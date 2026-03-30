@@ -1,0 +1,13 @@
+.env
+*.local
+node_modules/
+dist/
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# Trade secrets / internal docs
+AREA_CODE_BUILD_PROMPT.md
+CLAUDE.md
+ENGINEERING_STANDARDS.md
