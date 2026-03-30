@@ -2,6 +2,10 @@
 *.local
 node_modules/
 dist/
+.turbo/
+*.tsbuildinfo
+.next/
+.expo/
 .terraform/
 *.tfstate
 *.tfstate.backup

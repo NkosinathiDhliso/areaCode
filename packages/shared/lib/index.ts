@@ -1,0 +1,7 @@
+export { api, type ApiError } from './api'
+export { getSocket, disconnectSocket } from './socket'
+export { storage } from './storage'
+export { isWeb, setPageTitle, getDeviceInfo, isOnline, isSaveDataEnabled } from './platform'
+export { haversineDistance, isWithinRadius } from './geoUtils'
+export { formatZAR, formatRelativeTime, formatLocalTime, formatLocalDate, formatCountdown } from './formatters'
+export * from './featureGating'

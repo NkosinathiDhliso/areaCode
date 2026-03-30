@@ -9,14 +9,14 @@ Implementation language: **TypeScript** throughout (React 18 + Vite frontend, Fa
 ## Tasks
 
 - [-] 1. Monorepo scaffolding, tooling, and shared types
-  - [-] 1.1 Initialise pnpm monorepo with workspace config
+  - [x] 1.1 Initialise pnpm monorepo with workspace config
     - Create root `package.json` (private, workspaces), `pnpm-workspace.yaml`, root `tsconfig.json` (strict mode with `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`)
     - Create directory structure: `apps/web`, `apps/mobile`, `apps/business`, `apps/staff`, `apps/admin`, `packages/features/*`, `packages/shared/*`, `backend/src/features/*`, `backend/src/shared/*`, `backend/src/workers/`, `infra/modules/*`, `infra/environments/*`, `infra/shared/`
     - Add `.env.example` with all required environment variables using placeholder values. Must include all ~40 variables from the master prompt: `AREA_CODE_ENV`, `AREA_CODE_CONSENT_VERSION`, `AREA_CODE_DB_URL`, `AREA_CODE_DB_READ_URL`, `AREA_CODE_REDIS_URL`, `AWS_REGION`, `AREA_CODE_S3_MEDIA_BUCKET`, `AREA_CODE_SMS_ORIGINATION_NUMBER`, 4× Cognito pool IDs + client IDs (consumer, business, staff, admin) with both `AREA_CODE_COGNITO_*` and `VITE_COGNITO_*` variants, `VITE_MAPBOX_TOKEN`, `AREA_CODE_MAPBOX_TOKEN_MOBILE`, `MAPBOX_DOWNLOADS_TOKEN`, `YOCO_DEV_SECRET_KEY`, `YOCO_DEV_PUBLIC_KEY`, `YOCO_PROD_SECRET_KEY`, `YOCO_PROD_PUBLIC_KEY`, `AREA_CODE_QR_HMAC_SECRET`, `AREA_CODE_VAPID_PUBLIC_KEY`, `AREA_CODE_VAPID_PRIVATE_KEY`, `AREA_CODE_VAPID_SUBJECT`, `AREA_CODE_SQS_REWARD_QUEUE_URL`, `AREA_CODE_SQS_PUSH_QUEUE_URL`, `AREA_CODE_FINGERPRINT_PRO_KEY`, `AREA_CODE_CIPC_API_KEY`, `PORT`, `VITE_API_URL`, `VITE_SOCKET_URL`
     - Add `scripts/deploy-secrets.sh` — reads `.env`, pushes each secret to AWS Secrets Manager using path pattern `area-code/{env}/{service}`. Mapping: `YOCO_*_SECRET_KEY` → `area-code/{env}/yoco-secret-key`, `YOCO_*_PUBLIC_KEY` → `area-code/{env}/yoco-public-key`, `VITE_MAPBOX_TOKEN` → `area-code/{env}/mapbox-token`, `AREA_CODE_DB_URL` → `area-code/{env}/db-url`, `AREA_CODE_DB_READ_URL` → `area-code/{env}/db-read-url`, `AREA_CODE_REDIS_URL` → `area-code/{env}/redis-url`, `AREA_CODE_QR_HMAC_SECRET` → `area-code/{env}/qr-hmac-secret`, `AREA_CODE_FINGERPRINT_PRO_KEY` → `area-code/{env}/fingerprint-pro-key`, `AREA_CODE_CIPC_API_KEY` → `area-code/{env}/cipc-api-key`, `AREA_CODE_VAPID_PRIVATE_KEY` → `area-code/{env}/vapid-private-key`, `AREA_CODE_SQS_REWARD_QUEUE_URL` → `area-code/{env}/sqs-reward-queue-url`, `AREA_CODE_SQS_PUSH_QUEUE_URL` → `area-code/{env}/sqs-push-queue-url`. Script uses `aws secretsmanager create-secret` or `put-secret-value` (update if exists). Accepts `--env dev|prod` flag to select Yoco keys (dev uses `YOCO_DEV_*`, prod uses `YOCO_PROD_*`). Never hardcode secret values in Terraform or handler code.
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 40.3, 40.10_
 
-  - [ ] 1.2 Configure ESLint, Prettier, Husky, and dependency enforcement
+  - [x] 1.2 Configure ESLint, Prettier, Husky, and dependency enforcement
     - Set up ESLint flat config with `typescript-eslint`, `react-hooks`, `import` plugin
     - Configure Prettier (120 char line length), Husky pre-commit (format + lint) and pre-push (test)
     - Add ESLint import rules to enforce dependency direction: `packages/features/*` → `packages/shared/*` only, `packages/shared/` never imports from `packages/features/*`, `packages/*` never imports from `apps/*`
@@ -24,19 +24,19 @@ Implementation language: **TypeScript** throughout (React 18 + Vite frontend, Fa
     - Note: test files are NOT generated during implementation — testing deferred to post-implementation phase
     - _Requirements: 1.7, 1.8, 1.9, 37.1, 37.2, 37.4, 37.5, 37.6, 37.7_
 
-  - [ ] 1.3 Create shared TypeScript types and constants
+  - [x] 1.3 Create shared TypeScript types and constants
     - Create `packages/shared/types/index.ts` with all shared interfaces: `Node`, `NodeState`, `PulseScore`, `CheckIn`, `Reward`, `RewardRedemption`, `User`, `BusinessAccount`, `StaffAccount`, `Toast`, `ToastType`, `SocketEvents` (ServerToClient + ClientToServer), `MapInstance`, `Tier`, `ConsentRecord`, `AbuseFlag`, `Report`, `LeaderboardEntry`
     - Create `packages/shared/constants/sa-cities.ts`, `node-categories.ts`, `reward-types.ts`, `tier-levels.ts`
     - _Requirements: 1.6, 3.4, 4.1, 5.1, 7.1, 8.1, 18.7, 18.8, 20.1, 33.1_
 
-  - [ ] 1.4 Create design system tokens and primitives
+  - [x] 1.4 Create design system tokens and primitives
     - Create `tokens.css` with all CSS variables (backgrounds, text, accent, status, node category colours, tier badge colours including `--tier-legend: linear-gradient(135deg, #f093fb, #f5576c, #fda085)`, border, nav-height, bottom-sheet-radius)
     - Create shimmer keyframe animation for Legend tier gradient badge
     - Create `packages/shared/components/primitives.tsx` — `Box`, `Text`, `Row` mapping to `div`/`span`/`div(flex-row)` for web
     - Set up font preloading in `apps/web/index.html` for Syne (700, 800) and DM Sans (400, 500)
     - _Requirements: 33.1, 33.2, 33.3, 33.4, 33.5, 33.7, 33.10, 34.1, 34.3, 60.1, 60.2_
 
-  - [ ] 1.5 Create shared lib utilities
+  - [-] 1.5 Create shared lib utilities
     - Create `packages/shared/lib/api.ts` — typed API client with base URL, auth header injection, error handling
     - Create `packages/shared/lib/socket.ts` — singleton Socket.io client instance (never instantiate new socket in a component)
     - Create `packages/shared/lib/storage.ts` — abstraction wrapping `localStorage` (web) / `AsyncStorage` (mobile); all storage access goes through this module
