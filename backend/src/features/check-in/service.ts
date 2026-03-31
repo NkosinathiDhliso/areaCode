@@ -7,8 +7,11 @@ import {
   userConsent,
 } from '../../shared/redis/keys.js'
 import { emitPulseUpdate, emitToast, emitBusinessCheckin } from '../../shared/socket/events.js'
+import { isDbAvailable } from '../../shared/db/prisma.js'
 import * as repo from './repository.js'
 import type { CheckInInput, CheckInResponse } from './types.js'
+
+const DEV_MODE = !isDbAvailable
 
 const REWARD_COOLDOWN = 14400  // 4 hours
 const PRESENCE_COOLDOWN = 3600 // 1 hour
@@ -52,6 +55,11 @@ export async function processCheckIn(
   userId: string,
   input: CheckInInput,
 ): Promise<CheckInResponse> {
+  if (DEV_MODE) {
+    const cooldownUntil = new Date(Date.now() + 14400 * 1000).toISOString()
+    return { success: true, cooldownUntil }
+  }
+
   // 1. Get node
   const node = await repo.getNodeWithCity(input.nodeId)
   if (!node) throw AppError.notFound('Node not found')

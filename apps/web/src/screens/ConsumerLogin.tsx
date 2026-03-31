@@ -18,17 +18,30 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
   const [error, setError] = useState<string | null>(null)
   const [wrongDoor, setWrongDoor] = useState(false)
 
+  /** Convert local SA number (06x, 07x, 08x) to E.164 (+27...) */
+  function toE164(raw: string): string {
+    const digits = raw.replace(/\D/g, '')
+    if (digits.startsWith('0') && digits.length === 10) {
+      return `+27${digits.slice(1)}`
+    }
+    if (digits.startsWith('27') && digits.length === 11) {
+      return `+${digits}`
+    }
+    return raw.startsWith('+') ? raw : `+${digits}`
+  }
+
   async function handleSendOtp() {
     setLoading(true)
     setError(null)
     setWrongDoor(false)
+    const e164 = toE164(phone)
     try {
-      await api.post('/v1/auth/consumer/login', { phone })
+      await api.post('/v1/auth/consumer/login', { phone: e164 })
       setStep('otp')
     } catch {
       try {
         const typeRes = await api.get<{ accountType: string }>(
-          `/v1/auth/account-type?phone=${encodeURIComponent(phone)}`,
+          `/v1/auth/account-type?phone=${encodeURIComponent(e164)}`,
         )
         if (typeRes.accountType === 'business') {
           setWrongDoor(true)
@@ -47,7 +60,7 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
     try {
       const res = await api.post<{
         accessToken: string; refreshToken: string; user: { id: string }
-      }>('/v1/auth/consumer/verify-otp', { phone, code: otp })
+      }>('/v1/auth/consumer/verify-otp', { phone: toE164(phone), code: otp })
       setAuth(res.accessToken, res.refreshToken, res.user.id)
       onNavigate('map')
     } catch {

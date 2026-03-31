@@ -2,6 +2,9 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { redis } from '../redis/client.js';
 import { rateLimit as rateLimitKey } from '../redis/keys.js';
 import { AppError } from '../errors/AppError.js';
+import { isDbAvailable } from '../db/prisma.js';
+
+const DEV_MODE = !isDbAvailable;
 
 interface RateLimitOptions {
   /** Key prefix for this limiter */
@@ -22,6 +25,8 @@ export function rateLimitMiddleware(options: RateLimitOptions) {
   const { key, max, windowSeconds, identifierFn } = options;
 
   return async (request: FastifyRequest, _reply: FastifyReply) => {
+    if (DEV_MODE) return; // Skip rate limiting in dev mode
+
     const identifier = identifierFn
       ? identifierFn(request)
       : request.ip;

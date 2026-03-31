@@ -1,13 +1,21 @@
 import { AppError } from '../../shared/errors/AppError.js'
 import { redis } from '../../shared/redis/client.js'
 import { userConsent, otpCooldown, otpHourlyCount } from '../../shared/redis/keys.js'
+import { isDbAvailable } from '../../shared/db/prisma.js'
 import * as repo from './repository.js'
+
+const DEV_MODE = !isDbAvailable
 
 // ─── Consumer Auth ──────────────────────────────────────────────────────────
 
 export async function consumerSignup(data: {
   phone: string; username: string; displayName: string; citySlug: string;
 }) {
+  if (DEV_MODE) {
+    const userId = `dev-user-${Date.now()}`
+    return { userId, message: 'OTP sent (dev mode)' }
+  }
+
   const existing = await repo.findUserByPhone(data.phone)
   if (existing) throw AppError.conflict('Phone number already registered')
 
@@ -34,6 +42,11 @@ export async function consumerSignup(data: {
 }
 
 export async function consumerLogin(phone: string) {
+  if (DEV_MODE) {
+    // Skip DB/Redis checks in dev mode
+    return
+  }
+
   const user = await repo.findUserByPhone(phone)
   if (!user) throw AppError.notFound('Account not found')
   await checkOtpRateLimit(phone)
@@ -41,6 +54,15 @@ export async function consumerLogin(phone: string) {
 }
 
 export async function consumerVerifyOtp(phone: string, _code: string) {
+  if (DEV_MODE) {
+    const userId = `dev-user-${Date.now()}`
+    return {
+      accessToken: `dev-access-${userId}`,
+      refreshToken: `dev-refresh-${userId}`,
+      user: { id: userId, username: phone, displayName: 'Dev User', tier: 'explorer' },
+    }
+  }
+
   const user = await repo.findUserByPhone(phone)
   if (!user) throw AppError.unauthorized('Invalid credentials')
   // In production: verify OTP with Cognito, return real tokens
@@ -56,6 +78,10 @@ export async function consumerVerifyOtp(phone: string, _code: string) {
 export async function businessSignup(data: {
   email: string; phone: string; businessName: string; registrationNumber?: string;
 }) {
+  if (DEV_MODE) {
+    return { businessId: `dev-biz-${Date.now()}`, message: 'OTP sent (dev mode)' }
+  }
+
   const existing = await repo.findBusinessByEmail(data.email)
   if (existing) throw AppError.conflict('Email already registered')
 
@@ -73,6 +99,7 @@ export async function businessSignup(data: {
 }
 
 export async function businessLogin(phone: string) {
+  if (DEV_MODE) return
   await checkOtpRateLimit(phone)
   // In production: initiate Cognito auth for business pool
 }
@@ -88,6 +115,7 @@ export async function businessVerifyOtp(phone: string, _code: string) {
 // ─── Staff Auth ─────────────────────────────────────────────────────────────
 
 export async function staffLogin(phone: string) {
+  if (DEV_MODE) return
   const staff = await repo.findStaffByPhone(phone)
   if (!staff) throw AppError.notFound('Staff account not found')
   await checkOtpRateLimit(phone)
@@ -95,6 +123,13 @@ export async function staffLogin(phone: string) {
 }
 
 export async function staffVerifyOtp(phone: string, _code: string) {
+  if (DEV_MODE) {
+    return {
+      accessToken: `dev-staff-access-${Date.now()}`,
+      refreshToken: `dev-staff-refresh-${Date.now()}`,
+      staff: { id: `dev-staff-${Date.now()}`, name: 'Dev Staff', businessId: 'dev-biz-1' },
+    }
+  }
   const staff = await repo.findStaffByPhone(phone)
   if (!staff) throw AppError.unauthorized('Invalid credentials')
   return {
@@ -116,6 +151,9 @@ export async function refreshToken(_refreshToken: string, _pool: string) {
 // ─── User Profile ───────────────────────────────────────────────────────────
 
 export async function getUserProfile(cognitoSub: string) {
+  if (DEV_MODE) {
+    return { id: 'dev-user-1', username: 'dev_user', displayName: 'Dev User', phone: '+27000000000', tier: 'explorer', citySlug: 'johannesburg', avatarUrl: null, cognitoSub }
+  }
   const user = await repo.getUserByCognitoSub(cognitoSub)
   if (!user) throw AppError.notFound('User not found')
   return user
@@ -125,6 +163,9 @@ export async function updateProfile(
   userId: string,
   data: { displayName?: string; avatarUrl?: string | null; citySlug?: string },
 ) {
+  if (DEV_MODE) {
+    return { id: userId, ...data }
+  }
   const updateData: Record<string, unknown> = {}
 
   if (data.displayName !== undefined) updateData['displayName'] = data.displayName
@@ -144,6 +185,16 @@ export async function getCheckInHistory(
   cursor: string | undefined,
   limit: number,
 ) {
+  if (DEV_MODE) {
+    return {
+      items: [
+        { id: 'ci-1', nodeId: 'dev-1', checkedInAt: new Date(Date.now() - 3600000).toISOString(), node: { name: 'Father Coffee', slug: 'father-coffee', category: 'coffee' } },
+        { id: 'ci-2', nodeId: 'dev-3', checkedInAt: new Date(Date.now() - 86400000).toISOString(), node: { name: "Kitchener's Bar", slug: 'kitcheners-bar', category: 'nightlife' } },
+      ],
+      nextCursor: null,
+      hasMore: false,
+    }
+  }
   return repo.getUserCheckInHistory(userId, cursor, limit)
 }
 
@@ -187,6 +238,8 @@ export async function getUserConsent(userId: string) {
 // ─── Account Type Lookup ────────────────────────────────────────────────────
 
 export async function getAccountType(phone: string): Promise<string> {
+  if (DEV_MODE) return 'consumer'
+
   const user = await repo.findUserByPhone(phone)
   if (user) return 'consumer'
 
@@ -200,6 +253,7 @@ export async function getAccountType(phone: string): Promise<string> {
 // ─── OTP Rate Limiting ──────────────────────────────────────────────────────
 
 export async function checkOtpRateLimit(phone: string) {
+  if (DEV_MODE) return // Skip rate limiting in dev mode
   // 60s resend cooldown
   const cooldownKey = otpCooldown(phone)
   const cooldown = await redis.get(cooldownKey)

@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto'
 import { AppError } from '../../shared/errors/AppError.js'
+import { isDbAvailable } from '../../shared/db/prisma.js'
 import * as repo from './repository.js'
 import {
   BUSINESS_PLANS,
@@ -7,9 +8,14 @@ import {
   type BoostDuration,
 } from './types.js'
 
+const DEV_MODE = !isDbAvailable
+
 // ─── Business Profile ───────────────────────────────────────────────────────
 
 export async function getBusinessProfile(cognitoSub: string) {
+  if (DEV_MODE) {
+    return { id: 'dev-biz-1', businessName: 'Dev Business', email: 'dev@areacode.co.za', tier: 'growth', cognitoSub }
+  }
   const biz = await repo.findBusinessByCognitoSub(cognitoSub)
   if (!biz) throw AppError.notFound('Business account not found')
   return biz
@@ -66,6 +72,10 @@ export async function createCheckoutSession(
   plan: 'growth' | 'pro' | 'payg',
   interval?: string,
 ) {
+  if (DEV_MODE) {
+    const amountCents = plan === 'payg' ? 2900 : 14900
+    return { checkoutUrl: '#dev-checkout', amountCents, currency: 'ZAR', metadata: { businessId, plan, interval } }
+  }
   const biz = await repo.findBusinessById(businessId)
   if (!biz) throw AppError.notFound('Business not found')
 
@@ -99,6 +109,10 @@ export async function purchaseBoost(
   nodeId: string,
   duration: BoostDuration,
 ) {
+  if (DEV_MODE) {
+    const amountCents = BOOST_PRICING[duration]
+    return { checkoutUrl: '#dev-boost', amountCents, currency: 'ZAR', metadata: { businessId, nodeId, duration, type: 'boost' } }
+  }
   const node = await repo.getNodeForBusiness(nodeId, businessId)
   if (!node) throw AppError.forbidden('You do not own this node')
 
@@ -120,6 +134,8 @@ export async function processYocoWebhook(
   payload: Record<string, unknown>,
   signature: string,
 ) {
+  if (DEV_MODE) return { duplicate: false }
+
   // Verify signature
   const secret = process.env['YOCO_DEV_SECRET_KEY'] ?? ''
   const expected = createHmac('sha256', secret)
@@ -178,6 +194,9 @@ export async function inviteStaff(
   phone?: string,
   email?: string,
 ) {
+  if (DEV_MODE) {
+    return { id: `dev-invite-${Date.now()}`, businessId, phone, email, inviteToken: 'dev-token', accepted: false }
+  }
   const biz = await repo.findBusinessById(businessId)
   if (!biz) throw AppError.notFound('Business not found')
 
@@ -195,10 +214,12 @@ export async function inviteStaff(
 }
 
 export async function listStaff(businessId: string) {
+  if (DEV_MODE) return []
   return repo.listStaffAccounts(businessId)
 }
 
 export async function removeStaff(staffId: string, businessId: string) {
+  if (DEV_MODE) return
   const result = await repo.removeStaffAccount(staffId, businessId)
   if (result.count === 0) throw AppError.notFound('Staff member not found')
 }
@@ -229,6 +250,10 @@ export function validateQrToken(nodeId: string, token: string): boolean {
 }
 
 export async function getQrData(nodeId: string, businessId: string) {
+  if (DEV_MODE) {
+    const token = generateQrToken(nodeId)
+    return { url: `areacode.co.za/qr/${nodeId}/${token}`, token, nodeId }
+  }
   const node = await repo.getNodeForBusiness(nodeId, businessId)
   if (!node) throw AppError.forbidden('You do not own this node')
 
@@ -243,6 +268,7 @@ export async function getQrData(nodeId: string, businessId: string) {
 // ─── Trial Management ───────────────────────────────────────────────────────
 
 export async function startTrial(businessId: string, plan: 'growth' | 'pro') {
+  if (DEV_MODE) return { id: businessId, tier: plan, trialEndsAt: new Date(Date.now() + 14 * 86400000).toISOString() }
   const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
   return repo.updateBusinessTier(businessId, plan, trialEndsAt)
 }

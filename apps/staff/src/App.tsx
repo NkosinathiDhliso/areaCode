@@ -1,12 +1,14 @@
 import { useState } from 'react'
 
 import { useStaffAuthStore } from './stores/staffAuthStore'
+import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { StaffInvite } from './screens/StaffInvite'
 import { StaffLogin } from './screens/StaffLogin'
 import { StaffHome } from './screens/StaffHome'
 
 export function App() {
   const isAuthenticated = useStaffAuthStore((s) => s.isAuthenticated)
+  useTheme()
   const [route] = useState(() => {
     const path = window.location.pathname
     if (path.startsWith('/staff-invite/')) return 'invite'

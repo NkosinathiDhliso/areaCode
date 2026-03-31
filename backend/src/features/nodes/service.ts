@@ -4,19 +4,47 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { AppError } from '../../shared/errors/AppError.js'
 import { redis } from '../../shared/redis/client.js'
 import { nodesPulse } from '../../shared/redis/keys.js'
+import { isDbAvailable } from '../../shared/db/prisma.js'
 import * as repo from './repository.js'
 
 const s3 = new S3Client({ region: process.env['AWS_REGION'] ?? 'af-south-1' })
 const BUCKET = process.env['AREA_CODE_S3_MEDIA_BUCKET'] ?? 'area-code-media'
 const ENV = process.env['AREA_CODE_ENV'] ?? 'dev'
+const DEV_MODE = !isDbAvailable
+
+// ─── Dev Mock Data ──────────────────────────────────────────────────────────
+
+const DEV_NODES = [
+  { id: 'dev-1', name: 'Father Coffee', slug: 'father-coffee', category: 'coffee', lat: -26.1834, lng: 28.0172, pulseScore: 8, state: 'quiet', citySlug: 'johannesburg' },
+  { id: 'dev-2', name: 'Doubleshot Coffee', slug: 'doubleshot-coffee', category: 'coffee', lat: -26.1838, lng: 28.0168, pulseScore: 0, state: 'dormant', citySlug: 'johannesburg' },
+  { id: 'dev-3', name: "Kitchener's Bar", slug: 'kitcheners-bar', category: 'nightlife', lat: -26.1931, lng: 28.0348, pulseScore: 72, state: 'popping', citySlug: 'johannesburg' },
+  { id: 'dev-4', name: 'Taboo Nightclub', slug: 'taboo-nightclub', category: 'nightlife', lat: -26.1085, lng: 28.0572, pulseScore: 65, state: 'popping', citySlug: 'johannesburg' },
+  { id: 'dev-5', name: 'Sandton City', slug: 'sandton-city', category: 'shopping', lat: -26.1073, lng: 28.052, pulseScore: 18, state: 'active', citySlug: 'johannesburg' },
+  { id: 'dev-6', name: 'Arts on Main', slug: 'arts-on-main', category: 'culture', lat: -26.2048, lng: 28.0565, pulseScore: 55, state: 'buzzing', citySlug: 'johannesburg' },
+  { id: 'dev-7', name: "Nando's Rosebank", slug: 'nandos-rosebank', category: 'food', lat: -26.14565, lng: 28.04325, pulseScore: 45, state: 'buzzing', citySlug: 'johannesburg' },
+  { id: 'dev-8', name: 'Neighbourgoods Market', slug: 'neighbourgoods-market', category: 'food', lat: -26.1925, lng: 28.0335, pulseScore: 25, state: 'active', citySlug: 'johannesburg' },
+  { id: 'dev-9', name: 'The Grillhouse', slug: 'the-grillhouse', category: 'food', lat: -26.1468, lng: 28.0418, pulseScore: 38, state: 'buzzing', citySlug: 'johannesburg' },
+  { id: 'dev-10', name: 'Virgin Active Sandton', slug: 'virgin-active-sandton', category: 'fitness', lat: -26.1068, lng: 28.0528, pulseScore: 3, state: 'quiet', citySlug: 'johannesburg' },
+  { id: 'dev-11', name: 'Planet Fitness Melrose', slug: 'planet-fitness-melrose', category: 'fitness', lat: -26.1345, lng: 28.0685, pulseScore: 5, state: 'quiet', citySlug: 'johannesburg' },
+  { id: 'dev-12', name: 'Keyes Art Mile', slug: 'keyes-art-mile', category: 'culture', lat: -26.1492, lng: 28.0408, pulseScore: 12, state: 'active', citySlug: 'johannesburg' },
+]
 
 // ─── Node Queries ───────────────────────────────────────────────────────────
 
 export async function getNodesByCitySlug(citySlug: string) {
+  if (DEV_MODE) {
+    return DEV_NODES.filter((n) => n.citySlug === citySlug)
+  }
   return repo.getNodesByCitySlug(citySlug)
 }
 
 export async function getNodeDetail(nodeId: string) {
+  if (DEV_MODE) {
+    const node = DEV_NODES.find((n) => n.id === nodeId)
+    if (!node) throw AppError.notFound('Node not found')
+    return { ...node, pulseScore: node.pulseScore }
+  }
+
   const node = await repo.getNodeById(nodeId)
   if (!node) throw AppError.notFound('Node not found')
 
@@ -47,6 +75,10 @@ export async function getNodePublic(nodeSlug: string) {
 
 export async function searchNodes(query: string, lat: number, lng: number) {
   if (query.length < 2) throw AppError.badRequest('Query must be at least 2 characters')
+  if (DEV_MODE) {
+    const q = query.toLowerCase()
+    return DEV_NODES.filter((n) => n.name.toLowerCase().includes(q))
+  }
   return repo.searchNodes(query, lat, lng)
 }
 

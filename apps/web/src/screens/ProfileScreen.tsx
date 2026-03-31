@@ -3,6 +3,8 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useUserStore } from '@area-code/shared/stores/userStore'
+import { useTheme } from '@area-code/shared/hooks/useTheme'
+import type { ThemePreference } from '@area-code/shared/hooks/useTheme'
 import { TierBadge } from '@area-code/shared/components/TierBadge'
 import { Avatar } from '@area-code/shared/components/Avatar'
 import type { User } from '@area-code/shared/types'
@@ -16,6 +18,7 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   const { t } = useTranslation()
   const { isAuthenticated, logout } = useConsumerAuthStore()
   const { user, tier, totalCheckIns, streakCount, setUser } = useUserStore()
+  const { preference, setPreference } = useTheme()
 
   const { data: profile } = useQuery({
     queryKey: ['user', 'me'],
@@ -86,6 +89,27 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
           <span className="text-[var(--text-primary)] text-sm">{t('profile.privacyToggle')}</span>
           <input type="checkbox" defaultChecked className="accent-[var(--accent)]" />
         </label>
+      </div>
+
+      <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 mb-3">
+        <h3 className="text-[var(--text-secondary)] text-xs font-medium uppercase tracking-wider mb-3">
+          {t('profile.appearance')}
+        </h3>
+        <div className="flex flex-row gap-2">
+          {(['auto', 'light', 'dark'] as ThemePreference[]).map((opt) => (
+            <button
+              key={opt}
+              onClick={() => setPreference(opt)}
+              className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all duration-150 ${
+                preference === opt
+                  ? 'gradient-accent'
+                  : 'bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)]'
+              }`}
+            >
+              {t(`profile.theme.${opt}`)}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 mb-3">

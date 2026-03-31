@@ -36,14 +36,14 @@ export function getMarkerSize(state: NodeState, score: number): number {
 const CATEGORY_HEX: Record<string, string> = {
   food: '#ff6b6b',
   coffee: '#a0785a',
-  nightlife: '#b44eff',
+  nightlife: '#3B7DD8',
   retail: '#38bdf8',
   fitness: '#22d3a0',
   arts: '#ff9f43',
 }
 
 export function getCategoryColour(category: NodeCategory | string): string {
-  return CATEGORY_HEX[category] ?? '#6c63ff'
+  return CATEGORY_HEX[category] ?? '#778CA9'
 }
 
 export function applyMarkerStyle(

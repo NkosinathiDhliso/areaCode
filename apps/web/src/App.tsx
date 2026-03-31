@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useNavigationStore } from '@area-code/shared/stores/navigationStore'
 import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
+import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { api } from '@area-code/shared/lib/api'
 import { getSocket } from '@area-code/shared/lib/socket'
 
@@ -23,6 +24,9 @@ export function App() {
   const accessToken = useConsumerAuthStore((s) => s.accessToken)
   const resetNavigation = useNavigationStore((s) => s.resetNavigation)
   const { setOnline, setApiOnly, setOffline } = useConnectivityStore()
+
+  // Activate SAST time-based theme (06:00–18:00 light, 18:00–06:00 dark)
+  useTheme()
 
   const [route, setRoute] = useState<AppRoute>(() => {
     const path = window.location.pathname

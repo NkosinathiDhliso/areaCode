@@ -25,8 +25,8 @@ export function CategoryFilterBar({ onFilter }: CategoryFilterBarProps) {
           onClick={() => handleTap(cat.value)}
           className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 ${
             active === cat.value
-              ? 'bg-[var(--accent)] text-white'
-              : 'bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)]'
+              ? 'gradient-accent text-white'
+              : 'glass text-[var(--text-secondary)]'
           }`}
         >
           {t(`map.categories.${cat.value}`)}

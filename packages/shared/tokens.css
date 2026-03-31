@@ -1,133 +1,139 @@
+/* Area Code Tokens — Glacier/Slate accent, zero purple */
 :root {
-  /* Backgrounds */
-  --bg-map: #0a0a0f;
-  --bg-base: #0f0f17;
-  --bg-surface: #161622;
-  --bg-raised: #1e1e2e;
-  --bg-overlay: rgba(10, 10, 15, 0.85);
-
-  /* Text */
-  --text-primary: #f0f0f5;
-  --text-secondary: #a0a0b8;
-  --text-muted: #606078;
-
-  /* Accent — Electric Indigo */
-  --accent: #6c63ff;
-  --accent-bright: #8b84ff;
-  --accent-dim: #4a43cc;
-  --on-accent: #ffffff;
-
-  /* Status */
+  color-scheme: dark light;
+  --bg-map: #080a0e;
+  --bg-gradient: linear-gradient(145deg,#0a0c14 0%,#101828 30%,#162030 50%,#0e1420 75%,#0a0c14 100%);
+  --bg-base: #0c1018;
+  --bg-surface: rgba(18,26,38,0.65);
+  --bg-raised: rgba(26,36,52,0.70);
+  --bg-overlay: rgba(8,10,14,0.80);
+  --glass-blur: 16px;
+  --glass-border: rgba(255,255,255,0.06);
+  --glass-highlight: linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0) 60%);
+  --glow-accent: radial-gradient(ellipse at 50% 0%,rgba(169,203,224,0.12) 0%,transparent 70%);
+  --glow-warm: radial-gradient(ellipse at 50% 100%,rgba(255,107,107,0.08) 0%,transparent 60%);
+  --text-primary: #e8ecf0;
+  --text-secondary: #9aa8b8;
+  --text-muted: #5c6878;
+  --accent: #778CA9;
+  --accent-bright: #A9CBE0;
+  --accent-dim: #5A6F8A;
+  --accent-gradient: linear-gradient(135deg,#5A6F8A 0%,#778CA9 50%,#A9CBE0 100%);
+  --on-accent: #f0f4f8;
   --success: #22d3a0;
+  --success-soft: rgba(34,211,160,0.12);
   --danger: #ff4757;
+  --danger-soft: rgba(255,71,87,0.12);
   --warning: #ffb830;
+  --warning-soft: rgba(255,184,48,0.12);
   --info: #38bdf8;
-
-  /* Node pulse colours (by category) */
+  --info-soft: rgba(56,189,248,0.12);
   --node-food: #ff6b6b;
   --node-coffee: #a0785a;
-  --node-nightlife: #b44eff;
+  --node-nightlife: #3B7DD8;
   --node-retail: #38bdf8;
   --node-fitness: #22d3a0;
   --node-arts: #ff9f43;
-  --node-default: #6c63ff;
-
-  /* Tier badge colours */
-  --tier-local: #606078;
+  --node-default: #778CA9;
+  --node-food-glow: rgba(255,107,107,0.15);
+  --node-coffee-glow: rgba(160,120,90,0.15);
+  --node-nightlife-glow: rgba(59,125,216,0.18);
+  --node-retail-glow: rgba(56,189,248,0.15);
+  --node-fitness-glow: rgba(34,211,160,0.15);
+  --node-arts-glow: rgba(255,159,67,0.15);
+  --node-default-glow: rgba(119,140,169,0.15);
+  --tier-local: #5c6878;
   --tier-regular: #cd7f32;
   --tier-fixture: #c0c0c0;
   --tier-institution: #ffd700;
-  --tier-legend: linear-gradient(135deg, #f093fb, #f5576c, #fda085);
+  --tier-legend: linear-gradient(135deg,#A9CBE0,#ff6b6b,#ffb830);
+  --border: rgba(255,255,255,0.06);
+  --border-strong: rgba(255,255,255,0.12);
 
-  /* Misc */
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.16);
+  --border-gradient: linear-gradient(135deg,rgba(255,255,255,0.08) 0%,rgba(119,140,169,0.14) 50%,rgba(255,255,255,0.04) 100%);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+  --shadow-glow: 0 0 20px rgba(169,203,224,0.12);
+  --noise-opacity: 0.03;
   --nav-height: 56px;
   --bottom-sheet-radius: 20px;
 }
 
-/* Legend tier shimmer animation */
-@keyframes shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
+:root[data-theme="light"] {
+  --bg-map: #e4e8ec;
+  --bg-gradient: linear-gradient(145deg,#f5f1ea 0%,#eee8e0 25%,#dce6ee 50%,#eee8e0 75%,#f5f2eb 100%);
+  --bg-base: #f0ece6;
+  --bg-surface: rgba(255,255,255,0.55);
+  --bg-raised: rgba(255,255,255,0.70);
+  --bg-overlay: rgba(240,236,230,0.85);
+  --glass-blur: 20px;
+  --glass-border: rgba(0,0,0,0.06);
+  --glass-highlight: linear-gradient(135deg,rgba(255,255,255,0.60) 0%,rgba(255,255,255,0.20) 60%);
+  --glow-accent: radial-gradient(ellipse at 50% 0%,rgba(119,140,169,0.10) 0%,transparent 70%);
+  --glow-warm: radial-gradient(ellipse at 50% 100%,rgba(205,127,50,0.08) 0%,transparent 60%);
+  --text-primary: #1a1e24;
+  --text-secondary: #4a5568;
+  --text-muted: #8a94a0;
+  --accent: #5A6F8A;
+  --accent-bright: #778CA9;
+  --accent-dim: #465A72;
+  --accent-gradient: linear-gradient(135deg,#465A72 0%,#5A6F8A 50%,#778CA9 100%);
+  --on-accent: #ffffff;
+  --success: #18b888;
+  --success-soft: rgba(24,184,136,0.10);
+  --danger: #e8364a;
+  --danger-soft: rgba(232,54,74,0.10);
+  --warning: #e0a020;
+  --warning-soft: rgba(224,160,32,0.10);
+  --info: #2da0d8;
+  --info-soft: rgba(45,160,216,0.10);
+  --node-food: #e85555;
+  --node-coffee: #8a6548;
+  --node-nightlife: #2E6AB8;
+  --node-retail: #2a96d0;
+  --node-fitness: #18b888;
+  --node-arts: #e08830;
+  --node-default: #5A6F8A;
+  --node-food-glow: rgba(232,85,85,0.10);
+  --node-coffee-glow: rgba(138,101,72,0.10);
+  --node-nightlife-glow: rgba(46,106,184,0.12);
+  --node-retail-glow: rgba(42,150,208,0.10);
+  --node-fitness-glow: rgba(24,184,136,0.10);
+  --node-arts-glow: rgba(224,136,48,0.10);
+  --node-default-glow: rgba(90,111,138,0.10);
+  --tier-local: #8a94a0;
+  --tier-regular: #b06e28;
+  --tier-fixture: #8a8a96;
+  --tier-institution: #c8a800;
+  --tier-legend: linear-gradient(135deg,#778CA9,#e85555,#e08830);
+  --border: rgba(0,0,0,0.06);
+  --border-strong: rgba(0,0,0,0.12);
+  --border-gradient: linear-gradient(135deg,rgba(0,0,0,0.04) 0%,rgba(90,111,138,0.12) 50%,rgba(0,0,0,0.03) 100%);
+  --shadow-sm: 0 1px 4px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.10);
+  --shadow-glow: 0 0 16px rgba(90,111,138,0.10);
+  --noise-opacity: 0.018;
 }
 
-.animate-shimmer {
-  animation: shimmer 3s ease-in-out infinite;
-  background-size: 200% 100%;
-}
+.glass{background:var(--bg-surface);backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur));border:1px solid var(--glass-border)}
+.glass-sheen{background:var(--glass-highlight),var(--bg-surface);backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur));border:1px solid var(--glass-border)}
+.glass-raised{background:var(--bg-raised);backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur));border:1px solid var(--glass-border);box-shadow:var(--shadow-md)}
+.gradient-accent{background:var(--accent-gradient);color:var(--on-accent)}
+.gradient-border{position:relative}
+.gradient-border::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;background:var(--border-gradient);-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+.bg-success-soft{background:var(--success-soft)}
+.bg-danger-soft{background:var(--danger-soft)}
+.bg-warning-soft{background:var(--warning-soft)}
+.bg-info-soft{background:var(--info-soft)}
 
-/* Node breathe animation */
-@keyframes breathe {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 0.8;
-  }
-  50% {
-    transform: scale(1.05);
-    opacity: 1;
-  }
-}
-
-/* Node pulse animation */
-@keyframes pulse {
-  0%, 100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.15);
-  }
-}
-
-/* Node ripple animation (check-in) */
-@keyframes ripple {
-  0% {
-    transform: scale(1);
-    opacity: 0.6;
-  }
-  100% {
-    transform: scale(3);
-    opacity: 0;
-  }
-}
-
-/* Node pop-in animation */
-@keyframes popIn {
-  0% {
-    transform: scale(0);
-    opacity: 0;
-  }
-  60% {
-    transform: scale(1.2);
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-/* Bottom sheet slide up */
-@keyframes slideUp {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
-}
-
-/* Toast slide in from right */
-@keyframes slideInRight {
-  from {
-    transform: translateX(110%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.animate-shimmer{animation:shimmer 3s ease-in-out infinite;background-size:200% 100%}
+@keyframes breathe{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.05);opacity:1}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+@keyframes ripple{0%{transform:scale(1);opacity:.6}100%{transform:scale(3);opacity:0}}
+@keyframes popIn{0%{transform:scale(0);opacity:0}60%{transform:scale(1.2)}100%{transform:scale(1);opacity:1}}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes slideInRight{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes gradientDrift{0%{background-position:0% 0%}50%{background-position:100% 100%}100%{background-position:0% 0%}}

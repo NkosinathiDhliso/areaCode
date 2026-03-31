@@ -24,12 +24,24 @@ export function ConsumerSignup({ onNavigate }: ConsumerSignupProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  /** Convert local SA number (06x, 07x, 08x) to E.164 (+27...) */
+  function toE164(raw: string): string {
+    const digits = raw.replace(/\D/g, '')
+    if (digits.startsWith('0') && digits.length === 10) {
+      return `+27${digits.slice(1)}`
+    }
+    if (digits.startsWith('27') && digits.length === 11) {
+      return `+${digits}`
+    }
+    return raw.startsWith('+') ? raw : `+${digits}`
+  }
+
   async function handleSignup() {
     setLoading(true)
     setError(null)
     try {
       await api.post('/v1/auth/consumer/signup', {
-        phone,
+        phone: toE164(phone),
         username,
         displayName,
         citySlug,
@@ -51,7 +63,7 @@ export function ConsumerSignup({ onNavigate }: ConsumerSignupProps) {
     try {
       const res = await api.post<{
         accessToken: string; refreshToken: string; user: { id: string }
-      }>('/v1/auth/consumer/verify-otp', { phone, code: otp })
+      }>('/v1/auth/consumer/verify-otp', { phone: toE164(phone), code: otp })
       setAuth(res.accessToken, res.refreshToken, res.user.id)
       onNavigate('map')
     } catch {

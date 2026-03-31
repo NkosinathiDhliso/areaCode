@@ -30,7 +30,7 @@ export function BottomNav({ active, onNavigate }: BottomNavProps) {
 
   return (
     <nav
-      className="flex flex-row items-center justify-around bg-[var(--bg-surface)] border-t border-[var(--border)] px-2"
+      className="flex flex-row items-center justify-around glass border-t border-[var(--glass-border)] px-2"
       style={{ height: 'var(--nav-height)' }}
       role="navigation"
       aria-label="Main navigation"

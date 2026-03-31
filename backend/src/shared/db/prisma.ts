@@ -1,29 +1,36 @@
-import { PrismaClient } from '@prisma/client';
-
-/**
- * Prisma client singleton.
- *
- * In Lambda, each cold start creates a new client. The singleton pattern
- * ensures we reuse the same client across warm invocations within the
- * same container. In ECS/long-running processes, the single instance
- * is shared across all requests.
- */
+import { PrismaClient } from '@prisma/client'
 
 const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
-
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log:
-      process.env['AREA_CODE_ENV'] === 'dev'
-        ? ['query', 'warn', 'error']
-        : ['warn', 'error'],
-  });
-
-if (process.env['AREA_CODE_ENV'] !== 'prod') {
-  globalForPrisma.prisma = prisma;
+  prisma: PrismaClient | undefined
 }
 
-export type { PrismaClient };
+const hasDbUrl = !!process.env['AREA_CODE_DB_URL']
+
+export const prisma: PrismaClient = hasDbUrl
+  ? (globalForPrisma.prisma ??
+    new PrismaClient({
+      log:
+        process.env['AREA_CODE_ENV'] === 'dev'
+          ? ['query', 'warn', 'error']
+          : ['warn', 'error'],
+    }))
+  : (new Proxy({} as PrismaClient, {
+      get(_target, prop) {
+        // Return a model-like proxy for any table access
+        return new Proxy({}, {
+          get() {
+            return async () => {
+              throw new Error(`[prisma-mock] DB unavailable (no AREA_CODE_DB_URL). Called ${String(prop)}`)
+            }
+          },
+        })
+      },
+    }))
+
+if (process.env['AREA_CODE_ENV'] !== 'prod' && hasDbUrl) {
+  globalForPrisma.prisma = prisma
+}
+
+export const isDbAvailable = hasDbUrl
+
+export type { PrismaClient }

@@ -2,6 +2,9 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import jwt from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
 import { AppError } from '../errors/AppError.js';
+import { isDbAvailable } from '../db/prisma.js';
+
+const DEV_MODE = !isDbAvailable;
 
 export type AuthRole = 'consumer' | 'business' | 'staff' | 'admin';
 
@@ -108,6 +111,21 @@ async function verifyToken(token: string, role: AuthRole): Promise<AuthPayload> 
  */
 export function requireAuth(...roles: AuthRole[]) {
   return async (request: FastifyRequest, _reply: FastifyReply) => {
+    // Dev mode: accept any Bearer token and create a mock auth payload
+    if (DEV_MODE) {
+      const authHeader = request.headers.authorization;
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
+      const role = roles[0] ?? 'consumer';
+      const userId = token.includes('dev-') ? token.split('-').slice(1, 3).join('-') : `dev-user-${Date.now()}`;
+      (request as FastifyRequest & { auth: AuthPayload }).auth = {
+        userId,
+        role,
+        cognitoSub: `dev-sub-${userId}`,
+        citySlug: 'johannesburg',
+      };
+      return;
+    }
+
     const authHeader = request.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
       throw AppError.unauthorized('Missing or invalid Authorization header');
@@ -141,7 +159,19 @@ export function optionalAuth(...roles: AuthRole[]) {
   return async (request: FastifyRequest, _reply: FastifyReply) => {
     const authHeader = request.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
-      return; // No token, continue without auth
+      return;
+    }
+
+    if (DEV_MODE) {
+      const token = authHeader.slice(7);
+      const role = roles[0] ?? 'consumer';
+      (request as FastifyRequest & { auth: AuthPayload }).auth = {
+        userId: `dev-user-${Date.now()}`,
+        role,
+        cognitoSub: `dev-sub-${token}`,
+        citySlug: 'johannesburg',
+      };
+      return;
     }
 
     const token = authHeader.slice(7);
