@@ -1,0 +1,50 @@
+name: Quality Gate
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  quality-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript check (frontend)
+        run: npx tsc --noEmit
+
+      - name: TypeScript check (backend)
+        run: npx tsc --noEmit
+        working-directory: backend
+
+      - name: Lint frontend
+        run: npx eslint packages/ apps/ --max-warnings 50
+
+      - name: Lint backend
+        run: npx eslint src/ --max-warnings 50
+        working-directory: backend
+
+      - name: Run frontend tests
+        run: npx vitest run --coverage
+
+      - name: Run backend tests
+        run: npm test -- --coverage
+        working-directory: backend
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

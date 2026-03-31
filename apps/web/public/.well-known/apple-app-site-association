@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAMID.co.za.areacode.app",
+        "paths": [
+          "/node/*",
+          "/qr/*",
+          "/staff-invite/*"
+        ]
+      }
+    ]
+  }
+}

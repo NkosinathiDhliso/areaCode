@@ -1,0 +1,456 @@
+// ─── Prisma Schema ──────────────────────────────────────────────────────────
+// All models use @map / @@map for camelCase code ↔ snake_case DB mapping.
+// PostGIS geography columns and partitioned tables are handled via raw SQL
+// migrations since Prisma doesn't natively support them.
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("AREA_CODE_DB_URL")
+}
+
+// ─── Cities ─────────────────────────────────────────────────────────────────
+
+model City {
+  id      String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name    String
+  slug    String @unique
+  country String @default("ZA")
+
+  users              User[]
+  neighbourhoods     Neighbourhood[]
+  nodes              Node[]
+  leaderboardHistory LeaderboardHistory[]
+
+  @@map("cities")
+}
+
+// ─── Neighbourhoods ─────────────────────────────────────────────────────────
+
+model Neighbourhood {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cityId String @map("city_id") @db.Uuid
+  name   String
+  slug   String @unique
+  // boundary GEOGRAPHY(POLYGON, 4326) — managed via raw SQL + GIST index
+
+  city     City      @relation(fields: [cityId], references: [id])
+  users    User[]
+  checkIns CheckIn[]
+
+  @@map("neighbourhoods")
+}
+
+// ─── Users ──────────────────────────────────────────────────────────────────
+
+model User {
+  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  phone           String? @unique
+  username        String  @unique
+  displayName     String  @map("display_name")
+  avatarUrl       String? @map("avatar_url")
+  cityId          String? @map("city_id") @db.Uuid
+  neighbourhoodId String? @map("neighbourhood_id") @db.Uuid
+  tier            String  @default("local")
+  totalCheckIns   Int     @default(0) @map("total_check_ins")
+  cognitoSub      String? @unique @map("cognito_sub")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  city          City?          @relation(fields: [cityId], references: [id])
+  neighbourhood Neighbourhood? @relation(fields: [neighbourhoodId], references: [id])
+
+  checkIns           CheckIn[]
+  rewardRedemptions  RewardRedemption[]
+  consentRecords     ConsentRecord[]
+  pushTokens         UserPushToken[]
+  notificationPrefs  NotificationPreference?
+  followers          UserFollow[]           @relation("following")
+  following          UserFollow[]           @relation("follower")
+  reports            Report[]
+  leaderboardHistory LeaderboardHistory[]
+  deviceFingerprints DeviceFingerprint[]
+  adminMessages      AdminMessage[]
+
+  @@map("users")
+}
+
+// ─── Business Accounts ──────────────────────────────────────────────────────
+
+model BusinessAccount {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email              String    @unique
+  businessName       String    @map("business_name")
+  registrationNumber String?   @map("registration_number")
+  cognitoSub         String?   @unique @map("cognito_sub")
+  tier               String    @default("free")
+  trialEndsAt        DateTime? @map("trial_ends_at") @db.Timestamptz
+  paymentGraceUntil  DateTime? @map("payment_grace_until") @db.Timestamptz
+  yocoCustomerId     String?   @map("yoco_customer_id")
+  isActive           Boolean   @default(true) @map("is_active")
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  nodes                  Node[]                  @relation("nodeOwner")
+  submittedNodes         Node[]                  @relation("nodeSubmitter")
+  staffInvites           StaffInvite[]
+  staffAccounts          StaffAccount[]
+  nodeImages             NodeImage[]
+  businessConsentRecords BusinessConsentRecord[]
+
+  @@map("business_accounts")
+}
+
+// ─── Nodes ──────────────────────────────────────────────────────────────────
+
+model Node {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String
+  slug            String   @unique
+  category        String
+  lat             Float    @db.DoublePrecision
+  lng             Float    @db.DoublePrecision
+  // location GEOGRAPHY(POINT, 4326) GENERATED ALWAYS AS ... STORED — managed via raw SQL
+  cityId          String?  @map("city_id") @db.Uuid
+  businessId      String?  @map("business_id") @db.Uuid
+  submittedBy     String?  @map("submitted_by") @db.Uuid
+  claimStatus     String   @default("unclaimed") @map("claim_status")
+  claimCipcStatus String?  @map("claim_cipc_status")
+  nodeColour      String   @default("default") @map("node_colour")
+  nodeIcon        String?  @map("node_icon")
+  qrCheckinEnabled Boolean @default(false) @map("qr_checkin_enabled")
+  isVerified      Boolean  @default(false) @map("is_verified")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  city        City?            @relation(fields: [cityId], references: [id])
+  business    BusinessAccount? @relation("nodeOwner", fields: [businessId], references: [id])
+  submitter   BusinessAccount? @relation("nodeSubmitter", fields: [submittedBy], references: [id])
+
+  checkIns   CheckIn[]
+  rewards    Reward[]
+  nodeImages NodeImage[]
+  reports    Report[]
+
+  @@map("nodes")
+}
+
+// ─── Check-ins (partitioned table — managed via raw SQL) ────────────────────
+
+model CheckIn {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  nodeId          String   @map("node_id") @db.Uuid
+  neighbourhoodId String?  @map("neighbourhood_id") @db.Uuid
+  type            String   @default("reward")
+  checkedInAt     DateTime @default(now()) @map("checked_in_at") @db.Timestamptz
+
+  user          User           @relation(fields: [userId], references: [id])
+  node          Node           @relation(fields: [nodeId], references: [id])
+  neighbourhood Neighbourhood? @relation(fields: [neighbourhoodId], references: [id])
+
+  @@map("check_ins")
+}
+
+// ─── Rewards ────────────────────────────────────────────────────────────────
+
+model Reward {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nodeId       String    @map("node_id") @db.Uuid
+  type         String
+  title        String
+  description  String?
+  triggerValue Int?      @map("trigger_value")
+  totalSlots   Int?      @map("total_slots")
+  claimedCount Int       @default(0) @map("claimed_count")
+  slotsLocked  Boolean   @default(false) @map("slots_locked")
+  isActive     Boolean   @default(true) @map("is_active")
+  expiresAt    DateTime? @map("expires_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  node        Node               @relation(fields: [nodeId], references: [id])
+  redemptions RewardRedemption[]
+
+  @@map("rewards")
+}
+
+// ─── Reward Redemptions ─────────────────────────────────────────────────────
+
+model RewardRedemption {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rewardId       String    @map("reward_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  redemptionCode String    @map("redemption_code") @db.Char(6)
+  codeExpiresAt  DateTime  @map("code_expires_at") @db.Timestamptz
+  redeemedAt     DateTime? @map("redeemed_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  reward Reward @relation(fields: [rewardId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([rewardId, userId])
+  @@map("reward_redemptions")
+}
+
+// ─── Node Images ────────────────────────────────────────────────────────────
+
+model NodeImage {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nodeId       String   @map("node_id") @db.Uuid
+  s3Key        String   @map("s3_key")
+  displayOrder Int      @default(0) @map("display_order")
+  uploadedBy   String?  @map("uploaded_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  node     Node             @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  uploader BusinessAccount? @relation(fields: [uploadedBy], references: [id])
+
+  @@map("node_images")
+}
+
+// ─── Reports ────────────────────────────────────────────────────────────────
+
+model Report {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reporterId String   @map("reporter_id") @db.Uuid
+  nodeId     String   @map("node_id") @db.Uuid
+  type       String
+  detail     String?
+  status     String   @default("pending")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  reporter User @relation(fields: [reporterId], references: [id])
+  node     Node @relation(fields: [nodeId], references: [id])
+
+  @@map("reports")
+}
+
+// ─── Leaderboard History ────────────────────────────────────────────────────
+
+model LeaderboardHistory {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cityId       String   @map("city_id") @db.Uuid
+  weekEnding   DateTime @map("week_ending") @db.Timestamptz
+  userId       String   @map("user_id") @db.Uuid
+  rank         Int
+  checkInCount Int      @map("check_in_count")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  city City @relation(fields: [cityId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([cityId, weekEnding])
+  @@index([userId])
+  @@map("leaderboard_history")
+}
+
+// ─── Consent Records ────────────────────────────────────────────────────────
+
+model ConsentRecord {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String   @map("user_id") @db.Uuid
+  consentVersion    String   @map("consent_version")
+  analyticsOptIn    Boolean  @default(false) @map("analytics_opt_in")
+  broadcastLocation Boolean  @default(true) @map("broadcast_location")
+  consentedAt       DateTime @default(now()) @map("consented_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, consentedAt(sort: Desc)])
+  @@map("consent_records")
+}
+
+// ─── Business Consent Records (ECTA) ────────────────────────────────────────
+
+model BusinessConsentRecord {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId     String   @map("business_id") @db.Uuid
+  consentVersion String   @map("consent_version")
+  tier           String
+  ipAddress      String?  @map("ip_address")
+  acceptedAt     DateTime @default(now()) @map("accepted_at") @db.Timestamptz
+
+  business BusinessAccount @relation(fields: [businessId], references: [id])
+
+  @@map("business_consent_records")
+}
+
+// ─── User Push Tokens ───────────────────────────────────────────────────────
+
+model UserPushToken {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  token      String
+  platform   String
+  deviceId   String?   @map("device_id")
+  isActive   Boolean   @default(true) @map("is_active")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, token])
+  @@map("user_push_tokens")
+}
+
+// ─── Notification Preferences ───────────────────────────────────────────────
+
+model NotificationPreference {
+  userId                String   @id @map("user_id") @db.Uuid
+  streakAtRisk          Boolean  @default(false) @map("streak_at_risk")
+  rewardActivated       Boolean  @default(false) @map("reward_activated")
+  rewardClaimedPush     Boolean  @default(true) @map("reward_claimed_push")
+  leaderboardPrewarning Boolean  @default(false) @map("leaderboard_prewarning")
+  followedUserCheckin   Boolean  @default(false) @map("followed_user_checkin")
+  updatedAt             DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("notification_preferences")
+}
+
+// ─── Staff Invites ──────────────────────────────────────────────────────────
+
+model StaffInvite {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId   String   @map("business_id") @db.Uuid
+  inviteToken  String   @unique @map("invite_token")
+  invitedPhone String?  @map("invited_phone")
+  invitedEmail String?  @map("invited_email")
+  accepted     Boolean  @default(false)
+  expiresAt    DateTime @map("expires_at") @db.Timestamptz
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  business BusinessAccount @relation(fields: [businessId], references: [id])
+
+  @@map("staff_invites")
+}
+
+// ─── Staff Accounts ─────────────────────────────────────────────────────────
+
+model StaffAccount {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId String   @map("business_id") @db.Uuid
+  name       String
+  phone      String   @unique
+  cognitoSub String?  @unique @map("cognito_sub")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  business BusinessAccount @relation(fields: [businessId], references: [id])
+
+  @@map("staff_accounts")
+}
+
+// ─── User Follows ───────────────────────────────────────────────────────────
+
+model UserFollow {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  followerId  String   @map("follower_id") @db.Uuid
+  followingId String   @map("following_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  follower  User @relation("follower", fields: [followerId], references: [id])
+  following User @relation("following", fields: [followingId], references: [id])
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@map("user_follows")
+}
+
+// ─── Abuse Flags ────────────────────────────────────────────────────────────
+
+model AbuseFlag {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type         String
+  entityId     String   @map("entity_id") @db.Uuid
+  entityType   String   @map("entity_type")
+  evidenceJson Json?    @map("evidence_json") @db.JsonB
+  reviewed     Boolean  @default(false)
+  autoActioned Boolean  @default(false) @map("auto_actioned")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([entityType, entityId])
+  @@index([reviewed, createdAt])
+  @@map("abuse_flags")
+}
+
+// ─── Device Fingerprints ────────────────────────────────────────────────────
+
+model DeviceFingerprint {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  fingerprintHash String   @map("fingerprint_hash")
+  platform        String
+  firstSeenAt     DateTime @default(now()) @map("first_seen_at") @db.Timestamptz
+  lastSeenAt      DateTime @default(now()) @map("last_seen_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, fingerprintHash])
+  @@index([fingerprintHash])
+  @@map("device_fingerprints")
+}
+
+// ─── Audit Log ──────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adminId     String   @map("admin_id") @db.Uuid
+  adminRole   String   @map("admin_role")
+  action      String
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id") @db.Uuid
+  beforeState Json?    @map("before_state") @db.JsonB
+  afterState  Json?    @map("after_state") @db.JsonB
+  note        String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([entityType, entityId])
+  @@index([adminId])
+  @@index([createdAt])
+  @@map("audit_log")
+}
+
+// ─── Impersonation Log ─────────────────────────────────────────────────────
+
+model ImpersonationLog {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adminId           String    @map("admin_id") @db.Uuid
+  targetUserId      String    @map("target_user_id") @db.Uuid
+  targetAccountType String    @map("target_account_type")
+  note              String
+  startedAt         DateTime  @default(now()) @map("started_at") @db.Timestamptz
+  endedAt           DateTime? @map("ended_at") @db.Timestamptz
+
+  @@map("impersonation_log")
+}
+
+// ─── Admin Messages ─────────────────────────────────────────────────────────
+
+model AdminMessage {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adminId      String    @map("admin_id") @db.Uuid
+  targetUserId String    @map("target_user_id") @db.Uuid
+  message      String
+  readAt       DateTime? @map("read_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  targetUser User @relation(fields: [targetUserId], references: [id])
+
+  @@map("admin_messages")
+}
+
+// ─── Webhook Events (Yoco idempotency) ──────────────────────────────────────
+
+model WebhookEvent {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventId     String   @unique @map("event_id")
+  eventType   String   @map("event_type")
+  processedAt DateTime @default(now()) @map("processed_at") @db.Timestamptz
+
+  @@map("webhook_events")
+}

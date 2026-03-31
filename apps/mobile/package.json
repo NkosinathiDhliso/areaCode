@@ -1,0 +1,25 @@
+{
+  "name": "@area-code/mobile",
+  "version": "0.0.1",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
+  },
+  "dependencies": {
+    "@area-code/shared": "workspace:*",
+    "@rnmapbox/maps": "^10.0.0",
+    "expo": "~52.0.0",
+    "expo-location": "~18.0.0",
+    "expo-notifications": "~0.29.0",
+    "expo-router": "~4.0.0",
+    "react": "^18.3.0",
+    "react-native": "0.76.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "typescript": "^5.5.0"
+  }
+}

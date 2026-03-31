@@ -1,7 +1,11 @@
 {
   "private": true,
   "type": "module",
-  "workspaces": ["apps/*", "packages/*", "backend"],
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "backend"
+  ],
   "scripts": {
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -9,14 +13,24 @@
     "typecheck": "tsc --noEmit",
     "prepare": "husky"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma"
+    ]
+  },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
+    "@vitest/coverage-v8": "^4.1.2",
     "eslint": "^9.0.0",
     "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-react-hooks": "^5.0.0",
+    "fast-check": "^4.6.0",
     "husky": "^9.0.0",
     "prettier": "^3.0.0",
     "typescript": "^5.5.0",
-    "typescript-eslint": "^8.0.0"
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^4.1.2"
   }
 }

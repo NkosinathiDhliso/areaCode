@@ -34,3 +34,23 @@ export function isSaveDataEnabled(): boolean {
   const connection = (navigator as unknown as Record<string, unknown>).connection as { saveData?: boolean } | undefined
   return connection?.saveData ?? false
 }
+
+export function hasGeolocation(): boolean {
+  return isWeb && 'geolocation' in navigator
+}
+
+export function getCurrentPosition(
+  onSuccess: (coords: { latitude: number; longitude: number; accuracy: number }) => void,
+  onError: (error: { code: number; PERMISSION_DENIED: number }) => void,
+  options?: { enableHighAccuracy?: boolean; timeout?: number; maximumAge?: number },
+): void {
+  if (!hasGeolocation()) {
+    onError({ code: 2, PERMISSION_DENIED: 1 })
+    return
+  }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => onSuccess(pos.coords),
+    (err) => onError({ code: err.code, PERMISSION_DENIED: err.PERMISSION_DENIED }),
+    options,
+  )
+}

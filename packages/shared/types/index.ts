@@ -214,6 +214,24 @@ export interface MapInstance {
   getBounds(): { toArray(): [[number, number], [number, number]] }
 }
 
+// Business room event payloads
+export interface BusinessCheckinPayload {
+  nodeId: string
+  nodeName: string
+  checkInCount: number
+  avatarUrl?: string
+  username?: string
+  timestamp: string
+}
+
+export interface BusinessRewardClaimedPayload {
+  nodeId: string
+  nodeName: string
+  rewardId: string
+  rewardTitle: string
+  timestamp: string
+}
+
 // Socket event types
 export interface ServerToClientEvents {
   'node:pulse_update': (payload: { nodeId: string; pulseScore: number; checkInCount: number; state: NodeState }) => void
@@ -223,6 +241,8 @@ export interface ServerToClientEvents {
   'reward:claimed': (payload: { rewardId: string; rewardTitle: string; redemptionCode: string; codeExpiresAt: string }) => void
   'reward:slots_update': (payload: { rewardId: string; slotsRemaining: number }) => void
   'leaderboard:update': (payload: { userId: string; rank: number; delta: number }) => void
+  'business:checkin': (payload: BusinessCheckinPayload) => void
+  'business:reward_claimed': (payload: BusinessRewardClaimedPayload) => void
 }
 
 export interface ClientToServerEvents {

@@ -1,0 +1,22 @@
+{
+  "staff.login.title": "Staff Login",
+  "staff.login.phone": "Phone number",
+  "staff.login.sendOtp": "Send OTP",
+  "staff.login.verifyOtp": "Verify OTP",
+  "staff.login.otpPlaceholder": "Enter 6-digit code",
+  "staff.invite.title": "Accept Invite",
+  "staff.invite.accepting": "Setting up your account...",
+  "staff.invite.expired": "This invite has expired or has already been used.",
+  "staff.invite.success": "Account created. Please log in.",
+  "staff.validator.title": "Validate Redemption",
+  "staff.validator.placeholder": "Enter 6-digit code",
+  "staff.validator.validate": "Validate",
+  "staff.validator.validating": "Validating...",
+  "staff.validator.success": "Reward redeemed successfully",
+  "staff.validator.invalidCode": "Invalid code",
+  "staff.validator.expiredCode": "Code has expired",
+  "staff.validator.alreadyRedeemed": "Already redeemed",
+  "staff.validator.recentRedemptions": "Recent Redemptions",
+  "staff.validator.noRedemptions": "No redemptions yet",
+  "staff.logout": "Log out"
+}

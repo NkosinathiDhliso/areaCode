@@ -1,0 +1,57 @@
+name: Deploy ECS Socket Server
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/src/shared/socket/**'
+      - 'backend/Dockerfile'
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: prod
+        type: choice
+        options:
+          - dev
+          - prod
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+          ENV: ${{ github.event.inputs.environment || 'prod' }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          REPO="area-code-${ENV}-socket-server"
+          docker build -t ${ECR_REGISTRY}/${REPO}:${IMAGE_TAG} -f backend/Dockerfile backend/
+          docker push ${ECR_REGISTRY}/${REPO}:${IMAGE_TAG}
+
+      - name: Update ECS service
+        env:
+          ENV: ${{ github.event.inputs.environment || 'prod' }}
+        run: |
+          aws ecs update-service \
+            --cluster area-code-${ENV} \
+            --service area-code-${ENV}-socket-server \
+            --force-new-deployment

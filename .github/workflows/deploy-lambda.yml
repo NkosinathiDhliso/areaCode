@@ -1,0 +1,62 @@
+name: Deploy Lambda
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/src/**'
+
+  workflow_dispatch:
+    inputs:
+      function:
+        description: 'Lambda function name (or "all")'
+        required: true
+        default: all
+      environment:
+        description: 'Target environment'
+        required: true
+        default: prod
+        type: choice
+        options:
+          - dev
+          - prod
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Build and deploy
+        run: |
+          ENV="${{ github.event.inputs.environment || 'prod' }}"
+          FN="${{ github.event.inputs.function || 'all' }}"
+
+          if [ "$FN" = "all" ]; then
+            make build-all
+            make deploy-all ENV=$ENV
+          else
+            make build-fn FN=$FN
+            make deploy-fn FN=$FN ENV=$ENV
+          fi

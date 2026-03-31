@@ -8,19 +8,34 @@ const SOCKET_URL = typeof import.meta !== 'undefined' ? (import.meta as unknown 
 
 let socketInstance: TypedSocket | null = null
 
-export function getSocket(token?: string): TypedSocket {
+export function getSocket(token?: string, opts?: { userId?: string; citySlug?: string }): TypedSocket {
   if (socketInstance?.connected) {
     return socketInstance
   }
 
-  socketInstance = io(SOCKET_URL, {
-    auth: token ? { token } : undefined,
+  const auth: Record<string, string> = {}
+  if (token) auth['token'] = token
+  if (opts?.userId) auth['userId'] = opts.userId
+  if (opts?.citySlug) auth['citySlug'] = opts.citySlug
+
+  const options: Parameters<typeof io>[1] = {
     transports: ['websocket'],
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 30000,
     randomizationFactor: 0.5,
-  }) as TypedSocket
+  }
+
+  // In dev without a backend, limit reconnection attempts to reduce console spam
+  if (typeof import.meta !== 'undefined' && (import.meta as unknown as Record<string, Record<string, boolean>>).env?.DEV) {
+    options.reconnectionAttempts = 3
+  }
+
+  if (Object.keys(auth).length > 0) {
+    options.auth = auth
+  }
+
+  socketInstance = io(SOCKET_URL, options) as TypedSocket
 
   return socketInstance
 }

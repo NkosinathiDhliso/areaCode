@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+/* Tell Tailwind v4 to scan shared packages for utility classes */
+@source "../../packages/shared";
+@source "../../packages/features";
+
+/* ── Design system tokens ─────────────────────────────────────────────── */
+@import "@area-code/shared/tokens.css";
+
+/* ── Base styles ──────────────────────────────────────────────────────── */
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Hide scrollbar on category filter bar and horizontal scroll areas */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Mapbox GL overrides for dark theme */
+  .mapboxgl-ctrl-attrib,
+  .mapboxgl-ctrl-logo {
+    opacity: 0.3;
+  }
+
+  /* Allow node marker glow/halo to extend beyond marker bounds */
+  .mapboxgl-marker {
+    overflow: visible !important;
+  }
+
+  /* Focus ring for accessibility */
+  *:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Button reset */
+  button {
+    cursor: pointer;
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+  }
+}
