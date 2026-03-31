@@ -459,12 +459,21 @@ module "ecs_api" {
   custom_domain      = "api.areacode.co.za"
   enable_https       = true   # ACM cert is ISSUED — enable HTTPS listener
   environment_variables = {
-    AREA_CODE_ENV = local.env
-    NODE_ENV      = "production"
+    AREA_CODE_ENV                          = local.env
+    NODE_ENV                               = "production"
+    AWS_REGION                             = "us-east-1"
+    AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID = module.cognito_consumer.user_pool_id
+    AREA_CODE_COGNITO_CONSUMER_CLIENT_ID    = "5pn5l49sk08bqdavsom3eusf0b"
+    AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID = module.cognito_business.user_pool_id
+    AREA_CODE_COGNITO_BUSINESS_CLIENT_ID    = "4mb35kfs23e9s42ueb8jhh3c7c"
+    AREA_CODE_COGNITO_STAFF_USER_POOL_ID    = module.cognito_staff.user_pool_id
+    AREA_CODE_COGNITO_STAFF_CLIENT_ID       = "tlvem71ii7hbt7soqkvvok7i1"
+    AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
+    AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = "6ndlrao62ph9fkmv0fmirlom6p"
   }
   secrets = {
-    DATABASE_URL = data.aws_secretsmanager_secret.db_url.arn
-    REDIS_URL    = data.aws_secretsmanager_secret.redis_url.arn
+    AREA_CODE_DB_URL    = data.aws_secretsmanager_secret.db_url.arn
+    AREA_CODE_REDIS_URL = data.aws_secretsmanager_secret.redis_url.arn
   }
 }
 
