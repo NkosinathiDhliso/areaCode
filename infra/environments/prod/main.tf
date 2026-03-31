@@ -414,11 +414,11 @@ module "amplify_domain_web" {
 
   sub_domains = [
     {
-      branch_name = "main"
+      branch_name = "master"
       prefix      = ""       # root domain: areacode.co.za
     },
     {
-      branch_name = "main"
+      branch_name = "master"
       prefix      = "www"    # www.areacode.co.za
     }
   ]
@@ -432,7 +432,7 @@ module "amplify_domain_admin" {
 
   sub_domains = [
     {
-      branch_name = "main"
+      branch_name = "master"
       prefix      = "admin"  # admin.areacode.co.za
     }
   ]
@@ -446,7 +446,7 @@ module "amplify_domain_business" {
 
   sub_domains = [
     {
-      branch_name = "main"
+      branch_name = "master"
       prefix      = "business"  # business.areacode.co.za
     }
   ]
@@ -460,7 +460,7 @@ module "amplify_domain_staff" {
 
   sub_domains = [
     {
-      branch_name = "main"
+      branch_name = "master"
       prefix      = "staff"  # staff.areacode.co.za
     }
   ]
