@@ -12,10 +12,6 @@ variable "alb_arn" {
   default = ""
 }
 
-locals {
-  resource_arns = compact([var.api_gateway_arn, var.alb_arn])
-}
-
 resource "aws_wafv2_web_acl" "this" {
   name  = "area-code-${var.env}-waf"
   scope = "REGIONAL"
@@ -147,9 +143,9 @@ resource "aws_wafv2_web_acl" "this" {
   }
 }
 
-resource "aws_wafv2_web_acl_association" "this" {
-  for_each     = toset(local.resource_arns)
-  resource_arn = each.value
+resource "aws_wafv2_web_acl_association" "alb" {
+  count        = var.alb_arn != "" ? 1 : 0
+  resource_arn = var.alb_arn
   web_acl_arn  = aws_wafv2_web_acl.this.arn
 }
 
