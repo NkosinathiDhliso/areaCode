@@ -405,7 +405,89 @@ resource "aws_budgets_budget" "monthly" {
   }
 }
 
+# --- Amplify domains ---
+module "amplify_domain_web" {
+  source         = "../../modules/amplify-domain"
+  env            = local.env
+  amplify_app_id = "d3pm78r41ma6w6"
+  domain_name    = "areacode.co.za"
+
+  sub_domains = [
+    {
+      branch_name = "main"
+      prefix      = ""       # root domain: areacode.co.za
+    },
+    {
+      branch_name = "main"
+      prefix      = "www"    # www.areacode.co.za
+    }
+  ]
+}
+
+module "amplify_domain_admin" {
+  source         = "../../modules/amplify-domain"
+  env            = local.env
+  amplify_app_id = "d1ay6jict0ql9w"
+  domain_name    = "areacode.co.za"
+
+  sub_domains = [
+    {
+      branch_name = "main"
+      prefix      = "admin"  # admin.areacode.co.za
+    }
+  ]
+}
+
+module "amplify_domain_business" {
+  source         = "../../modules/amplify-domain"
+  env            = local.env
+  amplify_app_id = "dbp54yxhyjvk0"
+  domain_name    = "areacode.co.za"
+
+  sub_domains = [
+    {
+      branch_name = "main"
+      prefix      = "business"  # business.areacode.co.za
+    }
+  ]
+}
+
+module "amplify_domain_staff" {
+  source         = "../../modules/amplify-domain"
+  env            = local.env
+  amplify_app_id = "d166bb81tg4k61"
+  domain_name    = "areacode.co.za"
+
+  sub_domains = [
+    {
+      branch_name = "main"
+      prefix      = "staff"  # staff.areacode.co.za
+    }
+  ]
+}
+
 # --- Outputs ---
+output "amplify_web_domain_arn" {
+  value = module.amplify_domain_web.domain_association_arn
+}
+
+output "amplify_admin_domain_arn" {
+  value = module.amplify_domain_admin.domain_association_arn
+}
+
+output "amplify_business_domain_arn" {
+  value = module.amplify_domain_business.domain_association_arn
+}
+
+output "amplify_staff_domain_arn" {
+  value = module.amplify_domain_staff.domain_association_arn
+}
+
+output "amplify_web_cert_dns" {
+  value       = module.amplify_domain_web.certificate_verification_dns_record
+  description = "Add this CNAME to GoDaddy for SSL certificate verification"
+}
+
 output "api_endpoint" {
   value = module.api_gateway.api_endpoint
 }
