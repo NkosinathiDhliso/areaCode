@@ -23,6 +23,76 @@ export async function businessRoutes(app: FastifyInstance) {
     },
   )
 
+  // GET /v1/business/me/live-stats
+  app.get(
+    '/v1/business/me/live-stats',
+    { preHandler: [requireAuth('business')] },
+    async (request) => {
+      const auth = getAuth(request)
+      return service.getLiveStats(auth.userId)
+    },
+  )
+
+  // GET /v1/business/me/nodes
+  app.get(
+    '/v1/business/me/nodes',
+    { preHandler: [requireAuth('business')] },
+    async (request) => {
+      const auth = getAuth(request)
+      return service.getBusinessNodes(auth.userId)
+    },
+  )
+
+  // GET /v1/business/me/audience
+  app.get(
+    '/v1/business/me/audience',
+    { preHandler: [requireAuth('business')] },
+    async (request) => {
+      const auth = getAuth(request)
+      return service.getAudienceAnalytics(auth.userId)
+    },
+  )
+
+  // GET /v1/business/me/audience/music
+  app.get(
+    '/v1/business/me/audience/music',
+    { preHandler: [requireAuth('business')] },
+    async (request) => {
+      const auth = getAuth(request)
+      return service.getMusicAudience(auth.userId)
+    },
+  )
+
+  // GET /v1/business/me/recent-redemptions
+  app.get(
+    '/v1/business/me/recent-redemptions',
+    { preHandler: [requireAuth('business')] },
+    async (request) => {
+      const auth = getAuth(request)
+      return service.getRecentRedemptions(auth.userId)
+    },
+  )
+
+  // GET /v1/business/rewards
+  app.get(
+    '/v1/business/rewards',
+    { preHandler: [requireAuth('business')] },
+    async (request) => {
+      const auth = getAuth(request)
+      return service.getBusinessRewards(auth.userId)
+    },
+  )
+
+  // GET /v1/business/nodes/current/qr
+  app.get(
+    '/v1/business/nodes/current/qr',
+    { preHandler: [requireAuth('business')] },
+    async (request) => {
+      const auth = getAuth(request)
+      return service.getCurrentNodeQr(auth.userId)
+    },
+  )
+
   // GET /v1/business/plans
   app.get('/v1/business/plans', async () => {
     return service.getPlans()

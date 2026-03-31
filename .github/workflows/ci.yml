@@ -226,8 +226,9 @@ jobs:
         run: |
           ECR_REPO="${{ steps.ecr-login.outputs.registry }}/area-code-dev-api"
           IMAGE_TAG="${{ github.sha }}"
-          docker build -t ${ECR_REPO}:${IMAGE_TAG} .
+          docker build -t ${ECR_REPO}:${IMAGE_TAG} -t ${ECR_REPO}:latest .
           docker push ${ECR_REPO}:${IMAGE_TAG}
+          docker push ${ECR_REPO}:latest
           aws ecs update-service \
             --cluster area-code-dev \
             --service area-code-dev-api \
@@ -289,8 +290,9 @@ jobs:
         run: |
           ECR_REPO="${{ steps.ecr-login.outputs.registry }}/area-code-prod-api"
           IMAGE_TAG="${{ github.sha }}"
-          docker build -t ${ECR_REPO}:${IMAGE_TAG} .
+          docker build -t ${ECR_REPO}:${IMAGE_TAG} -t ${ECR_REPO}:latest .
           docker push ${ECR_REPO}:${IMAGE_TAG}
+          docker push ${ECR_REPO}:latest
           aws ecs update-service \
             --cluster area-code-prod \
             --service area-code-prod-api \

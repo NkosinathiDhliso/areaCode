@@ -4,7 +4,7 @@ import type { ClientToServerEvents, ServerToClientEvents } from '../types'
 
 type TypedSocket = Socket<ServerToClientEvents, ClientToServerEvents>
 
-const SOCKET_URL = typeof import.meta !== 'undefined' ? (import.meta as unknown as Record<string, Record<string, string>>).env?.VITE_SOCKET_URL ?? 'http://localhost:3001' : 'http://localhost:3001'
+const SOCKET_URL = typeof import.meta !== 'undefined' ? (import.meta as unknown as Record<string, Record<string, string>>).env?.VITE_SOCKET_URL ?? (import.meta as unknown as Record<string, Record<string, string>>).env?.VITE_API_URL ?? 'http://localhost:4000' : 'http://localhost:4000'
 
 let socketInstance: TypedSocket | null = null
 

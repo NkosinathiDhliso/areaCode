@@ -29,6 +29,21 @@ variable "custom_attributes" {
   default = []
 }
 
+variable "define_auth_challenge_arn" {
+  type    = string
+  default = ""
+}
+
+variable "create_auth_challenge_arn" {
+  type    = string
+  default = ""
+}
+
+variable "verify_auth_challenge_arn" {
+  type    = string
+  default = ""
+}
+
 resource "aws_iam_role" "cognito_sns" {
   name = "area-code-${var.env}-${var.pool_name}-cognito-sns"
 
@@ -101,6 +116,15 @@ resource "aws_cognito_user_pool" "this" {
 
   lifecycle {
     ignore_changes = [schema]
+  }
+
+  dynamic "lambda_config" {
+    for_each = var.define_auth_challenge_arn != "" ? [1] : []
+    content {
+      define_auth_challenge          = var.define_auth_challenge_arn
+      create_auth_challenge          = var.create_auth_challenge_arn
+      verify_auth_challenge_response = var.verify_auth_challenge_arn
+    }
   }
 }
 

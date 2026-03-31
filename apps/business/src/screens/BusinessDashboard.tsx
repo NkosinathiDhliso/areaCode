@@ -8,9 +8,10 @@ import { RewardsPanel } from './panels/RewardsPanel'
 import { AudiencePanel } from './panels/AudiencePanel'
 import { NodeEditorPanel } from './panels/NodeEditorPanel'
 import { BoostPanel } from './panels/BoostPanel'
+import { PlansPanel } from './panels/PlansPanel'
 import { SettingsPanel } from './panels/SettingsPanel'
 
-const PANELS: DashboardPanel[] = ['live', 'rewards', 'audience', 'node', 'boost', 'settings']
+const PANELS: DashboardPanel[] = ['live', 'rewards', 'audience', 'node', 'boost', 'plans', 'settings']
 
 const PANEL_LABELS: Record<DashboardPanel, string> = {
   live: 'biz.panel.live',
@@ -18,6 +19,7 @@ const PANEL_LABELS: Record<DashboardPanel, string> = {
   audience: 'biz.panel.audience',
   node: 'biz.panel.node',
   boost: 'biz.panel.boost',
+  plans: 'biz.panel.plans',
   settings: 'biz.panel.settings',
 }
 
@@ -106,6 +108,7 @@ export function BusinessDashboard() {
               {panel === 'audience' && <AudiencePanel />}
               {panel === 'node' && <NodeEditorPanel />}
               {panel === 'boost' && <BoostPanel />}
+              {panel === 'plans' && <PlansPanel />}
               {panel === 'settings' && <SettingsPanel />}
             </div>
           ))}

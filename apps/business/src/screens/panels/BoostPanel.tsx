@@ -61,7 +61,7 @@ export function BoostPanel() {
                 <span className="text-[var(--text-primary)] font-medium">{dur} Boost</span>
               </div>
               <span className="text-[var(--accent)] font-bold">
-                {formatZAR(pricing[dur])}
+                {formatZAR(pricing[dur] / 100)}
               </span>
             </button>
           ))}

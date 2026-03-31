@@ -3,9 +3,11 @@ import { useTranslation } from 'react-i18next'
 
 import { api } from '@area-code/shared/lib/api'
 import type { BusinessAccount, StaffAccount } from '@area-code/shared/types'
+import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 
 export function SettingsPanel() {
   const { t } = useTranslation()
+  const setPanel = useBusinessStore((s) => s.setPanel)
   const [biz, setBiz] = useState<BusinessAccount | null>(null)
   const [staff, setStaff] = useState<StaffAccount[]>([])
   const [qrUrl, setQrUrl] = useState<string | null>(null)
@@ -62,6 +64,12 @@ export function SettingsPanel() {
               Trial ends {new Date(biz.trialEndsAt).toLocaleDateString()}
             </p>
           )}
+          <button
+            onClick={() => setPanel('plans')}
+            className="text-[var(--accent)] text-xs mt-2"
+          >
+            {t('biz.plans.changePlan')}
+          </button>
         </div>
       )}
 

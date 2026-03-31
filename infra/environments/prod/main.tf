@@ -57,12 +57,18 @@ module "cognito_consumer" {
   source    = "../../modules/cognito"
   env       = local.env
   pool_name = "consumer"
+  define_auth_challenge_arn  = module.cognito_triggers_consumer.define_auth_arn
+  create_auth_challenge_arn  = module.cognito_triggers_consumer.create_auth_arn
+  verify_auth_challenge_arn  = module.cognito_triggers_consumer.verify_auth_arn
 }
 
 module "cognito_business" {
   source    = "../../modules/cognito"
   env       = local.env
   pool_name = "business"
+  define_auth_challenge_arn  = module.cognito_triggers_business.define_auth_arn
+  create_auth_challenge_arn  = module.cognito_triggers_business.create_auth_arn
+  verify_auth_challenge_arn  = module.cognito_triggers_business.verify_auth_arn
 }
 
 module "cognito_staff" {
@@ -70,6 +76,9 @@ module "cognito_staff" {
   env                    = local.env
   pool_name              = "staff"
   access_token_ttl_hours = 8
+  define_auth_challenge_arn  = module.cognito_triggers_staff.define_auth_arn
+  create_auth_challenge_arn  = module.cognito_triggers_staff.create_auth_arn
+  verify_auth_challenge_arn  = module.cognito_triggers_staff.verify_auth_arn
 }
 
 module "cognito_admin" {
@@ -80,6 +89,28 @@ module "cognito_admin" {
     name = "admin_role"
     type = "String"
   }]
+}
+
+# --- Cognito CUSTOM_AUTH Lambda triggers (consumer, business, staff) ---
+module "cognito_triggers_consumer" {
+  source       = "../../modules/cognito-triggers"
+  env          = local.env
+  pool_name    = "consumer"
+  user_pool_id = module.cognito_consumer.user_pool_id
+}
+
+module "cognito_triggers_business" {
+  source       = "../../modules/cognito-triggers"
+  env          = local.env
+  pool_name    = "business"
+  user_pool_id = module.cognito_business.user_pool_id
+}
+
+module "cognito_triggers_staff" {
+  source       = "../../modules/cognito-triggers"
+  env          = local.env
+  pool_name    = "staff"
+  user_pool_id = module.cognito_staff.user_pool_id
 }
 
 # --- S3 media bucket ---
@@ -423,7 +454,10 @@ module "ecs_api" {
   memory             = 1024
   vpc_id             = module.vpc.vpc_id
   subnet_ids         = module.vpc.private_subnet_ids
+  public_subnet_ids  = module.vpc.public_subnet_ids
   security_group_ids = module.vpc.ecs_security_group_ids
+  custom_domain      = "api.areacode.co.za"
+  enable_https       = true   # ACM cert is ISSUED — enable HTTPS listener
   environment_variables = {
     AREA_CODE_ENV = local.env
     NODE_ENV      = "production"
@@ -637,6 +671,11 @@ output "redis_endpoint" {
 
 output "ecs_api_url" {
   value = module.ecs_api.alb_dns_name
+}
+
+output "ecs_api_acm_validation" {
+  description = "Add these CNAME records to GoDaddy for api.areacode.co.za SSL cert validation"
+  value       = module.ecs_api.acm_validation_records
 }
 
 output "sqs_reward_eval_url" {

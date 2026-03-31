@@ -58,12 +58,18 @@ module "cognito_consumer" {
   source    = "../../modules/cognito"
   env       = local.env
   pool_name = "consumer"
+  define_auth_challenge_arn  = module.cognito_triggers_consumer.define_auth_arn
+  create_auth_challenge_arn  = module.cognito_triggers_consumer.create_auth_arn
+  verify_auth_challenge_arn  = module.cognito_triggers_consumer.verify_auth_arn
 }
 
 module "cognito_business" {
   source    = "../../modules/cognito"
   env       = local.env
   pool_name = "business"
+  define_auth_challenge_arn  = module.cognito_triggers_business.define_auth_arn
+  create_auth_challenge_arn  = module.cognito_triggers_business.create_auth_arn
+  verify_auth_challenge_arn  = module.cognito_triggers_business.verify_auth_arn
 }
 
 module "cognito_staff" {
@@ -71,6 +77,9 @@ module "cognito_staff" {
   env                    = local.env
   pool_name              = "staff"
   access_token_ttl_hours = 8
+  define_auth_challenge_arn  = module.cognito_triggers_staff.define_auth_arn
+  create_auth_challenge_arn  = module.cognito_triggers_staff.create_auth_arn
+  verify_auth_challenge_arn  = module.cognito_triggers_staff.verify_auth_arn
 }
 
 module "cognito_admin" {
@@ -81,6 +90,28 @@ module "cognito_admin" {
     name = "admin_role"
     type = "String"
   }]
+}
+
+# --- Cognito CUSTOM_AUTH Lambda triggers (consumer, business, staff) ---
+module "cognito_triggers_consumer" {
+  source       = "../../modules/cognito-triggers"
+  env          = local.env
+  pool_name    = "consumer"
+  user_pool_id = module.cognito_consumer.user_pool_id
+}
+
+module "cognito_triggers_business" {
+  source       = "../../modules/cognito-triggers"
+  env          = local.env
+  pool_name    = "business"
+  user_pool_id = module.cognito_business.user_pool_id
+}
+
+module "cognito_triggers_staff" {
+  source       = "../../modules/cognito-triggers"
+  env          = local.env
+  pool_name    = "staff"
+  user_pool_id = module.cognito_staff.user_pool_id
 }
 
 # --- S3 media bucket ---

@@ -272,3 +272,84 @@ export async function startTrial(businessId: string, plan: 'growth' | 'pro') {
   const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
   return repo.updateBusinessTier(businessId, plan, trialEndsAt)
 }
+
+// ─── Live Stats ─────────────────────────────────────────────────────────────
+
+export async function getLiveStats(businessId: string) {
+  if (DEV_MODE) {
+    return { checkInsToday: 34, rewardsClaimed: 12, pulseScore: 45, totalCheckIns: 1247 }
+  }
+  return repo.getLiveStats(businessId)
+}
+
+// ─── Business Nodes ─────────────────────────────────────────────────────────
+
+export async function getBusinessNodes(businessId: string) {
+  if (DEV_MODE) {
+    return { items: [] }
+  }
+  const items = await repo.getNodesForBusiness(businessId)
+  return { items }
+}
+
+// ─── Audience Analytics ─────────────────────────────────────────────────────
+
+export async function getAudienceAnalytics(businessId: string) {
+  if (DEV_MODE) {
+    return {
+      tierDistribution: { local: 40, regular: 30, fixture: 20, institution: 8, legend: 2 },
+      repeatVsNew: { repeat: 180, new: 67 },
+      totalUniqueVisitors: 247,
+      peakHours: ['12:00-14:00', '18:00-21:00'],
+    }
+  }
+  return repo.getAudienceAnalytics(businessId)
+}
+
+// ─── Music Audience ─────────────────────────────────────────────────────────
+
+export async function getMusicAudience(businessId: string) {
+  if (DEV_MODE) {
+    return {
+      totalWithMusicPrefs: 0,
+      genreDistribution: {},
+      archetypeBreakdown: {},
+      peakArchetypeByTime: [],
+    }
+  }
+  return repo.getMusicAudience(businessId)
+}
+
+// ─── Recent Redemptions ─────────────────────────────────────────────────────
+
+export async function getRecentRedemptions(businessId: string) {
+  if (DEV_MODE) {
+    return []
+  }
+  return repo.getRecentRedemptions(businessId)
+}
+
+// ─── Business Rewards (list) ────────────────────────────────────────────────
+
+export async function getBusinessRewards(businessId: string) {
+  if (DEV_MODE) {
+    return { items: [] }
+  }
+  const items = await repo.getRewardsForBusiness(businessId)
+  return { items }
+}
+
+// ─── Current Node QR (convenience) ──────────────────────────────────────────
+
+export async function getCurrentNodeQr(businessId: string) {
+  if (DEV_MODE) {
+    const nodeId = 'dev-node-1'
+    const token = generateQrToken(nodeId)
+    return { url: `areacode.co.za/qr/${nodeId}/${token}`, token, nodeId }
+  }
+  const nodes = await repo.getNodesForBusiness(businessId)
+  if (!nodes.length) throw AppError.notFound('No nodes found')
+  const nodeId = nodes[0]!.id
+  const token = generateQrToken(nodeId)
+  return { url: `areacode.co.za/qr/${nodeId}/${token}`, token, nodeId }
+}

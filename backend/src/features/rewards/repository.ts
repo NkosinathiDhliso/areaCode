@@ -103,3 +103,32 @@ export async function getRecentRedemptions(businessId: string, limit = 20) {
     },
   })
 }
+
+export async function getStaffRecentRedemptions(staffId: string, limit = 20) {
+  // Get the staff's business, then fetch recent redemptions for that business
+  const staff = await prisma.staffAccount.findUnique({
+    where: { id: staffId },
+    select: { businessId: true },
+  })
+  if (!staff) return []
+
+  const items = await prisma.rewardRedemption.findMany({
+    where: {
+      redeemedAt: { not: null },
+      reward: { node: { businessId: staff.businessId } },
+    },
+    orderBy: { redeemedAt: 'desc' },
+    take: limit,
+    include: {
+      reward: { select: { title: true } },
+      user: { select: { displayName: true } },
+    },
+  })
+
+  return items.map((r) => ({
+    code: r.redemptionCode,
+    rewardTitle: r.reward.title,
+    displayName: r.user.displayName,
+    redeemedAt: r.redeemedAt?.toISOString(),
+  }))
+}

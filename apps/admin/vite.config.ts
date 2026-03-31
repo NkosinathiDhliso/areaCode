@@ -7,6 +7,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: { port: 3003 },
   build: { outDir: 'dist' },
+  envDir: resolve(__dirname, '../..'),
   resolve: {
     alias: {
       '@area-code/shared': resolve(__dirname, '../../packages/shared'),

@@ -8,7 +8,7 @@ variable "service_name" {
 
 variable "container_port" {
   type    = number
-  default = 3001
+  default = 4000
 }
 
 variable "cpu" {
@@ -48,9 +48,27 @@ variable "environment_variables" {
   default = {}
 }
 
+variable "custom_domain" {
+  description = "Custom domain for the ALB (e.g. api.areacode.co.za). Creates ACM cert. Leave empty to skip."
+  type        = string
+  default     = ""
+}
+
+variable "enable_https" {
+  description = "Set to true AFTER the ACM certificate has been DNS-validated on your domain registrar."
+  type        = bool
+  default     = false
+}
+
+variable "public_subnet_ids" {
+  description = "Public subnets for the internet-facing ALB. Falls back to subnet_ids if not set."
+  type        = list(string)
+  default     = []
+}
+
 resource "aws_ecr_repository" "this" {
   name                 = "area-code-${var.env}-${var.service_name}"
-  image_tag_mutability = "IMMUTABLE"
+  image_tag_mutability = "MUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
@@ -149,16 +167,21 @@ resource "aws_cloudwatch_log_group" "this" {
   retention_in_days = 30
 }
 
+locals {
+  alb_subnets       = length(var.public_subnet_ids) > 0 ? var.public_subnet_ids : var.subnet_ids
+  has_custom_domain = var.custom_domain != ""
+}
+
 resource "aws_lb" "this" {
   name               = "area-code-${var.env}-${var.service_name}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = var.security_group_ids
-  subnets            = var.subnet_ids
+  subnets            = local.alb_subnets
 }
 
 resource "aws_lb_target_group" "this" {
-  name        = "ac-${var.env}-${var.service_name}"
+  name        = "ac-${var.env}-${var.service_name}-${var.container_port}"
   port        = var.container_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -171,9 +194,44 @@ resource "aws_lb_target_group" "this" {
     timeout             = 5
     interval            = 30
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
-resource "aws_lb_listener" "http" {
+# --- ACM certificate (created when custom_domain is set, validated externally) ---
+resource "aws_acm_certificate" "this" {
+  count             = local.has_custom_domain ? 1 : 0
+  domain_name       = var.custom_domain
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = { Name = "area-code-${var.env}-${var.service_name}" }
+}
+
+# --- HTTPS listener (only when enable_https = true, i.e. cert is validated) ---
+resource "aws_lb_listener" "https" {
+  count             = var.enable_https ? 1 : 0
+  load_balancer_arn = aws_lb.this.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = aws_acm_certificate.this[0].arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.this.arn
+  }
+}
+
+# --- HTTP listener: always forward to target group.
+#     When HTTPS is enabled, redirect instead. ---
+resource "aws_lb_listener" "http_forward" {
+  count             = var.enable_https ? 0 : 1
   load_balancer_arn = aws_lb.this.arn
   port              = 80
   protocol          = "HTTP"
@@ -181,6 +239,23 @@ resource "aws_lb_listener" "http" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.this.arn
+  }
+}
+
+resource "aws_lb_listener" "http_redirect" {
+  count             = var.enable_https ? 1 : 0
+  load_balancer_arn = aws_lb.this.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
   }
 }
 
@@ -201,6 +276,11 @@ resource "aws_ecs_service" "this" {
     container_name   = var.service_name
     container_port   = var.container_port
   }
+
+  depends_on = [
+    aws_lb_listener.http_forward,
+    aws_lb_listener.https,
+  ]
 }
 
 output "ecr_repository_url" {
@@ -221,4 +301,19 @@ output "alb_arn" {
 
 output "task_role_name" {
   value = aws_iam_role.task.name
+}
+
+output "acm_certificate_arn" {
+  value = local.has_custom_domain ? aws_acm_certificate.this[0].arn : ""
+}
+
+output "acm_validation_records" {
+  description = "DNS records to add for ACM certificate validation"
+  value = local.has_custom_domain ? {
+    for dvo in aws_acm_certificate.this[0].domain_validation_options : dvo.domain_name => {
+      name  = dvo.resource_record_name
+      type  = dvo.resource_record_type
+      value = dvo.resource_record_value
+    }
+  } : {}
 }

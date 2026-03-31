@@ -105,3 +105,86 @@ export async function deactivateBusinessRewards(businessId: string) {
     data: { isActive: false },
   })
 }
+
+// ─── Live Stats ─────────────────────────────────────────────────────────────
+
+export async function getLiveStats(businessId: string) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const [checkInsToday, totalCheckIns, rewardsClaimed] = await Promise.all([
+    prisma.checkIn.count({
+      where: { node: { businessId }, checkedInAt: { gte: today } },
+    }),
+    prisma.checkIn.count({
+      where: { node: { businessId } },
+    }),
+    prisma.rewardRedemption.count({
+      where: { reward: { node: { businessId } }, redeemedAt: { gte: today } },
+    }),
+  ])
+
+  return { checkInsToday, rewardsClaimed, pulseScore: 0, totalCheckIns }
+}
+
+// ─── Business Nodes ─────────────────────────────────────────────────────────
+
+export async function getNodesForBusiness(businessId: string) {
+  return prisma.node.findMany({
+    where: { businessId },
+    orderBy: { createdAt: 'desc' },
+  })
+}
+
+// ─── Audience Analytics ─────────────────────────────────────────────────────
+
+export async function getAudienceAnalytics(businessId: string) {
+  const nodes = await prisma.node.findMany({ where: { businessId }, select: { id: true } })
+  const nodeIds = nodes.map((n) => n.id)
+
+  const uniqueUsers = await prisma.checkIn.groupBy({
+    by: ['userId'],
+    where: { nodeId: { in: nodeIds } },
+  })
+
+  return {
+    tierDistribution: {},
+    repeatVsNew: { repeat: 0, new: uniqueUsers.length },
+    totalUniqueVisitors: uniqueUsers.length,
+    peakHours: [],
+  }
+}
+
+// ─── Music Audience ─────────────────────────────────────────────────────────
+
+export async function getMusicAudience(_businessId: string) {
+  return {
+    totalWithMusicPrefs: 0,
+    genreDistribution: {},
+    archetypeBreakdown: {},
+    peakArchetypeByTime: [],
+  }
+}
+
+// ─── Recent Redemptions ─────────────────────────────────────────────────────
+
+export async function getRecentRedemptions(businessId: string) {
+  return prisma.rewardRedemption.findMany({
+    where: { reward: { node: { businessId } }, redeemedAt: { not: null } },
+    orderBy: { redeemedAt: 'desc' },
+    take: 20,
+    include: {
+      reward: { select: { title: true } },
+      user: { select: { displayName: true } },
+    },
+  })
+}
+
+// ─── Business Rewards ───────────────────────────────────────────────────────
+
+export async function getRewardsForBusiness(businessId: string) {
+  return prisma.reward.findMany({
+    where: { node: { businessId } },
+    orderBy: { createdAt: 'desc' },
+  })
+}

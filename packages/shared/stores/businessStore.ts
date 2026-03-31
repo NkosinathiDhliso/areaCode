@@ -3,7 +3,7 @@ import { immer } from 'zustand/middleware/immer'
 
 import type { BusinessAccount, Node } from '../types'
 
-type DashboardPanel = 'live' | 'rewards' | 'audience' | 'node' | 'boost' | 'settings'
+type DashboardPanel = 'live' | 'rewards' | 'audience' | 'node' | 'boost' | 'plans' | 'settings'
 
 interface BusinessState {
   business: BusinessAccount | null
