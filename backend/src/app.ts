@@ -25,6 +25,7 @@ export function buildApp() {
     origin: isProd
       ? [
           'https://areacode.co.za',
+          'https://www.areacode.co.za',
           'https://business.areacode.co.za',
           'https://staff.areacode.co.za',
           'https://admin.areacode.co.za',
