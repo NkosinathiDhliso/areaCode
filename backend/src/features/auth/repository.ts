@@ -92,6 +92,7 @@ export async function createUser(data: {
 export async function createBusinessAccount(data: {
   email: string; businessName: string;
   registrationNumber?: string; cognitoSub: string;
+  phone?: string;
 }) {
   return prisma.businessAccount.create({ data })
 }
@@ -121,4 +122,19 @@ export async function softDeleteCheckInHistory(userId: string) {
   // In production, this would set a deleted_at timestamp
   // For now, we track via a deletion queue
   return prisma.checkIn.deleteMany({ where: { userId } })
+}
+
+// ─── Account Deletion (POPIA erasure) ───────────────────────────────────────
+
+export async function createErasureRequest(userId: string) {
+  return prisma.erasureRequest.create({
+    data: { userId },
+  })
+}
+
+export async function hasActiveErasureRequest(userId: string) {
+  const existing = await prisma.erasureRequest.findFirst({
+    where: { userId, status: 'pending' },
+  })
+  return !!existing
 }

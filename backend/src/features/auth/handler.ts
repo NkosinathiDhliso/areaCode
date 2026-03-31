@@ -226,6 +226,16 @@ export async function authRoutes(app: FastifyInstance) {
     },
   )
 
+  // DELETE /v1/users/me — POPIA right-to-erasure
+  app.delete(
+    '/v1/users/me',
+    { preHandler: [requireAuth('consumer')] },
+    async (request) => {
+      const auth = getAuth(request)
+      return service.requestAccountDeletion(auth.userId)
+    },
+  )
+
   // POST /v1/staff-invite/accept
   app.post(
     '/v1/staff-invite/accept',

@@ -57,6 +57,7 @@ model User {
   neighbourhoodId String? @map("neighbourhood_id") @db.Uuid
   tier            String  @default("local")
   totalCheckIns   Int     @default(0) @map("total_check_ins")
+  streakCount     Int     @default(0) @map("streak_count")
   cognitoSub         String?  @unique @map("cognito_sub")
   musicGenres        String[] @default([]) @map("music_genres")
   dimensionScores    Json?    @map("dimension_scores") @db.JsonB
@@ -78,6 +79,7 @@ model User {
   leaderboardHistory LeaderboardHistory[]
   deviceFingerprints DeviceFingerprint[]
   adminMessages      AdminMessage[]
+  erasureRequests    ErasureRequest[]
 
   @@map("users")
 }
@@ -87,6 +89,7 @@ model User {
 model BusinessAccount {
   id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email              String    @unique
+  phone              String?   @unique
   businessName       String    @map("business_name")
   registrationNumber String?   @map("registration_number")
   cognitoSub         String?   @unique @map("cognito_sub")
@@ -457,4 +460,19 @@ model WebhookEvent {
   processedAt DateTime @default(now()) @map("processed_at") @db.Timestamptz
 
   @@map("webhook_events")
+}
+
+// ─── Erasure Requests (POPIA right-to-erasure) ──────────────────────────────
+
+model ErasureRequest {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  requestedAt DateTime  @default(now()) @map("requested_at") @db.Timestamptz
+  processedAt DateTime? @map("processed_at") @db.Timestamptz
+  status      String    @default("pending")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([status, requestedAt])
+  @@map("erasure_requests")
 }

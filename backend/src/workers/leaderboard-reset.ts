@@ -67,6 +67,48 @@ export async function handler() {
  */
 export async function preResetHandler() {
   console.log('[leaderboard-reset] Sending pre-reset notifications')
-  // Push notifications handled by notification service
-  return { sent: 0 }
+
+  const cities = await prisma.city.findMany({ select: { id: true, slug: true } })
+  let sent = 0
+
+  for (const city of cities) {
+    const key = leaderboard(city.id)
+    const top50 = await redis.zrevrange(key, 0, 49, 'WITHSCORES')
+
+    const userIds: string[] = []
+    const rankMap = new Map<string, { rank: number; count: number }>()
+    for (let i = 0; i < top50.length; i += 2) {
+      const userId = top50[i]!
+      userIds.push(userId)
+      rankMap.set(userId, {
+        rank: Math.floor(i / 2) + 1,
+        count: parseInt(top50[i + 1]!, 10),
+      })
+    }
+
+    if (userIds.length === 0) continue
+
+    // Find users who opted in to leaderboard prewarning
+    const optedIn = await prisma.notificationPreference.findMany({
+      where: { userId: { in: userIds }, leaderboardPrewarning: true },
+      select: { userId: true },
+    })
+
+    for (const pref of optedIn) {
+      const entry = rankMap.get(pref.userId)
+      if (!entry) continue
+
+      // Emit via socket — push fallback handled by notification service
+      const { emitToast } = await import('../shared/socket/events.js')
+      emitToast(city.slug, {
+        type: 'leaderboard',
+        message: `Leaderboard resets tonight! You're #${entry.rank} with ${entry.count} check-ins.`,
+        nodeId: '',
+      })
+      sent++
+    }
+  }
+
+  console.log(`[leaderboard-reset] Pre-reset notifications sent: ${sent}`)
+  return { sent }
 }

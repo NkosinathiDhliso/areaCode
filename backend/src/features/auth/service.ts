@@ -120,8 +120,9 @@ export async function businessSignup(data: {
   const business = await repo.createBusinessAccount({
     email: data.email,
     businessName: data.businessName,
-    registrationNumber: data.registrationNumber,
+    ...(data.registrationNumber ? { registrationNumber: data.registrationNumber } : {}),
     cognitoSub: cognitoUser.sub,
+    phone: data.phone,
   })
 
   await cognito.updateUserAttributes('business', data.phone, {
@@ -263,7 +264,7 @@ export async function refreshToken(_refreshToken: string, _pool: string) {
 
 export async function getUserProfile(cognitoSub: string) {
   if (DEV_MODE) {
-    return { id: 'dev-user-1', username: 'dev_user', displayName: 'Dev User', phone: '+27000000000', tier: 'explorer', cityId: null, neighbourhoodId: null, totalCheckIns: 8, avatarUrl: null, cognitoSub, createdAt: new Date().toISOString() }
+    return { id: 'dev-user-1', username: 'dev_user', displayName: 'Dev User', phone: '+27000000000', tier: 'explorer', cityId: null, neighbourhoodId: null, totalCheckIns: 8, streakCount: 3, avatarUrl: null, cognitoSub, createdAt: new Date().toISOString() }
   }
   const user = await repo.getUserByCognitoSub(cognitoSub)
   if (!user) throw AppError.notFound('User not found')
@@ -390,6 +391,20 @@ export async function checkOtpRateLimit(phone: string) {
 
   // Set 60s cooldown
   await redis.set(cooldownKey, '1', 'EX', 60)
+}
+
+// ─── Account Deletion (POPIA) ────────────────────────────────────────────────
+
+export async function requestAccountDeletion(userId: string) {
+  if (DEV_MODE) {
+    return { success: true, message: 'Erasure request queued (dev mode)' }
+  }
+  const hasExisting = await repo.hasActiveErasureRequest(userId)
+  if (hasExisting) {
+    throw AppError.conflict('Erasure request already pending')
+  }
+  await repo.createErasureRequest(userId)
+  return { success: true, message: 'Your data will be erased within 30 days per POPIA requirements.' }
 }
 
 // ─── Staff Invite ───────────────────────────────────────────────────────────

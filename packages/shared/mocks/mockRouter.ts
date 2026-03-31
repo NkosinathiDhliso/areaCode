@@ -115,6 +115,11 @@ register('GET', '/v1/auth/account-type', () => ({ accountType: 'consumer' }))
 
 register('POST', '/v1/auth/business/login', () => ({ success: true }))
 
+register('POST', '/v1/auth/business/signup', () => ({
+  businessId: CURRENT_BUSINESS_ID,
+  message: 'OTP sent (dev mode)',
+}))
+
 register('POST', '/v1/auth/business/verify-otp', () => ({
   accessToken: 'dev-access-mock-biz-2',
   refreshToken: 'dev-refresh-mock-biz-2',
@@ -226,6 +231,15 @@ register('GET', '/v1/rewards/unclaimed', () => {
 })
 
 register('POST', '/v1/rewards/redeem', ({ body }) => {
+  const { code } = (body ?? {}) as { code?: string }
+  const codeStr = code ?? ''
+  if (codeStr.length < 6) {
+    return { error: 'invalid_code', message: 'Invalid code', statusCode: 400 }
+  }
+  return { success: true, rewardTitle: 'Free coffee with any breakfast', redeemedAt: new Date().toISOString() }
+})
+
+register('POST', '/v1/rewards/:code/redeem', ({ body }) => {
   const { code } = (body ?? {}) as { code?: string }
   const codeStr = code ?? ''
   if (codeStr.length < 6) {
@@ -417,10 +431,11 @@ register('GET', '/v1/business/me/recent-redemptions', () => {
 })
 
 register('GET', '/v1/business/rewards', () => {
-  return state.rewards.filter((r) => {
+  const items = state.rewards.filter((r) => {
     const node = MOCK_NODES.find((n) => n.id === r.nodeId)
     return node?.businessId === CURRENT_BUSINESS_ID
   })
+  return { items }
 })
 
 register('POST', '/v1/business/rewards', ({ body }) => {
@@ -444,22 +459,54 @@ register('POST', '/v1/business/rewards', ({ body }) => {
 })
 
 register('GET', '/v1/business/plans', () => ({
-  subscriptions: [
-    { tier: 'starter', monthlyPrice: 0, yearlyPrice: 0 },
-    { tier: 'growth', monthlyPrice: 299, yearlyPrice: 2990 },
-    { tier: 'pro', monthlyPrice: 799, yearlyPrice: 7990 },
-    { tier: 'payg', dailyPrice: 99, weeklyPrice: 199 },
-  ],
-  boosts: [
-    { duration: '2hr', price: 25 },
-    { duration: '6hr', price: 50 },
-    { duration: '24hr', price: 150 },
-  ],
+  starter: {
+    name: 'Starter',
+    monthlyPriceCents: 0,
+    yearlyPriceCents: 0,
+    maxNodes: 1,
+    maxRewards: 3,
+    maxStaff: 2,
+  },
+  growth: {
+    name: 'Growth',
+    monthlyPriceCents: 29900,
+    yearlyPriceCents: 299000,
+    maxNodes: 5,
+    maxRewards: 10,
+    maxStaff: 5,
+    trialDays: 14,
+  },
+  pro: {
+    name: 'Pro',
+    monthlyPriceCents: 79900,
+    yearlyPriceCents: 799000,
+    maxNodes: null,
+    maxRewards: null,
+    maxStaff: null,
+    trialDays: 14,
+  },
+  payg: {
+    name: 'Pay-as-you-go',
+    dailyPriceCents: 9900,
+    weeklyPriceCents: 19900,
+    maxNodes: 1,
+    maxRewards: 3,
+    maxStaff: 2,
+  },
+  boost: { '2hr': 2500, '6hr': 5000, '24hr': 15000 },
 }))
 
 register('POST', '/v1/business/boost', () => ({
   success: true,
-  checkoutUrl: 'https://pay.yoco.com/mock',
+  checkoutUrl: '#dev-boost',
+  amountCents: 2500,
+  currency: 'ZAR',
+}))
+
+register('POST', '/v1/business/checkout', () => ({
+  checkoutUrl: '#dev-checkout',
+  amountCents: 29900,
+  currency: 'ZAR',
 }))
 
 register('GET', '/v1/business/staff', () => ({ items: MOCK_STAFF }))
@@ -501,7 +548,7 @@ register('GET', '/v1/admin/businesses', () => ({
 
 register('POST', '/v1/admin/businesses/:businessId/:action', () => ({ success: true }))
 
-register('GET', '/v1/admin/reports', () => state.reports)
+register('GET', '/v1/admin/reports', () => ({ items: state.reports }))
 
 register('POST', '/v1/admin/reports/:reportId/:action', ({ pathParams }) => {
   const report = state.reports.find((r) => r.id === pathParams['reportId'])
@@ -514,19 +561,34 @@ register('POST', '/v1/admin/reports/:reportId/:action', ({ pathParams }) => {
   return { success: true }
 })
 
-register('GET', '/v1/admin/consent', () => state.consents)
+register('GET', '/v1/admin/consent', () => ({ items: state.consents }))
 
 register('GET', '/v1/admin/consent/export-reconsent', () => {
   return state.consents.filter((c) => c.consentVersion !== CURRENT_CONSENT_VERSION)
 })
 
-register('GET', '/v1/admin/erasure-queue', () => [])
+register('GET', '/v1/admin/erasure-queue', () => ({ items: [] }))
+
+register('GET', '/v1/admin/abuse-flags', () => ({
+  items: MOCK_ABUSE_FLAGS.filter((f) => !f.reviewed),
+}))
+
+register('POST', '/v1/admin/abuse-flags/:flagId/review', (params) => {
+  const flag = MOCK_ABUSE_FLAGS.find((f) => f.id === params.pathParams['flagId'])
+  if (flag) flag.reviewed = true
+  return flag ?? { error: 'not_found' }
+})
+
+register('DELETE', '/v1/users/me', () => ({
+  success: true,
+  message: 'Your data will be erased within 30 days per POPIA requirements.',
+}))
 
 // ---------------------------------------------------------------------------
 // Staff endpoints
 // ---------------------------------------------------------------------------
 register('GET', '/v1/staff/recent-redemptions', () => {
-  return MOCK_REDEMPTIONS.filter((rd) => rd.redeemedAt).map((rd) => {
+  const items = MOCK_REDEMPTIONS.filter((rd) => rd.redeemedAt).map((rd) => {
     const reward = MOCK_REWARDS.find((r) => r.id === rd.rewardId)
     const user = MOCK_USERS.find((u) => u.id === rd.userId)
     return {
@@ -536,6 +598,7 @@ register('GET', '/v1/staff/recent-redemptions', () => {
       redeemedAt: rd.redeemedAt,
     }
   })
+  return { items }
 })
 
 // ---------------------------------------------------------------------------

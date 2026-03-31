@@ -142,3 +142,77 @@ export async function getUsersNeedingReconsent(currentVersion: string) {
     take: 100,
   })
 }
+
+// ─── Consumer Search ────────────────────────────────────────────────────────
+
+export async function searchConsumers(query: string) {
+  if (!query) {
+    return prisma.user.findMany({ take: 50, orderBy: { createdAt: 'desc' } })
+  }
+  return prisma.user.findMany({
+    where: {
+      OR: [
+        { username: { contains: query, mode: 'insensitive' } },
+        { phone: { contains: query } },
+        { displayName: { contains: query, mode: 'insensitive' } },
+      ],
+    },
+    take: 50,
+  })
+}
+
+// ─── Business Search ────────────────────────────────────────────────────────
+
+export async function searchBusinesses(query: string) {
+  if (!query) {
+    return prisma.businessAccount.findMany({ take: 50, orderBy: { createdAt: 'desc' } })
+  }
+  return prisma.businessAccount.findMany({
+    where: {
+      OR: [
+        { businessName: { contains: query, mode: 'insensitive' } },
+        { email: { contains: query, mode: 'insensitive' } },
+      ],
+    },
+    take: 50,
+  })
+}
+
+// ─── Consent List ───────────────────────────────────────────────────────────
+
+export async function listConsents() {
+  return prisma.consentRecord.findMany({
+    orderBy: { consentedAt: 'desc' },
+    take: 100,
+  })
+}
+
+// ─── Erasure Queue ──────────────────────────────────────────────────────────
+
+export async function getErasureQueue() {
+  return prisma.erasureRequest.findMany({
+    where: { status: 'pending' },
+    orderBy: { requestedAt: 'asc' },
+    take: 100,
+    include: {
+      user: { select: { id: true, username: true, displayName: true, phone: true } },
+    },
+  })
+}
+
+// ─── Abuse Flags ────────────────────────────────────────────────────────────
+
+export async function getUnreviewedAbuseFlags() {
+  return prisma.abuseFlag.findMany({
+    where: { reviewed: false },
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+  })
+}
+
+export async function reviewAbuseFlag(flagId: string) {
+  return prisma.abuseFlag.update({
+    where: { id: flagId },
+    data: { reviewed: true },
+  })
+}

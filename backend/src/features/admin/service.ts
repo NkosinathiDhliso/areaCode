@@ -213,6 +213,17 @@ export async function getGenreWeights() {
   return { matrix: genreWeightMatrix }
 }
 
+export async function testArchetype(genres: string[]) {
+  // Simple test: return the archetype that would be resolved for the given genres
+  // In production this would use the full resolver logic
+  return {
+    dimensionScores: {},
+    resolvedArchetype: archetypeCatalog.find((a) => a.isActive && a.name !== 'The Eclectic' && a.name !== 'The Uncharted') ?? archetypeCatalog[archetypeCatalog.length - 1],
+    allMatches: archetypeCatalog.filter((a) => a.isActive).slice(0, 3),
+    inputGenres: genres,
+  }
+}
+
 export async function updateGenreWeights(
   adminId: string, adminRole: AdminRole, data: Record<string, unknown>,
 ) {
@@ -227,4 +238,81 @@ export async function updateGenreWeights(
     beforeState: { matrix: before }, afterState: data,
   })
   return { matrix: genreWeightMatrix }
+}
+
+// ─── Consumer Search ────────────────────────────────────────────────────────
+
+export async function searchConsumers(adminRole: AdminRole, query: string) {
+  checkPermission(adminRole, 'view_user')
+  const items = await repo.searchConsumers(query)
+  return { items, nextCursor: null, hasMore: false }
+}
+
+export async function consumerAction(
+  adminId: string, adminRole: AdminRole,
+  userId: string, action: string, note?: string,
+) {
+  checkPermission(adminRole, action === 'process-erasure' ? 'process_erasure' : 'view_user')
+  await repo.createAuditLog({
+    adminId, adminRole, action: `consumer_${action}`,
+    entityType: 'user', entityId: userId,
+    afterState: { note },
+  })
+  return { success: true }
+}
+
+// ─── Business Search ────────────────────────────────────────────────────────
+
+export async function searchBusinesses(adminRole: AdminRole, query: string) {
+  checkPermission(adminRole, 'view_business')
+  const items = await repo.searchBusinesses(query)
+  return { items, nextCursor: null, hasMore: false }
+}
+
+export async function businessAction(
+  adminId: string, adminRole: AdminRole,
+  businessId: string, action: string,
+) {
+  checkPermission(adminRole, 'view_business')
+  await repo.createAuditLog({
+    adminId, adminRole, action: `business_${action}`,
+    entityType: 'business', entityId: businessId,
+  })
+  return { success: true }
+}
+
+// ─── Consent List ───────────────────────────────────────────────────────────
+
+export async function listConsents(adminRole: AdminRole) {
+  checkPermission(adminRole, 'view_consent')
+  const items = await repo.listConsents()
+  return { items }
+}
+
+// ─── Erasure Queue ──────────────────────────────────────────────────────────
+
+export async function getErasureQueue(adminRole: AdminRole) {
+  checkPermission(adminRole, 'view_consent')
+  const items = await repo.getErasureQueue()
+  return { items }
+}
+
+// ─── Abuse Flags ────────────────────────────────────────────────────────────
+
+export async function getAbuseFlags(adminRole: AdminRole) {
+  checkPermission(adminRole, 'view_user')
+  const items = await repo.getUnreviewedAbuseFlags()
+  return { items }
+}
+
+export async function reviewAbuseFlag(
+  adminId: string, adminRole: AdminRole, flagId: string,
+) {
+  checkPermission(adminRole, 'reset_flags')
+  const flag = await repo.reviewAbuseFlag(flagId)
+  await repo.createAuditLog({
+    adminId, adminRole, action: 'review_abuse_flag',
+    entityType: 'abuse_flag', entityId: flagId,
+  })
+  return flag
 }

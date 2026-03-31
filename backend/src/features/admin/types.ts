@@ -29,4 +29,6 @@ export const reportActionBodySchema = z.object({
 
 export const reportIdParamsSchema = z.object({ reportId: z.string().uuid() })
 
+export const abuseFlagIdParamsSchema = z.object({ flagId: z.string().uuid() })
+
 export type AdminRole = 'super_admin' | 'support_agent' | 'content_moderator'

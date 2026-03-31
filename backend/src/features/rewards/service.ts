@@ -1,5 +1,6 @@
 import { AppError } from '../../shared/errors/AppError.js'
 import { isDbAvailable } from '../../shared/db/prisma.js'
+import { findBusinessById } from '../business/repository.js'
 import * as repo from './repository.js'
 
 const DEV_MODE = !isDbAvailable
@@ -24,8 +25,10 @@ export async function createReward(
     totalSlots?: number | undefined; expiresAt?: string | undefined;
   },
 ) {
+  const business = await findBusinessById(businessId)
+  const tier = business?.tier ?? 'free'
   const count = await repo.countActiveRewardsForBusiness(businessId)
-  const limit = TIER_REWARD_LIMITS['growth']
+  const limit = TIER_REWARD_LIMITS[tier] ?? TIER_REWARD_LIMITS['free']
   if (limit !== undefined && limit !== null && count >= limit) {
     throw AppError.forbidden('Active reward limit reached for your tier')
   }
@@ -128,4 +131,19 @@ export async function getRecentRedemptions(businessId: string) {
       redeemedAt: r.redeemedAt?.toISOString(),
     })),
   }
+}
+
+// ─── Staff Recent Redemptions ───────────────────────────────────────────────
+
+export async function getStaffRecentRedemptions(staffId: string) {
+  if (DEV_MODE) {
+    return {
+      items: [
+        { code: 'AC-MOCK-1234', rewardTitle: 'Free Coffee', displayName: 'Thabo M.', redeemedAt: new Date(Date.now() - 600000).toISOString() },
+        { code: 'AC-MOCK-5678', rewardTitle: '20% Off Cocktails', displayName: 'Naledi K.', redeemedAt: new Date(Date.now() - 3600000).toISOString() },
+      ],
+    }
+  }
+  const items = await repo.getStaffRecentRedemptions(staffId)
+  return { items }
 }

@@ -6,7 +6,7 @@ import {
   userIdParamsSchema, businessIdParamsSchema,
   adminMessageBodySchema, impersonateBodySchema,
   extendTrialBodySchema, reportActionBodySchema,
-  reportIdParamsSchema,
+  reportIdParamsSchema, abuseFlagIdParamsSchema,
 } from './types.js'
 import type { AdminRole } from './types.js'
 import { z } from 'zod'
@@ -18,6 +18,83 @@ function getAdminRole(request: { headers: Record<string, unknown> }): AdminRole 
 
 export async function adminRoutes(app: FastifyInstance) {
   const adminAuth = requireAuth('admin')
+
+  // GET /v1/admin/consumers
+  app.get(
+    '/v1/admin/consumers',
+    { preHandler: [adminAuth] },
+    async (request) => {
+      const role = getAdminRole(request)
+      const query = (request.query as Record<string, string>)['q'] ?? ''
+      return service.searchConsumers(role, query)
+    },
+  )
+
+  // POST /v1/admin/consumers/:userId/:action
+  app.post(
+    '/v1/admin/consumers/:userId/:action',
+    { preHandler: [adminAuth, validate({ params: userIdParamsSchema })] },
+    async (request) => {
+      const auth = getAuth(request)
+      const role = getAdminRole(request)
+      const params = request.params as z.infer<typeof userIdParamsSchema> & { action: string }
+      const body = request.body as { note?: string } | undefined
+      return service.consumerAction(auth.userId, role, params.userId, params.action, body?.note)
+    },
+  )
+
+  // GET /v1/admin/businesses
+  app.get(
+    '/v1/admin/businesses',
+    { preHandler: [adminAuth] },
+    async (request) => {
+      const role = getAdminRole(request)
+      const query = (request.query as Record<string, string>)['q'] ?? ''
+      return service.searchBusinesses(role, query)
+    },
+  )
+
+  // POST /v1/admin/businesses/:businessId/:action
+  app.post(
+    '/v1/admin/businesses/:businessId/:action',
+    { preHandler: [adminAuth, validate({ params: businessIdParamsSchema })] },
+    async (request) => {
+      const auth = getAuth(request)
+      const role = getAdminRole(request)
+      const params = request.params as z.infer<typeof businessIdParamsSchema> & { action: string }
+      return service.businessAction(auth.userId, role, params.businessId, params.action)
+    },
+  )
+
+  // GET /v1/admin/consent (list all)
+  app.get(
+    '/v1/admin/consent',
+    { preHandler: [adminAuth] },
+    async (request) => {
+      const role = getAdminRole(request)
+      return service.listConsents(role)
+    },
+  )
+
+  // GET /v1/admin/consent/export-reconsent
+  app.get(
+    '/v1/admin/consent/export-reconsent',
+    { preHandler: [adminAuth] },
+    async (request) => {
+      const role = getAdminRole(request)
+      return service.getReconsentList(role)
+    },
+  )
+
+  // GET /v1/admin/erasure-queue
+  app.get(
+    '/v1/admin/erasure-queue',
+    { preHandler: [adminAuth] },
+    async (request) => {
+      const role = getAdminRole(request)
+      return service.getErasureQueue(role)
+    },
+  )
 
   // GET /v1/admin/users/:userId
   app.get(
@@ -165,6 +242,30 @@ export async function adminRoutes(app: FastifyInstance) {
     },
   )
 
+  // ─── Abuse Flags ─────────────────────────────────────────────────────────
+
+  // GET /v1/admin/abuse-flags
+  app.get(
+    '/v1/admin/abuse-flags',
+    { preHandler: [adminAuth] },
+    async (request) => {
+      const role = getAdminRole(request)
+      return service.getAbuseFlags(role)
+    },
+  )
+
+  // POST /v1/admin/abuse-flags/:flagId/review
+  app.post(
+    '/v1/admin/abuse-flags/:flagId/review',
+    { preHandler: [adminAuth, validate({ params: abuseFlagIdParamsSchema })] },
+    async (request) => {
+      const auth = getAuth(request)
+      const role = getAdminRole(request)
+      const params = request.params as z.infer<typeof abuseFlagIdParamsSchema>
+      return service.reviewAbuseFlag(auth.userId, role, params.flagId)
+    },
+  )
+
   // ─── Archetype Management ───────────────────────────────────────────────
 
   // GET /v1/admin/archetypes
@@ -196,6 +297,16 @@ export async function adminRoutes(app: FastifyInstance) {
       const role = getAdminRole(request)
       const params = request.params as { id: string }
       return service.updateArchetype(auth.userId, role, params.id, request.body as Record<string, unknown>)
+    },
+  )
+
+  // POST /v1/admin/archetypes/test
+  app.post(
+    '/v1/admin/archetypes/test',
+    { preHandler: [adminAuth] },
+    async (request) => {
+      const body = request.body as { genres?: string[] }
+      return service.testArchetype(body.genres ?? [])
     },
   )
 

@@ -9,6 +9,7 @@ import { emitPulseUpdate, emitToast, emitBusinessCheckin, emitFriendToast } from
 import { isDbAvailable } from '../../shared/db/prisma.js'
 import { getMutualFollowIds, getFollowingIds } from '../social/repository.js'
 import { getUserById } from '../auth/repository.js'
+import { runAbuseChecks } from './abuse.js'
 import * as repo from './repository.js'
 import type { CheckInInput, CheckInResponse } from './types.js'
 
@@ -85,6 +86,14 @@ export async function processCheckIn(
     }
   }
 
+  // 2b. Abuse checks (after proximity, before DB insert)
+  await runAbuseChecks(
+    userId,
+    input.nodeId,
+    input.fingerprintHash,
+    '', // IP extracted at handler level in production
+  )
+
   // 3. Cooldown check
   const cooldownKey = input.type === 'reward'
     ? checkinCooldownReward(userId, input.nodeId)
@@ -98,12 +107,14 @@ export async function processCheckIn(
     throw AppError.tooManyRequests('Check-in cooldown active', cooldownUntil)
   }
 
-  // 4. Insert check-in (no lat/lng persisted)
-  await repo.insertCheckIn({
+  // 4. Insert check-in (no lat/lng persisted) + increment totalCheckIns + recalculate tier
+  const checkIn = await repo.insertCheckIn({
     userId,
     nodeId: input.nodeId,
     type: input.type,
   })
+  await repo.incrementTotalCheckIns(userId)
+  await repo.updateStreak(userId)
 
   // 5. Set cooldown
   await redis.set(cooldownKey, '1', 'EX', cooldownTtl)
@@ -184,9 +195,23 @@ export async function processCheckIn(
     })
   }
 
-  // 8. Publish to SQS reward queue (placeholder — in production uses SQS)
+  // 8. Publish to SQS reward queue
   if (input.type === 'reward') {
-    console.log(`[check-in] Queuing reward evaluation: user=${userId} node=${input.nodeId}`)
+    const { SQSClient, SendMessageCommand } = await import('@aws-sdk/client-sqs')
+    const sqsUrl = process.env['AREA_CODE_REWARD_QUEUE_URL']
+    if (sqsUrl) {
+      const sqs = new SQSClient({ region: process.env['AWS_REGION'] ?? 'af-south-1' })
+      await sqs.send(new SendMessageCommand({
+        QueueUrl: sqsUrl,
+        MessageBody: JSON.stringify({
+          userId,
+          nodeId: input.nodeId,
+          checkInId: checkIn.id,
+        }),
+      }))
+    } else {
+      console.log(`[check-in] SQS not configured, skipping reward evaluation: user=${userId} node=${input.nodeId}`)
+    }
   }
 
   const cooldownUntil = new Date(Date.now() + cooldownTtl * 1000).toISOString()
