@@ -82,14 +82,4 @@ export async function rewardRoutes(app: FastifyInstance) {
       return service.redeemReward(body.code)
     },
   )
-
-  // GET /v1/staff/recent-redemptions
-  app.get(
-    '/v1/staff/recent-redemptions',
-    { preHandler: [requireAuth('staff')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return service.getStaffRecentRedemptions(auth.userId)
-    },
-  )
 }
