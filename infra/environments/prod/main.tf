@@ -115,44 +115,41 @@ module "elasticache" {
   security_group_ids = module.vpc.redis_security_group_ids
 }
 
-# --- Lambda functions (higher provisioned concurrency for prod) ---
+# --- Lambda functions (provisioned concurrency requires account limit increase — request via AWS Support) ---
 module "lambda_check_in" {
-  source                  = "../../modules/lambda"
-  env                     = local.env
-  function_name           = "check-in"
-  timeout                 = 10
-  provisioned_concurrency = 5
-  lambda_in_vpc           = true
-  vpc_subnet_ids          = module.vpc.private_subnet_ids
-  vpc_security_group_ids  = module.vpc.lambda_security_group_ids
+  source                 = "../../modules/lambda"
+  env                    = local.env
+  function_name          = "check-in"
+  timeout                = 10
+  lambda_in_vpc          = true
+  vpc_subnet_ids         = module.vpc.private_subnet_ids
+  vpc_security_group_ids = module.vpc.lambda_security_group_ids
   environment_variables = {
     AREA_CODE_ENV = local.env
   }
 }
 
 module "lambda_node_detail" {
-  source                  = "../../modules/lambda"
-  env                     = local.env
-  function_name           = "node-detail"
-  timeout                 = 10
-  provisioned_concurrency = 5
-  lambda_in_vpc           = true
-  vpc_subnet_ids          = module.vpc.private_subnet_ids
-  vpc_security_group_ids  = module.vpc.lambda_security_group_ids
+  source                 = "../../modules/lambda"
+  env                    = local.env
+  function_name          = "node-detail"
+  timeout                = 10
+  lambda_in_vpc          = true
+  vpc_subnet_ids         = module.vpc.private_subnet_ids
+  vpc_security_group_ids = module.vpc.lambda_security_group_ids
   environment_variables = {
     AREA_CODE_ENV = local.env
   }
 }
 
 module "lambda_rewards_near_me" {
-  source                  = "../../modules/lambda"
-  env                     = local.env
-  function_name           = "rewards-near-me"
-  timeout                 = 10
-  provisioned_concurrency = 3
-  lambda_in_vpc           = true
-  vpc_subnet_ids          = module.vpc.private_subnet_ids
-  vpc_security_group_ids  = module.vpc.lambda_security_group_ids
+  source                 = "../../modules/lambda"
+  env                    = local.env
+  function_name          = "rewards-near-me"
+  timeout                = 10
+  lambda_in_vpc          = true
+  vpc_subnet_ids         = module.vpc.private_subnet_ids
+  vpc_security_group_ids = module.vpc.lambda_security_group_ids
   environment_variables = {
     AREA_CODE_ENV = local.env
   }

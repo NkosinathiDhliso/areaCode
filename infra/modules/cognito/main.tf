@@ -98,6 +98,10 @@ resource "aws_cognito_user_pool" "this" {
       priority = 1
     }
   }
+
+  lifecycle {
+    ignore_changes = [schema]
+  }
 }
 
 resource "aws_cognito_user_pool_client" "this" {
