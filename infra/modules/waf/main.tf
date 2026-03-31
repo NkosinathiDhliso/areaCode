@@ -3,7 +3,17 @@ variable "env" {
 }
 
 variable "api_gateway_arn" {
-  type = string
+  type    = string
+  default = ""
+}
+
+variable "alb_arn" {
+  type    = string
+  default = ""
+}
+
+locals {
+  resource_arns = compact([var.api_gateway_arn, var.alb_arn])
 }
 
 resource "aws_wafv2_web_acl" "this" {
@@ -138,7 +148,8 @@ resource "aws_wafv2_web_acl" "this" {
 }
 
 resource "aws_wafv2_web_acl_association" "this" {
-  resource_arn = var.api_gateway_arn
+  for_each     = toset(local.resource_arns)
+  resource_arn = each.value
   web_acl_arn  = aws_wafv2_web_acl.this.arn
 }
 

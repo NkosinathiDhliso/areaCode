@@ -89,5 +89,5 @@ output "api_execution_arn" {
 }
 
 output "api_arn" {
-  value = aws_apigatewayv2_stage.default.arn
+  value = "arn:aws:apigateway:us-east-1::/apis/${aws_apigatewayv2_api.this.id}/stages/${aws_apigatewayv2_stage.default.id}"
 }

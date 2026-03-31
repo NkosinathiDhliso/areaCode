@@ -327,11 +327,11 @@ module "ecs_api" {
   }
 }
 
-# --- WAF ---
+# --- WAF (attached to ALB — WAFv2 doesn't support HTTP API Gateway) ---
 module "waf" {
-  source          = "../../modules/waf"
-  env             = local.env
-  api_gateway_arn = module.api_gateway.api_arn
+  source  = "../../modules/waf"
+  env     = local.env
+  alb_arn = module.ecs_api.alb_arn
 }
 
 # --- VPC Endpoints (replaces NAT for AWS service access) ---

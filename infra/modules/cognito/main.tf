@@ -29,6 +29,38 @@ variable "custom_attributes" {
   default = []
 }
 
+resource "aws_iam_role" "cognito_sns" {
+  name = "area-code-${var.env}-${var.pool_name}-cognito-sns"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = { Service = "cognito-idp.amazonaws.com" }
+      Condition = {
+        StringEquals = {
+          "sts:ExternalId" = "area-code-${var.env}-${var.pool_name}-sns"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "cognito_sns" {
+  name = "sns-publish"
+  role = aws_iam_role.cognito_sns.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["sns:Publish"]
+      Resource = "*"
+    }]
+  })
+}
+
 resource "aws_cognito_user_pool" "this" {
   name = "area-code-${var.env}-${var.pool_name}"
 
@@ -36,6 +68,12 @@ resource "aws_cognito_user_pool" "this" {
   mfa_configuration        = "OFF"
 
   username_attributes = ["phone_number"]
+
+  sms_configuration {
+    external_id    = "area-code-${var.env}-${var.pool_name}-sns"
+    sns_caller_arn = aws_iam_role.cognito_sns.arn
+    sns_region     = "us-east-1"
+  }
 
   password_policy {
     minimum_length    = 8
