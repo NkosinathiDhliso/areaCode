@@ -53,16 +53,6 @@ export async function businessRoutes(app: FastifyInstance) {
     },
   )
 
-  // GET /v1/business/me/audience/music
-  app.get(
-    '/v1/business/me/audience/music',
-    { preHandler: [requireAuth('business')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return service.getMusicAudience(auth.userId)
-    },
-  )
-
   // GET /v1/business/me/recent-redemptions
   app.get(
     '/v1/business/me/recent-redemptions',
