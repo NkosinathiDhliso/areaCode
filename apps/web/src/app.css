@@ -40,11 +40,6 @@
     opacity: 0.3;
   }
 
-  /* Allow node marker glow/halo to extend beyond marker bounds */
-  .mapboxgl-marker {
-    overflow: visible !important;
-  }
-
   /* Focus ring for accessibility */
   *:focus-visible {
     outline: 2px solid var(--accent);

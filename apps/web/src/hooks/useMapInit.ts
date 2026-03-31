@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import mapboxgl from 'mapbox-gl'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import type { MapInstance } from '@area-code/shared/types'
@@ -8,10 +8,9 @@ const MAPBOX_TOKEN = import.meta.env['VITE_MAPBOX_TOKEN'] as string | undefined
 const DEFAULT_CENTER: [number, number] = [28.0473, -26.2041]
 const DEFAULT_ZOOM = 13
 
-// Module-level singleton so React StrictMode double-mount doesn't destroy the map.
-// We also track which DOM node it was attached to.
 let singletonMap: mapboxgl.Map | null = null
 let singletonContainer: HTMLDivElement | null = null
+let singletonLoaded = false
 
 function buildMapInstance(map: mapboxgl.Map): MapInstance {
   return {
@@ -37,44 +36,45 @@ function buildMapInstance(map: mapboxgl.Map): MapInstance {
 
 /**
  * Initialises Mapbox GL JS once and persists across navigation.
- * Uses a module-level singleton to survive React StrictMode double-mount.
+ * mapRef is only set AFTER the map fires 'load', ensuring markers
+ * added via useMapMarkers are properly geo-anchored.
  */
 export function useMapInit() {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
   const setMapInstance = useMapStore((s) => s.setMapInstance)
+  // Force re-render when map becomes ready so useMapMarkers picks it up
+  const [, setMapReady] = useState(false)
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
-    console.log('[useMapInit] Container found, dimensions:', container.offsetWidth, 'x', container.offsetHeight)
+    console.log('[useMapInit] Container:', container.offsetWidth, 'x', container.offsetHeight)
 
-    // If singleton exists and is attached to this same DOM node, just restore refs
-    if (singletonMap && singletonContainer === container) {
-      console.log('[useMapInit] Reusing singleton map (StrictMode remount)')
+    // Singleton already loaded and attached to same container
+    if (singletonMap && singletonContainer === container && singletonLoaded) {
+      console.log('[useMapInit] Reusing loaded singleton')
       mapRef.current = singletonMap
       setMapInstance(buildMapInstance(singletonMap))
+      setMapReady(true)
       requestAnimationFrame(() => singletonMap?.resize())
       return
     }
 
-    // If singleton exists but container changed (shouldn't happen in normal flow),
-    // destroy the old one
     if (singletonMap) {
-      console.log('[useMapInit] Container changed, destroying old map')
       singletonMap.remove()
       singletonMap = null
       singletonContainer = null
+      singletonLoaded = false
     }
 
     if (!MAPBOX_TOKEN) {
-      console.error('[useMapInit] VITE_MAPBOX_TOKEN is not set — map will not render.')
+      console.error('[useMapInit] VITE_MAPBOX_TOKEN is not set')
       return
     }
 
-    console.log('[useMapInit] Creating new Mapbox map, token length:', MAPBOX_TOKEN.length)
-
+    console.log('[useMapInit] Creating map')
     mapboxgl.accessToken = MAPBOX_TOKEN
 
     const map = new mapboxgl.Map({
@@ -86,8 +86,17 @@ export function useMapInit() {
       bearing: -10,
     })
 
+    singletonMap = map
+    singletonContainer = container
+
+    // Only expose the map ref AFTER it's fully loaded
     map.on('load', () => {
-      console.log('[useMapInit] Map loaded successfully')
+      console.log('[useMapInit] Map loaded — markers can now be added')
+      singletonLoaded = true
+      mapRef.current = map
+      setMapInstance(buildMapInstance(map))
+      setMapReady(true)
+
       map.setFog({
         range: [0.5, 10],
         color: '#0a0a0f',
@@ -121,23 +130,11 @@ export function useMapInit() {
     map.scrollZoom.enable()
     map.dragPan.enable()
 
-    // Ensure map fills container once layout is settled
-    map.once('style.load', () => map.resize())
-
-    singletonMap = map
-    singletonContainer = container
-    mapRef.current = map
-    setMapInstance(buildMapInstance(map))
-
-    // ResizeObserver to handle container dimension changes
-    const ro = new ResizeObserver(() => {
-      map.resize()
-    })
+    const ro = new ResizeObserver(() => map.resize())
     ro.observe(container)
 
     return () => {
       ro.disconnect()
-      // Do NOT call map.remove() — singleton survives StrictMode remount
     }
   }, [setMapInstance])
 

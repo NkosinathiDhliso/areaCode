@@ -10,6 +10,7 @@ dist/
 *.tfstate.backup
 .terraform.lock.hcl
 infra/modules/lambda/placeholder.zip
+tfplan
 
 # Markdown files — internal docs, specs, prompts
 *.md
