@@ -4,7 +4,7 @@ on:
     paths:
       - 'infra/**'
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - 'infra/**'
 
@@ -61,7 +61,7 @@ jobs:
             })
 
   apply-dev:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -89,7 +89,7 @@ jobs:
         working-directory: infra/environments/dev
 
   apply-prod:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: apply-dev
     runs-on: ubuntu-latest
     permissions:
