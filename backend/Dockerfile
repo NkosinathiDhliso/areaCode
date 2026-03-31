@@ -4,12 +4,13 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --production=false
 
-COPY tsconfig.json ./
+# Copy root tsconfig (backend extends it) and backend tsconfig
+COPY tsconfig.docker.json ./tsconfig.json
 COPY src/ ./src/
 COPY prisma/ ./prisma/
 
 RUN npx prisma generate
-RUN npx tsc --outDir dist
+RUN npx tsc --project tsconfig.json
 
 FROM node:20-alpine
 

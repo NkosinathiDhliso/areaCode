@@ -201,7 +201,7 @@ export async function inviteStaff(
   if (!biz) throw AppError.notFound('Business not found')
 
   const limit = STAFF_LIMITS[biz.tier]
-  if (limit !== null) {
+  if (limit !== null && limit !== undefined) {
     const count = await repo.countStaffForBusiness(businessId)
     if (count >= limit) {
       throw AppError.forbidden(

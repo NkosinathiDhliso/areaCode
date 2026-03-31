@@ -1,6 +1,6 @@
 import { Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
-import type { ServerToClientEvents, ClientToServerEvents } from '../../../../packages/shared/types/index.js';
+import type { ServerToClientEvents, ClientToServerEvents } from './types.js';
 
 export type TypedServer = Server<ClientToServerEvents, ServerToClientEvents>;
 

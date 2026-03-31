@@ -1,4 +1,4 @@
-import type { NodeState, ToastType, BusinessCheckinPayload, BusinessRewardClaimedPayload } from '../../../../packages/shared/types/index.js';
+import type { NodeState, ToastType, BusinessCheckinPayload, BusinessRewardClaimedPayload } from './types.js';
 import { getIO } from './server.js';
 import { cityRoom, nodeRoom, userRoom, businessRoom } from './rooms.js';
 
