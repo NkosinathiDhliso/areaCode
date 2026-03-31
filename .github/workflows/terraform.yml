@@ -1,0 +1,118 @@
+name: Terraform
+on:
+  pull_request:
+    paths:
+      - 'infra/**'
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+
+jobs:
+  plan:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    strategy:
+      matrix:
+        environment: [dev, prod]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: infra/environments/${{ matrix.environment }}
+
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: infra/environments/${{ matrix.environment }}
+
+      - name: Terraform Plan
+        run: terraform plan -no-color -out=tfplan
+        working-directory: infra/environments/${{ matrix.environment }}
+
+      - name: Comment PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `#### Terraform Plan (${{ matrix.environment }}) 📋
+            \`\`\`
+            Plan output available in workflow logs
+            \`\`\``;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+
+  apply-dev:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: infra/environments/dev
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        working-directory: infra/environments/dev
+
+  apply-prod:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: apply-dev
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: infra/environments/prod
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        working-directory: infra/environments/prod
