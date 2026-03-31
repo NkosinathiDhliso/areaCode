@@ -60,6 +60,11 @@ export async function getNodeDetail(nodeId: string) {
 }
 
 export async function getNodePublic(nodeSlug: string) {
+  if (DEV_MODE) {
+    const node = DEV_NODES.find((n) => n.slug === nodeSlug)
+    if (!node) throw AppError.notFound('Node not found')
+    return { name: node.name, category: node.category, city: 'Johannesburg', pulseScore: node.pulseScore, activeRewardCount: 2, ogImage: null }
+  }
   const node = await repo.getNodeBySlug(nodeSlug)
   if (!node) throw AppError.notFound('Node not found')
 
@@ -96,6 +101,10 @@ export async function createNode(
   businessId: string,
   data: { name: string; category: string; lat: number; lng: number; citySlug: string },
 ) {
+  if (DEV_MODE) {
+    const id = `dev-${Date.now()}`
+    return { id, name: data.name, slug: slugify(data.name), category: data.category, lat: data.lat, lng: data.lng, citySlug: data.citySlug }
+  }
   const city = await repo.getCityBySlug(data.citySlug)
   if (!city) throw AppError.badRequest('Invalid city')
 
@@ -115,6 +124,7 @@ export async function updateNode(
   businessId: string,
   data: Partial<{ name: string; category: string; nodeColour: string; nodeIcon: string; qrCheckinEnabled: boolean }>,
 ) {
+  if (DEV_MODE) return
   const result = await repo.updateNode(nodeId, businessId, data)
   if (result.count === 0) throw AppError.forbidden('You do not own this node')
 }
@@ -126,6 +136,9 @@ export async function claimNode(
   businessId: string,
   registrationNumber: string,
 ) {
+  if (DEV_MODE) {
+    return { nodeId, businessId, claimStatus: 'validated' }
+  }
   const node = await repo.getNodeById(nodeId)
   if (!node) throw AppError.notFound('Node not found')
   if (node.claimStatus === 'claimed') {
@@ -158,6 +171,9 @@ export async function reportNode(
   type: string,
   detail?: string,
 ) {
+  if (DEV_MODE) {
+    return { id: `report-${Date.now()}`, reporterId, nodeId, type, detail, status: 'pending' }
+  }
   // Check if reporter is banned (3 dismissed reports in 30 days)
   const dismissed = await repo.countDismissedReports(reporterId)
   if (dismissed >= 3) {
@@ -180,6 +196,12 @@ export async function reportNode(
 // ─── Who Is Here ────────────────────────────────────────────────────────────
 
 export async function getWhoIsHere(nodeId: string, limit: number, cursor?: string) {
+  if (DEV_MODE) {
+    return { items: [
+      { userId: 'dev-user-2', username: 'sipho_jozi', displayName: 'Sipho', avatarUrl: null, tier: 'trailblazer', checkedInAt: new Date(Date.now() - 120000).toISOString() },
+      { userId: 'dev-user-3', username: 'thandi_sa', displayName: 'Thandi', avatarUrl: null, tier: 'explorer', checkedInAt: new Date(Date.now() - 300000).toISOString() },
+    ], nextCursor: null, hasMore: false }
+  }
   return repo.getWhoIsHere(nodeId, limit, cursor)
 }
 
@@ -224,6 +246,9 @@ export async function registerNodeImage(
   s3Key: string,
   displayOrder: number,
 ) {
+  if (DEV_MODE) {
+    return { id: `img-${Date.now()}`, nodeId, s3Key, displayOrder }
+  }
   // Verify ownership
   const node = await repo.getNodeById(nodeId)
   if (!node || node.businessId !== businessId) {

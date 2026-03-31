@@ -33,9 +33,11 @@ export async function getActivityFeed(
   if (DEV_MODE) {
     return {
       items: [
-        { id: 'feed-1', type: 'checkin', userId: 'dev-user-2', username: 'sipho_jozi', displayName: 'Sipho', nodeName: "Kitchener's Bar", timestamp: new Date(Date.now() - 300000).toISOString() },
-        { id: 'feed-2', type: 'checkin', userId: 'dev-user-3', username: 'thandi_sa', displayName: 'Thandi', nodeName: 'Arts on Main', timestamp: new Date(Date.now() - 900000).toISOString() },
-        { id: 'feed-3', type: 'reward_claimed', userId: 'dev-user-4', username: 'bongani_jhb', displayName: 'Bongani', nodeName: 'Father Coffee', rewardTitle: 'Free Coffee', timestamp: new Date(Date.now() - 1800000).toISOString() },
+        { id: 'feed-1', checkedInAt: new Date(Date.now() - 300000).toISOString(), user: { id: 'dev-user-2', username: 'sipho_jozi', displayName: 'Sipho', avatarUrl: null, tier: 'trailblazer' }, node: { id: 'dev-3', name: "Kitchener's Bar", slug: 'kitcheners-bar', category: 'nightlife' } },
+        { id: 'feed-2', checkedInAt: new Date(Date.now() - 900000).toISOString(), user: { id: 'dev-user-3', username: 'thandi_sa', displayName: 'Thandi', avatarUrl: null, tier: 'explorer' }, node: { id: 'dev-6', name: 'Arts on Main', slug: 'arts-on-main', category: 'culture' } },
+        { id: 'feed-3', checkedInAt: new Date(Date.now() - 1800000).toISOString(), user: { id: 'dev-user-4', username: 'bongani_jhb', displayName: 'Bongani', avatarUrl: null, tier: 'explorer' }, node: { id: 'dev-1', name: 'Father Coffee', slug: 'father-coffee', category: 'coffee' } },
+        { id: 'feed-4', checkedInAt: new Date(Date.now() - 3600000).toISOString(), user: { id: 'dev-user-5', username: 'lerato_rosebank', displayName: 'Lerato', avatarUrl: null, tier: 'local' }, node: { id: 'dev-7', name: "Nando's Rosebank", slug: 'nandos-rosebank', category: 'food' } },
+        { id: 'feed-5', checkedInAt: new Date(Date.now() - 7200000).toISOString(), user: { id: 'dev-user-1', username: 'neo_sandton', displayName: 'Neo', avatarUrl: null, tier: 'local' }, node: { id: 'dev-5', name: 'Sandton City', slug: 'sandton-city', category: 'shopping' } },
       ],
       nextCursor: null,
       hasMore: false,

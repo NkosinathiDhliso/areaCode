@@ -152,7 +152,7 @@ export async function refreshToken(_refreshToken: string, _pool: string) {
 
 export async function getUserProfile(cognitoSub: string) {
   if (DEV_MODE) {
-    return { id: 'dev-user-1', username: 'dev_user', displayName: 'Dev User', phone: '+27000000000', tier: 'explorer', citySlug: 'johannesburg', avatarUrl: null, cognitoSub }
+    return { id: 'dev-user-1', username: 'dev_user', displayName: 'Dev User', phone: '+27000000000', tier: 'explorer', cityId: null, neighbourhoodId: null, totalCheckIns: 8, avatarUrl: null, cognitoSub, createdAt: new Date().toISOString() }
   }
   const user = await repo.getUserByCognitoSub(cognitoSub)
   if (!user) throw AppError.notFound('User not found')
@@ -199,6 +199,7 @@ export async function getCheckInHistory(
 }
 
 export async function deleteCheckInHistory(userId: string) {
+  if (DEV_MODE) return
   return repo.softDeleteCheckInHistory(userId)
 }
 
@@ -210,6 +211,9 @@ export async function updateConsent(
   analyticsOptIn: boolean,
   broadcastLocation: boolean,
 ) {
+  if (DEV_MODE) {
+    return { id: `consent-${Date.now()}`, userId, consentVersion, analyticsOptIn, broadcastLocation, consentedAt: new Date().toISOString() }
+  }
   const record = await repo.insertConsentRecord(
     userId, consentVersion, analyticsOptIn, broadcastLocation,
   )
@@ -219,6 +223,9 @@ export async function updateConsent(
 }
 
 export async function getUserConsent(userId: string) {
+  if (DEV_MODE) {
+    return { broadcastLocation: true, analyticsOptIn: false }
+  }
   // Check Redis cache first
   const cached = await redis.get(userConsent(userId))
   if (cached) return JSON.parse(cached) as { broadcastLocation: boolean; analyticsOptIn: boolean }
@@ -276,6 +283,9 @@ export async function checkOtpRateLimit(phone: string) {
 // ─── Staff Invite ───────────────────────────────────────────────────────────
 
 export async function acceptStaffInvite(token: string, name: string, phone: string) {
+  if (DEV_MODE) {
+    return { id: `dev-staff-${Date.now()}`, businessId: 'dev-biz-1', name, phone, cognitoSub: `staff-${Date.now()}`, isActive: true, createdAt: new Date().toISOString() }
+  }
   const invite = await repo.findStaffInviteByToken(token)
   if (!invite) throw AppError.notFound('Invite not found')
   if (invite.accepted) throw AppError.gone('Invite already accepted')
