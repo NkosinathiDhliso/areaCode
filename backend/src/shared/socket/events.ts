@@ -80,3 +80,15 @@ export function emitBusinessRewardClaimed(
 ) {
   getIO().to(businessRoom(businessId)).emit('business:reward_claimed', payload);
 }
+
+export function emitFriendToast(
+  userId: string,
+  payload: {
+    type: ToastType;
+    message: string;
+    nodeId?: string;
+    avatarUrl?: string;
+  }
+) {
+  getIO().to(userRoom(userId)).emit('toast:friend_checkin', payload);
+}

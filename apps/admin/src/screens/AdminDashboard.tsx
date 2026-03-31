@@ -6,20 +6,24 @@ import { ConsumerManagement } from './ConsumerManagement'
 import { BusinessManagement } from './BusinessManagement'
 import { ReportQueue } from './ReportQueue'
 import { ConsentAudit } from './ConsentAudit'
+import { ArchetypeManagement } from '../components/ArchetypeManagement'
+import { GenreWeightEditor } from '../components/GenreWeightEditor'
 
-type Tab = 'consumers' | 'businesses' | 'reports' | 'consent'
+type Tab = 'consumers' | 'businesses' | 'reports' | 'consent' | 'archetypes' | 'genre-weights'
 
 const TAB_LABELS: Record<Tab, string> = {
   consumers: 'admin.nav.consumers',
   businesses: 'admin.nav.businesses',
   reports: 'admin.nav.reports',
   consent: 'admin.nav.consent',
+  archetypes: 'admin.nav.archetypes',
+  'genre-weights': 'admin.nav.genreWeights',
 }
 
 function getVisibleTabs(role: string | null): Tab[] {
   switch (role) {
     case 'super_admin':
-      return ['consumers', 'businesses', 'reports', 'consent']
+      return ['consumers', 'businesses', 'reports', 'consent', 'archetypes', 'genre-weights']
     case 'support_agent':
       return ['consumers', 'businesses']
     case 'content_moderator':
@@ -70,6 +74,8 @@ export function AdminDashboard() {
         {activeTab === 'businesses' && <BusinessManagement />}
         {activeTab === 'reports' && <ReportQueue />}
         {activeTab === 'consent' && <ConsentAudit />}
+        {activeTab === 'archetypes' && <ArchetypeManagement />}
+        {activeTab === 'genre-weights' && <GenreWeightEditor />}
       </main>
     </div>
   )

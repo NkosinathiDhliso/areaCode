@@ -40,6 +40,65 @@ export type PushPlatform = 'expo' | 'web'
 // Device platforms
 export type DevicePlatform = 'web' | 'ios' | 'android'
 
+// Music genres — 12 South African-relevant genres
+export type MusicGenre =
+  | 'amapiano' | 'deep_house' | 'afrobeats' | 'hip_hop' | 'rnb'
+  | 'kwaito' | 'gqom' | 'jazz' | 'rock' | 'pop' | 'gospel' | 'maskandi'
+
+// Personality dimensions — 5 scoring axes
+export type PersonalityDimension =
+  | 'energy' | 'cultural_rootedness' | 'sophistication' | 'edge' | 'spirituality'
+
+// Dimension score vector — maps each dimension to 0.0–1.0
+export type DimensionScoreVector = Record<PersonalityDimension, number>
+
+// Streaming provider
+export type StreamingProvider = 'spotify' | 'apple_music'
+
+// Genre weight entry — one row of the 12×5 matrix
+export interface GenreWeightEntry {
+  genre: MusicGenre
+  weights: DimensionScoreVector
+}
+
+// Personality archetype — stored in DB, managed by admins
+export interface PersonalityArchetype {
+  id: string
+  name: string
+  iconId: string
+  description: string
+  dimensionThresholds: Partial<Record<PersonalityDimension, number>>
+  priority: number
+  isActive: boolean
+}
+
+// Crowd vibe snapshot — aggregated per node
+export interface CrowdVibeSnapshot {
+  genreCounts: Partial<Record<MusicGenre, number>>
+  archetypePercentages: Record<string, number>
+  aggregateDimensionScores: DimensionScoreVector | null
+  totalCheckedIn: number
+}
+
+// Business music audience data
+export interface BusinessMusicAudience {
+  genreDistribution: Partial<Record<MusicGenre, number>>
+  archetypeBreakdown: Record<string, number>
+  peakArchetypeByTime: Array<{
+    timeSegment: string
+    archetypeName: string
+    archetypeIconId: string
+  }>
+  totalWithMusicPrefs: number
+}
+
+// Archetype test result (admin tool)
+export interface ArchetypeTestResult {
+  dimensionScores: DimensionScoreVector | null
+  resolvedArchetype: PersonalityArchetype
+  allMatches: PersonalityArchetype[]
+}
+
 // Core interfaces
 export interface Node {
   id: string
@@ -113,6 +172,10 @@ export interface User {
   totalCheckIns: number
   cognitoSub: string | null
   createdAt: string
+  musicGenres?: MusicGenre[]
+  dimensionScores?: DimensionScoreVector | null
+  archetypeId?: string | null
+  streamingProvider?: StreamingProvider | null
 }
 
 export interface BusinessAccount {
@@ -156,7 +219,6 @@ export interface ConsentRecord {
   userId: string
   consentVersion: string
   analyticsOptIn: boolean
-  broadcastLocation: boolean
   consentedAt: string
 }
 
@@ -183,12 +245,13 @@ export interface Report {
 
 export interface LeaderboardEntry {
   userId: string
-  username: string
-  displayName: string
+  username: string | null
+  displayName: string | null
   avatarUrl: string | null
   tier: Tier
   rank: number
   checkInCount: number
+  isFriend: boolean
 }
 
 export interface City {
@@ -243,6 +306,7 @@ export interface ServerToClientEvents {
   'leaderboard:update': (payload: { userId: string; rank: number; delta: number }) => void
   'business:checkin': (payload: BusinessCheckinPayload) => void
   'business:reward_claimed': (payload: BusinessRewardClaimedPayload) => void
+  'toast:friend_checkin': (payload: { type: 'checkin'; message: string; nodeId?: string; avatarUrl?: string }) => void
 }
 
 export interface ClientToServerEvents {

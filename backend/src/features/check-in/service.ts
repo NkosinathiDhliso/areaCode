@@ -4,10 +4,11 @@ import { redis } from '../../shared/redis/client.js'
 import {
   checkinCooldownReward, checkinCooldownPresence,
   checkinToday, nodesPulse, uniqueUsersToday, leaderboard,
-  userConsent,
 } from '../../shared/redis/keys.js'
-import { emitPulseUpdate, emitToast, emitBusinessCheckin } from '../../shared/socket/events.js'
+import { emitPulseUpdate, emitToast, emitBusinessCheckin, emitFriendToast } from '../../shared/socket/events.js'
 import { isDbAvailable } from '../../shared/db/prisma.js'
+import { getMutualFollowIds, getFollowingIds } from '../social/repository.js'
+import { getUserById } from '../auth/repository.js'
 import * as repo from './repository.js'
 import type { CheckInInput, CheckInResponse } from './types.js'
 
@@ -134,16 +135,42 @@ export async function processCheckIn(
       state: getNodeState(pulseScore),
     })
 
-    // Emit toast if user consents to broadcast
-    const broadcast = await shouldBroadcast(userId)
-    if (broadcast) {
-      emitToast(citySlug, {
-        type: 'checkin',
-        message: `Someone just checked in to ${node.name}`,
-        nodeId: input.nodeId,
-        nodeLat: node.lat,
-        nodeLng: node.lng,
-      })
+    // Always emit anonymous city toast — no identity fields
+    emitToast(citySlug, {
+      type: 'checkin',
+      message: `${node.name} is heating up — ${dailyCount} check-ins`,
+      nodeId: input.nodeId,
+      nodeLat: node.lat,
+      nodeLng: node.lng,
+    })
+
+    // Emit personalised friend toasts to each mutual follow's user room
+    try {
+      const followingIds = await getFollowingIds(userId)
+      const friendIds = await getMutualFollowIds(userId, followingIds)
+      if (friendIds.size > 0) {
+        const user = await getUserById(userId)
+        const displayName = user?.displayName ?? 'Someone'
+        const friendPayload: {
+          type: 'checkin';
+          message: string;
+          nodeId: string;
+          avatarUrl?: string;
+        } = {
+          type: 'checkin',
+          message: `${displayName} just checked in at ${node.name}`,
+          nodeId: input.nodeId,
+        }
+        if (user?.avatarUrl) {
+          friendPayload.avatarUrl = user.avatarUrl
+        }
+        for (const friendId of friendIds) {
+          emitFriendToast(friendId, friendPayload)
+        }
+      }
+    } catch {
+      // Friend toast failures are logged but don't affect the check-in response
+      console.error('[check-in] Failed to emit friend toasts')
     }
   }
 
@@ -164,15 +191,4 @@ export async function processCheckIn(
 
   const cooldownUntil = new Date(Date.now() + cooldownTtl * 1000).toISOString()
   return { success: true, cooldownUntil }
-}
-
-// ─── Consent Check (used by check-in to decide toast emission) ──────────────
-
-export async function shouldBroadcast(userId: string): Promise<boolean> {
-  const cached = await redis.get(userConsent(userId))
-  if (cached) {
-    const consent = JSON.parse(cached) as { broadcastLocation: boolean }
-    return consent.broadcastLocation
-  }
-  return true // Default to broadcasting
 }

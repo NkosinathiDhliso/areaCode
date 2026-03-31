@@ -105,9 +105,6 @@ export function ConsentAudit() {
                 User {c.userId.slice(0, 8)}...
               </div>
               <div className="flex flex-row gap-3 text-xs">
-                <span className={c.broadcastLocation ? 'text-[var(--success)]' : 'text-[var(--text-muted)]'}>
-                  Broadcast: {c.broadcastLocation ? 'ON' : 'OFF'}
-                </span>
                 <span className={c.analyticsOptIn ? 'text-[var(--success)]' : 'text-[var(--text-muted)]'}>
                   Analytics: {c.analyticsOptIn ? 'ON' : 'OFF'}
                 </span>

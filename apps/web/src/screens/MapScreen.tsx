@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
 import { useMapStore, useConsumerAuthStore, useLocationStore, useUserStore } from '@area-code/shared/stores'
 import { useGeolocation, useCheckIn } from '@area-code/shared/hooks'
-import type { Node, NodeCategory } from '@area-code/shared/types'
+import type { Node, NodeCategory, Reward } from '@area-code/shared/types'
 
 import { useMapInit } from '../hooks/useMapInit'
 import { useMapMarkers } from '../hooks/useMapMarkers'
@@ -17,7 +17,6 @@ import { NodeDetailSheet } from '../components/NodeDetailSheet'
 import { SignupSheet } from '../components/SignupSheet'
 import { SearchSheet, type SearchResult } from '../components/SearchSheet'
 import { NotificationPrimingSheet, isDeferredRecently } from '../components/NotificationPrimingSheet'
-import { MOCK_NODES, MOCK_PULSE_SCORES } from '../mocks/nodes'
 import type { AppRoute } from '../types'
 
 interface MapScreenProps {
@@ -31,9 +30,8 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
-  const { containerRef, mapRef } = useMapInit()
+  const { containerRef, mapRef, mapReady } = useMapInit()
   const { setNodes, pulseScores } = useMapStore()
-  const updateNodePulse = useMapStore((s) => s.updateNodePulse)
   const accessToken = useConsumerAuthStore((s) => s.accessToken)
   const permissionState = useLocationStore((s) => s.permissionState)
   const lastKnownPosition = useLocationStore((s) => s.lastKnownPosition)
@@ -54,40 +52,18 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const userId = useConsumerAuthStore((s) => s.userId)
   useMapSockets(CITY_SLUG, accessToken ?? undefined, userId)
 
-  // Fetch nodes for city — fall back to mock data in dev when backend is unavailable
-  const isDev = import.meta.env.DEV
+  // Fetch nodes for city
   const { data: nodeList } = useQuery({
     queryKey: ['nodes', CITY_SLUG],
-    queryFn: async () => {
-      try {
-        const result = await api.get<Node[]>(`/v1/nodes/${CITY_SLUG}`)
-        if (isDev) console.log('[MapScreen] Fetched nodes from API:', result.length)
-        return result
-      } catch (err) {
-        if (isDev) {
-          console.log('[MapScreen] API unavailable, using mock data:', MOCK_NODES.length, 'nodes')
-          return MOCK_NODES
-        }
-        throw new Error('Failed to fetch nodes')
-      }
-    },
+    queryFn: () => api.get<Node[]>(`/v1/nodes/${CITY_SLUG}`),
     staleTime: 30_000,
-    retry: isDev ? false : 2,
   })
 
   useEffect(() => {
     if (nodeList) {
-      if (isDev) console.log('[MapScreen] Setting nodes in store:', nodeList.length)
       setNodes(nodeList)
-      // Load mock pulse scores in dev so markers show different visual states
-      if (isDev) {
-        console.log('[MapScreen] Loading mock pulse scores:', Object.keys(MOCK_PULSE_SCORES).length)
-        for (const [nodeId, score] of Object.entries(MOCK_PULSE_SCORES)) {
-          updateNodePulse(nodeId, score)
-        }
-      }
     }
-  }, [nodeList, setNodes, updateNodePulse, isDev])
+  }, [nodeList, setNodes])
 
   // Geolocation acquisition via the GPS state machine hook
   useEffect(() => {
@@ -112,7 +88,15 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   }, [onboarding.hintSeen, markHintSeen, resetQrFallback])
 
   // Marker management (extracted hook)
-  useMapMarkers(mapRef, categoryFilter, handleNodeTap)
+  useMapMarkers(mapRef, categoryFilter, handleNodeTap, mapReady)
+
+  // Fetch rewards for the selected node
+  const { data: nodeRewards } = useQuery({
+    queryKey: ['node-rewards', selectedNode?.id],
+    queryFn: () => api.get<Reward[]>(`/v1/nodes/${selectedNode!.id}/rewards`),
+    enabled: !!selectedNode,
+    staleTime: 30_000,
+  })
 
   // Check-in handler using the enhanced useCheckIn hook
   async function handleCheckIn() {
@@ -217,7 +201,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
       <NodeDetailSheet
         node={selectedNode}
-        rewards={[]}
+        rewards={nodeRewards ?? []}
         pulseScore={selectedScore}
         state={getNodeState(selectedScore)}
         isOpen={sheetOpen}

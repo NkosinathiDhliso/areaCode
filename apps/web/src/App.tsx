@@ -11,6 +11,7 @@ import { MapScreen } from './screens/MapScreen'
 import { RewardsScreen } from './screens/RewardsScreen'
 import { LeaderboardScreen } from './screens/LeaderboardScreen'
 import { FeedScreen } from './screens/FeedScreen'
+import { FriendsScreen } from './screens/FriendsScreen'
 import { ProfileScreen } from './screens/ProfileScreen'
 import { ConsumerLogin } from './screens/ConsumerLogin'
 import { ConsumerSignup } from './screens/ConsumerSignup'
@@ -77,6 +78,7 @@ export function App() {
         {route === 'rewards' && <RewardsScreen />}
         {route === 'leaderboard' && <LeaderboardScreen />}
         {route === 'feed' && <FeedScreen />}
+        {route === 'friends' && <FriendsScreen />}
         {route === 'profile' && <ProfileScreen onNavigate={setRoute} />}
       </div>
       <BottomNav active={route} onNavigate={setRoute} />

@@ -7,7 +7,7 @@ import {
   updateProfileBodySchema, consentBodySchema, checkInHistoryQuerySchema,
   accountTypeQuerySchema, staffInviteAcceptBodySchema,
   consumerSignupBodySchema, verifyOtpBodySchema, loginBodySchema,
-  refreshBodySchema, businessSignupBodySchema,
+  refreshBodySchema, businessSignupBodySchema, adminLoginBodySchema,
 } from './types.js'
 import { z } from 'zod'
 
@@ -113,6 +113,18 @@ export async function authRoutes(app: FastifyInstance) {
     },
   )
 
+  // ─── Admin Auth ─────────────────────────────────────────────────────────
+
+  // POST /v1/auth/admin/login
+  app.post(
+    '/v1/auth/admin/login',
+    { preHandler: [validate({ body: adminLoginBodySchema })] },
+    async (request) => {
+      const body = request.body as z.infer<typeof adminLoginBodySchema>
+      return service.adminLogin(body.email, body.password)
+    },
+  )
+
   // ─── User Profile & Consent ───────────────────────────────────────────
 
   // GET /v1/users/me
@@ -184,7 +196,6 @@ export async function authRoutes(app: FastifyInstance) {
         auth.userId,
         body.consentVersion,
         body.analyticsOptIn,
-        body.broadcastLocation,
       )
     },
   )

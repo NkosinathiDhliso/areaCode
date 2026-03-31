@@ -57,8 +57,12 @@ model User {
   neighbourhoodId String? @map("neighbourhood_id") @db.Uuid
   tier            String  @default("local")
   totalCheckIns   Int     @default(0) @map("total_check_ins")
-  cognitoSub      String? @unique @map("cognito_sub")
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  cognitoSub         String?  @unique @map("cognito_sub")
+  musicGenres        String[] @default([]) @map("music_genres")
+  dimensionScores    Json?    @map("dimension_scores") @db.JsonB
+  archetypeId        String?  @map("archetype_id")
+  streamingProvider  String?  @map("streaming_provider")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   city          City?          @relation(fields: [cityId], references: [id])
   neighbourhood Neighbourhood? @relation(fields: [neighbourhoodId], references: [id])

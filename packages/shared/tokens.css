@@ -2,7 +2,7 @@
 :root {
   color-scheme: dark light;
   --bg-map: #080a0e;
-  --bg-gradient: linear-gradient(145deg,#0a0c14 0%,#101828 30%,#162030 50%,#0e1420 75%,#0a0c14 100%);
+  --bg-gradient: linear-gradient(145deg,#0b1018 0%,#111827 50%,#1a2030 100%);
   --bg-base: #0c1018;
   --bg-surface: rgba(18,26,38,0.65);
   --bg-raised: rgba(26,36,52,0.70);
@@ -19,6 +19,8 @@
   --accent-bright: #A9CBE0;
   --accent-dim: #5A6F8A;
   --accent-gradient: linear-gradient(135deg,#5A6F8A 0%,#778CA9 50%,#A9CBE0 100%);
+  --cta-gradient: linear-gradient(135deg,#5A6F8A 0%,#6E8BA8 100%);
+  --cta-gradient-hover: linear-gradient(135deg,#6E8BA8 0%,#8AA4C0 100%);
   --on-accent: #f0f4f8;
   --success: #22d3a0;
   --success-soft: rgba(34,211,160,0.12);
@@ -62,7 +64,7 @@
 
 :root[data-theme="light"] {
   --bg-map: #e4e8ec;
-  --bg-gradient: linear-gradient(145deg,#f5f1ea 0%,#eee8e0 25%,#dce6ee 50%,#eee8e0 75%,#f5f2eb 100%);
+  --bg-gradient: linear-gradient(145deg,#f0ece6 0%,#e8e4de 50%,#dfe6ec 100%);
   --bg-base: #f0ece6;
   --bg-surface: rgba(255,255,255,0.55);
   --bg-raised: rgba(255,255,255,0.70);
@@ -79,6 +81,8 @@
   --accent-bright: #778CA9;
   --accent-dim: #465A72;
   --accent-gradient: linear-gradient(135deg,#465A72 0%,#5A6F8A 50%,#778CA9 100%);
+  --cta-gradient: linear-gradient(135deg,#465A72 0%,#5A7088 100%);
+  --cta-gradient-hover: linear-gradient(135deg,#5A7088 0%,#6E8BA8 100%);
   --on-accent: #ffffff;
   --success: #18b888;
   --success-soft: rgba(24,184,136,0.10);
@@ -121,6 +125,8 @@
 .glass-sheen{background:var(--glass-highlight),var(--bg-surface);backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur));border:1px solid var(--glass-border)}
 .glass-raised{background:var(--bg-raised);backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur));border:1px solid var(--glass-border);box-shadow:var(--shadow-md)}
 .gradient-accent{background:var(--accent-gradient);color:var(--on-accent)}
+.gradient-cta{background:var(--cta-gradient);color:var(--on-accent);transition:background 0.2s ease}
+.gradient-cta:hover{background:var(--cta-gradient-hover)}
 .gradient-border{position:relative}
 .gradient-border::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;background:var(--border-gradient);-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
 .bg-success-soft{background:var(--success-soft)}

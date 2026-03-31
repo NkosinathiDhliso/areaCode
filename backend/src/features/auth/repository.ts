@@ -50,10 +50,9 @@ export async function insertConsentRecord(
   userId: string,
   consentVersion: string,
   analyticsOptIn: boolean,
-  broadcastLocation: boolean,
 ) {
   return prisma.consentRecord.create({
-    data: { userId, consentVersion, analyticsOptIn, broadcastLocation },
+    data: { userId, consentVersion, analyticsOptIn },
   })
 }
 

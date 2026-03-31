@@ -82,5 +82,12 @@ upsert_secret "area-code/${ENV}/vapid-private-key"     "${AREA_CODE_VAPID_PRIVAT
 upsert_secret "area-code/${ENV}/sqs-reward-queue-url"  "${AREA_CODE_SQS_REWARD_QUEUE_URL:-}"
 upsert_secret "area-code/${ENV}/sqs-push-queue-url"    "${AREA_CODE_SQS_PUSH_QUEUE_URL:-}"
 
+# ── Streaming OAuth ──────────────────────────────────────────────────────────
+upsert_secret "area-code/${ENV}/spotify-client-id"     "${SPOTIFY_CLIENT_ID:-}"
+upsert_secret "area-code/${ENV}/spotify-client-secret"  "${SPOTIFY_CLIENT_SECRET:-}"
+upsert_secret "area-code/${ENV}/apple-music-team-id"    "${APPLE_MUSIC_TEAM_ID:-}"
+upsert_secret "area-code/${ENV}/apple-music-key-id"     "${APPLE_MUSIC_KEY_ID:-}"
+upsert_secret "area-code/${ENV}/apple-music-private-key" "${APPLE_MUSIC_PRIVATE_KEY:-}"
+
 echo ""
 echo "All secrets deployed to area-code/${ENV}/*"

@@ -7,7 +7,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "dev": "npx tsx --watch src/server.ts"
+    "dev": "npx tsx --watch src/server.ts",
+    "test": "vitest run",
+    "test:data-integrity": "vitest run src/__tests__/data-integrity.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.1020.0",

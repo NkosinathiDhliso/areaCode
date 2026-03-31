@@ -18,7 +18,7 @@ export function SettingsPanel() {
           api.get<{ items: StaffAccount[] }>('/v1/business/staff'),
         ])
         setBiz(bizRes)
-        setStaff(staffRes.items)
+        setStaff(staffRes.items ?? [])
       } catch {
         // Fail silently
       }

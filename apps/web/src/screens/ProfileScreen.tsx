@@ -9,6 +9,7 @@ import { TierBadge } from '@area-code/shared/components/TierBadge'
 import { Avatar } from '@area-code/shared/components/Avatar'
 import type { User } from '@area-code/shared/types'
 import type { AppRoute } from '../types'
+import { StreamingSection } from '../components/StreamingSection'
 
 interface ProfileScreenProps {
   onNavigate: (route: AppRoute) => void
@@ -23,11 +24,14 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   const { data: profile } = useQuery({
     queryKey: ['user', 'me'],
     queryFn: async () => {
-      const u = await api.get<User>('/v1/users/me')
+      const u = await api.get<User & { streakCount?: number }>('/v1/users/me')
       setUser(u)
+      if (typeof u.streakCount === 'number') {
+        useUserStore.getState().setStreak(u.streakCount)
+      }
       return u
     },
-    enabled: isAuthenticated,
+    // Allow fetching in browse mode so mock data is visible
     staleTime: 60_000,
   })
 
@@ -41,7 +45,9 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
     onNavigate('map')
   }
 
-  if (!isAuthenticated) {
+  const displayUser = profile ?? user
+
+  if (!displayUser && !isAuthenticated) {
     return (
       <div className="flex flex-col items-center justify-center h-full px-5 gap-4">
         <p className="text-[var(--text-secondary)] text-sm">{t('auth.gated.signIn')}</p>
@@ -54,8 +60,6 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
       </div>
     )
   }
-
-  const displayUser = profile ?? user
 
   return (
     <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4">
@@ -81,14 +85,23 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
         <StatCard value={tier} label={t('profile.currentTier')} capitalize />
       </div>
 
+      <StreamingSection />
+
+      <button
+        onClick={() => onNavigate('friends')}
+        className="w-full flex flex-row items-center justify-between bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3 mb-3 transition-all active:scale-[0.98]"
+      >
+        <span className="text-[var(--text-primary)] text-sm font-medium">{t('friends.title')}</span>
+        <span className="text-[var(--text-muted)] text-sm">→</span>
+      </button>
+
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 mb-3">
         <h3 className="text-[var(--text-secondary)] text-xs font-medium uppercase tracking-wider mb-3">
           {t('profile.privacy')}
         </h3>
-        <label className="flex flex-row items-center justify-between">
-          <span className="text-[var(--text-primary)] text-sm">{t('profile.privacyToggle')}</span>
-          <input type="checkbox" defaultChecked className="accent-[var(--accent)]" />
-        </label>
+        <p className="text-[var(--text-secondary)] text-sm">
+          {t('profile.privacyExplainer')}
+        </p>
       </div>
 
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 mb-3">

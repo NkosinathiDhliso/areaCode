@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@area-code/shared/lib/api'
+import { MusicInsightsSection } from '../../components/MusicInsightsSection'
 
 interface AudienceData {
   tierDistribution: Record<string, number>
@@ -64,6 +65,8 @@ export function AudiencePanel() {
           </div>
         </div>
       </div>
+
+      <MusicInsightsSection />
     </div>
   )
 }

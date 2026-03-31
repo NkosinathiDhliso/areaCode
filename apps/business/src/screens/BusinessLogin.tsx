@@ -13,11 +13,18 @@ export function BusinessLogin() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  function normalizePhone(raw: string): string {
+    const digits = raw.replace(/\s+/g, '')
+    if (digits.startsWith('+')) return digits
+    if (digits.startsWith('0')) return `+27${digits.slice(1)}`
+    return `+${digits}`
+  }
+
   async function handleSendOtp() {
     setLoading(true)
     setError(null)
     try {
-      await api.post('/v1/auth/business/login', { phone })
+      await api.post('/v1/auth/business/login', { phone: normalizePhone(phone) })
       setStep('otp')
     } catch {
       setError('Failed to send OTP.')
@@ -34,7 +41,7 @@ export function BusinessLogin() {
         accessToken: string
         refreshToken: string
         businessId: string
-      }>('/v1/auth/business/verify-otp', { phone, otp })
+      }>('/v1/auth/business/verify-otp', { phone: normalizePhone(phone), code: otp })
       setAuth(res.accessToken, res.refreshToken, res.businessId)
     } catch {
       setError('Invalid or expired OTP.')

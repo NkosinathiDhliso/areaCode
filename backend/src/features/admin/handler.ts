@@ -164,4 +164,60 @@ export async function adminRoutes(app: FastifyInstance) {
       return service.getReconsentList(role)
     },
   )
+
+  // ─── Archetype Management ───────────────────────────────────────────────
+
+  // GET /v1/admin/archetypes
+  app.get(
+    '/v1/admin/archetypes',
+    { preHandler: [adminAuth] },
+    async () => {
+      return service.getArchetypes()
+    },
+  )
+
+  // POST /v1/admin/archetypes
+  app.post(
+    '/v1/admin/archetypes',
+    { preHandler: [adminAuth] },
+    async (request) => {
+      const auth = getAuth(request)
+      const role = getAdminRole(request)
+      return service.createArchetype(auth.userId, role, request.body as Record<string, unknown>)
+    },
+  )
+
+  // PATCH /v1/admin/archetypes/:id
+  app.patch(
+    '/v1/admin/archetypes/:id',
+    { preHandler: [adminAuth] },
+    async (request) => {
+      const auth = getAuth(request)
+      const role = getAdminRole(request)
+      const params = request.params as { id: string }
+      return service.updateArchetype(auth.userId, role, params.id, request.body as Record<string, unknown>)
+    },
+  )
+
+  // ─── Genre Weight Management ────────────────────────────────────────────
+
+  // GET /v1/admin/genre-weights
+  app.get(
+    '/v1/admin/genre-weights',
+    { preHandler: [adminAuth] },
+    async () => {
+      return service.getGenreWeights()
+    },
+  )
+
+  // PATCH /v1/admin/genre-weights
+  app.patch(
+    '/v1/admin/genre-weights',
+    { preHandler: [adminAuth] },
+    async (request) => {
+      const auth = getAuth(request)
+      const role = getAdminRole(request)
+      return service.updateGenreWeights(auth.userId, role, request.body as Record<string, unknown>)
+    },
+  )
 }

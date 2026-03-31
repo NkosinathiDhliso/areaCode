@@ -218,3 +218,7 @@ output "alb_dns_name" {
 output "alb_arn" {
   value = aws_lb.this.arn
 }
+
+output "task_role_name" {
+  value = aws_iam_role.task.name
+}

@@ -5,3 +5,4 @@ export { isWeb, setPageTitle, getDeviceInfo, isOnline, isSaveDataEnabled, hasGeo
 export { haversineDistance, isWithinRadius } from './geoUtils'
 export { formatZAR, formatRelativeTime, formatLocalTime, formatLocalDate, formatCountdown } from './formatters'
 export * from './featureGating'
+export { computeDimensionScores, resolveArchetype, matchesArchetype } from './archetypeResolver'

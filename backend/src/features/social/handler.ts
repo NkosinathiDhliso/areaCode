@@ -8,6 +8,8 @@ import {
   feedQuerySchema,
   leaderboardParamsSchema,
   nearbyRecentQuerySchema,
+  whoIsHereParamsSchema,
+  userSearchQuerySchema,
 } from './types.js'
 import { z } from 'zod'
 
@@ -96,6 +98,69 @@ export async function socialRoutes(app: FastifyInstance) {
       const auth = getOptionalAuth(request)
       const params = request.params as z.infer<typeof leaderboardParamsSchema>
       return service.getCityLeaderboard(params.citySlug, auth?.userId)
+    },
+  )
+
+  // GET /v1/nodes/:id/who-is-here/summary
+  app.get(
+    '/v1/nodes/:id/who-is-here/summary',
+    {
+      preHandler: [
+        optionalAuth('consumer'),
+        validate({ params: whoIsHereParamsSchema }),
+      ],
+    },
+    async (request) => {
+      const auth = getOptionalAuth(request)
+      const params = request.params as z.infer<typeof whoIsHereParamsSchema>
+      return service.getWhoIsHere(params.id, auth?.userId)
+    },
+  )
+
+  // GET /v1/users/me/friends
+  app.get(
+    '/v1/users/me/friends',
+    { preHandler: [requireAuth('consumer')] },
+    async (request) => {
+      const auth = getAuth(request)
+      return service.getFriendsList(auth.userId)
+    },
+  )
+
+  // GET /v1/users/me/following
+  app.get(
+    '/v1/users/me/following',
+    { preHandler: [requireAuth('consumer')] },
+    async (request) => {
+      const auth = getAuth(request)
+      return service.getFollowingList(auth.userId)
+    },
+  )
+
+  // GET /v1/users/me/followers
+  app.get(
+    '/v1/users/me/followers',
+    { preHandler: [requireAuth('consumer')] },
+    async (request) => {
+      const auth = getAuth(request)
+      return service.getFollowersList(auth.userId)
+    },
+  )
+
+  // GET /v1/users/search
+  app.get(
+    '/v1/users/search',
+    {
+      preHandler: [
+        requireAuth('consumer'),
+        validate({ query: userSearchQuerySchema }),
+        rateLimitMiddleware({ key: 'user-search', max: 20, windowSeconds: 60 }),
+      ],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      const query = request.query as z.infer<typeof userSearchQuerySchema>
+      return service.searchUsers(auth.userId, query.q)
     },
   )
 }

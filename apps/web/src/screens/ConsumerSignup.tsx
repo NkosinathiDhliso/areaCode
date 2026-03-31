@@ -17,7 +17,6 @@ export function ConsumerSignup({ onNavigate }: ConsumerSignupProps) {
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [citySlug, setCitySlug] = useState('johannesburg')
-  const [consentBroadcast, setConsentBroadcast] = useState(true)
   const [consentAnalytics, setConsentAnalytics] = useState(false)
   const [otp, setOtp] = useState('')
   const [step, setStep] = useState<'form' | 'otp'>('form')
@@ -45,7 +44,6 @@ export function ConsumerSignup({ onNavigate }: ConsumerSignupProps) {
         username,
         displayName,
         citySlug,
-        consentBroadcast,
         consentAnalytics,
       })
       setStep('otp')
@@ -123,10 +121,9 @@ export function ConsumerSignup({ onNavigate }: ConsumerSignupProps) {
           <input type="checkbox" checked={consentAnalytics} onChange={(e) => setConsentAnalytics(e.target.checked)} className="mt-1" />
           <span className="text-[var(--text-secondary)] text-xs">{t('auth.signup.consentAnalytics')}</span>
         </label>
-        <label className="flex flex-row items-start gap-3">
-          <input type="checkbox" checked={consentBroadcast} onChange={(e) => setConsentBroadcast(e.target.checked)} className="mt-1" />
-          <span className="text-[var(--text-secondary)] text-xs">{t('auth.signup.consentBroadcast')}</span>
-        </label>
+        <p className="text-[var(--text-muted)] text-xs mt-2">
+          {t('profile.privacyExplainer')}
+        </p>
 
         <button onClick={handleSignup} disabled={loading || !phone || !username || !displayName} className="bg-[var(--accent)] text-white font-semibold rounded-xl py-4 text-base transition-all duration-150 active:scale-95 disabled:opacity-50 mt-2">
           {loading ? '...' : t('auth.signup.submit')}

@@ -44,15 +44,21 @@ export function LeaderboardScreen() {
               <span className="text-[var(--text-muted)] text-sm font-medium w-6 text-right">
                 {entry.rank}
               </span>
-              <Avatar
-                url={entry.avatarUrl}
-                displayName={entry.displayName}
-                size="sm"
-                tier={entry.tier as Tier}
-              />
+              {entry.isFriend ? (
+                <Avatar
+                  url={entry.avatarUrl}
+                  displayName={entry.displayName ?? ''}
+                  size="sm"
+                  tier={entry.tier as Tier}
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-[var(--bg-raised)] flex items-center justify-center">
+                  <TierBadge tier={entry.tier as Tier} />
+                </div>
+              )}
               <div className="flex-1">
                 <p className="text-[var(--text-primary)] text-sm font-medium">
-                  {entry.username}
+                  {entry.isFriend ? entry.displayName : t('leaderboard.anonymousExplorer')}
                 </p>
               </div>
               <TierBadge tier={entry.tier as Tier} />

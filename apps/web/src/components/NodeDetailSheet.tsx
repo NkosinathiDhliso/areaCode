@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BottomSheet } from '@area-code/shared/components/BottomSheet'
 import type { Node, Reward, NodeState } from '@area-code/shared/types'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import type { GeoStatus } from '@area-code/shared/stores/locationStore'
+import { CrowdVibeSection } from './CrowdVibeSection'
 
 interface NodeDetailSheetProps {
   node: Node | null
@@ -18,7 +19,7 @@ interface NodeDetailSheetProps {
   qrFallback?: boolean
 }
 
-export function NodeDetailSheet({
+export const NodeDetailSheet = memo(function NodeDetailSheet({
   node, rewards, pulseScore: _pulseScore, state,
   isOpen, onClose, onCheckIn, onSignup,
   qrFallback = false,
@@ -139,6 +140,9 @@ export function NodeDetailSheet({
               </div>
             </div>
           )}
+
+          {/* Crowd Vibe section */}
+          <CrowdVibeSection nodeId={node.id} />
         </>
       )}
 
@@ -156,7 +160,7 @@ export function NodeDetailSheet({
       </button>
     </BottomSheet>
   )
-}
+})
 
 function getCtaInfo(
   geoStatus: GeoStatus,

@@ -14,10 +14,19 @@ const queryClient = new QueryClient({
   },
 })
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
-  </React.StrictMode>,
-)
+async function bootstrap() {
+  if (import.meta.env.VITE_DEV_MOCK === 'true') {
+    const { initDevMocks } = await import('@area-code/shared/mocks')
+    await initDevMocks()
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    </React.StrictMode>,
+  )
+}
+
+void bootstrap()

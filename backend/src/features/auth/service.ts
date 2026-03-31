@@ -1,8 +1,9 @@
 import { AppError } from '../../shared/errors/AppError.js'
 import { redis } from '../../shared/redis/client.js'
-import { userConsent, otpCooldown, otpHourlyCount } from '../../shared/redis/keys.js'
+import { userConsent, otpCooldown, otpHourlyCount, otpSession } from '../../shared/redis/keys.js'
 import { isDbAvailable } from '../../shared/db/prisma.js'
 import * as repo from './repository.js'
+import * as cognito from '../../shared/cognito/client.js'
 
 const DEV_MODE = !isDbAvailable
 
@@ -24,36 +25,50 @@ export async function consumerSignup(data: {
 
   await checkOtpRateLimit(data.phone)
 
-  // In production: create Cognito user, send OTP via SMS
-  const cognitoSub = `consumer-${Date.now()}`
+  // Create Cognito user
+  await cognito.signUpUser('consumer', data.phone)
+
+  // Get the Cognito sub
+  const cognitoUser = await cognito.getCognitoUser('consumer', data.phone)
+  if (!cognitoUser) throw AppError.internal('Failed to create Cognito user')
+
   const user = await repo.createUser({
     phone: data.phone,
     username: data.username,
     displayName: data.displayName,
     cityId: city.id,
-    cognitoSub,
+    cognitoSub: cognitoUser.sub,
+  })
+
+  // Store userId as custom attribute in Cognito for JWT claims
+  await cognito.updateUserAttributes('consumer', data.phone, {
+    userId: user.id,
+    citySlug: data.citySlug,
   })
 
   // Insert initial consent record
   const consentVersion = process.env['AREA_CODE_CONSENT_VERSION'] ?? 'v1.0'
-  await repo.insertConsentRecord(user.id, consentVersion, false, true)
+  await repo.insertConsentRecord(user.id, consentVersion, false)
+
+  // Initiate auth to send OTP
+  const { session } = await cognito.initiateAuth('consumer', data.phone)
+  await redis.set(otpSession(data.phone), session, 'EX', 300)
 
   return { userId: user.id, message: 'OTP sent' }
 }
 
 export async function consumerLogin(phone: string) {
-  if (DEV_MODE) {
-    // Skip DB/Redis checks in dev mode
-    return
-  }
+  if (DEV_MODE) return
 
   const user = await repo.findUserByPhone(phone)
   if (!user) throw AppError.notFound('Account not found')
   await checkOtpRateLimit(phone)
-  // In production: initiate Cognito auth, send OTP
+
+  const { session } = await cognito.initiateAuth('consumer', phone)
+  await redis.set(otpSession(phone), session, 'EX', 300)
 }
 
-export async function consumerVerifyOtp(phone: string, _code: string) {
+export async function consumerVerifyOtp(phone: string, code: string) {
   if (DEV_MODE) {
     const userId = `dev-user-${Date.now()}`
     return {
@@ -63,13 +78,24 @@ export async function consumerVerifyOtp(phone: string, _code: string) {
     }
   }
 
-  const user = await repo.findUserByPhone(phone)
-  if (!user) throw AppError.unauthorized('Invalid credentials')
-  // In production: verify OTP with Cognito, return real tokens
-  return {
-    accessToken: `access-${user.id}-${Date.now()}`,
-    refreshToken: `refresh-${user.id}-${Date.now()}`,
-    user: { id: user.id, username: user.username, displayName: user.displayName, tier: user.tier },
+  const session = await redis.get(otpSession(phone))
+  if (!session) throw AppError.unauthorized('OTP expired or not requested')
+
+  try {
+    const tokens = await cognito.respondToAuthChallenge('consumer', phone, code, session)
+    await redis.del(otpSession(phone))
+
+    const user = await repo.findUserByPhone(phone)
+    if (!user) throw AppError.unauthorized('Invalid credentials')
+
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      user: { id: user.id, username: user.username, displayName: user.displayName, tier: user.tier },
+    }
+  } catch (err) {
+    if (err instanceof AppError) throw err
+    throw AppError.unauthorized('Invalid or expired OTP')
   }
 }
 
@@ -87,13 +113,23 @@ export async function businessSignup(data: {
 
   await checkOtpRateLimit(data.phone)
 
-  const cognitoSub = `business-${Date.now()}`
+  await cognito.signUpUser('business', data.phone)
+  const cognitoUser = await cognito.getCognitoUser('business', data.phone)
+  if (!cognitoUser) throw AppError.internal('Failed to create Cognito user')
+
   const business = await repo.createBusinessAccount({
     email: data.email,
     businessName: data.businessName,
     registrationNumber: data.registrationNumber,
-    cognitoSub,
+    cognitoSub: cognitoUser.sub,
   })
+
+  await cognito.updateUserAttributes('business', data.phone, {
+    businessId: business.id,
+  })
+
+  const { session } = await cognito.initiateAuth('business', data.phone)
+  await redis.set(otpSession(data.phone), session, 'EX', 300)
 
   return { businessId: business.id, message: 'OTP sent' }
 }
@@ -101,14 +137,39 @@ export async function businessSignup(data: {
 export async function businessLogin(phone: string) {
   if (DEV_MODE) return
   await checkOtpRateLimit(phone)
-  // In production: initiate Cognito auth for business pool
+
+  const { session } = await cognito.initiateAuth('business', phone)
+  await redis.set(otpSession(phone), session, 'EX', 300)
 }
 
-export async function businessVerifyOtp(phone: string, _code: string) {
-  // In production: verify OTP with Cognito business pool
-  return {
-    accessToken: `biz-access-${Date.now()}`,
-    refreshToken: `biz-refresh-${Date.now()}`,
+export async function businessVerifyOtp(phone: string, code: string) {
+  if (DEV_MODE) {
+    return {
+      accessToken: `biz-access-${Date.now()}`,
+      refreshToken: `biz-refresh-${Date.now()}`,
+      businessId: `dev-biz-${Date.now()}`,
+    }
+  }
+
+  const session = await redis.get(otpSession(phone))
+  if (!session) throw AppError.unauthorized('OTP expired or not requested')
+
+  try {
+    const tokens = await cognito.respondToAuthChallenge('business', phone, code, session)
+    await redis.del(otpSession(phone))
+
+    // Look up businessId from Cognito custom attributes
+    const cognitoUser = await cognito.getCognitoUser('business', phone)
+    const businessId = cognitoUser?.attributes['custom:businessId'] ?? ''
+
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      businessId,
+    }
+  } catch (err) {
+    if (err instanceof AppError) throw err
+    throw AppError.unauthorized('Invalid or expired OTP')
   }
 }
 
@@ -116,13 +177,16 @@ export async function businessVerifyOtp(phone: string, _code: string) {
 
 export async function staffLogin(phone: string) {
   if (DEV_MODE) return
+
   const staff = await repo.findStaffByPhone(phone)
   if (!staff) throw AppError.notFound('Staff account not found')
   await checkOtpRateLimit(phone)
-  // In production: initiate Cognito auth for staff pool (8hr TTL)
+
+  const { session } = await cognito.initiateAuth('staff', phone)
+  await redis.set(otpSession(phone), session, 'EX', 300)
 }
 
-export async function staffVerifyOtp(phone: string, _code: string) {
+export async function staffVerifyOtp(phone: string, code: string) {
   if (DEV_MODE) {
     return {
       accessToken: `dev-staff-access-${Date.now()}`,
@@ -130,19 +194,66 @@ export async function staffVerifyOtp(phone: string, _code: string) {
       staff: { id: `dev-staff-${Date.now()}`, name: 'Dev Staff', businessId: 'dev-biz-1' },
     }
   }
-  const staff = await repo.findStaffByPhone(phone)
-  if (!staff) throw AppError.unauthorized('Invalid credentials')
-  return {
-    accessToken: `staff-access-${staff.id}-${Date.now()}`,
-    refreshToken: `staff-refresh-${staff.id}-${Date.now()}`,
-    staff: { id: staff.id, name: staff.name, businessId: staff.businessId },
+
+  const session = await redis.get(otpSession(phone))
+  if (!session) throw AppError.unauthorized('OTP expired or not requested')
+
+  try {
+    const tokens = await cognito.respondToAuthChallenge('staff', phone, code, session)
+    await redis.del(otpSession(phone))
+
+    const staff = await repo.findStaffByPhone(phone)
+    if (!staff) throw AppError.unauthorized('Invalid credentials')
+
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      staff: { id: staff.id, name: staff.name, businessId: staff.businessId },
+    }
+  } catch (err) {
+    if (err instanceof AppError) throw err
+    throw AppError.unauthorized('Invalid or expired OTP')
+  }
+}
+
+// ─── Admin Auth ─────────────────────────────────────────────────────────────
+
+export async function adminLogin(email: string, password: string) {
+  if (DEV_MODE) {
+    return {
+      accessToken: `dev-admin-access-${Date.now()}`,
+      adminId: 'dev-admin-1',
+      role: 'super_admin' as const,
+    }
+  }
+
+  try {
+    const tokens = await cognito.adminPasswordAuth(email, password)
+
+    // Extract admin role from ID token claims
+    const cognitoUser = await cognito.getCognitoUser('admin', email)
+    const role = cognitoUser?.attributes['custom:admin_role'] ?? 'support_agent'
+    const adminId = cognitoUser?.sub ?? ''
+
+    return {
+      accessToken: tokens.accessToken,
+      adminId,
+      role,
+    }
+  } catch {
+    throw AppError.unauthorized('Invalid credentials')
   }
 }
 
 // ─── Token Refresh ──────────────────────────────────────────────────────────
 
 export async function refreshToken(_refreshToken: string, _pool: string) {
-  // In production: call Cognito to refresh tokens
+  if (DEV_MODE) {
+    return { accessToken: `refreshed-access-${Date.now()}` }
+  }
+  // In production: call Cognito AdminInitiateAuth with REFRESH_TOKEN_AUTH flow
+  // For now, return a placeholder — full implementation requires storing which pool
+  // the refresh token belongs to
   return {
     accessToken: `refreshed-access-${Date.now()}`,
   }
@@ -209,13 +320,12 @@ export async function updateConsent(
   userId: string,
   consentVersion: string,
   analyticsOptIn: boolean,
-  broadcastLocation: boolean,
 ) {
   if (DEV_MODE) {
-    return { id: `consent-${Date.now()}`, userId, consentVersion, analyticsOptIn, broadcastLocation, consentedAt: new Date().toISOString() }
+    return { id: `consent-${Date.now()}`, userId, consentVersion, analyticsOptIn, consentedAt: new Date().toISOString() }
   }
   const record = await repo.insertConsentRecord(
-    userId, consentVersion, analyticsOptIn, broadcastLocation,
+    userId, consentVersion, analyticsOptIn,
   )
   // Invalidate Redis cache
   await redis.del(userConsent(userId))
@@ -224,18 +334,17 @@ export async function updateConsent(
 
 export async function getUserConsent(userId: string) {
   if (DEV_MODE) {
-    return { broadcastLocation: true, analyticsOptIn: false }
+    return { analyticsOptIn: false }
   }
   // Check Redis cache first
   const cached = await redis.get(userConsent(userId))
-  if (cached) return JSON.parse(cached) as { broadcastLocation: boolean; analyticsOptIn: boolean }
+  if (cached) return JSON.parse(cached) as { analyticsOptIn: boolean }
 
   // Fall back to DB
   const record = await repo.getLatestConsent(userId)
-  if (!record) return { broadcastLocation: true, analyticsOptIn: false }
+  if (!record) return { analyticsOptIn: false }
 
   const consent = {
-    broadcastLocation: record.broadcastLocation,
     analyticsOptIn: record.analyticsOptIn,
   }
   await redis.set(userConsent(userId), JSON.stringify(consent), 'EX', 3600)
@@ -253,14 +362,17 @@ export async function getAccountType(phone: string): Promise<string> {
   const staff = await repo.findStaffByPhone(phone)
   if (staff) return 'staff'
 
-  // Business lookup would check Cognito in production
+  // Check Cognito business pool
+  const bizUser = await cognito.getCognitoUser('business', phone)
+  if (bizUser) return 'business'
+
   return 'not_found'
 }
 
 // ─── OTP Rate Limiting ──────────────────────────────────────────────────────
 
 export async function checkOtpRateLimit(phone: string) {
-  if (DEV_MODE) return // Skip rate limiting in dev mode
+  if (DEV_MODE) return
   // 60s resend cooldown
   const cooldownKey = otpCooldown(phone)
   const cooldown = await redis.get(cooldownKey)
@@ -293,12 +405,22 @@ export async function acceptStaffInvite(token: string, name: string, phone: stri
 
   await repo.acceptStaffInvite(invite.id)
 
-  // In production, create Cognito user and get sub
-  const cognitoSub = `staff-${Date.now()}`
-  return repo.createStaffAccount({
+  // Create Cognito user for staff
+  await cognito.signUpUser('staff', phone)
+  const cognitoUser = await cognito.getCognitoUser('staff', phone)
+  if (!cognitoUser) throw AppError.internal('Failed to create staff Cognito user')
+
+  const staff = await repo.createStaffAccount({
     businessId: invite.businessId,
     name,
     phone,
-    cognitoSub,
+    cognitoSub: cognitoUser.sub,
   })
+
+  await cognito.updateUserAttributes('staff', phone, {
+    staffId: staff.id,
+    businessId: invite.businessId,
+  })
+
+  return staff
 }

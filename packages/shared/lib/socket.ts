@@ -8,6 +8,13 @@ const SOCKET_URL = typeof import.meta !== 'undefined' ? (import.meta as unknown 
 
 let socketInstance: TypedSocket | null = null
 
+/**
+ * Allow the dev mock layer to inject a fake socket without reassigning the ES module export.
+ */
+export function setSocketOverride(socket: TypedSocket): void {
+  socketInstance = socket
+}
+
 export function getSocket(token?: string, opts?: { userId?: string; citySlug?: string }): TypedSocket {
   if (socketInstance?.connected) {
     return socketInstance

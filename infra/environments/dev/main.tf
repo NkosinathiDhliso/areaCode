@@ -248,6 +248,107 @@ module "lambda_yoco_webhook" {
   }
 }
 
+# --- SQS Queues ---
+module "sqs_reward_eval" {
+  source              = "../../modules/sqs"
+  env                 = local.env
+  queue_name          = "reward-eval"
+  visibility_timeout  = 60
+  lambda_function_arn = module.lambda_reward_evaluator.function_arn
+}
+
+module "sqs_push_sender" {
+  source             = "../../modules/sqs"
+  env                = local.env
+  queue_name         = "push-sender"
+  visibility_timeout = 30
+}
+
+# --- Lambda IAM: check-in → SQS send ---
+resource "aws_iam_role_policy" "checkin_sqs_send" {
+  name = "sqs-send"
+  role = module.lambda_check_in.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["sqs:SendMessage"]
+      Resource = module.sqs_reward_eval.queue_arn
+    }]
+  })
+}
+
+# --- Lambda IAM: reward-evaluator → SQS receive + push queue send ---
+resource "aws_iam_role_policy" "reward_eval_sqs" {
+  name = "sqs-access"
+  role = module.lambda_reward_evaluator.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+        Resource = module.sqs_reward_eval.queue_arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"]
+        Resource = module.sqs_push_sender.queue_arn
+      }
+    ]
+  })
+}
+
+# --- Lambda IAM: ECS task → SQS send ---
+resource "aws_iam_role_policy" "ecs_sqs_send" {
+  name = "sqs-send"
+  role = module.ecs_api.task_role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["sqs:SendMessage"]
+      Resource = [module.sqs_reward_eval.queue_arn, module.sqs_push_sender.queue_arn]
+    }]
+  })
+}
+
+# --- EventBridge Schedules ---
+module "eventbridge_schedules" {
+  source = "../../modules/eventbridge"
+  env    = local.env
+
+  schedules = {
+    pulse-decay = {
+      description          = "Pulse decay every 5 minutes"
+      schedule_expression  = "rate(5 minutes)"
+      lambda_arn           = module.lambda_pulse_decay.function_arn
+      lambda_function_name = module.lambda_pulse_decay.function_name
+    }
+    leaderboard-reset = {
+      description          = "Weekly leaderboard reset Monday 00:00 SAST (Sunday 22:00 UTC)"
+      schedule_expression  = "cron(0 22 ? * SUN *)"
+      lambda_arn           = module.lambda_leaderboard_reset.function_arn
+      lambda_function_name = module.lambda_leaderboard_reset.function_name
+    }
+    partition-manager = {
+      description          = "Check-in table partition management daily at 03:00 SAST (01:00 UTC)"
+      schedule_expression  = "cron(0 1 * * ? *)"
+      lambda_arn           = module.lambda_partition_manager.function_arn
+      lambda_function_name = module.lambda_partition_manager.function_name
+    }
+    cleanup = {
+      description          = "Cleanup expired tokens/data daily at 04:00 SAST (02:00 UTC)"
+      schedule_expression  = "cron(0 2 * * ? *)"
+      lambda_arn           = module.lambda_cleanup.function_arn
+      lambda_function_name = module.lambda_cleanup.function_name
+    }
+  }
+}
+
 # --- API Gateway (with Lambda integrations) ---
 module "api_gateway" {
   source = "../../modules/api-gateway"
@@ -414,4 +515,12 @@ output "redis_endpoint" {
 
 output "ecs_api_url" {
   value = module.ecs_api.alb_dns_name
+}
+
+output "sqs_reward_eval_url" {
+  value = module.sqs_reward_eval.queue_url
+}
+
+output "sqs_push_sender_url" {
+  value = module.sqs_push_sender.queue_url
 }

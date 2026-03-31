@@ -48,10 +48,9 @@ function buildMarkerElement(
     justifyContent: 'center',
     cursor: 'pointer',
     overflow: 'visible',
-    // Prevent Mapbox from clipping our glow layers
-    pointerEvents: 'auto',
+    // Let clicks on the transparent area pass through to the map
+    pointerEvents: 'none',
   })
-  container.addEventListener('click', onTap)
 
   // ── Layer 1: Blur halo ──
   const haloSize = coreSize * 2.5
@@ -95,9 +94,13 @@ function buildMarkerElement(
     borderRadius: '50%',
     border: `2px solid ${colour}`,
     opacity: String(cfg.ringOpacity),
-    pointerEvents: 'none',
+    cursor: 'pointer',
+    pointerEvents: 'auto',
   })
   ring.dataset.layer = 'ring'
+  ring.addEventListener('mousedown', (e) => e.stopPropagation())
+  ring.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true })
+  ring.addEventListener('click', (e) => { e.stopPropagation(); onTap() })
   container.appendChild(ring)
 
   if (state === 'buzzing' || state === 'popping') {
@@ -127,9 +130,14 @@ function buildMarkerElement(
     boxShadow: state === 'dormant'
       ? 'none'
       : `0 0 ${glowSpread}px ${colour}60, 0 0 ${glowSpread * 2}px ${colour}30`,
-    pointerEvents: 'none',
+    cursor: 'pointer',
+    pointerEvents: 'auto',
   })
   core.dataset.layer = 'core'
+  // Stop mousedown/touchstart so Mapbox doesn't interpret it as a drag
+  core.addEventListener('mousedown', (e) => e.stopPropagation())
+  core.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true })
+  core.addEventListener('click', (e) => { e.stopPropagation(); onTap() })
   container.appendChild(core)
 
   // ── Layer 4: Live count badge ──
@@ -231,33 +239,31 @@ export function useMapMarkers(
   mapRef: React.RefObject<mapboxgl.Map | null>,
   categoryFilter: NodeCategory | null,
   onNodeTap: (node: Node) => void,
+  mapReady = false,
 ) {
   const nodes = useMapStore((s) => s.nodes)
   const pulseScores = useMapStore((s) => s.pulseScores)
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map())
+  // Keep a stable ref to the latest onNodeTap so marker click handlers are never stale
+  const onNodeTapRef = useRef(onNodeTap)
+  onNodeTapRef.current = onNodeTap
 
   useEffect(() => {
     const map = mapRef.current
-    if (!map) {
-      console.log('[useMapMarkers] No map instance yet, skipping')
+    if (!map || !mapReady) {
       return
     }
 
+    let cancelled = false
+
     // Wait for map style to be loaded before adding markers
     const addMarkers = () => {
+      if (cancelled) return
+
       const nodeArray = Object.values(nodes)
       const filtered = categoryFilter
         ? nodeArray.filter((n) => n.category === categoryFilter)
         : nodeArray
-
-      console.log('[useMapMarkers] Rendering markers:', {
-        totalNodes: nodeArray.length,
-        filtered: filtered.length,
-        pulseScoreKeys: Object.keys(pulseScores).length,
-        existingMarkers: markersRef.current.size,
-        categoryFilter,
-        mapLoaded: map.loaded(),
-      })
 
       const filteredIds = new Set(filtered.map((n) => n.id))
 
@@ -281,9 +287,9 @@ export function useMapMarkers(
           continue
         }
 
-        console.log(`[useMapMarkers] Creating marker: ${node.name} | state=${state} score=${score} coreSize=${coreSize} pos=[${node.lng},${node.lat}]`)
-
-        const el = buildMarkerElement(node, coreSize, colour, state, score, () => onNodeTap(node))
+        const el = buildMarkerElement(node, coreSize, colour, state, score, () => {
+          onNodeTapRef.current(node)
+        })
 
         const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
           .setLngLat([node.lng, node.lat])
@@ -291,8 +297,6 @@ export function useMapMarkers(
 
         markersRef.current.set(node.id, marker)
       }
-
-      console.log('[useMapMarkers] Done. Total markers on map:', markersRef.current.size)
     }
 
     if (map.loaded()) {
@@ -300,5 +304,10 @@ export function useMapMarkers(
     } else {
       map.once('load', addMarkers)
     }
-  }, [nodes, pulseScores, categoryFilter, mapRef, onNodeTap])
+
+    return () => {
+      cancelled = true
+      map.off('load', addMarkers)
+    }
+  }, [nodes, pulseScores, categoryFilter, mapRef, mapReady])
 }

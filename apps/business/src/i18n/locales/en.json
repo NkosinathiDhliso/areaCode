@@ -26,5 +26,9 @@
   "biz.live.step2": "Create your first reward",
   "biz.live.step3": "Share your node with customers",
   "biz.live.step4": "Display QR code at entrance",
-  "biz.logout": "Log out"
+  "biz.logout": "Log out",
+  "biz.audience.musicTaste": "Music Taste",
+  "biz.audience.personalityTypes": "Personality Types",
+  "biz.audience.peakPersonality": "Peak Personality by Time",
+  "biz.audience.minMusicData": "Not enough music data yet. At least 20 visitors with music preferences are needed."
 }

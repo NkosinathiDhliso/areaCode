@@ -14,10 +14,11 @@ export function NodeEditorPanel() {
     async function fetch() {
       try {
         const res = await api.get<{ items: Node[] }>('/v1/business/me/nodes')
-        setNodes(res.items)
-        if (res.items[0]) {
-          setSelected(res.items[0])
-          setName(res.items[0].name)
+        const items = res.items ?? []
+        setNodes(items)
+        if (items[0]) {
+          setSelected(items[0])
+          setName(items[0].name)
         }
       } catch {
         // Fail silently

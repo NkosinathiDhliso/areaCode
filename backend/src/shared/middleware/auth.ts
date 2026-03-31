@@ -27,25 +27,25 @@ function getPoolConfig(role: AuthRole): PoolConfig {
   switch (role) {
     case 'consumer':
       return {
-        poolId: process.env['AREA_CODE_COGNITO_CONSUMER_POOL_ID'] ?? '',
+        poolId: process.env['AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID'] ?? '',
         clientId: process.env['AREA_CODE_COGNITO_CONSUMER_CLIENT_ID'] ?? '',
         region,
       };
     case 'business':
       return {
-        poolId: process.env['AREA_CODE_COGNITO_BUSINESS_POOL_ID'] ?? '',
+        poolId: process.env['AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID'] ?? '',
         clientId: process.env['AREA_CODE_COGNITO_BUSINESS_CLIENT_ID'] ?? '',
         region,
       };
     case 'staff':
       return {
-        poolId: process.env['AREA_CODE_COGNITO_STAFF_POOL_ID'] ?? '',
+        poolId: process.env['AREA_CODE_COGNITO_STAFF_USER_POOL_ID'] ?? '',
         clientId: process.env['AREA_CODE_COGNITO_STAFF_CLIENT_ID'] ?? '',
         region,
       };
     case 'admin':
       return {
-        poolId: process.env['AREA_CODE_COGNITO_ADMIN_POOL_ID'] ?? '',
+        poolId: process.env['AREA_CODE_COGNITO_ADMIN_USER_POOL_ID'] ?? '',
         clientId: process.env['AREA_CODE_COGNITO_ADMIN_CLIENT_ID'] ?? '',
         region,
       };

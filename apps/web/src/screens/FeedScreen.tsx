@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
-import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { Avatar } from '@area-code/shared/components/Avatar'
 import { Skeleton } from '@area-code/shared/components/Skeleton'
 import { formatRelativeTime } from '@area-code/shared/lib/formatters'
@@ -22,24 +21,13 @@ interface FeedResponse {
 
 export function FeedScreen() {
   const { t } = useTranslation()
-  const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
 
+  // Feed is browsable without auth in dev mock mode
   const { data, isLoading } = useQuery({
     queryKey: ['feed'],
     queryFn: () => api.get<FeedResponse>('/v1/feed?limit=20'),
-    enabled: isAuthenticated,
     staleTime: 30_000,
   })
-
-  if (!isAuthenticated) {
-    return (
-      <div className="flex items-center justify-center h-full px-5">
-        <p className="text-[var(--text-secondary)] text-sm text-center">
-          {t('auth.gated.feedSignIn')}
-        </p>
-      </div>
-    )
-  }
 
   return (
     <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4">

@@ -13,11 +13,18 @@ export function StaffLogin() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  function normalizePhone(raw: string): string {
+    const digits = raw.replace(/\s+/g, '')
+    if (digits.startsWith('+')) return digits
+    if (digits.startsWith('0')) return `+27${digits.slice(1)}`
+    return `+${digits}`
+  }
+
   async function handleSendOtp() {
     setLoading(true)
     setError(null)
     try {
-      await api.post('/v1/auth/staff/login', { phone })
+      await api.post('/v1/auth/staff/login', { phone: normalizePhone(phone) })
       setStep('otp')
     } catch {
       setError('Failed to send OTP. Check your phone number.')
@@ -32,11 +39,9 @@ export function StaffLogin() {
     try {
       const res = await api.post<{
         accessToken: string
-        staffId: string
-        businessId: string
-        nodeName: string
-      }>('/v1/auth/staff/verify-otp', { phone, otp })
-      setAuth(res.accessToken, res.staffId, res.businessId, res.nodeName)
+        staff: { id: string; name: string; businessId: string }
+      }>('/v1/auth/staff/verify-otp', { phone: normalizePhone(phone), code: otp })
+      setAuth(res.accessToken, res.staff.id, res.staff.businessId, res.staff.name)
     } catch {
       setError('Invalid or expired OTP.')
     } finally {

@@ -19,3 +19,11 @@ export const nearbyRecentQuerySchema = z.object({
   radiusMetres: z.coerce.number().default(1000),
   withinMinutes: z.coerce.number().default(10),
 })
+
+export const whoIsHereParamsSchema = z.object({
+  id: z.string().uuid(),
+})
+
+export const userSearchQuerySchema = z.object({
+  q: z.string().min(2, 'Query must be at least 2 characters').max(50),
+})

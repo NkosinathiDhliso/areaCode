@@ -4,6 +4,7 @@ export type AppRoute =
   | 'rewards'
   | 'leaderboard'
   | 'feed'
+  | 'friends'
   | 'profile'
   | 'login'
   | 'signup'

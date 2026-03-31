@@ -9,6 +9,7 @@ import { checkInRoutes } from './features/check-in/handler.js'
 import { authRoutes } from './features/auth/handler.js'
 import { adminRoutes } from './features/admin/handler.js'
 import { notificationRoutes } from './features/notifications/handler.js'
+import { musicRoutes } from './features/music/handler.js'
 
 export function buildApp() {
   const app = Fastify({
@@ -98,6 +99,7 @@ export function buildApp() {
   void app.register(socialRoutes)
   void app.register(adminRoutes)
   void app.register(notificationRoutes)
+  void app.register(musicRoutes)
 
   return app
 }

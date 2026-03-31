@@ -11,6 +11,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:data-integrity": "vitest run backend/src/__tests__/data-integrity.test.ts",
     "prepare": "husky"
   },
   "pnpm": {

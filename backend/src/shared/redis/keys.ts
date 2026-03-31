@@ -37,6 +37,10 @@ export const otpCooldown = (phone: string) =>
 export const otpHourlyCount = (phone: string) =>
   `otp:hourly:${phone}` as const;
 
+// Cognito auth session (stored between initiate and verify)
+export const otpSession = (phone: string) =>
+  `otp:session:${phone}` as const;
+
 // Leaderboard sorted set per city per week
 export const leaderboard = (cityId: string) =>
   `leaderboard:${cityId}:week` as const;

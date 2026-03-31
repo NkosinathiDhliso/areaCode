@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import type { MapInstance } from '@area-code/shared/types'
@@ -43,8 +43,9 @@ export function useMapInit() {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
   const setMapInstance = useMapStore((s) => s.setMapInstance)
-  // Force re-render when map becomes ready so useMapMarkers picks it up
-  const [, setMapReady] = useState(false)
+  // Increment counter when map becomes ready — this is more reliable than a
+  // boolean that can flip false→true→false during React strict-mode remounts.
+  const [mapReadyKey, setMapReadyKey] = useState(0)
 
   useEffect(() => {
     const container = containerRef.current
@@ -57,7 +58,7 @@ export function useMapInit() {
       console.log('[useMapInit] Reusing loaded singleton')
       mapRef.current = singletonMap
       setMapInstance(buildMapInstance(singletonMap))
-      setMapReady(true)
+      setMapReadyKey((k) => k + 1)
       requestAnimationFrame(() => singletonMap?.resize())
       return
     }
@@ -95,7 +96,7 @@ export function useMapInit() {
       singletonLoaded = true
       mapRef.current = map
       setMapInstance(buildMapInstance(map))
-      setMapReady(true)
+      setMapReadyKey((k) => k + 1)
 
       map.setFog({
         range: [0.5, 10],
@@ -135,8 +136,10 @@ export function useMapInit() {
 
     return () => {
       ro.disconnect()
+      // Reset ref so useMapMarkers doesn't operate on a destroyed map
+      mapRef.current = null
     }
   }, [setMapInstance])
 
-  return { containerRef, mapRef }
+  return { containerRef, mapRef, mapReady: mapReadyKey > 0 }
 }

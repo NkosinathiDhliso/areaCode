@@ -9,8 +9,7 @@ export const updateProfileBodySchema = z.object({
 export const consentBodySchema = z.object({
   consentVersion: z.string().min(1),
   analyticsOptIn: z.boolean(),
-  broadcastLocation: z.boolean(),
-})
+}).strict()
 
 export const checkInHistoryQuerySchema = z.object({
   cursor: z.string().optional(),
@@ -52,4 +51,9 @@ export const staffInviteAcceptBodySchema = z.object({
 
 export const accountTypeQuerySchema = z.object({
   phone: z.string().regex(/^\+\d{10,15}$/),
+})
+
+export const adminLoginBodySchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
 })

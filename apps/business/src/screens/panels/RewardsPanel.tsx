@@ -14,7 +14,7 @@ export function RewardsPanel() {
     async function fetch() {
       try {
         const res = await api.get<{ items: Reward[] }>('/v1/business/rewards')
-        setRewards(res.items)
+        setRewards(res.items ?? [])
       } catch {
         // Fail silently
       }
