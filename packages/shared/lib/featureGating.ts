@@ -1,5 +1,12 @@
 import type { BusinessTier, Tier } from '../types'
 
+const TIER_ORDER: Tier[] = ['local', 'regular', 'fixture', 'institution', 'legend']
+
+function tierAtLeast(tier: Tier | null, minTier: Tier): boolean {
+  if (!tier) return false
+  return TIER_ORDER.indexOf(tier) >= TIER_ORDER.indexOf(minTier)
+}
+
 // Consumer feature gates
 export function canCheckIn(tier: Tier | null): boolean {
   return tier !== null // Must be authenticated (any tier)
@@ -10,7 +17,7 @@ export function canClaimRewards(tier: Tier | null): boolean {
 }
 
 export function canViewWhoIsHere(tier: Tier | null): boolean {
-  return tier !== null
+  return tierAtLeast(tier, 'regular')
 }
 
 export function canParticipateInLeaderboard(tier: Tier | null): boolean {

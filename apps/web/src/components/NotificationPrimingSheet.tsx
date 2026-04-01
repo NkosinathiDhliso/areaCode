@@ -83,13 +83,33 @@ export function NotificationPrimingSheet({
   }, [isOpen, lat, lng])
 
   function handleEnable() {
-    if ('Notification' in window) {
-      void Notification.requestPermission().then(() => {
-        onClose()
-      })
-    } else {
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
       onClose()
+      return
     }
+
+    void Notification.requestPermission().then(async (permission) => {
+      if (permission === 'granted') {
+        try {
+          const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined
+          if (vapidKey) {
+            const reg = await navigator.serviceWorker.ready
+            const subscription = await reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: vapidKey,
+            })
+            // Register the subscription with the backend
+            await api.post('/v1/users/me/push-token', {
+              token: JSON.stringify(subscription),
+              platform: 'web',
+            })
+          }
+        } catch {
+          // Push registration failed — still close the sheet
+        }
+      }
+      onClose()
+    })
   }
 
   function handleNotNow() {

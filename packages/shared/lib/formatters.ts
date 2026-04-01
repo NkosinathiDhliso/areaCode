@@ -48,3 +48,15 @@ export function formatCountdown(seconds: number): string {
   const sec = seconds % 60
   return `${min}:${sec.toString().padStart(2, '0')}`
 }
+
+/** Convert local SA number (06x, 07x, 08x) to E.164 (+27...) */
+export function toE164(raw: string): string {
+  const digits = raw.replace(/\D/g, '')
+  if (digits.startsWith('0') && digits.length === 10) {
+    return `+27${digits.slice(1)}`
+  }
+  if (digits.startsWith('27') && digits.length === 11) {
+    return `+${digits}`
+  }
+  return raw.startsWith('+') ? raw : `+${digits}`
+}

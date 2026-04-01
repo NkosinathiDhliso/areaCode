@@ -297,11 +297,22 @@ jobs:
             --cluster area-code-prod \
             --service area-code-prod-api \
             --force-new-deployment
-
-      # 4. Smoke test
       - name: Smoke test prod API
         run: |
           sleep 30
           HEALTH=$(curl -sf https://api.areacode.co.za/health || echo '{"status":"failed"}')
           echo "Health check: ${HEALTH}"
           echo "${HEALTH}" | grep -q '"status":"ok"'
+
+      # Notify Sentry of new release
+      - name: Create Sentry release
+        if: env.SENTRY_AUTH_TOKEN != ''
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: area-code-api
+        run: |
+          npx @sentry/cli releases new "area-code-api@${{ github.sha }}"
+          npx @sentry/cli releases set-commits "area-code-api@${{ github.sha }}" --auto
+          npx @sentry/cli releases finalize "area-code-api@${{ github.sha }}"
+          npx @sentry/cli releases deploys "area-code-api@${{ github.sha }}" new -e prod

@@ -98,6 +98,7 @@ async function persistFlags(
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    console.error(`[abuse] Failed to persist flags: ${msg}`)
+    // Log via process stderr — Fastify logger not available in async context
+    process.stderr.write(`[abuse] Failed to persist flags: ${msg}\n`)
   }
 }

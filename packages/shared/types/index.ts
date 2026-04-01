@@ -167,6 +167,7 @@ export interface User {
   displayName: string
   avatarUrl: string | null
   cityId: string | null
+  citySlug?: string | null
   neighbourhoodId: string | null
   tier: Tier
   totalCheckIns: number

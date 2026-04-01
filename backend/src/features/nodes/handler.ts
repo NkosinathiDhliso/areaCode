@@ -132,6 +132,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     {
       preHandler: [
         requireAuth('consumer'),
+        rateLimitMiddleware({ key: 'node-report', max: 5, windowSeconds: 300 }),
         validate({ params: nodeIdParamsSchema, body: reportNodeBodySchema }),
       ],
     },

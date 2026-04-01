@@ -4,7 +4,8 @@ import { rateLimit as rateLimitKey } from '../redis/keys.js';
 import { AppError } from '../errors/AppError.js';
 import { isDbAvailable } from '../db/prisma.js';
 
-const DEV_MODE = !isDbAvailable;
+// DEV_MODE only activates when DB is unavailable AND we're explicitly NOT in production
+const DEV_MODE = !isDbAvailable && process.env['AREA_CODE_ENV'] !== 'prod';
 
 interface RateLimitOptions {
   /** Key prefix for this limiter */

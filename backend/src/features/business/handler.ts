@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { validate } from '../../shared/middleware/validation.js'
+import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
 import * as service from './service.js'
 import {
   checkoutBodySchema,
@@ -125,9 +126,12 @@ export async function businessRoutes(app: FastifyInstance) {
   )
 
   // POST /v1/webhooks/yoco
-  app.post('/v1/webhooks/yoco', async (request, reply) => {
+  app.post('/v1/webhooks/yoco', {
+    preHandler: [rateLimitMiddleware({ key: 'yoco-webhook', max: 100, windowSeconds: 60, identifierFn: () => 'yoco' })],
+  }, async (request, reply) => {
     const signature = request.headers['x-yoco-signature'] as string ?? ''
     const body = request.body as Record<string, unknown>
+    const rawBody = (request as unknown as { rawBody?: string }).rawBody ?? JSON.stringify(body)
     const eventId = body['id'] as string ?? ''
     const eventType = body['type'] as string ?? ''
 
@@ -136,6 +140,7 @@ export async function businessRoutes(app: FastifyInstance) {
       eventType,
       body,
       signature,
+      rawBody,
     )
     return reply.status(200).send({ ok: true, duplicate: result.duplicate })
   })

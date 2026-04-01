@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { validate } from '../../shared/middleware/validation.js'
+import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
 import * as service from './service.js'
 import { checkInBodySchema } from './types.js'
 import { z } from 'zod'
@@ -12,6 +13,7 @@ export async function checkInRoutes(app: FastifyInstance) {
     {
       preHandler: [
         requireAuth('consumer'),
+        rateLimitMiddleware({ key: 'check-in', max: 10, windowSeconds: 60 }),
         validate({ body: checkInBodySchema }),
       ],
     },

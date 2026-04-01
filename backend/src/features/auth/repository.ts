@@ -73,9 +73,10 @@ export async function findBusinessByEmail(email: string) {
   return prisma.businessAccount.findUnique({ where: { email } })
 }
 
-export async function findBusinessByPhone(_phone: string) {
-  // Business accounts don't have phone directly, but we check via Cognito
-  return null
+export async function findBusinessByPhone(phone: string) {
+  // Business accounts have an optional phone field
+  if (!phone) return null
+  return prisma.businessAccount.findUnique({ where: { phone } })
 }
 
 export async function findStaffByPhone(phone: string) {

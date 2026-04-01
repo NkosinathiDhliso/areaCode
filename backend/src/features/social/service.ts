@@ -2,7 +2,7 @@ import { AppError } from '../../shared/errors/AppError.js'
 import { isDbAvailable } from '../../shared/db/prisma.js'
 import * as repo from './repository.js'
 
-const DEV_MODE = !isDbAvailable
+const DEV_MODE = !isDbAvailable && process.env['AREA_CODE_ENV'] !== 'prod'
 
 // ─── Identity Stripper ──────────────────────────────────────────────────────
 

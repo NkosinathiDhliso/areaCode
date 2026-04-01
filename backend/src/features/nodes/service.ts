@@ -7,10 +7,10 @@ import { nodesPulse } from '../../shared/redis/keys.js'
 import { isDbAvailable } from '../../shared/db/prisma.js'
 import * as repo from './repository.js'
 
-const s3 = new S3Client({ region: process.env['AWS_REGION'] ?? 'af-south-1' })
+const s3 = new S3Client({ region: process.env['AWS_REGION'] ?? 'us-east-1' })
 const BUCKET = process.env['AREA_CODE_S3_MEDIA_BUCKET'] ?? 'area-code-media'
 const ENV = process.env['AREA_CODE_ENV'] ?? 'dev'
-const DEV_MODE = !isDbAvailable
+const DEV_MODE = !isDbAvailable && process.env['AREA_CODE_ENV'] !== 'prod'
 
 // ─── Dev Mock Data ──────────────────────────────────────────────────────────
 

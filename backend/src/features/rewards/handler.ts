@@ -78,8 +78,9 @@ export async function rewardRoutes(app: FastifyInstance) {
       ],
     },
     async (request) => {
+      const auth = getAuth(request)
       const body = request.body as z.infer<typeof redeemBodySchema>
-      return service.redeemReward(body.code)
+      return service.redeemReward(body.code, auth.userId)
     },
   )
 }

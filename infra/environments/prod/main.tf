@@ -33,6 +33,12 @@ locals {
   env = "prod"
 }
 
+variable "git_sha" {
+  description = "Git commit SHA for release tracking"
+  type        = string
+  default     = "unknown"
+}
+
 # --- Data sources for secrets ---
 data "aws_secretsmanager_secret" "db_url" {
   name = "area-code/${local.env}/db-url"
@@ -44,6 +50,10 @@ data "aws_secretsmanager_secret" "redis_url" {
 
 data "aws_secretsmanager_secret" "qr_hmac" {
   name = "area-code/${local.env}/qr-hmac-secret"
+}
+
+data "aws_secretsmanager_secret" "sentry_dsn" {
+  name = "area-code/${local.env}/sentry-dsn"
 }
 
 # --- VPC / Networking ---
@@ -470,10 +480,16 @@ module "ecs_api" {
     AREA_CODE_COGNITO_STAFF_CLIENT_ID       = "tlvem71ii7hbt7soqkvvok7i1"
     AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
     AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = "6ndlrao62ph9fkmv0fmirlom6p"
+    AREA_CODE_REWARD_QUEUE_URL              = module.sqs_reward_eval.queue_url
+    AREA_CODE_S3_MEDIA_BUCKET               = "area-code-${local.env}-media"
+    AREA_CODE_CONSENT_VERSION               = "v1.0"
+    GIT_SHA                                 = var.git_sha
   }
   secrets = {
-    AREA_CODE_DB_URL    = data.aws_secretsmanager_secret.db_url.arn
-    AREA_CODE_REDIS_URL = data.aws_secretsmanager_secret.redis_url.arn
+    AREA_CODE_DB_URL           = data.aws_secretsmanager_secret.db_url.arn
+    AREA_CODE_REDIS_URL        = data.aws_secretsmanager_secret.redis_url.arn
+    AREA_CODE_QR_HMAC_SECRET   = data.aws_secretsmanager_secret.qr_hmac.arn
+    SENTRY_DSN                 = data.aws_secretsmanager_secret.sentry_dsn.arn
   }
 }
 

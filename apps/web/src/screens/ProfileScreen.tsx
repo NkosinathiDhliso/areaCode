@@ -126,7 +126,20 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
       </div>
 
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 mb-3">
-        <button className="w-full text-left text-[var(--text-primary)] text-sm py-2">
+        <button
+          onClick={() => {
+            void api.get<{ items: unknown[] }>('/v1/users/me/check-in-history?limit=50').then((data) => {
+              const blob = new Blob([JSON.stringify(data.items, null, 2)], { type: 'application/json' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = 'check-in-history.json'
+              a.click()
+              URL.revokeObjectURL(url)
+            })
+          }}
+          className="w-full text-left text-[var(--text-primary)] text-sm py-2"
+        >
           {t('profile.exportHistory')}
         </button>
         <button

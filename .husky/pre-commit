@@ -1,2 +1,2 @@
-pnpm exec prettier --check .
-pnpm exec eslint .
+npx --no prettier --check .
+npx --no eslint .

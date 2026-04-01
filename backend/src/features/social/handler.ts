@@ -20,6 +20,7 @@ export async function socialRoutes(app: FastifyInstance) {
     {
       preHandler: [
         requireAuth('consumer'),
+        rateLimitMiddleware({ key: 'follow', max: 30, windowSeconds: 60 }),
         validate({ params: followParamsSchema }),
       ],
     },

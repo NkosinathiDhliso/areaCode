@@ -28,7 +28,7 @@ export async function runMigrations(): Promise<void> {
     console.log('[migration-runner] Running prisma migrate deploy...');
     execSync('npx prisma migrate deploy', {
       cwd: prismaDir,
-      env: { ...process.env, DATABASE_URL: dbUrl },
+      env: { ...process.env, DATABASE_URL: dbUrl, AREA_CODE_DB_URL: dbUrl },
       stdio: 'pipe',
       timeout: 60_000, // 60s timeout for Lambda
     });

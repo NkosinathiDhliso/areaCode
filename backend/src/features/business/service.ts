@@ -8,7 +8,7 @@ import {
   type BoostDuration,
 } from './types.js'
 
-const DEV_MODE = !isDbAvailable
+const DEV_MODE = !isDbAvailable && process.env['AREA_CODE_ENV'] !== 'prod'
 
 // ─── Business Profile ───────────────────────────────────────────────────────
 
@@ -133,16 +133,18 @@ export async function processYocoWebhook(
   eventType: string,
   payload: Record<string, unknown>,
   signature: string,
+  rawBody?: string,
 ) {
   if (DEV_MODE) return { duplicate: false }
 
-  // Verify signature
-  const secret = process.env['YOCO_DEV_SECRET_KEY'] ?? ''
+  // Verify signature using raw body bytes for accuracy
+  const secret = process.env['YOCO_WEBHOOK_SECRET'] ?? process.env['YOCO_DEV_SECRET_KEY'] ?? ''
+  const bodyToSign = rawBody ?? JSON.stringify(payload)
   const expected = createHmac('sha256', secret)
-    .update(JSON.stringify(payload))
+    .update(bodyToSign)
     .digest('hex')
 
-  if (signature !== expected) {
+  if (!signature || !expected || signature !== expected) {
     throw AppError.unauthorized('Invalid webhook signature')
   }
 

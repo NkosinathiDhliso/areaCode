@@ -46,6 +46,10 @@ data "aws_secretsmanager_secret" "qr_hmac" {
   name = "area-code/${local.env}/qr-hmac-secret"
 }
 
+data "aws_secretsmanager_secret" "sentry_dsn" {
+  name = "area-code/${local.env}/sentry-dsn"
+}
+
 # --- VPC / Networking (NAT disabled — using VPC endpoints to save ~$32/mo) ---
 module "vpc" {
   source             = "../../modules/vpc"
@@ -450,12 +454,26 @@ module "ecs_api" {
   subnet_ids         = module.vpc.private_subnet_ids
   security_group_ids = module.vpc.ecs_security_group_ids
   environment_variables = {
-    AREA_CODE_ENV = local.env
-    NODE_ENV      = "development"
+    AREA_CODE_ENV                          = local.env
+    NODE_ENV                               = "development"
+    AWS_REGION                             = "us-east-1"
+    AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID = module.cognito_consumer.user_pool_id
+    AREA_CODE_COGNITO_CONSUMER_CLIENT_ID    = module.cognito_consumer.client_id
+    AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID = module.cognito_business.user_pool_id
+    AREA_CODE_COGNITO_BUSINESS_CLIENT_ID    = module.cognito_business.client_id
+    AREA_CODE_COGNITO_STAFF_USER_POOL_ID    = module.cognito_staff.user_pool_id
+    AREA_CODE_COGNITO_STAFF_CLIENT_ID       = module.cognito_staff.client_id
+    AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
+    AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
+    AREA_CODE_REWARD_QUEUE_URL              = module.sqs_reward_eval.queue_url
+    AREA_CODE_S3_MEDIA_BUCKET               = "area-code-${local.env}-media"
+    AREA_CODE_CONSENT_VERSION               = "v1.0"
   }
   secrets = {
-    DATABASE_URL = data.aws_secretsmanager_secret.db_url.arn
-    REDIS_URL    = data.aws_secretsmanager_secret.redis_url.arn
+    AREA_CODE_DB_URL         = data.aws_secretsmanager_secret.db_url.arn
+    AREA_CODE_REDIS_URL      = data.aws_secretsmanager_secret.redis_url.arn
+    AREA_CODE_QR_HMAC_SECRET = data.aws_secretsmanager_secret.qr_hmac.arn
+    SENTRY_DSN               = data.aws_secretsmanager_secret.sentry_dsn.arn
   }
 }
 

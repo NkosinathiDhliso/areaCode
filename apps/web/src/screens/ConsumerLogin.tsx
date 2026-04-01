@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@area-code/shared/lib/api'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
+import { toE164 } from '@area-code/shared/lib/formatters'
 import type { AppRoute } from '../types'
 
 interface ConsumerLoginProps {
@@ -17,18 +18,7 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [wrongDoor, setWrongDoor] = useState(false)
-
-  /** Convert local SA number (06x, 07x, 08x) to E.164 (+27...) */
-  function toE164(raw: string): string {
-    const digits = raw.replace(/\D/g, '')
-    if (digits.startsWith('0') && digits.length === 10) {
-      return `+27${digits.slice(1)}`
-    }
-    if (digits.startsWith('27') && digits.length === 11) {
-      return `+${digits}`
-    }
-    return raw.startsWith('+') ? raw : `+${digits}`
-  }
+  const [resendCooldown, setResendCooldown] = useState(0)
 
   async function handleSendOtp() {
     setLoading(true)
@@ -38,6 +28,13 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
     try {
       await api.post('/v1/auth/consumer/login', { phone: e164 })
       setStep('otp')
+      setResendCooldown(60)
+      const interval = setInterval(() => {
+        setResendCooldown((prev) => {
+          if (prev <= 1) { clearInterval(interval); return 0 }
+          return prev - 1
+        })
+      }, 1000)
     } catch {
       try {
         const typeRes = await api.get<{ accountType: string }>(
@@ -111,6 +108,13 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
             className="bg-[var(--accent)] text-white font-semibold rounded-xl py-4 text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
           >
             {loading ? '...' : t('auth.login.verifyOtp')}
+          </button>
+          <button
+            onClick={handleSendOtp}
+            disabled={loading || resendCooldown > 0}
+            className="text-[var(--accent)] text-sm mt-1 disabled:text-[var(--text-muted)]"
+          >
+            {resendCooldown > 0 ? `${t('auth.login.resendOtp')} (${resendCooldown}s)` : t('auth.login.resendOtp')}
           </button>
         </div>
       )}

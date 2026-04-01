@@ -96,14 +96,14 @@ export async function updateStreak(userId: string): Promise<number> {
 
   // Deduplicate by SAST date
   const days = [...new Set(recent.map((c) => toSASTDate(c.checkedInAt)))]
-  const today = toSASTDate(new Date())
 
-  // Calculate streak from today backwards
+  // Calculate streak from today backwards using a fixed reference point
+  const now = new Date()
   let streak = 0
   for (let i = 0; i < days.length; i++) {
-    const expected = new Date(Date.now() + 2 * 60 * 60 * 1000)
-    expected.setUTCDate(expected.getUTCDate() - i)
-    const expectedDate = expected.toISOString().slice(0, 10)
+    const refDate = new Date(now.getTime() + 2 * 60 * 60 * 1000) // SAST
+    refDate.setUTCDate(refDate.getUTCDate() - i)
+    const expectedDate = refDate.toISOString().slice(0, 10)
     if (days[i] === expectedDate) {
       streak++
     } else {

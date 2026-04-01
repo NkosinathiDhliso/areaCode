@@ -25,8 +25,15 @@ function getNodeState(score: number): NodeState {
   return 'dormant'
 }
 
-// Track previous states in memory (per container)
-const previousStates = new Map<string, NodeState>()
+// Track previous states in Redis to survive container restarts
+async function getPreviousState(nodeId: string): Promise<NodeState> {
+  const state = await redis.get(`node:prev_state:${nodeId}`)
+  return (state as NodeState) ?? 'dormant'
+}
+
+async function setPreviousState(nodeId: string, state: NodeState): Promise<void> {
+  await redis.set(`node:prev_state:${nodeId}`, state, 'EX', 86400) // 24h TTL
+}
 
 export async function evaluateCityNodes(cityId: string, citySlug: string) {
   const key = nodesPulse(cityId)
@@ -38,10 +45,10 @@ export async function evaluateCityNodes(cityId: string, citySlug: string) {
     const nodeId = members[i]!
     const score = parseFloat(members[i + 1]!)
     const currentState = getNodeState(score)
-    const prevState = previousStates.get(nodeId) ?? 'dormant'
+    const prevState = await getPreviousState(nodeId)
 
     if (currentState !== prevState) {
-      previousStates.set(nodeId, currentState)
+      await setPreviousState(nodeId, currentState)
 
       // Only emit surge for upward transitions
       const stateOrder: NodeState[] = ['dormant', 'quiet', 'active', 'buzzing', 'popping']

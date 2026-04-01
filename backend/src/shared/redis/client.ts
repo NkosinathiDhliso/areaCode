@@ -12,7 +12,7 @@ const globalForRedis = globalThis as unknown as {
 function createRedisClient(): Redis {
   const url = process.env['AREA_CODE_REDIS_URL']
   if (!url) {
-    console.warn('[redis] AREA_CODE_REDIS_URL not set, using localhost')
+    process.stderr.write('[redis] AREA_CODE_REDIS_URL not set, using localhost\n')
   }
 
   const client = new Redis(url ?? 'redis://localhost:6379', {
@@ -25,11 +25,11 @@ function createRedisClient(): Redis {
   })
 
   client.on('error', (err) => {
-    console.error('[redis] Connection error:', err.message)
+    process.stderr.write(`[redis] Connection error: ${err.message}\n`)
   })
 
   client.on('connect', () => {
-    console.log('[redis] Connected')
+    process.stdout.write('[redis] Connected\n')
   })
 
   return client

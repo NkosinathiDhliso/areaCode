@@ -13,7 +13,7 @@ import { runAbuseChecks } from './abuse.js'
 import * as repo from './repository.js'
 import type { CheckInInput, CheckInResponse } from './types.js'
 
-const DEV_MODE = !isDbAvailable
+const DEV_MODE = !isDbAvailable && process.env['AREA_CODE_ENV'] !== 'prod'
 
 const REWARD_COOLDOWN = 14400  // 4 hours
 const PRESENCE_COOLDOWN = 3600 // 1 hour
@@ -124,7 +124,9 @@ export async function processCheckIn(
   const citySlug = node.city?.slug ?? ''
 
   await redis.incr(checkinToday(input.nodeId))
+  await redis.expire(checkinToday(input.nodeId), 86400) // 24h TTL
   await redis.sadd(uniqueUsersToday(input.nodeId), userId)
+  await redis.expire(uniqueUsersToday(input.nodeId), 86400) // 24h TTL
 
   // Recalculate pulse score
   const dailyCount = parseInt(await redis.get(checkinToday(input.nodeId)) ?? '0', 10)
@@ -180,8 +182,7 @@ export async function processCheckIn(
         }
       }
     } catch {
-      // Friend toast failures are logged but don't affect the check-in response
-      console.error('[check-in] Failed to emit friend toasts')
+      // Friend toast failures are non-critical — don't affect check-in response
     }
   }
 
@@ -200,7 +201,7 @@ export async function processCheckIn(
     const { SQSClient, SendMessageCommand } = await import('@aws-sdk/client-sqs')
     const sqsUrl = process.env['AREA_CODE_REWARD_QUEUE_URL']
     if (sqsUrl) {
-      const sqs = new SQSClient({ region: process.env['AWS_REGION'] ?? 'af-south-1' })
+      const sqs = new SQSClient({ region: process.env['AWS_REGION'] ?? 'us-east-1' })
       await sqs.send(new SendMessageCommand({
         QueueUrl: sqsUrl,
         MessageBody: JSON.stringify({
@@ -210,7 +211,7 @@ export async function processCheckIn(
         }),
       }))
     } else {
-      console.log(`[check-in] SQS not configured, skipping reward evaluation: user=${userId} node=${input.nodeId}`)
+      // SQS not configured — skip reward evaluation silently in dev
     }
   }
 

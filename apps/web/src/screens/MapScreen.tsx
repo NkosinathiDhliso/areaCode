@@ -24,7 +24,12 @@ interface MapScreenProps {
 }
 
 const DEFAULT_ZOOM = 13
-const CITY_SLUG = 'johannesburg'
+
+// Use the user's city from their profile, fallback to Johannesburg
+function getUserCitySlug(): string {
+  const userStore = useUserStore.getState()
+  return userStore.user?.citySlug ?? 'johannesburg'
+}
 
 export function MapScreen({ onNavigate }: MapScreenProps) {
   const { t } = useTranslation()
@@ -39,6 +44,8 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const { requestLocation, geoStatus } = useGeolocation()
   const { checkIn, qrFallback, resetQrFallback } = useCheckIn()
 
+  const citySlug = useUserStore((s) => s.user?.citySlug) ?? 'johannesburg'
+
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [signupOpen, setSignupOpen] = useState(false)
@@ -50,12 +57,12 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
   // Socket subscriptions — citySlug passed for anonymous room join
   const userId = useConsumerAuthStore((s) => s.userId)
-  useMapSockets(CITY_SLUG, accessToken ?? undefined, userId)
+  useMapSockets(citySlug, accessToken ?? undefined, userId)
 
   // Fetch nodes for city
   const { data: nodeList } = useQuery({
-    queryKey: ['nodes', CITY_SLUG],
-    queryFn: () => api.get<Node[]>(`/v1/nodes/${CITY_SLUG}`),
+    queryKey: ['nodes', citySlug],
+    queryFn: () => api.get<Node[]>(`/v1/nodes/${citySlug}`),
     staleTime: 30_000,
   })
 

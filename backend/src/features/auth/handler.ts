@@ -17,7 +17,10 @@ export async function authRoutes(app: FastifyInstance) {
   // POST /v1/auth/consumer/signup
   app.post(
     '/v1/auth/consumer/signup',
-    { preHandler: [validate({ body: consumerSignupBodySchema })] },
+    { preHandler: [
+      rateLimitMiddleware({ key: 'consumer-signup', max: 5, windowSeconds: 300 }),
+      validate({ body: consumerSignupBodySchema }),
+    ] },
     async (request, reply) => {
       const body = request.body as z.infer<typeof consumerSignupBodySchema>
       const result = await service.consumerSignup(body)
@@ -28,7 +31,10 @@ export async function authRoutes(app: FastifyInstance) {
   // POST /v1/auth/consumer/login
   app.post(
     '/v1/auth/consumer/login',
-    { preHandler: [validate({ body: loginBodySchema })] },
+    { preHandler: [
+      rateLimitMiddleware({ key: 'consumer-login', max: 5, windowSeconds: 60 }),
+      validate({ body: loginBodySchema }),
+    ] },
     async (request) => {
       const body = request.body as z.infer<typeof loginBodySchema>
       await service.consumerLogin(body.phone)
@@ -61,7 +67,10 @@ export async function authRoutes(app: FastifyInstance) {
   // POST /v1/auth/business/signup
   app.post(
     '/v1/auth/business/signup',
-    { preHandler: [validate({ body: businessSignupBodySchema })] },
+    { preHandler: [
+      rateLimitMiddleware({ key: 'business-signup', max: 5, windowSeconds: 300 }),
+      validate({ body: businessSignupBodySchema }),
+    ] },
     async (request, reply) => {
       const body = request.body as z.infer<typeof businessSignupBodySchema>
       const result = await service.businessSignup(body)
@@ -72,7 +81,10 @@ export async function authRoutes(app: FastifyInstance) {
   // POST /v1/auth/business/login
   app.post(
     '/v1/auth/business/login',
-    { preHandler: [validate({ body: loginBodySchema })] },
+    { preHandler: [
+      rateLimitMiddleware({ key: 'business-login', max: 5, windowSeconds: 60 }),
+      validate({ body: loginBodySchema }),
+    ] },
     async (request) => {
       const body = request.body as z.infer<typeof loginBodySchema>
       await service.businessLogin(body.phone)
@@ -95,7 +107,10 @@ export async function authRoutes(app: FastifyInstance) {
   // POST /v1/auth/staff/login
   app.post(
     '/v1/auth/staff/login',
-    { preHandler: [validate({ body: loginBodySchema })] },
+    { preHandler: [
+      rateLimitMiddleware({ key: 'staff-login', max: 5, windowSeconds: 60 }),
+      validate({ body: loginBodySchema }),
+    ] },
     async (request) => {
       const body = request.body as z.infer<typeof loginBodySchema>
       await service.staffLogin(body.phone)
@@ -220,8 +235,14 @@ export async function authRoutes(app: FastifyInstance) {
   app.post(
     '/v1/auth/logout',
     { preHandler: [requireAuth('consumer', 'business', 'staff', 'admin')] },
-    async (_request, reply) => {
-      // In production, revoke refresh token in Cognito
+    async (request, reply) => {
+      const auth = getAuth(request)
+      // Revoke all tokens for this user in Cognito
+      try {
+        await service.revokeUserTokens(auth.role, auth.cognitoSub)
+      } catch {
+        // Best-effort — don't fail the logout if revocation fails
+      }
       return reply.status(200).send({ success: true })
     },
   )

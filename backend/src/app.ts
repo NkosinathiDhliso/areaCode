@@ -1,6 +1,7 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import { AppError } from './shared/errors/AppError.js'
+import { initSentry, captureError } from './shared/monitoring/sentry.js'
 import { businessRoutes } from './features/business/handler.js'
 import { socialRoutes } from './features/social/handler.js'
 import { nodeRoutes } from './features/nodes/handler.js'
@@ -12,11 +13,30 @@ import { notificationRoutes } from './features/notifications/handler.js'
 import { musicRoutes } from './features/music/handler.js'
 import { staffRoutes } from './features/staff/handler.js'
 
-export function buildApp() {
+export async function buildApp() {
+  // Initialize error monitoring before anything else
+  await initSentry()
+
   const app = Fastify({
     logger: {
       level: process.env['AREA_CODE_ENV'] === 'prod' ? 'info' : 'debug',
     },
+  })
+
+  // Capture raw body for webhook signature verification
+  app.addHook('preParsing', async (request, _reply, payload) => {
+    if (request.url === '/v1/webhooks/yoco') {
+      const chunks: Buffer[] = []
+      for await (const chunk of payload) {
+        chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
+      }
+      const rawBody = Buffer.concat(chunks)
+      ;(request as unknown as { rawBody: string }).rawBody = rawBody.toString('utf-8')
+      // Return a new readable stream from the buffer for Fastify to parse
+      const { Readable } = await import('node:stream')
+      return Readable.from(rawBody)
+    }
+    return payload
   })
 
   // CORS
@@ -75,6 +95,7 @@ export function buildApp() {
     }
 
     app.log.error(error)
+    captureError(error)
     return reply.status(500).send({
       error: 'internal_error',
       message: 'Internal server error',

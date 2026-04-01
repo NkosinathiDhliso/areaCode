@@ -15,7 +15,7 @@ export function setSocketOverride(socket: TypedSocket): void {
   socketInstance = socket
 }
 
-export function getSocket(token?: string, opts?: { userId?: string; citySlug?: string }): TypedSocket {
+export function getSocket(token?: string, opts?: { userId?: string; citySlug?: string; businessId?: string }): TypedSocket {
   if (socketInstance?.connected) {
     return socketInstance
   }
@@ -24,6 +24,7 @@ export function getSocket(token?: string, opts?: { userId?: string; citySlug?: s
   if (token) auth['token'] = token
   if (opts?.userId) auth['userId'] = opts.userId
   if (opts?.citySlug) auth['citySlug'] = opts.citySlug
+  if (opts?.businessId) auth['businessId'] = opts.businessId
 
   const options: Parameters<typeof io>[1] = {
     transports: ['websocket'],

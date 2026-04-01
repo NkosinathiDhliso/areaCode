@@ -21,6 +21,7 @@ export const consumerSignupBodySchema = z.object({
   username: z.string().min(3).max(30),
   displayName: z.string().min(1).max(50),
   citySlug: z.string().min(1),
+  consentAnalytics: z.boolean().optional().default(false),
 })
 
 export const verifyOtpBodySchema = z.object({

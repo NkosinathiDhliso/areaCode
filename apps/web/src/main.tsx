@@ -15,6 +15,10 @@ const queryClient = new QueryClient({
 })
 
 async function bootstrap() {
+  // Initialize error monitoring first
+  const { initSentry } = await import('./lib/sentry')
+  await initSentry()
+
   if (import.meta.env.VITE_DEV_MOCK === 'true') {
     const { initDevMocks } = await import('@area-code/shared/mocks')
     await initDevMocks()
@@ -27,6 +31,11 @@ async function bootstrap() {
       </QueryClientProvider>
     </React.StrictMode>,
   )
+
+  // Register service worker for Web Push
+  if ('serviceWorker' in navigator && import.meta.env.PROD) {
+    void navigator.serviceWorker.register('/sw.js')
+  }
 }
 
 void bootstrap()

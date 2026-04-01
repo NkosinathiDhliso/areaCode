@@ -1,2 +1,2 @@
-pnpm exec tsc --noEmit
-pnpm exec vitest run
+npx --no tsc --noEmit
+npx --no vitest run

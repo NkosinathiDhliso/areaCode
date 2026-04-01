@@ -71,6 +71,8 @@ fi
 # ── Push secrets ─────────────────────────────────────────────────────────────
 upsert_secret "area-code/${ENV}/yoco-secret-key"       "$YOCO_SECRET"
 upsert_secret "area-code/${ENV}/yoco-public-key"       "$YOCO_PUBLIC"
+upsert_secret "area-code/${ENV}/yoco-webhook-secret"   "${YOCO_WEBHOOK_SECRET:-}"
+upsert_secret "area-code/${ENV}/sentry-dsn"            "${SENTRY_DSN:-}"
 upsert_secret "area-code/${ENV}/mapbox-token"          "${VITE_MAPBOX_TOKEN:-}"
 upsert_secret "area-code/${ENV}/db-url"                "${AREA_CODE_DB_URL:-}"
 upsert_secret "area-code/${ENV}/db-read-url"           "${AREA_CODE_DB_READ_URL:-}"
@@ -79,7 +81,7 @@ upsert_secret "area-code/${ENV}/qr-hmac-secret"        "${AREA_CODE_QR_HMAC_SECR
 upsert_secret "area-code/${ENV}/fingerprint-pro-key"   "${AREA_CODE_FINGERPRINT_PRO_KEY:-}"
 upsert_secret "area-code/${ENV}/cipc-api-key"          "${AREA_CODE_CIPC_API_KEY:-}"
 upsert_secret "area-code/${ENV}/vapid-private-key"     "${AREA_CODE_VAPID_PRIVATE_KEY:-}"
-upsert_secret "area-code/${ENV}/sqs-reward-queue-url"  "${AREA_CODE_SQS_REWARD_QUEUE_URL:-}"
+upsert_secret "area-code/${ENV}/reward-queue-url"      "${AREA_CODE_REWARD_QUEUE_URL:-}"
 upsert_secret "area-code/${ENV}/sqs-push-queue-url"    "${AREA_CODE_SQS_PUSH_QUEUE_URL:-}"
 
 # ── Streaming OAuth ──────────────────────────────────────────────────────────

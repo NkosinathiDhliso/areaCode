@@ -1,9 +1,7 @@
 import { randomBytes } from 'node:crypto'
-import { redis } from '../shared/redis/client.js'
 import { emitRewardClaimed, emitRewardSlotsUpdate, emitToast, emitBusinessRewardClaimed } from '../shared/socket/events.js'
 import { userRoom } from '../shared/socket/rooms.js'
 import { getIO } from '../shared/socket/server.js'
-import { rewardNotificationsToday } from '../shared/redis/keys.js'
 import * as repo from './reward-evaluator-repository.js'
 
 interface CheckInMessage {
@@ -71,11 +69,19 @@ async function emitClaimEvents(
       codeExpiresAt: codeExpiresAt.toISOString(),
     })
   } else {
-    const pushKey = rewardNotificationsToday(userId)
-    const pushCount = await redis.incr(pushKey)
-    if (pushCount === 1) await redis.expire(pushKey, 86400)
-    if (pushCount <= 2) {
-      console.log(`[reward-evaluator] Push queued: user=${userId} reward=${reward.title}`)
+    // Deliver via push notification (Expo / Web Push)
+    const { canSendRewardPush, incrementRewardPushCount, notifyUser } = await import('../features/notifications/service.js')
+    const canPush = await canSendRewardPush(userId)
+    if (canPush) {
+      await incrementRewardPushCount(userId)
+      await notifyUser(userId, 'reward:claimed', {
+        title: 'Reward unlocked!',
+        message: `You earned "${reward.title}" — claim it before it expires.`,
+        rewardId: reward.id,
+        rewardTitle: reward.title,
+        redemptionCode: code,
+        codeExpiresAt: codeExpiresAt.toISOString(),
+      })
     }
   }
 

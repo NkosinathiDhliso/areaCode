@@ -3,7 +3,7 @@ import { isDbAvailable } from '../../shared/db/prisma.js'
 import { findBusinessById } from '../business/repository.js'
 import * as repo from './repository.js'
 
-const DEV_MODE = !isDbAvailable
+const DEV_MODE = !isDbAvailable && process.env['AREA_CODE_ENV'] !== 'prod'
 
 const DEV_REWARDS = [
   { id: 'rew-1', title: 'Free Coffee', type: 'freebie', totalSlots: 50, claimedCount: 12, nodeId: 'dev-1', nodeName: 'Father Coffee', nodeSlug: 'father-coffee', distance: 150, expiresAt: null },
@@ -103,7 +103,7 @@ export async function getUnclaimedRewards(userId: string) {
   return repo.getUnclaimedRewards(userId)
 }
 
-export async function redeemReward(code: string) {
+export async function redeemReward(code: string, staffId?: string) {
   if (DEV_MODE) {
     return { success: true, rewardTitle: 'Free Coffee', redeemedAt: new Date().toISOString() }
   }
@@ -111,6 +111,21 @@ export async function redeemReward(code: string) {
   if (!redemption) throw AppError.badRequest('invalid_code')
   if (redemption.redeemedAt) throw AppError.badRequest('already_redeemed')
   if (redemption.codeExpiresAt < new Date()) throw AppError.badRequest('expired_code')
+
+  // Validate staff belongs to the business that owns this reward
+  if (staffId) {
+    const rewardDetail = await repo.getRewardById(redemption.rewardId)
+    if (rewardDetail?.node.businessId) {
+      const { prisma } = await import('../../shared/db/prisma.js')
+      const staff = await prisma.staffAccount.findUnique({
+        where: { id: staffId },
+        select: { businessId: true },
+      })
+      if (!staff || staff.businessId !== rewardDetail.node.businessId) {
+        throw AppError.forbidden('You cannot redeem rewards for this business')
+      }
+    }
+  }
 
   const updated = await repo.markRedeemed(redemption.id)
   return {

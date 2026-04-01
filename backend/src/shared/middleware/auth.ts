@@ -4,7 +4,8 @@ import jwksClient from 'jwks-rsa';
 import { AppError } from '../errors/AppError.js';
 import { isDbAvailable } from '../db/prisma.js';
 
-const DEV_MODE = !isDbAvailable;
+// DEV_MODE only activates when DB is unavailable AND we're explicitly NOT in production
+const DEV_MODE = !isDbAvailable && process.env['AREA_CODE_ENV'] !== 'prod';
 
 export type AuthRole = 'consumer' | 'business' | 'staff' | 'admin';
 
@@ -23,7 +24,7 @@ interface PoolConfig {
 }
 
 function getPoolConfig(role: AuthRole): PoolConfig {
-  const region = process.env['AWS_REGION'] ?? 'af-south-1';
+  const region = process.env['AWS_REGION'] ?? 'us-east-1';
   switch (role) {
     case 'consumer':
       return {
@@ -154,6 +155,7 @@ export function requireAuth(...roles: AuthRole[]) {
 
 /**
  * Optional auth — attaches auth payload if token present, otherwise continues.
+ * If a token is present but invalid/expired, returns 401 so the client knows to re-auth.
  */
 export function optionalAuth(...roles: AuthRole[]) {
   return async (request: FastifyRequest, _reply: FastifyReply) => {
@@ -184,7 +186,8 @@ export function optionalAuth(...roles: AuthRole[]) {
         // Try next role
       }
     }
-    // Token present but invalid — continue without auth (optional)
+    // Token present but invalid — inform client so they can refresh
+    throw AppError.unauthorized('Token expired or invalid');
   };
 }
 

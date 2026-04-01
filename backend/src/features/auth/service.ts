@@ -5,12 +5,13 @@ import { isDbAvailable } from '../../shared/db/prisma.js'
 import * as repo from './repository.js'
 import * as cognito from '../../shared/cognito/client.js'
 
-const DEV_MODE = !isDbAvailable
+const DEV_MODE = !isDbAvailable && process.env['AREA_CODE_ENV'] !== 'prod'
 
 // ─── Consumer Auth ──────────────────────────────────────────────────────────
 
 export async function consumerSignup(data: {
   phone: string; username: string; displayName: string; citySlug: string;
+  consentAnalytics?: boolean;
 }) {
   if (DEV_MODE) {
     const userId = `dev-user-${Date.now()}`
@@ -46,9 +47,9 @@ export async function consumerSignup(data: {
     citySlug: data.citySlug,
   })
 
-  // Insert initial consent record
+  // Insert initial consent record with analytics preference from signup
   const consentVersion = process.env['AREA_CODE_CONSENT_VERSION'] ?? 'v1.0'
-  await repo.insertConsentRecord(user.id, consentVersion, false)
+  await repo.insertConsentRecord(user.id, consentVersion, data.consentAnalytics ?? false)
 
   // Initiate auth to send OTP
   const { session } = await cognito.initiateAuth('consumer', data.phone)
@@ -248,15 +249,47 @@ export async function adminLogin(email: string, password: string) {
 
 // ─── Token Refresh ──────────────────────────────────────────────────────────
 
-export async function refreshToken(_refreshToken: string, _pool: string) {
+export async function refreshToken(refreshTokenValue: string, pool: string) {
   if (DEV_MODE) {
     return { accessToken: `refreshed-access-${Date.now()}` }
   }
-  // In production: call Cognito AdminInitiateAuth with REFRESH_TOKEN_AUTH flow
-  // For now, return a placeholder — full implementation requires storing which pool
-  // the refresh token belongs to
+
+  const role = pool as 'consumer' | 'business' | 'staff'
+  const poolConfig = {
+    consumer: {
+      userPoolId: process.env['AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID'] ?? '',
+      clientId: process.env['AREA_CODE_COGNITO_CONSUMER_CLIENT_ID'] ?? '',
+    },
+    business: {
+      userPoolId: process.env['AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID'] ?? '',
+      clientId: process.env['AREA_CODE_COGNITO_BUSINESS_CLIENT_ID'] ?? '',
+    },
+    staff: {
+      userPoolId: process.env['AREA_CODE_COGNITO_STAFF_USER_POOL_ID'] ?? '',
+      clientId: process.env['AREA_CODE_COGNITO_STAFF_CLIENT_ID'] ?? '',
+    },
+  }[role]
+
+  if (!poolConfig?.userPoolId) {
+    throw AppError.badRequest('Invalid pool for refresh')
+  }
+
+  const { CognitoIdentityProviderClient, AdminInitiateAuthCommand } = await import('@aws-sdk/client-cognito-identity-provider')
+  const client = new CognitoIdentityProviderClient({ region: process.env['AWS_REGION'] ?? 'us-east-1' })
+
+  const result = await client.send(new AdminInitiateAuthCommand({
+    UserPoolId: poolConfig.userPoolId,
+    ClientId: poolConfig.clientId,
+    AuthFlow: 'REFRESH_TOKEN_AUTH',
+    AuthParameters: { REFRESH_TOKEN: refreshTokenValue },
+  }))
+
+  if (!result.AuthenticationResult?.AccessToken) {
+    throw AppError.unauthorized('Token refresh failed')
+  }
+
   return {
-    accessToken: `refreshed-access-${Date.now()}`,
+    accessToken: result.AuthenticationResult.AccessToken,
   }
 }
 
@@ -438,4 +471,29 @@ export async function acceptStaffInvite(token: string, name: string, phone: stri
   })
 
   return staff
+}
+
+// ─── Token Revocation ───────────────────────────────────────────────────────
+
+export async function revokeUserTokens(role: string, cognitoSub: string) {
+  if (DEV_MODE) return
+
+  const { CognitoIdentityProviderClient, AdminUserGlobalSignOutCommand } = await import('@aws-sdk/client-cognito-identity-provider')
+  const region = process.env['AWS_REGION'] ?? 'us-east-1'
+
+  const poolIdMap: Record<string, string> = {
+    consumer: process.env['AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID'] ?? '',
+    business: process.env['AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID'] ?? '',
+    staff: process.env['AREA_CODE_COGNITO_STAFF_USER_POOL_ID'] ?? '',
+    admin: process.env['AREA_CODE_COGNITO_ADMIN_USER_POOL_ID'] ?? '',
+  }
+
+  const userPoolId = poolIdMap[role]
+  if (!userPoolId) return
+
+  const client = new CognitoIdentityProviderClient({ region })
+  await client.send(new AdminUserGlobalSignOutCommand({
+    UserPoolId: userPoolId,
+    Username: cognitoSub,
+  }))
 }
