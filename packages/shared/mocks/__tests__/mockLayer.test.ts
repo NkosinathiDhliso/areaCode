@@ -457,16 +457,16 @@ describe('Property 13: Report status updates persist in mock state', () => {
       fc.property(actionArb, (action) => {
         resetState()
         // Find a pending report
-        const reportsBefore = resolve('GET', '/v1/admin/reports') as Array<{ id: string; status: string }>
-        const pending = reportsBefore.find((r) => r.status === 'pending')
+        const resBefore = resolve('GET', '/v1/admin/reports') as { items: Array<{ id: string; status: string }> }
+        const pending = resBefore.items.find((r) => r.status === 'pending')
         if (!pending) return // skip if no pending reports
 
         // Perform action
         resolve('POST', `/v1/admin/reports/${pending.id}/${action}`)
 
         // Verify persistence
-        const reportsAfter = resolve('GET', '/v1/admin/reports') as Array<{ id: string; status: string }>
-        const updated = reportsAfter.find((r) => r.id === pending.id)
+        const resAfter = resolve('GET', '/v1/admin/reports') as { items: Array<{ id: string; status: string }> }
+        const updated = resAfter.items.find((r) => r.id === pending.id)
         expect(updated).toBeDefined()
         expect(updated!.status).toBe(expectedStatus[action])
       }),
@@ -560,8 +560,8 @@ describe('Property 17: Reward creation adds to mock state', () => {
         expect(createResult.success).toBe(true)
         expect(createResult.id).toBeDefined()
 
-        const rewards = resolve('GET', '/v1/business/rewards') as Array<{ id: string; title: string }>
-        const found = rewards.find((r) => r.id === createResult.id)
+        const res = resolve('GET', '/v1/business/rewards') as { items: Array<{ id: string; title: string }> }
+        const found = res.items.find((r) => r.id === createResult.id)
         expect(found).toBeDefined()
         expect(found!.title).toBe(title)
       }),

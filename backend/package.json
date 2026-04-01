@@ -20,6 +20,7 @@
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.2.0",
     "@prisma/client": "^6.8.2",
+    "@sentry/node": "^10.47.0",
     "crypto-js": "^4.2.0",
     "fastify": "^5.8.4",
     "ioredis": "^5.10.1",
@@ -36,7 +37,7 @@
     "@types/node": "^25.5.0",
     "@types/web-push": "^3.6.4",
     "prisma": "^6.8.2",
-    "typescript": "^5.5.0",
-    "tsx": "^4.19.0"
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
   }
 }
