@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigationStore } from '@area-code/shared/stores/navigationStore'
 import type { AppRoute } from '../types'
 
-type NavRoute = 'map' | 'rewards' | 'leaderboard' | 'feed' | 'profile'
+type NavRoute = 'map' | 'gets' | 'ranks' | 'feed' | 'profile'
 
 interface BottomNavProps {
   active: string
@@ -12,8 +12,8 @@ interface BottomNavProps {
 /** SVG-safe icon characters — no emoji per CLAUDE.md rule 5. */
 const NAV_ITEMS: ReadonlyArray<{ route: NavRoute; labelKey: string; icon: string }> = [
   { route: 'map', labelKey: 'nav.map', icon: '◉' },
-  { route: 'rewards', labelKey: 'nav.rewards', icon: '★' },
-  { route: 'leaderboard', labelKey: 'nav.leaderboard', icon: '▲' },
+  { route: 'gets', labelKey: 'nav.rewards', icon: '★' },
+  { route: 'ranks', labelKey: 'nav.leaderboard', icon: '▲' },
   { route: 'feed', labelKey: 'nav.feed', icon: '◎' },
   { route: 'profile', labelKey: 'nav.profile', icon: '●' },
 ]

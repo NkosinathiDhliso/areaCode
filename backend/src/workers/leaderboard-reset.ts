@@ -102,7 +102,7 @@ export async function preResetHandler() {
       const { emitToast } = await import('../shared/socket/events.js')
       emitToast(city.slug, {
         type: 'leaderboard',
-        message: `Leaderboard resets tonight! You're #${entry.rank} with ${entry.count} check-ins.`,
+        message: `Ranks reset tonight! You're #${entry.rank} with ${entry.count} check-ins.`,
         nodeId: '',
       })
       sent++

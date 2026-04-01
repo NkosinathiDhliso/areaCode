@@ -77,7 +77,7 @@ export function BusinessManagement() {
               <span className="text-[var(--text-muted)] text-xs capitalize">{biz.tier}</span>
             </div>
             <div className="text-[var(--text-secondary)] text-xs mt-1">
-              {biz.email} · {biz.nodeCount} nodes · {biz.staffCount} staff · {biz.activeRewardCount} rewards
+              {biz.email} · {biz.nodeCount} nodes · {biz.staffCount} staff · {biz.activeRewardCount} gets
             </div>
 
             {selected?.id === biz.id && (

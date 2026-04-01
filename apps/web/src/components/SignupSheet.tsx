@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { BottomSheet } from '@area-code/shared/components/BottomSheet'
 
-type Route = 'map' | 'rewards' | 'leaderboard' | 'feed' | 'profile' | 'login' | 'signup' | 'landing'
+type Route = 'map' | 'gets' | 'ranks' | 'feed' | 'profile' | 'login' | 'signup' | 'landing'
 
 interface SignupSheetProps {
   isOpen: boolean

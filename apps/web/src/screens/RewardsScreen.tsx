@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
+import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { Skeleton } from '@area-code/shared/components/Skeleton'
 
 interface NearbyReward {
@@ -21,17 +22,26 @@ export function RewardsScreen() {
   const { t } = useTranslation()
   const pos = useLocationStore((s) => s.lastKnownPosition)
   const connectivity = useConnectivityStore((s) => s.state)
+  const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
 
-  // Near-me rewards are browsable without auth
-  const { data: rewards, isLoading } = useQuery({
+  // Near-me rewards require auth
+  const { data: rewards, isLoading, error } = useQuery({
     queryKey: ['rewards', 'near-me', pos?.lat, pos?.lng],
     queryFn: () =>
       api.get<NearbyReward[]>(
         `/v1/rewards/near-me?lat=${pos?.lat ?? -26.2041}&lng=${pos?.lng ?? 28.0473}`,
       ),
-    enabled: connectivity !== 'offline',
+    enabled: connectivity !== 'offline' && isAuthenticated,
     staleTime: 30_000,
   })
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center h-full px-5">
+        <p className="text-[var(--text-muted)] text-sm text-center">{t('auth.gated.signIn')}</p>
+      </div>
+    )
+  }
 
   if (connectivity === 'offline') {
     return (

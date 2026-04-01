@@ -92,7 +92,7 @@ function RewardForm({ onCreated }: { onCreated: () => void }) {
         type="text"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder="Reward title"
+        placeholder="Get title"
         className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
       />
       <select
@@ -117,7 +117,7 @@ function RewardForm({ onCreated }: { onCreated: () => void }) {
         disabled={loading || !title}
         className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3 text-sm disabled:opacity-50"
       >
-        {loading ? '...' : 'Create Reward'}
+        {loading ? '...' : 'Create Get'}
       </button>
     </div>
   )

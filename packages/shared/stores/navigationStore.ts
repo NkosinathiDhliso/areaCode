@@ -1,14 +1,14 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 
-type DefaultTab = 'rewards' | 'leaderboard'
+type DefaultTab = 'gets' | 'ranks'
 
 function getTimeBasedDefault(): DefaultTab {
   const hour = parseInt(
     new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', hour: 'numeric', hour12: false }),
     10,
   )
-  return hour >= 17 ? 'leaderboard' : 'rewards'
+  return hour >= 17 ? 'ranks' : 'gets'
 }
 
 interface NavigationState {

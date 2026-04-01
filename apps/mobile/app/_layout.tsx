@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -15,6 +15,19 @@ const queryClient = new QueryClient({
 export default function RootLayout() {
   const accessToken = useConsumerAuthStore((s) => s.accessToken)
   const { setOnline, setApiOnly, setOffline } = useConnectivityStore()
+  const [ready, setReady] = useState(false)
+
+  // Initialize dev mocks if configured
+  useEffect(() => {
+    async function init() {
+      if (__DEV__ && process.env.EXPO_PUBLIC_DEV_MOCK === 'true') {
+        const { initDevMocks } = await import('@area-code/shared/mocks')
+        await initDevMocks()
+      }
+      setReady(true)
+    }
+    void init()
+  }, [])
 
   useEffect(() => {
     api.setTokenProvider(() => useConsumerAuthStore.getState().accessToken)
@@ -29,6 +42,8 @@ export default function RootLayout() {
       socket.off('disconnect')
     }
   }, [accessToken, setOnline, setApiOnly, setOffline])
+
+  if (!ready) return null
 
   return (
     <QueryClientProvider client={queryClient}>

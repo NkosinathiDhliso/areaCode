@@ -12,7 +12,7 @@
   "staff.validator.placeholder": "Enter 6-digit code",
   "staff.validator.validate": "Validate",
   "staff.validator.validating": "Validating...",
-  "staff.validator.success": "Reward redeemed successfully",
+  "staff.validator.success": "Get redeemed successfully",
   "staff.validator.invalidCode": "Invalid code",
   "staff.validator.expiredCode": "Code has expired",
   "staff.validator.alreadyRedeemed": "Already redeemed",

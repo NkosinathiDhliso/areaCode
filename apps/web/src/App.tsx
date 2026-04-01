@@ -75,8 +75,8 @@ export function App() {
       <ConnectivityBanner />
       <div className="flex-1 relative overflow-hidden">
         {route === 'map' && <MapScreen onNavigate={setRoute} />}
-        {route === 'rewards' && <RewardsScreen />}
-        {route === 'leaderboard' && <LeaderboardScreen />}
+        {route === 'gets' && <RewardsScreen />}
+        {route === 'ranks' && <LeaderboardScreen />}
         {route === 'feed' && <FeedScreen />}
         {route === 'friends' && <FriendsScreen />}
         {route === 'profile' && <ProfileScreen onNavigate={setRoute} />}

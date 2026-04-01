@@ -20,7 +20,7 @@
   "admin.consumers.sendMessage": "Send Message",
   "admin.businesses.title": "Business Accounts",
   "admin.businesses.extendTrial": "Extend Trial",
-  "admin.businesses.deactivateRewards": "Deactivate Rewards",
+  "admin.businesses.deactivateRewards": "Deactivate Gets",
   "admin.businesses.overrideCipc": "Override CIPC",
   "admin.reports.title": "Report Queue",
   "admin.reports.review": "Review",
