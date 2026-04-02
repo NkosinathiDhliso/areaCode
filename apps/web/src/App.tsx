@@ -33,8 +33,14 @@ export function App() {
     const path = window.location.pathname
     if (path === '/login') return 'login'
     if (path === '/signup/consumer') return 'signup'
-    if (path === '/signup') return 'landing'
-    return 'map'
+    if (path === '/signup') return 'signup'
+    if (path === '/map') return 'map'
+    if (path === '/gets') return 'gets'
+    if (path === '/ranks') return 'ranks'
+    if (path === '/feed') return 'feed'
+    if (path === '/friends') return 'friends'
+    if (path === '/profile') return 'profile'
+    return 'landing' // Default to landing page for root and unknown paths
   })
 
   // Wire API token provider once
