@@ -303,6 +303,9 @@ jobs:
           HEALTH=$(curl -sf https://api.areacode.co.za/health || echo '{"status":"failed"}')
           echo "Health check: ${HEALTH}"
           echo "${HEALTH}" | grep -q '"status":"ok"'
+          NODES_STATUS=$(curl -s -o /tmp/nodes.json -w "%{http_code}" https://api.areacode.co.za/v1/nodes/johannesburg)
+          echo "Nodes endpoint status: ${NODES_STATUS}"
+          test "${NODES_STATUS}" = "200"
 
       # Notify Sentry of new release
       - name: Create Sentry release
