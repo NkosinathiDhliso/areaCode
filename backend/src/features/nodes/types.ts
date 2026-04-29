@@ -60,3 +60,37 @@ export const registerImageBodySchema = z.object({
   s3Key: z.string().min(1),
   displayOrder: z.number().int().min(0).default(0),
 })
+
+// ============================================================================
+// DynamoDB Entity Types
+// ============================================================================
+
+export interface Node {
+  nodeId: string
+  name: string
+  slug: string
+  category: string
+  lat: number
+  lng: number
+  cityId?: string
+  businessId?: string
+  submittedBy?: string
+  claimStatus: string
+  claimCipcStatus?: string
+  nodeColour: string
+  nodeIcon?: string
+  qrCheckinEnabled: boolean
+  isVerified: boolean
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface NodeImage {
+  imageId: string
+  nodeId: string
+  s3Key: string
+  displayOrder: number
+  uploadedBy?: string
+  createdAt: string
+}

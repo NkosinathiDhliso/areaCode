@@ -15,3 +15,16 @@ export interface CheckInResponse {
   success: boolean
   cooldownUntil: string
 }
+
+// ============================================================================
+// DynamoDB Entity Type
+// ============================================================================
+
+export interface CheckIn {
+  checkInId: string
+  userId: string
+  nodeId: string
+  neighbourhoodId?: string
+  type: string
+  checkedInAt: string
+}

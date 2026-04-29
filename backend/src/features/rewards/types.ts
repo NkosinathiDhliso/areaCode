@@ -29,3 +29,33 @@ export const nearMeQuerySchema = z.object({
   lat: z.coerce.number().min(-90).max(90),
   lng: z.coerce.number().min(-180).max(180),
 })
+
+// ============================================================================
+// DynamoDB Entity Types
+// ============================================================================
+
+export interface Reward {
+  rewardId: string
+  nodeId: string
+  type: string
+  title: string
+  description?: string
+  triggerValue?: number
+  totalSlots?: number
+  claimedCount: number
+  slotsLocked: boolean
+  isActive: boolean
+  expiresAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RewardRedemption {
+  redemptionId: string
+  rewardId: string
+  userId: string
+  redemptionCode: string
+  codeExpiresAt: string
+  redeemedAt?: string
+  createdAt: string
+}

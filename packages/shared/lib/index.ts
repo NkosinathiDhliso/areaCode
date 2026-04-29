@@ -1,5 +1,6 @@
 export { api, type ApiError } from './api'
-export { getSocket, disconnectSocket } from './socket'
+export { getSocket, disconnectSocket, setSocketOverride } from './websocket'
+export { getWebSocket, disconnectWebSocket } from './websocket'
 export { storage } from './storage'
 export { isWeb, setPageTitle, getDeviceInfo, isOnline, isSaveDataEnabled, hasGeolocation, getCurrentPosition } from './platform'
 export { haversineDistance, isWithinRadius } from './geoUtils'

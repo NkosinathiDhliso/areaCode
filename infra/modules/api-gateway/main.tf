@@ -17,9 +17,13 @@ resource "aws_apigatewayv2_api" "this" {
   cors_configuration {
     allow_origins = var.env == "prod" ? [
       "https://areacode.co.za",
+      "https://www.areacode.co.za",
       "https://business.areacode.co.za",
+      "https://www.business.areacode.co.za",
       "https://staff.areacode.co.za",
-      "https://admin.areacode.co.za"
+      "https://www.staff.areacode.co.za",
+      "https://admin.areacode.co.za",
+      "https://www.admin.areacode.co.za"
     ] : [
       "http://localhost:3000",
       "http://localhost:3001",

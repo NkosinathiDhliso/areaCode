@@ -58,3 +58,53 @@ export const adminLoginBodySchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
 })
+
+// ============================================================================
+// DynamoDB Entity Types
+// ============================================================================
+
+export interface User {
+  userId: string
+  phone?: string
+  username: string
+  displayName: string
+  avatarUrl?: string | null
+  cityId?: string
+  neighbourhoodId?: string
+  tier?: string
+  totalCheckIns?: number
+  streakCount?: number
+  cognitoSub?: string
+  musicGenres?: string[]
+  dimensionScores?: Record<string, unknown>
+  archetypeId?: string
+  streamingProvider?: string
+  createdAt: string
+  updatedAt?: string
+}
+
+export interface BusinessAccount {
+  businessId: string
+  email: string
+  phone?: string
+  businessName: string
+  registrationNumber?: string
+  cognitoSub?: string
+  tier?: string
+  trialEndsAt?: string
+  paymentGraceUntil?: string
+  yocoCustomerId?: string
+  isActive?: boolean
+  createdAt: string
+  updatedAt?: string
+}
+
+export interface StaffAccount {
+  staffId: string
+  businessId: string
+  name: string
+  phone: string
+  cognitoSub?: string
+  isActive: boolean
+  createdAt: string
+}

@@ -1,0 +1,430 @@
+# Area Code — Feature Flowcharts (PRD)
+
+> Paste individual flowchart blocks into mylens.ai to generate visual diagrams.
+> Each section is a self-contained Mermaid flowchart covering one feature's sub-feature flows.
+
+---
+
+## 1. Authentication — Consumer
+
+```mermaid
+flowchart TD
+    A([Consumer opens app]) --> B{Has account?}
+    B -- No --> C[Enter phone + username + displayName + citySlug]
+    C --> D[Consent to analytics opt-in]
+    D --> E[POST /auth/consumer/signup]
+    E --> F[Check phone uniqueness]
+    F --> G[Validate citySlug]
+    G --> H[OTP rate limit check\n3/hr · 60s cooldown]
+    H --> I[Create Cognito user]
+    I --> J[Create DB user record]
+    J --> K[Store consent record]
+    K --> L[Initiate Cognito auth → OTP sent to phone]
+    L --> M[User enters OTP]
+    M --> N[POST /auth/consumer/verify-otp]
+    N --> O[Validate OTP via Cognito challenge]
+    O --> P[Return accessToken + refreshToken + user profile]
+    P --> Q([Logged in — tier: local])
+
+    B -- Yes --> R[Enter phone number]
+    R --> S[POST /auth/consumer/login]
+    S --> T[OTP rate limit check]
+    T --> U[Initiate Cognito auth → OTP sent]
+    U --> M
+```
+
+---
+
+## 2. Authentication — Business
+
+```mermaid
+flowchart TD
+    A([Business owner opens portal]) --> B{Has account?}
+    B -- No --> C[Enter email + phone + businessName]
+    C --> D[POST /auth/business/signup]
+    D --> E[Check email uniqueness]
+    E --> F[OTP rate limit check]
+    F --> G[Create Cognito business user]
+    G --> H[Create BusinessAccount record in DB]
+    H --> I[OTP sent to phone]
+    I --> J[Enter OTP]
+    J --> K[POST /auth/business/verify-otp]
+    K --> L[Cognito challenge response]
+    L --> M[Return accessToken + businessId]
+    M --> N([Business logged in — tier: free])
+
+    B -- Yes --> O[Enter phone]
+    O --> P[POST /auth/business/login]
+    P --> F
+```
+
+---
+
+## 3. Authentication — Staff and Admin
+
+```mermaid
+flowchart TD
+    A([Staff opens staff app]) --> B[Enter phone number]
+    B --> C[POST /auth/staff/login]
+    C --> D{Staff account exists?}
+    D -- No --> E([Error: Account not found])
+    D -- Yes --> F[OTP rate limit check]
+    F --> G[Initiate Cognito auth → OTP sent]
+    G --> H[Enter OTP]
+    H --> I[POST /auth/staff/verify-otp]
+    I --> J[Cognito challenge response]
+    J --> K[Return accessToken + staff profile]
+    K --> L([Staff logged in])
+
+    AA([Admin opens admin portal]) --> AB[Enter email + password]
+    AB --> AC[POST /auth/admin/login]
+    AC --> AD[Cognito admin password auth]
+    AD --> AE[Resolve admin role from Cognito attributes]
+    AE --> AF([Admin logged in — role: super_admin / support_agent / content_moderator])
+```
+
+---
+
+## 4. Staff Invite Flow
+
+```mermaid
+flowchart TD
+    A([Business owner]) --> B[POST /business/staff/invite with phone or email]
+    B --> C{Tier staff limit reached?}
+    C -- Yes --> D([Error: Staff limit reached])
+    C -- No --> E[Create StaffInvite record with token + expiry]
+    E --> F[Invite token sent to staff via SMS/email]
+    F --> G([Staff receives invite link])
+    G --> H[POST /auth/accept-invite with token + name + phone]
+    H --> I{Token valid and not expired?}
+    I -- No --> J([Error: Invite expired or invalid])
+    I -- Yes --> K[Mark invite as accepted]
+    K --> L[Create Cognito staff user]
+    L --> M[Create StaffAccount in DB]
+    M --> N([Staff account active])
+```
+
+---
+
+## 5. Check-In Pipeline
+
+```mermaid
+flowchart TD
+    A([User at a venue]) --> B{Check-in method?}
+    B -- GPS --> C[Submit lat + lng + nodeId + type]
+    B -- QR scan --> D[Submit qrToken + nodeId + type]
+
+    C --> E[Verify GPS proximity within 200m]
+    D --> F[Validate QR HMAC token\n15-min rotating window]
+
+    E --> G{Within range?}
+    G -- No --> H([Error: Too far from venue])
+    G -- Yes --> I
+
+    F --> I[Abuse checks\nfingerprint · rate limit · velocity]
+    I --> J{Cooldown active?}
+    J -- Yes · reward 4hr --> K([Error: Cooldown active])
+    J -- Yes · presence 1hr --> K
+    J -- No --> L[Insert CheckIn record]
+    L --> M[Increment user totalCheckIns]
+    M --> N[Update streak]
+    N --> O[Set Redis cooldown key]
+    O --> P[Increment nodesPulse score in Redis\nScore = daily x5 + unique x2]
+    P --> Q[Increment city leaderboard in Redis]
+    Q --> R[Emit pulse update via WebSocket]
+    R --> S[Emit anonymous city toast via WebSocket]
+    S --> T[Emit friend toasts to mutual followers]
+    T --> U{Business owned node?}
+    U -- Yes --> V[Emit business check-in event]
+    U -- No --> W
+    V --> W{type = reward?}
+    W -- Yes --> X[Publish to SQS reward queue]
+    X --> Y([Reward evaluator worker picks up job])
+    W -- No --> Z([Check-in complete])
+```
+
+---
+
+## 6. Reward System
+
+```mermaid
+flowchart TD
+    A([Business creates reward]) --> B[POST /rewards with nodeId + type + title + slots]
+    B --> C{Active reward limit for tier?}
+    C -- Exceeded --> D([Error: Reward limit reached])
+    C -- OK --> E[Create Reward record in DB]
+
+    F([SQS reward evaluator worker]) --> G[Pull check-in job from queue]
+    G --> H[Load reward rules for node]
+    H --> I{Trigger condition met?}
+    I -- No --> J([No reward issued])
+    I -- Yes --> K{Slots available?}
+    K -- No --> L([Slots exhausted])
+    K -- Yes --> M[Create RewardRedemption record\nwith 6-char redemption code]
+    M --> N[Increment claimedCount on Reward]
+    N --> O[Notify user via socket or push notification]
+
+    P([User views unclaimed rewards]) --> Q[GET /rewards/unclaimed]
+    Q --> R[Show redemption code + expiry]
+    R --> S([User at venue shows code to staff])
+    S --> T[Staff scans or enters code]
+    T --> U[POST /rewards/redeem with code]
+    U --> V{Code valid and not expired?}
+    V -- No --> W([Error: Invalid or expired code])
+    V -- Yes --> X{Staff belongs to owning business?}
+    X -- No --> Y([Error: Forbidden])
+    X -- Yes --> Z[Mark RewardRedemption as redeemed]
+    Z --> AA([Redemption confirmed])
+```
+
+---
+
+## 7. Nodes (Venues)
+
+```mermaid
+flowchart TD
+    A([Business creates a node]) --> B[POST /nodes with name + category + lat + lng + citySlug]
+    B --> C[Auto-generate slug]
+    C --> D[Save Node with claimStatus: unclaimed]
+
+    E([Business claims existing node]) --> F[POST /nodes/:id/claim with registrationNumber]
+    F --> G{Node already claimed or pending?}
+    G -- Yes --> H([Error: Already claimed])
+    G -- No --> I[CIPC business registration verification]
+    I --> J{CIPC match?}
+    J -- Validated --> K[Set claimStatus: claimed · link businessId]
+    J -- Unavailable --> L[Set claimStatus: cipc_unavailable]
+    K --> M([Node owned by business])
+
+    N([Business updates node]) --> O[PATCH /nodes/:id with name · category · colour · icon · qrEnabled]
+    O --> P{Owns node?}
+    P -- No --> Q([Error: Forbidden])
+    P -- Yes --> R[Update Node record]
+
+    S([User reports a node]) --> T[POST /nodes/:id/report with type + detail]
+    T --> U{Reporter suspended? 3 dismissed in 30 days}
+    U -- Yes --> V([Error: Reporting privileges suspended])
+    U -- No --> W[Create Report record]
+    W --> X{type = fake_rewards AND 5+ reports in 24h?}
+    X -- Yes --> Y[Auto-flag node]
+    X -- No --> Z([Report submitted])
+```
+
+---
+
+## 8. Social — Follow and Activity Feed
+
+```mermaid
+flowchart TD
+    A([User searches for another user]) --> B[GET /social/users/search?q=query]
+    B --> C[Return matched users]
+    C --> D([User taps Follow])
+    D --> E[POST /social/follow/:userId]
+    E --> F{Already following?}
+    F -- Yes --> G([Error: Already following])
+    F -- No --> H[Create UserFollow record]
+    H --> I{Other user follows back?}
+    I -- Yes --> J([Mutual follow = Friends])
+    I -- No --> K([One-way follow])
+
+    L([User opens Feed tab]) --> M[GET /social/feed]
+    M --> N[Load check-ins from mutual follows only]
+    N --> O[Return feed items with isFriend: true]
+    O --> P([Feed shows friends recent check-ins])
+
+    Q([User opens Leaderboard tab]) --> R[GET /social/leaderboard/:citySlug]
+    R --> S[Fetch top 50 from Redis sorted set]
+    S --> T[Resolve profiles from DB]
+    T --> U[Apply friend visibility rules]
+    U --> V{Is friend or self?}
+    V -- Yes --> W[Show displayName + avatar + tier]
+    V -- No --> X[Null out identity — show tier only]
+    W --> Y([Leaderboard displayed])
+    X --> Y
+```
+
+---
+
+## 9. Music Profile and Crowd Vibe
+
+```mermaid
+flowchart TD
+    A([User opens Profile — Music tab]) --> B{Connect streaming or manual?}
+    B -- Spotify --> C[POST /music/connect with provider: spotify]
+    C --> D[Generate OAuth state token with userId]
+    D --> E[Redirect to Spotify OAuth]
+    E --> F[Spotify callback with code + state]
+    F --> G[Exchange code for access token]
+    G --> H[Fetch top genres from Spotify API]
+    H --> I[Compute dimension scores\nenergy · cultural_rootedness · sophistication · edge · spirituality]
+    I --> J[Resolve music archetype from 15 possible archetypes]
+    J --> K[Save genres + scores + archetypeId to user profile]
+    K --> L([Archetype displayed on profile])
+
+    B -- Apple Music --> M[POST /music/connect with provider: apple_music + musicUserToken]
+    M --> N[Generate Apple developer token]
+    N --> O[Fetch top genres from Apple Music API]
+    O --> I
+
+    B -- Manual --> P[POST /music/genres with genre list]
+    P --> I
+
+    Q([User checks in at a venue]) --> R[GET /nodes/:id/crowd-vibe]
+    R --> S[Load recent check-ins at node]
+    S --> T[Aggregate genreCounts + archetypePercentages + dimensionScores]
+    T --> U([Crowd Vibe snapshot shown on node page])
+```
+
+---
+
+## 10. Business Dashboard
+
+```mermaid
+flowchart TD
+    A([Business logs in]) --> B[GET /business/me — profile + tier]
+    B --> C{Tier?}
+    C -- free --> D[1 node · 3 rewards · 2 staff]
+    C -- starter --> E[1 node · 3 rewards · 2 staff]
+    C -- growth --> F[5 nodes · 10 rewards · 5 staff]
+    C -- pro --> G[Unlimited nodes · rewards · staff]
+    C -- payg --> H[1 node · 3 rewards · 2 staff · daily or weekly billing]
+
+    B --> I[GET /business/me/live-stats\ncheck-ins today · rewards claimed · pulse · total]
+    B --> J[GET /business/me/audience\ntier distribution · repeat vs new · peak hours]
+    B --> K[GET /business/me/audience/music\ngenre distribution · archetype breakdown]
+    B --> L[GET /business/me/recent-redemptions]
+
+    M([Business upgrades tier]) --> N[GET /business/plans]
+    N --> O[POST /business/checkout with plan + interval]
+    O --> P[Create Yoco checkout session]
+    P --> Q([User pays via Yoco])
+    Q --> R[POST /webhooks/yoco — payment.succeeded]
+    R --> S{Signature valid?}
+    S -- No --> T([Reject])
+    S -- Yes --> U{Duplicate event?}
+    U -- Yes --> V([Skip — idempotent])
+    U -- No --> W[Update business tier in DB]
+    W --> X([Tier upgraded])
+
+    Y([Business boosts a node]) --> Z[POST /business/boost with nodeId + duration]
+    Z --> AA[Create Yoco checkout for boost]
+    AA --> AB([Pulse score elevated for 2h / 6h / 24h])
+```
+
+---
+
+## 11. Notifications
+
+```mermaid
+flowchart TD
+    A([App registers push token]) --> B[POST /notifications/push-token with token + platform + deviceId]
+    B --> C[Upsert UserPushToken in DB]
+
+    D([Event triggers notification]) --> E{User has active WebSocket?}
+    E -- Yes --> F[Emit via Socket.IO to user room]
+    F --> G([Delivered via socket])
+    E -- No --> H[Fetch active push tokens from DB]
+    H --> I{Platform?}
+    I -- expo --> J[Send via Expo Push API]
+    I -- web --> K[Send via VAPID Web Push]
+    J --> L{Token still valid?}
+    L -- No · DeviceNotRegistered --> M[Deactivate push token]
+    L -- Yes --> N([Delivered via push])
+    K --> N
+
+    O([User updates notification preferences]) --> P[PATCH /notifications/preferences]
+    P --> Q[Upsert NotificationPreference record]
+    Q --> R([Preferences saved:\nstreakAtRisk · rewardActivated · rewardClaimedPush\nleaderboardPrewarning · followedUserCheckin])
+```
+
+---
+
+## 12. Admin Panel
+
+```mermaid
+flowchart TD
+    A([Admin logs in]) --> B[Resolve role from Cognito]
+    B --> C{Role?}
+    C -- super_admin --> D[Full access:\nview/disable users · erasure · impersonate\nbusiness mgmt · reports · archetypes · genre weights]
+    C -- support_agent --> E[View users/businesses\nsend messages · extend trials · view consent]
+    C -- content_moderator --> F[Reports only:\nview + action reports · override CIPC]
+
+    G([Manage consumers]) --> H[GET /admin/consumers/search?q=]
+    H --> I[View user + check-in history + consent history]
+    I --> J{Action?}
+    J -- Disable user --> K[POST /admin/consumers/:id/disable]
+    J -- Reset abuse flags --> L[POST /admin/consumers/:id/reset-flags]
+    J -- Process erasure --> M[POST /admin/consumers/:id/process-erasure\nPOPIA right-to-erasure within 30 days]
+    J -- Send message --> N[POST /admin/consumers/:id/message]
+    K --> O[Create AuditLog entry]
+    L --> O
+    M --> O
+    N --> O
+
+    P([Manage reports]) --> Q[GET /admin/reports/queue]
+    Q --> R[Content moderator reviews report]
+    R --> S[POST /admin/reports/:id/action\ndismiss · warn · remove]
+    S --> O
+
+    T([Manage archetypes and genre weights]) --> U[GET /admin/archetypes]
+    U --> V[PATCH archetype thresholds or genre weights]
+    V --> O([AuditLog updated])
+```
+
+---
+
+## 13. Consumer Tier Progression
+
+```mermaid
+flowchart TD
+    A([User checks in]) --> B[Increment totalCheckIns]
+    B --> C[Recalculate tier based on totalCheckIns]
+    C --> D{totalCheckIns count?}
+    D -- 0 to 9 --> E([Tier: local])
+    D -- 10 to 24 --> F([Tier: regular])
+    D -- 25 to 49 --> G([Tier: fixture])
+    D -- 50 to 99 --> H([Tier: institution])
+    D -- 100+ --> I([Tier: legend])
+
+    J([User checks in daily]) --> K[Update streakCount]
+    K --> L{Streak maintained?}
+    L -- No — gap in days --> M[Reset streakCount to 0]
+    L -- Yes --> N([Streak incremented])
+
+    O([Weekly leaderboard reset worker]) --> P[Snapshot top 50 per city to LeaderboardHistory]
+    P --> Q[Clear Redis leaderboard sorted set]
+    Q --> R([New leaderboard week begins])
+```
+
+---
+
+## 14. Background Workers
+
+```mermaid
+flowchart TD
+    A([Pulse Decay Worker — runs hourly]) --> B[For each city node with pulseScore above 0]
+    B --> C[Apply decay factor to Redis pulse score]
+    C --> D[Emit updated node state via WebSocket]
+
+    E([Node State Evaluator — runs every 15 min]) --> F[Read pulse scores from Redis]
+    F --> G{Score range?}
+    G -- 61 and above --> H([State: popping])
+    G -- 31 to 60 --> I([State: buzzing])
+    G -- 11 to 30 --> J([State: active])
+    G -- 1 to 10 --> K([State: quiet])
+    G -- 0 --> L([State: dormant])
+
+    M([Reward Evaluator Worker — SQS consumer]) --> N[Receive check-in job from SQS]
+    N --> O[Load reward rules for node]
+    O --> P{Trigger condition met?}
+    P -- Yes --> Q[Issue RewardRedemption + notify user]
+    P -- No --> R([No reward issued])
+
+    S([Leaderboard Reset Worker — weekly cron]) --> T[Snapshot leaderboard to history table]
+    T --> U[Clear live Redis leaderboard sorted set]
+
+    V([Cleanup Worker — daily]) --> W[Expire soft-deleted records]
+    W --> X[Process pending POPIA erasure requests]
+
+    Y([Partition Manager — monthly]) --> Z[Create new check_ins table partition for next month]
+```
