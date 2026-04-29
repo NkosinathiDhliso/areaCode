@@ -5,6 +5,10 @@ import type { ClientToServerEvents, ServerToClientEvents } from '../types'
 
 type EventCallback = (payload: any) => void
 
+// Connection lifecycle events (Socket.io compatibility)
+type LifecycleEvent = 'connect' | 'disconnect' | 'connect_error'
+type AnyEventKey = keyof ServerToClientEvents | LifecycleEvent
+
 class WebSocketManager {
   private ws: WebSocket | null = null
   private url: string
@@ -12,7 +16,7 @@ class WebSocketManager {
   private reconnectAttempts = 0
   private maxReconnectAttempts = 5
   private reconnectDelay = 1000
-  private listeners: Map<keyof ServerToClientEvents, Set<EventCallback>> = new Map()
+  private listeners: Map<AnyEventKey, Set<EventCallback>> = new Map()
   private isConnecting = false
 
   constructor(url: string, token?: string) {
@@ -39,6 +43,7 @@ class WebSocketManager {
         console.log('WebSocket connected')
         this.reconnectAttempts = 0
         this.isConnecting = false
+        this.emitLifecycle('connect')
       }
 
       this.ws.onmessage = (event) => {
@@ -53,12 +58,14 @@ class WebSocketManager {
       this.ws.onclose = () => {
         console.log('WebSocket disconnected')
         this.isConnecting = false
+        this.emitLifecycle('disconnect')
         this.attemptReconnect()
       }
 
       this.ws.onerror = (error) => {
         console.error('WebSocket error:', error)
         this.isConnecting = false
+        this.emitLifecycle('connect_error', error)
       }
     } catch (error) {
       console.error('Failed to create WebSocket:', error)
@@ -82,6 +89,15 @@ class WebSocketManager {
     }, delay)
   }
 
+  private emitLifecycle(event: LifecycleEvent, payload?: any): void {
+    const callbacks = this.listeners.get(event)
+    if (callbacks) {
+      callbacks.forEach((cb) => {
+        try { cb(payload) } catch (e) { console.error(`Error in ${event} handler:`, e) }
+      })
+    }
+  }
+
   private handleMessage(message: { type: keyof ServerToClientEvents; payload: any }): void {
     const { type, payload } = message
     const callbacks = this.listeners.get(type)
@@ -97,32 +113,24 @@ class WebSocketManager {
     }
   }
 
-  // Subscribe to server events
-  on<K extends keyof ServerToClientEvents>(
-    event: K,
-    callback: (payload: Parameters<ServerToClientEvents[K]>[0]) => void
-  ): () => void {
+  // Subscribe to server events (supports lifecycle events 'connect'/'disconnect' for Socket.io compat)
+  on(event: AnyEventKey, callback: EventCallback): () => void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set())
     }
 
     const callbacks = this.listeners.get(event)!
-    const wrappedCallback = callback as EventCallback
-    callbacks.add(wrappedCallback)
+    callbacks.add(callback)
 
-    // Return unsubscribe function
     return () => {
-      callbacks.delete(wrappedCallback)
+      callbacks.delete(callback)
     }
   }
 
-  off<K extends keyof ServerToClientEvents>(
-    event: K,
-    callback: (payload: Parameters<ServerToClientEvents[K]>[0]) => void
-  ): void {
+  off(event: AnyEventKey, callback: EventCallback): void {
     const callbacks = this.listeners.get(event)
     if (callbacks) {
-      callbacks.delete(callback as EventCallback)
+      callbacks.delete(callback)
     }
   }
 
@@ -232,7 +240,7 @@ export function disconnectSocket(): void {
   disconnectWebSocket()
 }
 
-export function setSocketOverride(): void {
+export function setSocketOverride(_override?: unknown): void {
   // No-op in WebSocket mode (was for dev mocks)
   console.warn('setSocketOverride not supported in WebSocket mode')
 }

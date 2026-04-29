@@ -126,11 +126,11 @@ export function StreamingSection() {
               {t('profile.streaming.connectSpotify')}
             </button>
             <button
-              onClick={() => setShowConsent('apple_music')}
-              disabled={loading}
-              className="flex-1 bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl py-2 text-[var(--text-primary)] text-sm disabled:opacity-50"
+              disabled
+              title="Apple Music coming soon (Beta)"
+              className="flex-1 bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl py-2 text-[var(--text-muted)] text-sm opacity-50 cursor-not-allowed"
             >
-              {t('profile.streaming.connectApple')}
+              🔒 {t('profile.streaming.connectApple')}
             </button>
           </div>
           <ManualGenreSelector />
