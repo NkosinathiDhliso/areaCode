@@ -29,6 +29,11 @@ class WebSocketManager {
       return
     }
 
+    // Don't attempt connection to placeholder/disabled URLs
+    if (this.url === 'ws://disabled' || !this.url) {
+      return
+    }
+
     this.isConnecting = true
 
     try {
@@ -168,12 +173,24 @@ class WebSocketManager {
 // Singleton instance
 let wsManager: WebSocketManager | null = null
 
-function getWebSocketUrl(): string {
+function getWebSocketUrl(): string | null {
   const env = typeof import.meta !== 'undefined'
     ? (import.meta as unknown as Record<string, Record<string, string>>).env
     : {}
 
-  let url = env?.VITE_WEBSOCKET_URL ?? env?.VITE_SOCKET_URL ?? 'ws://localhost:4000'
+  // VITE_WEBSOCKET_URL must point to a WebSocket API Gateway (wss://)
+  // VITE_SOCKET_URL is the legacy fallback (only works for local dev with Socket.io)
+  let url = env?.VITE_WEBSOCKET_URL ?? null
+
+  // Fall back to VITE_SOCKET_URL only in local dev (localhost)
+  if (!url) {
+    const fallback = env?.VITE_SOCKET_URL
+    if (fallback && (fallback.includes('localhost') || fallback.includes('127.0.0.1'))) {
+      url = fallback
+    }
+  }
+
+  if (!url) return null
 
   // Auto-convert http(s) URLs to ws(s)
   if (url.startsWith('https://')) url = 'wss://' + url.substring(8)
@@ -185,6 +202,14 @@ function getWebSocketUrl(): string {
 const WEBSOCKET_URL = getWebSocketUrl()
 
 export function getWebSocket(token?: string, opts?: { userId?: string; citySlug?: string; businessId?: string }): WebSocketManager {
+  if (!WEBSOCKET_URL) {
+    // No WebSocket API configured — return a no-op manager
+    if (!wsManager) {
+      wsManager = new WebSocketManager('ws://disabled')
+    }
+    return wsManager
+  }
+
   if (!wsManager || !wsManager.connected) {
     // Build URL with query params
     const params = new URLSearchParams()

@@ -1,8 +1,7 @@
-import { isDbAvailable } from '../../shared/db/prisma.js'
 import * as repo from './repository.js'
 import type { MusicGenre, DimensionScoreVector, CrowdVibeSnapshot, BusinessMusicAudience } from './shared-types.js'
 
-const DEV_MODE = !isDbAvailable && process.env['AREA_CODE_ENV'] !== 'prod'
+const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
 // Re-export the archetype resolver logic inline to avoid cross-package import issues at runtime
 const DIMENSIONS = ['energy', 'cultural_rootedness', 'sophistication', 'edge', 'spirituality'] as const

@@ -1,6 +1,7 @@
-import { redis } from '../shared/redis/client.js'
-import { nodesPulse } from '../shared/redis/keys.js'
-import { prisma } from '../shared/db/prisma.js'
+// DynamoDB-backed node state evaluator (replaces Redis + Prisma)
+import { ScanCommand } from '@aws-sdk/lib-dynamodb'
+import { documentClient, TableNames } from '../shared/db/dynamodb.js'
+import { kvGet, kvSet } from '../shared/kv/dynamodb-kv.js'
 import { emitStateSurge, emitToast } from '../shared/socket/events.js'
 
 /**
@@ -25,50 +26,46 @@ function getNodeState(score: number): NodeState {
   return 'dormant'
 }
 
-// Track previous states in Redis to survive container restarts
 async function getPreviousState(nodeId: string): Promise<NodeState> {
-  const state = await redis.get(`node:prev_state:${nodeId}`)
+  const state = await kvGet(`node:prev_state:${nodeId}`)
   return (state as NodeState) ?? 'dormant'
 }
 
 async function setPreviousState(nodeId: string, state: NodeState): Promise<void> {
-  await redis.set(`node:prev_state:${nodeId}`, state, 'EX', 86400) // 24h TTL
+  await kvSet(`node:prev_state:${nodeId}`, state, 86400)
 }
 
 export async function evaluateCityNodes(cityId: string, citySlug: string) {
-  const key = nodesPulse(cityId)
-  const members = await redis.zrangebyscore(key, 0, '+inf', 'WITHSCORES')
+  // Get all nodes for this city via pulse KV keys (scan nodes table)
+  const nodesResult = await documentClient.send(
+    new ScanCommand({
+      TableName: TableNames.nodes,
+      FilterExpression: 'cityId = :cityId AND isActive = :active',
+      ExpressionAttributeValues: { ':cityId': cityId, ':active': true },
+    })
+  )
 
   let surgeCount = 0
 
-  for (let i = 0; i < members.length; i += 2) {
-    const nodeId = members[i]!
-    const score = parseFloat(members[i + 1]!)
+  for (const n of nodesResult.Items || []) {
+    const nodeId = (n['nodeId'] ?? n['id']) as string
+    const scoreStr = await kvGet(`pulse:${cityId}:${nodeId}`)
+    const score = scoreStr ? parseFloat(scoreStr) : 0
     const currentState = getNodeState(score)
     const prevState = await getPreviousState(nodeId)
 
     if (currentState !== prevState) {
       await setPreviousState(nodeId, currentState)
 
-      // Only emit surge for upward transitions
       const stateOrder: NodeState[] = ['dormant', 'quiet', 'active', 'buzzing', 'popping']
       const prevIdx = stateOrder.indexOf(prevState)
       const currIdx = stateOrder.indexOf(currentState)
 
       if (currIdx > prevIdx) {
-        emitStateSurge(citySlug, {
-          nodeId,
-          fromState: prevState,
-          toState: currentState,
-        })
+        emitStateSurge(citySlug, { nodeId, fromState: prevState, toState: currentState })
 
-        // Emit surge toast when entering popping
         if (currentState === 'popping') {
-          emitToast(citySlug, {
-            type: 'surge',
-            message: 'A spot just hit peak energy nearby',
-            nodeId,
-          })
+          emitToast(citySlug, { type: 'surge', message: 'A spot just hit peak energy nearby', nodeId })
         }
 
         surgeCount++
@@ -79,16 +76,26 @@ export async function evaluateCityNodes(cityId: string, citySlug: string) {
   return surgeCount
 }
 
+async function getCities() {
+  const result = await documentClient.send(
+    new ScanCommand({
+      TableName: TableNames.appData,
+      FilterExpression: 'begins_with(pk, :prefix) AND sk = pk',
+      ExpressionAttributeValues: { ':prefix': 'CITY#' },
+    })
+  )
+  return (result.Items || []).map((c) => ({ id: (c['cityId'] ?? c['pk']) as string, slug: c['slug'] as string }))
+}
+
 /**
- * Main loop for ECS sidecar — evaluates all cities with staggered offsets.
+ * Main loop for Lambda/sidecar — evaluates all cities with staggered offsets.
  */
 export async function startEvaluatorLoop() {
-  const cities = await prisma.city.findMany({ select: { id: true, slug: true } })
+  const cities = await getCities()
 
   async function tick() {
     for (let i = 0; i < cities.length; i++) {
       const city = cities[i]!
-      // Stagger by offset to avoid thundering herd
       setTimeout(async () => {
         try {
           await evaluateCityNodes(city.id, city.slug)
@@ -100,7 +107,6 @@ export async function startEvaluatorLoop() {
     }
   }
 
-  // Run every 30 seconds
   setInterval(tick, 30_000)
-  await tick() // Initial run
+  await tick()
 }

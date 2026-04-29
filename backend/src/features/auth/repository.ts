@@ -8,13 +8,15 @@ import {
   getBusinessById,
   getBusinessByCognitoSub,
   getBusinessByEmail,
+  getBusinessByOwnerId,
   createBusiness as createBusinessDb,
   getStaffById,
   getStaffByCognitoSub,
+  getStaffByPhone,
   createStaff as createStaffDb,
 } from './dynamodb-repository.js'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
-import { QueryCommand, PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb'
+import { QueryCommand, PutCommand, GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
 import { generateId } from '../../shared/db/entities.js'
 
 // Re-export DynamoDB functions with same names as Prisma
@@ -56,7 +58,7 @@ export async function getUserCheckInHistory(
       const nodeResult = await documentClient.send(
         new GetCommand({
           TableName: TableNames.nodes,
-          Key: { pk: `NODE#${checkIn.nodeId}`, sk: `PROFILE#${checkIn.nodeId}` },
+          Key: { nodeId: checkIn.nodeId },
         })
       )
       return {
@@ -123,32 +125,18 @@ export { getBusinessByEmail as findBusinessByEmail }
 
 export async function findBusinessByPhone(phone: string) {
   if (!phone) return null
-  // Use scan with filter for optional phone field
+  // No PhoneIndex GSI — scan at current scale
   const result = await documentClient.send(
-    new QueryCommand({
+    new ScanCommand({
       TableName: TableNames.businesses,
-      IndexName: 'PhoneIndex',
-      KeyConditionExpression: 'phone = :phone',
+      FilterExpression: 'phone = :phone',
       ExpressionAttributeValues: { ':phone': phone },
-      Limit: 1,
     })
   )
   return result.Items?.[0] || null
 }
 
-export async function findStaffByPhone(phone: string) {
-  // Staff accounts stored in appData table
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.appData,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'gsi1pk = :pk',
-      ExpressionAttributeValues: { ':pk': `STAFF_PHONE#${phone}` },
-      Limit: 1,
-    })
-  )
-  return result.Items?.[0] || null
-}
+export { getStaffByPhone as findStaffByPhone }
 
 export async function createUser(data: {
   phone: string; username: string; displayName: string;
@@ -197,7 +185,7 @@ export async function acceptStaffInvite(inviteId: string) {
 export async function createStaffAccount(data: {
   businessId: string; name: string; phone: string; cognitoSub: string;
 }) {
-  return createStaffDb(data)
+  return createStaffDb({ ...data, isActive: true })
 }
 
 export async function getCityBySlug(slug: string) {

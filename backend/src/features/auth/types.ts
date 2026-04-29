@@ -64,6 +64,7 @@ export const adminLoginBodySchema = z.object({
 // ============================================================================
 
 export interface User {
+  id?: string
   userId: string
   phone?: string
   username: string
@@ -84,6 +85,7 @@ export interface User {
 }
 
 export interface BusinessAccount {
+  id?: string
   businessId: string
   email: string
   phone?: string
@@ -100,6 +102,7 @@ export interface BusinessAccount {
 }
 
 export interface StaffAccount {
+  id?: string
   staffId: string
   businessId: string
   name: string

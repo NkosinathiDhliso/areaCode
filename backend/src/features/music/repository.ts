@@ -1,5 +1,8 @@
-import { prisma } from '../../shared/db/prisma.js'
-import { Prisma } from '@prisma/client'
+// DynamoDB-backed Music Repository (replaces Prisma)
+import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
+import { updateUser, getUserById } from '../auth/dynamodb-repository.js'
+import { getCheckInsByNode } from '../check-in/dynamodb-repository.js'
+import { QueryCommand } from '@aws-sdk/lib-dynamodb'
 
 export async function updateUserGenres(
   userId: string,
@@ -7,78 +10,74 @@ export async function updateUserGenres(
   dimensionScores: Record<string, number> | null,
   archetypeId: string,
 ) {
-  return prisma.user.update({
-    where: { id: userId },
-    data: {
-      musicGenres,
-      dimensionScores: dimensionScores as Prisma.InputJsonValue ?? Prisma.JsonNull,
-      archetypeId,
-    },
-    select: { id: true, musicGenres: true, dimensionScores: true, archetypeId: true },
-  })
+  const updated = await updateUser(userId, { musicGenres, dimensionScores, archetypeId } as any)
+  return updated ? { id: updated.userId, musicGenres, dimensionScores, archetypeId } : null
 }
 
 export async function updateStreamingProvider(userId: string, provider: string | null) {
-  return prisma.user.update({
-    where: { id: userId },
-    data: { streamingProvider: provider },
-    select: { id: true, streamingProvider: true },
-  })
+  const updated = await updateUser(userId, { streamingProvider: provider } as any)
+  return updated ? { id: updated.userId, streamingProvider: provider } : null
 }
 
 export async function clearUserMusicData(userId: string) {
-  return prisma.user.update({
-    where: { id: userId },
-    data: {
-      streamingProvider: null,
-      musicGenres: [],
-      dimensionScores: Prisma.JsonNull,
-      archetypeId: null,
-    },
-  })
+  return updateUser(userId, {
+    streamingProvider: null,
+    musicGenres: [],
+    dimensionScores: null,
+    archetypeId: null,
+  } as any)
 }
 
 export async function getCrowdVibeData(nodeId: string) {
-  const since = new Date(Date.now() - 60 * 60 * 1000) // last hour
-
-  const checkIns = await prisma.checkIn.findMany({
-    where: { nodeId, checkedInAt: { gte: since } },
-    distinct: ['userId'],
-    include: {
-      user: {
-        select: {
-          id: true,
-          musicGenres: true,
-          dimensionScores: true,
-          archetypeId: true,
-        },
-      },
-    },
-  })
-
-  return checkIns.map((ci) => ci.user)
+  const { checkIns } = await getCheckInsByNode(nodeId, { hours: 1 })
+  // Deduplicate by userId and enrich
+  const seen = new Set<string>()
+  const users = []
+  for (const ci of checkIns) {
+    if (seen.has(ci.userId)) continue
+    seen.add(ci.userId)
+    const user = await getUserById(ci.userId)
+    if (user) {
+      users.push({
+        id: user.userId,
+        musicGenres: (user as any).musicGenres ?? [],
+        dimensionScores: (user as any).dimensionScores ?? null,
+        archetypeId: (user as any).archetypeId ?? null,
+      })
+    }
+  }
+  return users
 }
 
 export async function getBusinessAudienceMusicData(businessId: string) {
-  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // last 30 days
+  // Get nodes for business
+  const nodesResult = await documentClient.send(
+    new QueryCommand({
+      TableName: TableNames.nodes,
+      IndexName: 'BusinessIndex',
+      KeyConditionExpression: 'businessId = :bid',
+      ExpressionAttributeValues: { ':bid': businessId },
+    })
+  )
+  const nodeIds = (nodesResult.Items || []).map((n) => (n['nodeId'] ?? n['id']) as string)
 
-  const checkIns = await prisma.checkIn.findMany({
-    where: {
-      node: { businessId },
-      checkedInAt: { gte: since },
-    },
-    distinct: ['userId'],
-    include: {
-      user: {
-        select: {
-          id: true,
-          musicGenres: true,
-          dimensionScores: true,
-          archetypeId: true,
-        },
-      },
-    },
-  })
-
-  return checkIns.map((ci) => ci.user)
+  const seen = new Set<string>()
+  const users = []
+  for (const nid of nodeIds) {
+    const { checkIns } = await getCheckInsByNode(nid, { hours: 720 }) // ~30 days
+    for (const ci of checkIns) {
+      if (seen.has(ci.userId)) continue
+      seen.add(ci.userId)
+      const user = await getUserById(ci.userId)
+      if (user) {
+        users.push({
+          id: user.userId,
+          musicGenres: (user as any).musicGenres ?? [],
+          dimensionScores: (user as any).dimensionScores ?? null,
+          archetypeId: (user as any).archetypeId ?? null,
+        })
+      }
+    }
+  }
+  return users
 }

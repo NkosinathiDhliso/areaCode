@@ -1,11 +1,9 @@
 import { AppError } from '../../shared/errors/AppError.js'
-import { redis } from '../../shared/redis/client.js'
-import { userConsent, otpCooldown, otpHourlyCount, otpSession } from '../../shared/redis/keys.js'
-import { isDbAvailable } from '../../shared/db/prisma.js'
+import { kvGet, kvSet, kvDel, kvIncr, kvTtl } from '../../shared/kv/dynamodb-kv.js'
 import * as repo from './repository.js'
 import * as cognito from '../../shared/cognito/client.js'
 
-const DEV_MODE = !isDbAvailable && process.env['AREA_CODE_ENV'] !== 'prod'
+const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
 // ─── Consumer Auth ──────────────────────────────────────────────────────────
 
@@ -43,19 +41,19 @@ export async function consumerSignup(data: {
 
   // Store userId as custom attribute in Cognito for JWT claims
   await cognito.updateUserAttributes('consumer', data.phone, {
-    userId: user.id,
+    userId: user.userId,
     citySlug: data.citySlug,
   })
 
   // Insert initial consent record with analytics preference from signup
   const consentVersion = process.env['AREA_CODE_CONSENT_VERSION'] ?? 'v1.0'
-  await repo.insertConsentRecord(user.id, consentVersion, data.consentAnalytics ?? false)
+  await repo.insertConsentRecord(user.userId, consentVersion, data.consentAnalytics ?? false)
 
   // Initiate auth to send OTP
   const { session } = await cognito.initiateAuth('consumer', data.phone)
-  await redis.set(otpSession(data.phone), session, 'EX', 300)
+  await kvSet(`otp:session:${data.phone}`, session, 300)
 
-  return { userId: user.id, message: 'OTP sent' }
+  return { userId: user.userId, message: 'OTP sent' }
 }
 
 export async function consumerLogin(phone: string) {
@@ -66,7 +64,7 @@ export async function consumerLogin(phone: string) {
   await checkOtpRateLimit(phone)
 
   const { session } = await cognito.initiateAuth('consumer', phone)
-  await redis.set(otpSession(phone), session, 'EX', 300)
+  await kvSet(`otp:session:${phone}`, session, 300)
 }
 
 export async function consumerVerifyOtp(phone: string, code: string) {
@@ -79,12 +77,12 @@ export async function consumerVerifyOtp(phone: string, code: string) {
     }
   }
 
-  const session = await redis.get(otpSession(phone))
+  const session = await kvGet(`otp:session:${phone}`)
   if (!session) throw AppError.unauthorized('OTP expired or not requested')
 
   try {
     const tokens = await cognito.respondToAuthChallenge('consumer', phone, code, session)
-    await redis.del(otpSession(phone))
+    await kvDel(`otp:session:${phone}`)
 
     const user = await repo.findUserByPhone(phone)
     if (!user) throw AppError.unauthorized('Invalid credentials')
@@ -92,7 +90,7 @@ export async function consumerVerifyOtp(phone: string, code: string) {
     return {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
-      user: { id: user.id, username: user.username, displayName: user.displayName, tier: user.tier },
+      user: { id: user.userId, username: user.username, displayName: user.displayName, tier: user.tier },
     }
   } catch (err) {
     if (err instanceof AppError) throw err
@@ -127,13 +125,13 @@ export async function businessSignup(data: {
   })
 
   await cognito.updateUserAttributes('business', data.phone, {
-    businessId: business.id,
+    businessId: business.businessId,
   })
 
   const { session } = await cognito.initiateAuth('business', data.phone)
-  await redis.set(otpSession(data.phone), session, 'EX', 300)
+  await kvSet(`otp:session:${data.phone}`, session, 300)
 
-  return { businessId: business.id, message: 'OTP sent' }
+  return { businessId: business.businessId, message: 'OTP sent' }
 }
 
 export async function businessLogin(phone: string) {
@@ -141,7 +139,7 @@ export async function businessLogin(phone: string) {
   await checkOtpRateLimit(phone)
 
   const { session } = await cognito.initiateAuth('business', phone)
-  await redis.set(otpSession(phone), session, 'EX', 300)
+  await kvSet(`otp:session:${phone}`, session, 300)
 }
 
 export async function businessVerifyOtp(phone: string, code: string) {
@@ -153,12 +151,12 @@ export async function businessVerifyOtp(phone: string, code: string) {
     }
   }
 
-  const session = await redis.get(otpSession(phone))
+  const session = await kvGet(`otp:session:${phone}`)
   if (!session) throw AppError.unauthorized('OTP expired or not requested')
 
   try {
     const tokens = await cognito.respondToAuthChallenge('business', phone, code, session)
-    await redis.del(otpSession(phone))
+    await kvDel(`otp:session:${phone}`)
 
     // Look up businessId from Cognito custom attributes
     const cognitoUser = await cognito.getCognitoUser('business', phone)
@@ -185,7 +183,7 @@ export async function staffLogin(phone: string) {
   await checkOtpRateLimit(phone)
 
   const { session } = await cognito.initiateAuth('staff', phone)
-  await redis.set(otpSession(phone), session, 'EX', 300)
+  await kvSet(`otp:session:${phone}`, session, 300)
 }
 
 export async function staffVerifyOtp(phone: string, code: string) {
@@ -197,12 +195,12 @@ export async function staffVerifyOtp(phone: string, code: string) {
     }
   }
 
-  const session = await redis.get(otpSession(phone))
+  const session = await kvGet(`otp:session:${phone}`)
   if (!session) throw AppError.unauthorized('OTP expired or not requested')
 
   try {
     const tokens = await cognito.respondToAuthChallenge('staff', phone, code, session)
-    await redis.del(otpSession(phone))
+    await kvDel(`otp:session:${phone}`)
 
     const staff = await repo.findStaffByPhone(phone)
     if (!staff) throw AppError.unauthorized('Invalid credentials')
@@ -210,7 +208,7 @@ export async function staffVerifyOtp(phone: string, code: string) {
     return {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
-      staff: { id: staff.id, name: staff.name, businessId: staff.businessId },
+      staff: { id: staff.staffId, name: staff.name, businessId: staff.businessId },
     }
   } catch (err) {
     if (err instanceof AppError) throw err
@@ -361,8 +359,8 @@ export async function updateConsent(
   const record = await repo.insertConsentRecord(
     userId, consentVersion, analyticsOptIn,
   )
-  // Invalidate Redis cache
-  await redis.del(userConsent(userId))
+  // Invalidate cache
+  await kvDel(`user:consent:${userId}`)
   return record
 }
 
@@ -370,8 +368,8 @@ export async function getUserConsent(userId: string) {
   if (DEV_MODE) {
     return { analyticsOptIn: false }
   }
-  // Check Redis cache first
-  const cached = await redis.get(userConsent(userId))
+  // Check cache first
+  const cached = await kvGet(`user:consent:${userId}`)
   if (cached) return JSON.parse(cached) as { analyticsOptIn: boolean }
 
   // Fall back to DB
@@ -381,7 +379,7 @@ export async function getUserConsent(userId: string) {
   const consent = {
     analyticsOptIn: record.analyticsOptIn,
   }
-  await redis.set(userConsent(userId), JSON.stringify(consent), 'EX', 3600)
+  await kvSet(`user:consent:${userId}`, JSON.stringify(consent), 3600)
   return consent
 }
 
@@ -408,22 +406,19 @@ export async function getAccountType(phone: string): Promise<string> {
 export async function checkOtpRateLimit(phone: string) {
   if (DEV_MODE) return
   // 60s resend cooldown
-  const cooldownKey = otpCooldown(phone)
-  const cooldown = await redis.get(cooldownKey)
+  const cooldown = await kvGet(`otp:cooldown:${phone}`)
   if (cooldown) {
     throw AppError.tooManyRequests('Please wait before requesting another OTP')
   }
 
   // 3/hour limit
-  const hourlyKey = otpHourlyCount(phone)
-  const count = await redis.incr(hourlyKey)
-  if (count === 1) await redis.expire(hourlyKey, 3600)
+  const count = await kvIncr(`otp:hourly:${phone}`, 3600)
   if (count > 3) {
     throw AppError.tooManyRequests('OTP rate limit exceeded. Try again later.')
   }
 
   // Set 60s cooldown
-  await redis.set(cooldownKey, '1', 'EX', 60)
+  await kvSet(`otp:cooldown:${phone}`, '1', 60)
 }
 
 // ─── Account Deletion (POPIA) ────────────────────────────────────────────────
@@ -466,7 +461,7 @@ export async function acceptStaffInvite(token: string, name: string, phone: stri
   })
 
   await cognito.updateUserAttributes('staff', phone, {
-    staffId: staff.id,
+    staffId: staff.staffId,
     businessId: invite.businessId,
   })
 

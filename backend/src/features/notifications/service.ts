@@ -1,5 +1,4 @@
-import { redis } from '../../shared/redis/client.js'
-import { rewardNotificationsToday, notifDeferred } from '../../shared/redis/keys.js'
+import { kvGet, kvIncr } from '../../shared/kv/dynamodb-kv.js'
 import * as repo from './repository.js'
 import { getIO } from '../../shared/socket/server.js'
 import { userRoom } from '../../shared/socket/rooms.js'
@@ -178,13 +177,12 @@ async function sendWebPush(
 // ─── Rate Limiting ──────────────────────────────────────────────────────────
 
 export async function canSendRewardPush(userId: string): Promise<boolean> {
-  const key = rewardNotificationsToday(userId)
-  const count = await redis.get(key)
+  const key = `notif:reward_push:${userId}`
+  const count = await kvGet(key)
   return !count || parseInt(count, 10) < 2
 }
 
 export async function incrementRewardPushCount(userId: string) {
-  const key = rewardNotificationsToday(userId)
-  const count = await redis.incr(key)
-  if (count === 1) await redis.expire(key, 86400)
+  const key = `notif:reward_push:${userId}`
+  await kvIncr(key, 86400)
 }

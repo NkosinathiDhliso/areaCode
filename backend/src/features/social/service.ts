@@ -1,8 +1,7 @@
 import { AppError } from '../../shared/errors/AppError.js'
-import { isDbAvailable } from '../../shared/db/prisma.js'
 import * as repo from './repository.js'
 
-const DEV_MODE = !isDbAvailable && process.env['AREA_CODE_ENV'] !== 'prod'
+const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
 // ─── Identity Stripper ──────────────────────────────────────────────────────
 
@@ -120,7 +119,8 @@ export async function getWhoIsHere(nodeId: string, viewerId?: string) {
   // Build tier distribution
   const tierDistribution: Record<string, number> = {}
   for (const e of entries) {
-    tierDistribution[e.tier] = (tierDistribution[e.tier] ?? 0) + 1
+    const t = e.tier ?? 'unknown'
+    tierDistribution[t] = (tierDistribution[t] ?? 0) + 1
   }
 
   // Resolve friends for authenticated viewer

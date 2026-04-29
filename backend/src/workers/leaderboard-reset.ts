@@ -1,60 +1,74 @@
-import { redis } from '../shared/redis/client.js'
-import { leaderboard } from '../shared/redis/keys.js'
-import { prisma } from '../shared/db/prisma.js'
+// DynamoDB-backed leaderboard reset worker (replaces Redis + Prisma)
+import { QueryCommand, PutCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
+import { documentClient, TableNames } from '../shared/db/dynamodb.js'
+import { generateId } from '../shared/db/entities.js'
+import { getNotificationPreferences } from '../features/notifications/repository.js'
+
+async function getCities() {
+  const result = await documentClient.send(
+    new ScanCommand({
+      TableName: TableNames.appData,
+      FilterExpression: 'begins_with(pk, :prefix) AND sk = pk',
+      ExpressionAttributeValues: { ':prefix': 'CITY#' },
+    })
+  )
+  return (result.Items || []).map((c) => ({ id: (c['cityId'] ?? c['pk']) as string, slug: c['slug'] as string }))
+}
 
 /**
  * Leaderboard reset worker — EventBridge Lambda Monday 00:00 SAST.
- * Atomic reset: snapshot → persist → rename → cleanup.
  */
 export async function handler() {
   console.log('[leaderboard-reset] Starting weekly leaderboard reset')
 
-  const cities = await prisma.city.findMany({ select: { id: true, slug: true } })
-  const weekEnding = new Date()
+  const cities = await getCities()
+  const weekEnding = new Date().toISOString()
   let totalEntries = 0
 
   for (const city of cities) {
-    const key = leaderboard(city.id)
-    const prevKey = `${key}:prev`
-
-    // 1. Snapshot top 50
-    const top50 = await redis.zrevrange(key, 0, 49, 'WITHSCORES')
-    const entries: Array<{ userId: string; rank: number; checkInCount: number }> = []
-
-    for (let i = 0; i < top50.length; i += 2) {
-      entries.push({
-        userId: top50[i]!,
-        rank: Math.floor(i / 2) + 1,
-        checkInCount: parseInt(top50[i + 1]!, 10),
+    // 1. Get leaderboard entries from app_data
+    const result = await documentClient.send(
+      new QueryCommand({
+        TableName: TableNames.appData,
+        KeyConditionExpression: 'pk = :pk',
+        ExpressionAttributeValues: { ':pk': `LEADERBOARD#${city.id}` },
+        ScanIndexForward: false,
+        Limit: 50,
       })
+    )
+    const entries = (result.Items || []).map((item, i) => ({
+      userId: item['userId'] as string,
+      rank: i + 1,
+      checkInCount: (item['checkInCount'] as number) ?? 0,
+    }))
+
+    // 2. Persist to leaderboard history
+    for (const e of entries) {
+      await documentClient.send(
+        new PutCommand({
+          TableName: TableNames.appData,
+          Item: {
+            pk: `LB_HISTORY#${city.id}`,
+            sk: `${weekEnding}#${e.userId}`,
+            cityId: city.id, weekEnding, userId: e.userId,
+            rank: e.rank, checkInCount: e.checkInCount,
+          },
+        })
+      )
     }
 
-    // 2. Persist to leaderboard_history
-    if (entries.length > 0) {
-      await prisma.leaderboardHistory.createMany({
-        data: entries.map((e) => ({
-          cityId: city.id,
-          weekEnding,
-          userId: e.userId,
-          rank: e.rank,
-          checkInCount: e.checkInCount,
-        })),
-      })
+    // 3. Delete current leaderboard entries
+    for (const item of result.Items || []) {
+      await documentClient.send(
+        new DeleteCommand({
+          TableName: TableNames.appData,
+          Key: { pk: item['pk'] as string, sk: item['sk'] as string },
+        })
+      )
     }
-
-    // 3. Atomic rename (never zero individual scores)
-    const exists = await redis.exists(key)
-    if (exists) {
-      await redis.rename(key, prevKey)
-    }
-
-    // 4. Cleanup previous week
-    await redis.del(prevKey)
 
     totalEntries += entries.length
-    console.log(
-      `[leaderboard-reset] ${city.slug}: ${entries.length} entries persisted`,
-    )
+    console.log(`[leaderboard-reset] ${city.slug}: ${entries.length} entries persisted`)
   }
 
   console.log(`[leaderboard-reset] Total entries: ${totalEntries}`)
@@ -63,49 +77,37 @@ export async function handler() {
 
 /**
  * Pre-reset notification — EventBridge Lambda Sunday 20:00 SAST.
- * Sends push to opted-in users with their current rank.
  */
 export async function preResetHandler() {
   console.log('[leaderboard-reset] Sending pre-reset notifications')
 
-  const cities = await prisma.city.findMany({ select: { id: true, slug: true } })
+  const cities = await getCities()
   let sent = 0
 
   for (const city of cities) {
-    const key = leaderboard(city.id)
-    const top50 = await redis.zrevrange(key, 0, 49, 'WITHSCORES')
-
-    const userIds: string[] = []
-    const rankMap = new Map<string, { rank: number; count: number }>()
-    for (let i = 0; i < top50.length; i += 2) {
-      const userId = top50[i]!
-      userIds.push(userId)
-      rankMap.set(userId, {
-        rank: Math.floor(i / 2) + 1,
-        count: parseInt(top50[i + 1]!, 10),
+    const result = await documentClient.send(
+      new QueryCommand({
+        TableName: TableNames.appData,
+        KeyConditionExpression: 'pk = :pk',
+        ExpressionAttributeValues: { ':pk': `LEADERBOARD#${city.id}` },
+        ScanIndexForward: false,
+        Limit: 50,
       })
-    }
+    )
 
-    if (userIds.length === 0) continue
-
-    // Find users who opted in to leaderboard prewarning
-    const optedIn = await prisma.notificationPreference.findMany({
-      where: { userId: { in: userIds }, leaderboardPrewarning: true },
-      select: { userId: true },
-    })
-
-    for (const pref of optedIn) {
-      const entry = rankMap.get(pref.userId)
-      if (!entry) continue
-
-      // Emit via socket — push fallback handled by notification service
-      const { emitToast } = await import('../shared/socket/events.js')
-      emitToast(city.slug, {
-        type: 'leaderboard',
-        message: `Ranks reset tonight! You're #${entry.rank} with ${entry.count} check-ins.`,
-        nodeId: '',
-      })
-      sent++
+    for (let i = 0; i < (result.Items || []).length; i++) {
+      const item = result.Items![i]!
+      const userId = item['userId'] as string
+      const prefs = await getNotificationPreferences(userId)
+      if (prefs && prefs['leaderboardPrewarning']) {
+        const { emitToast } = await import('../shared/socket/events.js')
+        emitToast(city.slug, {
+          type: 'leaderboard',
+          message: `Ranks reset tonight! You're #${i + 1} with ${item['checkInCount'] ?? 0} check-ins.`,
+          nodeId: '',
+        })
+        sent++
+      }
     }
   }
 

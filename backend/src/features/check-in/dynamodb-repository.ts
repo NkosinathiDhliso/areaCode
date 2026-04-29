@@ -15,14 +15,26 @@ import type { CheckIn } from './types.js'
 // CHECK-IN OPERATIONS
 // ============================================================================
 
-export async function getCheckInById(checkInId: string): Promise<CheckIn | null> {
+export async function getCheckInById(checkInId: string, timestamp?: number): Promise<CheckIn | null> {
+  if (timestamp !== undefined) {
+    const result = await documentClient.send(
+      new GetCommand({
+        TableName: TableNames.checkins,
+        Key: { checkInId, timestamp },
+      })
+    )
+    return result.Item ? mapCheckIn(result.Item) : null
+  }
+  // Without timestamp, query by checkInId (partition key only)
   const result = await documentClient.send(
-    new GetCommand({
+    new QueryCommand({
       TableName: TableNames.checkins,
-      Key: { pk: `CHECKIN#${checkInId}`, sk: `CHECKIN#${checkInId}` },
+      KeyConditionExpression: 'checkInId = :id',
+      ExpressionAttributeValues: { ':id': checkInId },
+      Limit: 1,
     })
   )
-  return result.Item ? (result.Item as CheckIn) : null
+  return result.Items?.[0] ? mapCheckIn(result.Items[0]) : null
 }
 
 export async function createCheckIn(
@@ -30,6 +42,7 @@ export async function createCheckIn(
 ): Promise<CheckIn> {
   const checkInId = generateId()
   const now = new Date().toISOString()
+  const ts = Date.now() // numeric timestamp for SK
 
   const checkIn: CheckIn = {
     ...data,
@@ -41,15 +54,8 @@ export async function createCheckIn(
     new PutCommand({
       TableName: TableNames.checkins,
       Item: {
-        pk: `CHECKIN#${checkInId}`,
-        sk: `CHECKIN#${checkInId}`,
-        // GSI1 for user queries
-        gsi1pk: `USER#${data.userId}`,
-        gsi1sk: now,
-        // GSI2 for node queries
-        gsi2pk: `NODE#${data.nodeId}`,
-        gsi2sk: now,
         ...checkIn,
+        timestamp: ts,
       },
     })
   )
@@ -66,14 +72,13 @@ export async function getCheckInsByUser(
     endTime?: string
   }
 ): Promise<{ checkIns: CheckIn[]; nextCursor?: string }> {
-  let keyCondition = 'gsi1pk = :userId'
-  const exprValues: Record<string, unknown> = { ':userId': `USER#${userId}` }
-  let filterExpr = ''
+  let keyCondition = 'userId = :userId'
+  const exprValues: Record<string, unknown> = { ':userId': userId }
 
   if (options?.startTime && options?.endTime) {
-    keyCondition += ' AND gsi1sk BETWEEN :start AND :end'
-    exprValues[':start'] = options.startTime
-    exprValues[':end'] = options.endTime
+    keyCondition += ' AND #ts BETWEEN :start AND :end'
+    exprValues[':start'] = new Date(options.startTime).getTime()
+    exprValues[':end'] = new Date(options.endTime).getTime()
   }
 
   const result = await documentClient.send(
@@ -81,6 +86,7 @@ export async function getCheckInsByUser(
       TableName: TableNames.checkins,
       IndexName: 'UserIndex',
       KeyConditionExpression: keyCondition,
+      ...(options?.startTime ? { ExpressionAttributeNames: { '#ts': 'timestamp' } } : {}),
       ExpressionAttributeValues: exprValues,
       ScanIndexForward: false,
       Limit: options?.limit || 50,
@@ -90,7 +96,7 @@ export async function getCheckInsByUser(
     })
   )
 
-  const checkIns = (result.Items || []) as CheckIn[]
+  const checkIns = (result.Items || []).map((i) => mapCheckIn(i))
   const nextCursor = result.LastEvaluatedKey
     ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64')
     : undefined
@@ -107,7 +113,7 @@ export async function getCheckInsByNode(
   }
 ): Promise<{ checkIns: CheckIn[]; nextCursor?: string }> {
   let filterExpr = ''
-  const exprValues: Record<string, unknown> = { ':nodeId': `NODE#${nodeId}` }
+  const exprValues: Record<string, unknown> = { ':nodeId': nodeId }
 
   if (options?.hours) {
     const cutoff = new Date(Date.now() - options.hours * 60 * 60 * 1000).toISOString()
@@ -119,7 +125,7 @@ export async function getCheckInsByNode(
     new QueryCommand({
       TableName: TableNames.checkins,
       IndexName: 'NodeIndex',
-      KeyConditionExpression: 'gsi2pk = :nodeId',
+      KeyConditionExpression: 'nodeId = :nodeId',
       ExpressionAttributeValues: exprValues,
       ...(filterExpr ? { FilterExpression: filterExpr } : {}),
       ScanIndexForward: false,
@@ -130,7 +136,7 @@ export async function getCheckInsByNode(
     })
   )
 
-  const checkIns = (result.Items || []) as CheckIn[]
+  const checkIns = (result.Items || []).map((i) => mapCheckIn(i))
   const nextCursor = result.LastEvaluatedKey
     ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64')
     : undefined
@@ -149,10 +155,10 @@ export async function getRecentCheckInCount(
     new QueryCommand({
       TableName: TableNames.checkins,
       IndexName: 'UserIndex',
-      KeyConditionExpression: 'gsi1pk = :userId',
+      KeyConditionExpression: 'userId = :userId',
       FilterExpression: 'nodeId = :nodeId AND checkedInAt >= :cutoff',
       ExpressionAttributeValues: {
-        ':userId': `USER#${userId}`,
+        ':userId': userId,
         ':nodeId': nodeId,
         ':cutoff': cutoff,
       },
@@ -167,8 +173,8 @@ export async function getUserCheckInCount(userId: string): Promise<number> {
     new QueryCommand({
       TableName: TableNames.checkins,
       IndexName: 'UserIndex',
-      KeyConditionExpression: 'gsi1pk = :userId',
-      ExpressionAttributeValues: { ':userId': `USER#${userId}` },
+      KeyConditionExpression: 'userId = :userId',
+      ExpressionAttributeValues: { ':userId': userId },
       Select: 'COUNT',
     })
   )
@@ -197,10 +203,10 @@ export async function getLeaderboard(
     })
   )
 
-  return (result.Items || []).map((item: { userId: string; rank?: number; checkInCount: number }, index: number) => ({
-    userId: item.userId,
-    rank: item.rank || index + 1,
-    checkInCount: item.checkInCount,
+  return (result.Items || []).map((item, index) => ({
+    userId: item['userId'] as string,
+    rank: (item['rank'] as number) || index + 1,
+    checkInCount: (item['checkInCount'] as number) ?? 0,
   }))
 }
 
@@ -242,9 +248,10 @@ export async function getCheckInVelocity(
     new QueryCommand({
       TableName: TableNames.checkins,
       IndexName: 'UserIndex',
-      KeyConditionExpression: 'gsi1pk = :userId AND gsi1sk >= :cutoff',
+      KeyConditionExpression: 'userId = :userId',
+      FilterExpression: 'checkedInAt >= :cutoff',
       ExpressionAttributeValues: {
-        ':userId': `USER#${userId}`,
+        ':userId': userId,
         ':cutoff': cutoff,
       },
     })
@@ -254,12 +261,16 @@ export async function getCheckInVelocity(
 }
 
 export async function markCheckInForDeletion(checkInId: string): Promise<void> {
+  // Need timestamp to address the item — query first
+  const item = await getCheckInById(checkInId)
+  if (!item) return
+  const ts = (item as unknown as Record<string, unknown>)['timestamp'] as number
   const ttl = Math.floor(Date.now() / 1000) + 86400 // 1 day from now
 
   await documentClient.send(
     new UpdateCommand({
       TableName: TableNames.checkins,
-      Key: { pk: `CHECKIN#${checkInId}`, sk: `CHECKIN#${checkInId}` },
+      Key: { checkInId, timestamp: ts },
       UpdateExpression: 'SET #deleted = :deleted, #ttl = :ttl',
       ExpressionAttributeNames: {
         '#deleted': 'deleted',
@@ -271,4 +282,15 @@ export async function markCheckInForDeletion(checkInId: string): Promise<void> {
       },
     })
   )
+}
+
+function mapCheckIn(item: Record<string, unknown>): CheckIn {
+  return {
+    checkInId: (item['checkInId'] as string) ?? (item['id'] as string),
+    userId: item['userId'] as string,
+    nodeId: item['nodeId'] as string,
+    neighbourhoodId: item['neighbourhoodId'] as string | undefined,
+    type: item['type'] as string,
+    checkedInAt: item['checkedInAt'] as string,
+  }
 }

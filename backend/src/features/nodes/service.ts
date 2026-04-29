@@ -2,15 +2,13 @@ import { randomUUID } from 'node:crypto'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { AppError } from '../../shared/errors/AppError.js'
-import { redis } from '../../shared/redis/client.js'
-import { nodesPulse } from '../../shared/redis/keys.js'
-import { isDbAvailable } from '../../shared/db/prisma.js'
+import { kvGet } from '../../shared/kv/dynamodb-kv.js'
 import * as repo from './repository.js'
 
 const s3 = new S3Client({ region: process.env['AWS_REGION'] ?? 'us-east-1' })
 const BUCKET = process.env['AREA_CODE_S3_MEDIA_BUCKET'] ?? 'area-code-media'
 const ENV = process.env['AREA_CODE_ENV'] ?? 'dev'
-const DEV_MODE = !isDbAvailable && process.env['AREA_CODE_ENV'] !== 'prod'
+const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
 // ─── Dev Mock Data ──────────────────────────────────────────────────────────
 
@@ -48,11 +46,11 @@ export async function getNodeDetail(nodeId: string) {
   const node = await repo.getNodeById(nodeId)
   if (!node) throw AppError.notFound('Node not found')
 
-  // Get pulse score from Redis
+  // Get pulse score from DynamoDB KV
   const cityId = node.city?.slug
   let pulseScore = 0
   if (cityId) {
-    const score = await redis.zscore(nodesPulse(cityId), nodeId)
+    const score = await kvGet(`pulse:${cityId}:${nodeId}`)
     pulseScore = score ? parseFloat(score) : 0
   }
 

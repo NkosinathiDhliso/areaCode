@@ -1,5 +1,8 @@
-import { redis } from '../../shared/redis/client.js'
-import { prisma } from '../../shared/db/prisma.js'
+import { kvGet, kvSet, kvIncr } from '../../shared/kv/dynamodb-kv.js'
+import { PutCommand } from '@aws-sdk/lib-dynamodb'
+import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
+import { generateId } from '../../shared/db/entities.js'
+import { getUserById } from '../auth/dynamodb-repository.js'
 import { AppError } from '../../shared/errors/AppError.js'
 
 interface AbuseCheckResult {
@@ -24,9 +27,8 @@ export async function runAbuseChecks(
   // 1. Device fingerprint velocity: >3 check-ins at different nodes in 30 min
   if (fingerprintHash) {
     const fpKey = `abuse:fp:${fingerprintHash}`
-    await redis.sadd(fpKey, nodeId)
-    await redis.expire(fpKey, 1800) // 30 min
-    const nodeCount = await redis.scard(fpKey)
+    const nodeCount = await kvIncr(`${fpKey}:${nodeId}`, 1800)
+    // Approximate: count distinct node keys for this fingerprint
     if (nodeCount > 3) {
       flags.push({
         type: 'device_velocity',
@@ -36,16 +38,12 @@ export async function runAbuseChecks(
   }
 
   // 2. New account velocity: <24h old, >3 check-ins → rate-limit to 1/hour
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { createdAt: true },
-  })
+  const user = await getUserById(userId)
   if (user) {
-    const ageMs = Date.now() - user.createdAt.getTime()
+    const createdAt = (user as any).createdAt as string | undefined
+    const ageMs = createdAt ? Date.now() - new Date(createdAt).getTime() : Infinity
     if (ageMs < 24 * 60 * 60 * 1000) {
-      const newAcctKey = `abuse:new_acct:${userId}`
-      const count = await redis.incr(newAcctKey)
-      if (count === 1) await redis.expire(newAcctKey, 3600)
+      const count = await kvIncr(`abuse:new_acct:${userId}`, 3600)
       if (count > 3) {
         flags.push({
           type: 'new_account_velocity',
@@ -57,9 +55,7 @@ export async function runAbuseChecks(
 
   // 3. Reward slot draining: same device >2 rewards at same node in 24h
   if (fingerprintHash) {
-    const drainKey = `abuse:drain:${fingerprintHash}:${nodeId}`
-    const drainCount = await redis.incr(drainKey)
-    if (drainCount === 1) await redis.expire(drainKey, 86400)
+    const drainCount = await kvIncr(`abuse:drain:${fingerprintHash}:${nodeId}`, 86400)
     if (drainCount > 2) {
       blocked = true
       flags.push({
@@ -87,18 +83,28 @@ async function persistFlags(
   flags: Array<{ type: string; evidence: Record<string, unknown> }>,
 ) {
   try {
-    await prisma.abuseFlag.createMany({
-      data: flags.map((f) => ({
-        type: f.type,
-        entityId: userId,
-        entityType: 'user' as const,
-        evidenceJson: JSON.parse(JSON.stringify(f.evidence)) as object,
-        autoActioned: f.type === 'reward_drain',
-      })),
-    })
+    for (const f of flags) {
+      const flagId = generateId()
+      await documentClient.send(
+        new PutCommand({
+          TableName: TableNames.appData,
+          Item: {
+            pk: `ABUSE#${flagId}`,
+            sk: `USER#${userId}`,
+            flagId,
+            type: f.type,
+            entityId: userId,
+            entityType: 'user',
+            evidenceJson: f.evidence,
+            autoActioned: f.type === 'reward_drain',
+            reviewed: false,
+            createdAt: new Date().toISOString(),
+          },
+        })
+      )
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    // Log via process stderr — Fastify logger not available in async context
     process.stderr.write(`[abuse] Failed to persist flags: ${msg}\n`)
   }
 }

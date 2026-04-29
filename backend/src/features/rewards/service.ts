@@ -1,9 +1,8 @@
 import { AppError } from '../../shared/errors/AppError.js'
-import { isDbAvailable } from '../../shared/db/prisma.js'
 import { findBusinessById } from '../business/repository.js'
 import * as repo from './repository.js'
 
-const DEV_MODE = !isDbAvailable && process.env['AREA_CODE_ENV'] !== 'prod'
+const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
 const DEV_REWARDS = [
   { id: 'rew-1', title: 'Free Coffee', type: 'freebie', totalSlots: 50, claimedCount: 12, nodeId: 'dev-1', nodeName: 'Father Coffee', nodeSlug: 'father-coffee', distance: 150, expiresAt: null },
@@ -41,7 +40,7 @@ export async function createReward(
   if (data.description !== undefined) createData.description = data.description
   if (data.triggerValue !== undefined) createData.triggerValue = data.triggerValue
   if (data.totalSlots !== undefined) createData.totalSlots = data.totalSlots
-  if (data.expiresAt !== undefined) createData.expiresAt = new Date(data.expiresAt)
+  if (data.expiresAt !== undefined) createData.expiresAt = data.expiresAt
 
   return repo.createReward(createData)
 }
@@ -58,7 +57,7 @@ export async function updateReward(
 ) {
   const reward = await repo.getRewardById(rewardId)
   if (!reward) throw AppError.notFound('Reward not found')
-  if (reward.node.businessId !== businessId) {
+  if (reward.node?.businessId !== businessId) {
     throw AppError.forbidden('You do not own this reward')
   }
 
@@ -69,7 +68,7 @@ export async function updateReward(
   if (data.expiresAt === null) {
     updateData.expiresAt = null
   } else if (data.expiresAt !== undefined) {
-    updateData.expiresAt = new Date(data.expiresAt)
+    updateData.expiresAt = data.expiresAt
   }
 
   return repo.updateReward(rewardId, updateData)
@@ -110,28 +109,26 @@ export async function redeemReward(code: string, staffId?: string) {
   const redemption = await repo.findRedemptionByCode(code)
   if (!redemption) throw AppError.badRequest('invalid_code')
   if (redemption.redeemedAt) throw AppError.badRequest('already_redeemed')
-  if (redemption.codeExpiresAt < new Date()) throw AppError.badRequest('expired_code')
+  if (redemption.codeExpiresAt && redemption.codeExpiresAt < new Date().toISOString()) throw AppError.badRequest('expired_code')
 
   // Validate staff belongs to the business that owns this reward
+  const rewardId = redemption.rewardId ?? redemption.id
   if (staffId) {
-    const rewardDetail = await repo.getRewardById(redemption.rewardId)
-    if (rewardDetail?.node.businessId) {
-      const { prisma } = await import('../../shared/db/prisma.js')
-      const staff = await prisma.staffAccount.findUnique({
-        where: { id: staffId },
-        select: { businessId: true },
-      })
+    const rewardDetail = await repo.getRewardById(rewardId)
+    if (rewardDetail?.node?.businessId) {
+      const { getStaffById } = await import('../auth/dynamodb-repository.js')
+      const staff = await getStaffById(staffId)
       if (!staff || staff.businessId !== rewardDetail.node.businessId) {
         throw AppError.forbidden('You cannot redeem rewards for this business')
       }
     }
   }
 
-  const updated = await repo.markRedeemed(redemption.id)
+  await repo.markRedeemed(redemption.id as string)
   return {
     success: true,
-    rewardTitle: redemption.reward.title,
-    redeemedAt: updated.redeemedAt?.toISOString(),
+    rewardTitle: redemption.reward?.title ?? '',
+    redeemedAt: new Date().toISOString(),
   }
 }
 

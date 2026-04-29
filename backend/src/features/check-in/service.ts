@@ -1,19 +1,14 @@
 import { createHmac } from 'node:crypto'
 import { AppError } from '../../shared/errors/AppError.js'
-import { redis } from '../../shared/redis/client.js'
-import {
-  checkinCooldownReward, checkinCooldownPresence,
-  checkinToday, nodesPulse, uniqueUsersToday, leaderboard,
-} from '../../shared/redis/keys.js'
+import { kvGet, kvSet, kvIncr, kvTtl } from '../../shared/kv/dynamodb-kv.js'
 import { emitPulseUpdate, emitToast, emitBusinessCheckin, emitFriendToast } from '../../shared/socket/events.js'
-import { isDbAvailable } from '../../shared/db/prisma.js'
 import { getMutualFollowIds, getFollowingIds } from '../social/repository.js'
 import { getUserById } from '../auth/repository.js'
 import { runAbuseChecks } from './abuse.js'
 import * as repo from './repository.js'
 import type { CheckInInput, CheckInResponse } from './types.js'
 
-const DEV_MODE = !isDbAvailable && process.env['AREA_CODE_ENV'] !== 'prod'
+const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
 const REWARD_COOLDOWN = 14400  // 4 hours
 const PRESENCE_COOLDOWN = 3600 // 1 hour
@@ -96,14 +91,14 @@ export async function processCheckIn(
 
   // 3. Cooldown check
   const cooldownKey = input.type === 'reward'
-    ? checkinCooldownReward(userId, input.nodeId)
-    : checkinCooldownPresence(userId, input.nodeId)
+    ? `checkin:cooldown:reward:${userId}:${input.nodeId}`
+    : `checkin:cooldown:presence:${userId}:${input.nodeId}`
   const cooldownTtl = input.type === 'reward' ? REWARD_COOLDOWN : PRESENCE_COOLDOWN
 
-  const existing = await redis.get(cooldownKey)
+  const existing = await kvGet(cooldownKey)
   if (existing) {
-    const ttl = await redis.ttl(cooldownKey)
-    const cooldownUntil = new Date(Date.now() + ttl * 1000).toISOString()
+    const ttl = await kvTtl(cooldownKey)
+    const cooldownUntil = new Date(Date.now() + (ttl > 0 ? ttl : cooldownTtl) * 1000).toISOString()
     throw AppError.tooManyRequests('Check-in cooldown active', cooldownUntil)
   }
 
@@ -117,26 +112,22 @@ export async function processCheckIn(
   await repo.updateStreak(userId)
 
   // 5. Set cooldown
-  await redis.set(cooldownKey, '1', 'EX', cooldownTtl)
+  await kvSet(cooldownKey, '1', cooldownTtl)
 
-  // 6. Update Redis counters and pulse score
+  // 6. Update DynamoDB counters and pulse score
   const cityId = node.city?.id ?? ''
   const citySlug = node.city?.slug ?? ''
 
-  await redis.incr(checkinToday(input.nodeId))
-  await redis.expire(checkinToday(input.nodeId), 86400) // 24h TTL
-  await redis.sadd(uniqueUsersToday(input.nodeId), userId)
-  await redis.expire(uniqueUsersToday(input.nodeId), 86400) // 24h TTL
-
-  // Recalculate pulse score
-  const dailyCount = parseInt(await redis.get(checkinToday(input.nodeId)) ?? '0', 10)
-  const uniqueUsers = await redis.scard(uniqueUsersToday(input.nodeId))
+  const dailyCount = await kvIncr(`checkin:today:${input.nodeId}`, 86400)
+  // Approximate unique users via a simple counter (DynamoDB has no SADD)
+  const uniqueUsers = dailyCount // simplified approximation
   const pulseScore = (dailyCount * 5) + (uniqueUsers * 2)
 
   if (cityId) {
-    await redis.zadd(nodesPulse(cityId), pulseScore, input.nodeId)
-    // Increment leaderboard
-    await redis.zincrby(leaderboard(cityId), 1, userId)
+    // Store pulse score in KV for quick lookup
+    await kvSet(`pulse:${cityId}:${input.nodeId}`, String(pulseScore), 86400)
+    // Increment leaderboard counter
+    await kvIncr(`leaderboard:${cityId}:${userId}`, 0) // no TTL
   }
 
   // 7. Emit socket events
@@ -207,7 +198,7 @@ export async function processCheckIn(
         MessageBody: JSON.stringify({
           userId,
           nodeId: input.nodeId,
-          checkInId: checkIn.id,
+          checkInId: checkIn.checkInId,
         }),
       }))
     } else {

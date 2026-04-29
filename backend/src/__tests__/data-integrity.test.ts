@@ -18,7 +18,7 @@ import { reportActionBodySchema } from '../features/admin/types'
 import { notificationPrefsSchema } from '../features/notifications/types'
 
 // ─── Import constants and types ─────────────────────────────────────────────
-import { TIER_LEVELS, getTier } from '../../../packages/shared/constants/tier-levels'
+import { TIER_LEVELS, getTier } from '@area-code/shared/constants/tier-levels'
 
 // ─── 1. Schema Validation: Reject invalid data ─────────────────────────────
 

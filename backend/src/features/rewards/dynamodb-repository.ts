@@ -19,10 +19,10 @@ export async function getRewardById(rewardId: string): Promise<Reward | null> {
   const result = await documentClient.send(
     new GetCommand({
       TableName: TableNames.rewards,
-      Key: { pk: `REWARD#${rewardId}`, sk: `REWARD#${rewardId}` },
+      Key: { rewardId },
     })
   )
-  return result.Item ? (result.Item as Reward) : null
+  return result.Item ? mapReward(result.Item) : null
 }
 
 export async function getRewardsByNodeId(nodeId: string): Promise<Reward[]> {
@@ -34,7 +34,7 @@ export async function getRewardsByNodeId(nodeId: string): Promise<Reward[]> {
       ExpressionAttributeValues: { ':nodeId': nodeId },
     })
   )
-  return (result.Items || []) as Reward[]
+  return (result.Items || []).map((i) => mapReward(i))
 }
 
 export async function getActiveRewardsByNodeId(nodeId: string): Promise<Reward[]> {
@@ -51,7 +51,7 @@ export async function getActiveRewardsByNodeId(nodeId: string): Promise<Reward[]
       },
     })
   )
-  return (result.Items || []) as Reward[]
+  return (result.Items || []).map((i) => mapReward(i))
 }
 
 export async function createReward(data: Omit<Reward, 'rewardId' | 'createdAt'>): Promise<Reward> {
@@ -71,15 +71,11 @@ export async function createReward(data: Omit<Reward, 'rewardId' | 'createdAt'>)
   await documentClient.send(
     new PutCommand({
       TableName: TableNames.rewards,
-      Item: {
-        pk: `REWARD#${rewardId}`,
-        sk: `REWARD#${rewardId}`,
-        ...reward,
-      },
+      Item: { ...reward, id: rewardId },
     })
   )
 
-  return reward
+  return mapReward(reward as unknown as Record<string, unknown>)
 }
 
 export async function updateReward(
@@ -93,7 +89,7 @@ export async function updateReward(
   const result = await documentClient.send(
     new UpdateCommand({
       TableName: TableNames.rewards,
-      Key: { pk: `REWARD#${rewardId}`, sk: `REWARD#${rewardId}` },
+      Key: { rewardId },
       UpdateExpression: `SET ${updateExpr}, #updatedAt = :updatedAt`,
       ExpressionAttributeNames: {
         ...Object.keys(data).reduce((acc, key) => ({ ...acc, [`#${key}`]: key }), {}),
@@ -107,14 +103,14 @@ export async function updateReward(
     })
   )
 
-  return result.Attributes as Reward
+  return result.Attributes ? mapReward(result.Attributes) : null
 }
 
 export async function incrementRewardClaimCount(rewardId: string): Promise<void> {
   await documentClient.send(
     new UpdateCommand({
       TableName: TableNames.rewards,
-      Key: { pk: `REWARD#${rewardId}`, sk: `REWARD#${rewardId}` },
+      Key: { rewardId },
       UpdateExpression: 'SET claimedCount = claimedCount + :inc',
       ExpressionAttributeValues: { ':inc': 1 },
     })
@@ -123,10 +119,7 @@ export async function incrementRewardClaimCount(rewardId: string): Promise<void>
 
 export async function deleteReward(rewardId: string): Promise<void> {
   await documentClient.send(
-    new DeleteCommand({
-      TableName: TableNames.rewards,
-      Key: { pk: `REWARD#${rewardId}`, sk: `REWARD#${rewardId}` },
-    })
+    new DeleteCommand({ TableName: TableNames.rewards, Key: { rewardId } })
   )
 }
 
@@ -248,7 +241,14 @@ export async function getRewardsNeedingEvaluation(): Promise<Reward[]> {
       },
     })
   )
-  return (result.Items || []) as Reward[]
+  return (result.Items || []).map((i) => mapReward(i))
+}
+
+function mapReward(item: Record<string, unknown>): Reward {
+  const copy = { ...item } as Record<string, unknown>
+  copy['id'] = (item['rewardId'] as string) ?? (item['id'] as string)
+  copy['rewardId'] = (item['rewardId'] as string) ?? (item['id'] as string)
+  return copy as unknown as Reward
 }
 
 export async function getRewardEligibility(
@@ -265,10 +265,10 @@ export async function getRewardEligibility(
     new QueryCommand({
       TableName: TableNames.checkins,
       IndexName: 'NodeIndex',
-      KeyConditionExpression: 'gsi2pk = :nodeId',
+      KeyConditionExpression: 'nodeId = :nodeId',
       FilterExpression: 'userId = :userId',
       ExpressionAttributeValues: {
-        ':nodeId': `NODE#${reward.nodeId}`,
+        ':nodeId': reward.nodeId,
         ':userId': userId,
       },
     })

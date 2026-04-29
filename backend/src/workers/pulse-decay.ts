@@ -1,6 +1,7 @@
-import { redis } from '../shared/redis/client.js'
-import { nodesPulse } from '../shared/redis/keys.js'
-import { prisma } from '../shared/db/prisma.js'
+// DynamoDB-backed pulse decay worker (replaces Redis + Prisma)
+import { ScanCommand } from '@aws-sdk/lib-dynamodb'
+import { documentClient, TableNames } from '../shared/db/dynamodb.js'
+import { kvGet, kvSet, kvDel } from '../shared/kv/dynamodb-kv.js'
 import { emitStateChange } from '../shared/socket/events.js'
 
 /**
@@ -33,29 +34,50 @@ function isPeakHour(): boolean {
   return hour >= 18 && hour <= 23
 }
 
+async function getCities() {
+  const result = await documentClient.send(
+    new ScanCommand({
+      TableName: TableNames.appData,
+      FilterExpression: 'begins_with(pk, :prefix) AND sk = pk',
+      ExpressionAttributeValues: { ':prefix': 'CITY#' },
+    })
+  )
+  return (result.Items || []).map((c) => ({ id: (c['cityId'] ?? c['pk']) as string, slug: c['slug'] as string }))
+}
+
 export async function handler() {
   console.log('[pulse-decay] Starting pulse decay worker')
   const decayFactor = isPeakHour() ? 0.95 : 0.90
 
-  const cities = await prisma.city.findMany({ select: { id: true, slug: true } })
+  const cities = await getCities()
   let totalProcessed = 0
 
   for (const city of cities) {
-    const key = nodesPulse(city.id)
-    const members = await redis.zrangebyscore(key, 1, '+inf', 'WITHSCORES')
+    // Get all active nodes for this city
+    const nodesResult = await documentClient.send(
+      new ScanCommand({
+        TableName: TableNames.nodes,
+        FilterExpression: 'cityId = :cityId AND isActive = :active',
+        ExpressionAttributeValues: { ':cityId': city.id, ':active': true },
+      })
+    )
 
-    for (let i = 0; i < members.length; i += 2) {
-      const nodeId = members[i]!
-      const currentScore = parseFloat(members[i + 1]!)
+    for (const n of nodesResult.Items || []) {
+      const nodeId = (n['nodeId'] ?? n['id']) as string
+      const scoreStr = await kvGet(`pulse:${city.id}:${nodeId}`)
+      if (!scoreStr) continue
+
+      const currentScore = parseFloat(scoreStr)
+      if (currentScore <= 0) continue
+
       const oldState = getNodeState(currentScore)
-
       const newScore = Math.floor(currentScore * decayFactor)
       const newState = getNodeState(newScore)
 
       if (newScore <= 0) {
-        await redis.zrem(key, nodeId)
+        await kvDel(`pulse:${city.id}:${nodeId}`)
       } else {
-        await redis.zadd(key, newScore, nodeId)
+        await kvSet(`pulse:${city.id}:${nodeId}`, String(newScore), 86400)
       }
 
       if (oldState !== newState) {

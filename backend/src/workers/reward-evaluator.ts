@@ -28,10 +28,11 @@ async function evaluateRewards(userId: string, nodeId: string) {
   for (const reward of rewards) {
     const qualified = await checkQualification(userId, nodeId, reward)
     if (!qualified) continue
-    if (reward.totalSlots !== null && reward.claimedCount >= reward.totalSlots) continue
+    const slots = reward.totalSlots ?? null
+    if (slots !== null && (reward.claimedCount ?? 0) >= slots) continue
 
     const code = generateRedemptionCode()
-    const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000)
+    const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
 
     try {
       await repo.createRedemption({
@@ -52,10 +53,11 @@ async function emitClaimEvents(
   nodeId: string,
   reward: Awaited<ReturnType<typeof repo.getActiveRewardsForNode>>[number],
   code: string,
-  codeExpiresAt: Date,
+  codeExpiresAt: string,
 ) {
-  const slotsRemaining = reward.totalSlots !== null
-    ? reward.totalSlots - reward.claimedCount - 1
+  const slots = reward.totalSlots ?? null
+  const slotsRemaining = slots !== null
+    ? slots - (reward.claimedCount ?? 0) - 1
     : null
 
   const io = getIO()
@@ -66,7 +68,7 @@ async function emitClaimEvents(
       rewardId: reward.id,
       rewardTitle: reward.title,
       redemptionCode: code,
-      codeExpiresAt: codeExpiresAt.toISOString(),
+      codeExpiresAt,
     })
   } else {
     // Deliver via push notification (Expo / Web Push)
@@ -80,7 +82,7 @@ async function emitClaimEvents(
         rewardId: reward.id,
         rewardTitle: reward.title,
         redemptionCode: code,
-        codeExpiresAt: codeExpiresAt.toISOString(),
+        codeExpiresAt,
       })
     }
   }
@@ -92,11 +94,11 @@ async function emitClaimEvents(
     })
 
     if (slotsRemaining <= 5 && slotsRemaining >= 0) {
-      const citySlug = reward.node.city?.slug
+      const citySlug = reward.node?.city?.slug
       if (citySlug) {
         emitToast(citySlug, {
           type: 'reward_pressure',
-          message: `Only ${slotsRemaining} left for ${reward.title} at ${reward.node.name}`,
+          message: `Only ${slotsRemaining} left for ${reward.title} at ${reward.node?.name ?? 'Unknown'}`,
           nodeId,
         })
       }
@@ -104,7 +106,7 @@ async function emitClaimEvents(
   }
 
   // Emit to business room if node is owned by a business
-  if (reward.node.businessId) {
+  if (reward.node?.businessId) {
     emitBusinessRewardClaimed(reward.node.businessId, {
       nodeId,
       nodeName: reward.node.name,
@@ -118,7 +120,7 @@ async function emitClaimEvents(
 async function checkQualification(
   userId: string,
   nodeId: string,
-  reward: { type: string; triggerValue: number | null },
+  reward: { type: string; triggerValue?: number | null },
 ): Promise<boolean> {
   const trigger = reward.triggerValue ?? 1
 
@@ -166,8 +168,9 @@ async function getStreakDays(userId: string, nodeId: string): Promise<number> {
   return streak
 }
 
-function toSASTDate(date: Date): Date {
-  const sast = new Date(date.getTime() + 2 * 60 * 60 * 1000)
+function toSASTDate(date: string | Date): Date {
+  const d = typeof date === 'string' ? new Date(date) : date
+  const sast = new Date(d.getTime() + 2 * 60 * 60 * 1000)
   sast.setUTCHours(0, 0, 0, 0)
   return sast
 }

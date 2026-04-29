@@ -1,6 +1,5 @@
 import { createHmac } from 'node:crypto'
 import { AppError } from '../../shared/errors/AppError.js'
-import { isDbAvailable } from '../../shared/db/prisma.js'
 import * as repo from './repository.js'
 import {
   BUSINESS_PLANS,
@@ -8,7 +7,7 @@ import {
   type BoostDuration,
 } from './types.js'
 
-const DEV_MODE = !isDbAvailable && process.env['AREA_CODE_ENV'] !== 'prod'
+const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
 // ─── Business Profile ───────────────────────────────────────────────────────
 
@@ -180,7 +179,7 @@ async function handlePaymentFailed(payload: Record<string, unknown>) {
   if (!metadata?.['businessId']) return
 
   const businessId = metadata['businessId']
-  const graceUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+  const graceUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
   await repo.setPaymentGrace(businessId, graceUntil)
   // Email notifications on day 1, 4, 7 handled by SES worker
 }
@@ -202,7 +201,7 @@ export async function inviteStaff(
   const biz = await repo.findBusinessById(businessId)
   if (!biz) throw AppError.notFound('Business not found')
 
-  const limit = STAFF_LIMITS[biz.tier]
+  const limit = STAFF_LIMITS[biz.tier ?? 'free']
   if (limit !== null && limit !== undefined) {
     const count = await repo.countStaffForBusiness(businessId)
     if (count >= limit) {
@@ -271,7 +270,7 @@ export async function getQrData(nodeId: string, businessId: string) {
 
 export async function startTrial(businessId: string, plan: 'growth' | 'pro') {
   if (DEV_MODE) return { id: businessId, tier: plan, trialEndsAt: new Date(Date.now() + 14 * 86400000).toISOString() }
-  const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+  const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
   return repo.updateBusinessTier(businessId, plan, trialEndsAt)
 }
 

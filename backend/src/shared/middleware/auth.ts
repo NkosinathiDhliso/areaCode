@@ -2,10 +2,8 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import jwt from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
 import { AppError } from '../errors/AppError.js';
-import { isDbAvailable } from '../db/prisma.js';
 
-// DEV_MODE only activates when DB is unavailable AND we're explicitly NOT in production
-const DEV_MODE = !isDbAvailable && process.env['AREA_CODE_ENV'] !== 'prod';
+const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE'];
 
 export type AuthRole = 'consumer' | 'business' | 'staff' | 'admin';
 

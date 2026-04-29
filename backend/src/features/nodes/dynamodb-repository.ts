@@ -17,12 +17,9 @@ import type { Node, NodeImage } from './types.js'
 
 export async function getNodeById(nodeId: string): Promise<Node | null> {
   const result = await documentClient.send(
-    new GetCommand({
-      TableName: TableNames.nodes,
-      Key: { pk: `NODE#${nodeId}`, sk: `PROFILE#${nodeId}` },
-    })
+    new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } })
   )
-  return result.Item ? (result.Item as Node) : null
+  return result.Item ? mapNode(result.Item) : null
 }
 
 export async function getNodeBySlug(slug: string): Promise<Node | null> {
@@ -68,15 +65,11 @@ export async function createNode(data: Omit<Node, 'nodeId' | 'createdAt'>): Prom
   await documentClient.send(
     new PutCommand({
       TableName: TableNames.nodes,
-      Item: {
-        pk: `NODE#${nodeId}`,
-        sk: `PROFILE#${nodeId}`,
-        ...node,
-      },
+      Item: { ...node, id: nodeId },
     })
   )
 
-  return node
+  return mapNode(node as unknown as Record<string, unknown>)
 }
 
 export async function updateNode(
@@ -90,7 +83,7 @@ export async function updateNode(
   const result = await documentClient.send(
     new UpdateCommand({
       TableName: TableNames.nodes,
-      Key: { pk: `NODE#${nodeId}`, sk: `PROFILE#${nodeId}` },
+      Key: { nodeId },
       UpdateExpression: `SET ${updateExpr}, #updatedAt = :updatedAt`,
       ExpressionAttributeNames: {
         ...Object.keys(data).reduce((acc, key) => ({ ...acc, [`#${key}`]: key }), {}),
@@ -104,15 +97,12 @@ export async function updateNode(
     })
   )
 
-  return result.Attributes as Node
+  return result.Attributes ? mapNode(result.Attributes) : null
 }
 
 export async function deleteNode(nodeId: string): Promise<void> {
   await documentClient.send(
-    new DeleteCommand({
-      TableName: TableNames.nodes,
-      Key: { pk: `NODE#${nodeId}`, sk: `PROFILE#${nodeId}` },
-    })
+    new DeleteCommand({ TableName: TableNames.nodes, Key: { nodeId } })
   )
 }
 
@@ -168,7 +158,30 @@ export async function listNodes(options?: {
     ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64')
     : undefined
 
-  return { nodes, nextCursor }
+  return { nodes: nodes.map((n) => mapNode(n as unknown as Record<string, unknown>)), nextCursor }
+}
+
+function mapNode(item: Record<string, unknown>): Node {
+  return {
+    nodeId: (item['nodeId'] as string) ?? (item['id'] as string),
+    name: item['name'] as string,
+    slug: item['slug'] as string,
+    category: item['category'] as string,
+    lat: item['lat'] as number,
+    lng: item['lng'] as number,
+    cityId: item['cityId'] as string | undefined,
+    businessId: item['businessId'] as string | undefined,
+    submittedBy: item['submittedBy'] as string | undefined,
+    claimStatus: (item['claimStatus'] as string) ?? 'unclaimed',
+    claimCipcStatus: item['claimCipcStatus'] as string | undefined,
+    nodeColour: (item['nodeColour'] as string) ?? '#000000',
+    nodeIcon: item['nodeIcon'] as string | undefined,
+    qrCheckinEnabled: (item['qrCheckinEnabled'] as boolean) ?? false,
+    isVerified: (item['isVerified'] as boolean) ?? false,
+    isActive: (item['isActive'] as boolean) ?? true,
+    createdAt: (item['createdAt'] as string) ?? '',
+    updatedAt: (item['updatedAt'] as string) ?? '',
+  }
 }
 
 // ============================================================================

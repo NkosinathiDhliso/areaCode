@@ -295,6 +295,17 @@ resource "aws_dynamodb_table" "rewards" {
     projection_type = "ALL"
   }
 
+  attribute {
+    name = "nodeId"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "NodeIndex"
+    hash_key        = "nodeId"
+    projection_type = "ALL"
+  }
+
   point_in_time_recovery { enabled = true }
 
   tags = { Environment = local.env }
@@ -359,12 +370,42 @@ resource "aws_dynamodb_table" "app_data" {
     projection_type = "ALL"
   }
 
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+
   point_in_time_recovery { enabled = true }
 
   tags = { Environment = local.env }
 }
 
 # --- Lambda functions ---
+
+# Monolith API Lambda — serves all Fastify routes via API Gateway catch-all
+module "lambda_api" {
+  source                 = "../../modules/lambda"
+  env                    = local.env
+  function_name          = "api"
+  handler                = "index.handler"
+  timeout                = 30
+  memory_size            = 512
+  lambda_in_vpc          = true
+  vpc_subnet_ids         = module.vpc.private_subnet_ids
+  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  environment_variables = {
+    AREA_CODE_ENV        = local.env
+    USERS_TABLE          = aws_dynamodb_table.users.name
+    NODES_TABLE          = aws_dynamodb_table.nodes.name
+    CHECKINS_TABLE       = aws_dynamodb_table.checkins.name
+    REWARDS_TABLE        = aws_dynamodb_table.rewards.name
+    BUSINESSES_TABLE     = aws_dynamodb_table.businesses.name
+    APP_DATA_TABLE       = aws_dynamodb_table.app_data.name
+    AREA_CODE_REWARD_QUEUE_URL = module.sqs_reward_eval.queue_url
+  }
+}
+
+# Legacy per-route Lambdas kept for backward compatibility during migration
 module "lambda_check_in" {
   source                 = "../../modules/lambda"
   env                    = local.env
@@ -494,11 +535,15 @@ module "lambda_yoco_webhook" {
 # --- Lambda DynamoDB IAM permissions ---
 resource "aws_iam_role_policy" "lambda_dynamodb" {
   for_each = {
+    api             = module.lambda_api.role_name
     check_in        = module.lambda_check_in.role_name
     node_detail     = module.lambda_node_detail.role_name
     rewards_near_me = module.lambda_rewards_near_me.role_name
     pulse_decay     = module.lambda_pulse_decay.role_name
     yoco_webhook    = module.lambda_yoco_webhook.role_name
+    reward_evaluator = module.lambda_reward_evaluator.role_name
+    leaderboard_reset = module.lambda_leaderboard_reset.role_name
+    cleanup         = module.lambda_cleanup.role_name
   }
 
   name = "dynamodb-access"
@@ -550,7 +595,21 @@ module "sqs_push_sender" {
   visibility_timeout = 30
 }
 
-# --- Lambda IAM: check-in -> SQS send ---
+# --- Lambda IAM: API + check-in -> SQS send ---
+resource "aws_iam_role_policy" "api_sqs_send" {
+  name = "sqs-send"
+  role = module.lambda_api.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["sqs:SendMessage"]
+      Resource = module.sqs_reward_eval.queue_arn
+    }]
+  })
+}
+
 resource "aws_iam_role_policy" "checkin_sqs_send" {
   name = "sqs-send"
   role = module.lambda_check_in.role_name
@@ -626,18 +685,12 @@ module "api_gateway" {
   env    = local.env
 
   lambda_integrations = {
-    check_in = {
-      invoke_arn = module.lambda_check_in.invoke_arn
-      route_key  = "POST /v1/check-in"
+    # Monolith catch-all — serves all Fastify routes
+    api_catchall = {
+      invoke_arn = module.lambda_api.invoke_arn
+      route_key  = "$default"
     }
-    node_detail = {
-      invoke_arn = module.lambda_node_detail.invoke_arn
-      route_key  = "GET /v1/nodes/{nodeId}"
-    }
-    rewards_near_me = {
-      invoke_arn = module.lambda_rewards_near_me.invoke_arn
-      route_key  = "GET /v1/rewards/near-me"
-    }
+    # Specific routes kept as overrides for yoco webhook (different Lambda)
     yoco_webhook = {
       invoke_arn = module.lambda_yoco_webhook.invoke_arn
       route_key  = "POST /v1/webhooks/yoco"
@@ -646,26 +699,10 @@ module "api_gateway" {
 }
 
 # --- Lambda -> API Gateway permissions ---
-resource "aws_lambda_permission" "apigw_check_in" {
+resource "aws_lambda_permission" "apigw_api" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
-  function_name = module.lambda_check_in.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${module.api_gateway.api_execution_arn}/*/*"
-}
-
-resource "aws_lambda_permission" "apigw_node_detail" {
-  statement_id  = "AllowAPIGatewayInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = module.lambda_node_detail.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${module.api_gateway.api_execution_arn}/*/*"
-}
-
-resource "aws_lambda_permission" "apigw_rewards_near_me" {
-  statement_id  = "AllowAPIGatewayInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = module.lambda_rewards_near_me.function_name
+  function_name = module.lambda_api.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${module.api_gateway.api_execution_arn}/*/*"
 }

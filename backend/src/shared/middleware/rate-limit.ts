@@ -1,11 +1,8 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { redis } from '../redis/client.js';
-import { rateLimit as rateLimitKey } from '../redis/keys.js';
+import { kvIncr, kvTtl } from '../kv/dynamodb-kv.js';
 import { AppError } from '../errors/AppError.js';
-import { isDbAvailable } from '../db/prisma.js';
 
-// DEV_MODE only activates when DB is unavailable AND we're explicitly NOT in production
-const DEV_MODE = !isDbAvailable && process.env['AREA_CODE_ENV'] !== 'prod';
+const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE'];
 
 interface RateLimitOptions {
   /** Key prefix for this limiter */
@@ -19,7 +16,7 @@ interface RateLimitOptions {
 }
 
 /**
- * Redis-backed sliding window rate limiter.
+ * DynamoDB-TTL-backed sliding window rate limiter.
  * Returns a Fastify preHandler.
  */
 export function rateLimitMiddleware(options: RateLimitOptions) {
@@ -32,17 +29,13 @@ export function rateLimitMiddleware(options: RateLimitOptions) {
       ? identifierFn(request)
       : request.ip;
 
-    const redisKey = rateLimitKey(key, identifier);
-    const current = await redis.incr(redisKey);
-
-    if (current === 1) {
-      await redis.expire(redisKey, windowSeconds);
-    }
+    const kvKey = `ratelimit:${key}:${identifier}`;
+    const current = await kvIncr(kvKey, windowSeconds);
 
     if (current > max) {
-      const ttl = await redis.ttl(redisKey);
+      const ttl = await kvTtl(kvKey);
       throw AppError.tooManyRequests(
-        `Rate limit exceeded. Try again in ${ttl}s.`
+        `Rate limit exceeded. Try again in ${ttl > 0 ? ttl : windowSeconds}s.`
       );
     }
   };

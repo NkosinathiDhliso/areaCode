@@ -177,6 +177,17 @@ resource "aws_dynamodb_table" "rewards" {
     projection_type = "ALL"
   }
 
+  attribute {
+    name = "nodeId"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "NodeIndex"
+    hash_key        = "nodeId"
+    projection_type = "ALL"
+  }
+
   point_in_time_recovery {
     enabled = true
   }
@@ -219,6 +230,11 @@ resource "aws_dynamodb_table" "app_data" {
     hash_key        = "gsi1pk"
     range_key       = "gsi1sk"
     projection_type = "ALL"
+  }
+
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
   }
 
   point_in_time_recovery {

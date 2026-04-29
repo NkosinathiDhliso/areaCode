@@ -21,6 +21,9 @@
       "@prisma/client",
       "@prisma/engines",
       "prisma"
+    ],
+    "ignoredBuiltDependencies": [
+      "esbuild"
     ]
   },
   "devDependencies": {
