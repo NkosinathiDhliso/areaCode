@@ -806,36 +806,21 @@ output "sqs_push_sender_url" {
   value = module.sqs_push_sender.queue_url
 }
 
-# --- WebSocket API ---
-module "websocket" {
-  source              = "../../modules/websocket"
-  env                 = local.env
-  lambda_function_arn = aws_lambda_function.websocket.arn
-  lambda_invoke_arn   = aws_lambda_function.websocket.invoke_arn
-}
-
-# WebSocket Lambda
-resource "aws_lambda_function" "websocket" {
-  function_name = "area-code-${local.env}-websocket"
-  role          = aws_iam_role.lambda_execution.arn
-  handler       = "src/lambdas/websocket.handler"
-  runtime       = "nodejs20.x"
-  timeout       = 10
-  memory_size   = 256
-
-  filename         = "${path.module}/../../backend/dist/websocket-lambda.zip"
-  source_code_hash = filebase64sha256("${path.module}/../../backend/dist/websocket-lambda.zip")
-
-  environment {
-    variables = {
-      AREA_CODE_ENV      = local.env
-      CONNECTIONS_TABLE  = module.websocket.connections_table_name
-      WEBSOCKET_ENDPOINT = module.websocket.websocket_api_endpoint
-    }
-  }
-}
-
-# Outputs for WebSocket
-output "websocket_endpoint" {
-  value = module.websocket.websocket_api_endpoint
-}
+# --- WebSocket API (TODO: deploy after backend zip is built) ---
+# module "websocket" {
+#   source              = "../../modules/websocket"
+#   env                 = local.env
+#   lambda_function_arn = aws_lambda_function.websocket.arn
+#   lambda_invoke_arn   = aws_lambda_function.websocket.invoke_arn
+# }
+#
+# resource "aws_lambda_function" "websocket" {
+#   function_name = "area-code-${local.env}-websocket"
+#   role          = module.lambda_check_in.role_arn
+#   handler       = "src/lambdas/websocket.handler"
+#   runtime       = "nodejs20.x"
+#   timeout       = 10
+#   memory_size   = 256
+#   filename         = "${path.module}/../../../backend/dist/websocket-lambda.zip"
+#   source_code_hash = filebase64sha256("${path.module}/../../../backend/dist/websocket-lambda.zip")
+# }
