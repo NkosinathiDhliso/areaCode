@@ -76,6 +76,11 @@ module "cognito_admin" {
   source    = "../../modules/cognito"
   env       = local.env
   pool_name = "admin"
+  username_attributes = ["email"]
+  explicit_auth_flows = [
+    "ALLOW_ADMIN_USER_PASSWORD_AUTH",
+    "ALLOW_REFRESH_TOKEN_AUTH",
+  ]
   custom_attributes = [{
     name = "admin_role"
     type = "String"

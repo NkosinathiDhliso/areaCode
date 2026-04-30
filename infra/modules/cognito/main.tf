@@ -29,6 +29,11 @@ variable "custom_attributes" {
   default = []
 }
 
+variable "username_attributes" {
+  type    = list(string)
+  default = ["phone_number"]
+}
+
 variable "define_auth_challenge_arn" {
   type    = string
   default = ""
@@ -79,10 +84,10 @@ resource "aws_iam_role_policy" "cognito_sns" {
 resource "aws_cognito_user_pool" "this" {
   name = "area-code-${var.env}-${var.pool_name}"
 
-  auto_verified_attributes = ["phone_number"]
+  auto_verified_attributes = var.username_attributes
   mfa_configuration        = "OFF"
 
-  username_attributes = ["phone_number"]
+  username_attributes = var.username_attributes
 
   sms_configuration {
     external_id    = "area-code-${var.env}-${var.pool_name}-sns"
@@ -109,7 +114,7 @@ resource "aws_cognito_user_pool" "this" {
 
   account_recovery_setting {
     recovery_mechanism {
-      name     = "verified_phone_number"
+      name     = contains(var.username_attributes, "email") ? "verified_email" : "verified_phone_number"
       priority = 1
     }
   }
