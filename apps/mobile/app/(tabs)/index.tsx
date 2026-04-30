@@ -131,7 +131,7 @@ export default function MapScreen() {
           <View style={styles.hintBox}>
             <Text style={styles.hintText}>{t('map.tapHint')}</Text>
             <TouchableOpacity onPress={() => markHintSeen('hintSeen')}>
-              <Text style={styles.hintDismiss}>✕</Text>
+              <Text style={styles.hintDismiss}>X</Text>
             </TouchableOpacity>
           </View>
         </View>

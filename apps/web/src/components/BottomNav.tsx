@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next'
 import { useNavigationStore } from '@area-code/shared/stores/navigationStore'
+import { Map, Gift, Trophy, Activity, User } from 'lucide-react'
 import type { AppRoute } from '../types'
+import type { LucideIcon } from 'lucide-react'
 
 type NavRoute = 'map' | 'gets' | 'ranks' | 'feed' | 'profile'
 
@@ -9,13 +11,12 @@ interface BottomNavProps {
   onNavigate: (route: AppRoute) => void
 }
 
-/** SVG-safe icon characters. No emoji per CLAUDE.md rules. */
-const NAV_ITEMS: ReadonlyArray<{ route: NavRoute; labelKey: string; icon: string }> = [
-  { route: 'map', labelKey: 'nav.map', icon: '◉' },
-  { route: 'gets', labelKey: 'nav.rewards', icon: '★' },
-  { route: 'ranks', labelKey: 'nav.leaderboard', icon: '▲' },
-  { route: 'feed', labelKey: 'nav.feed', icon: '◎' },
-  { route: 'profile', labelKey: 'nav.profile', icon: '●' },
+const NAV_ITEMS: ReadonlyArray<{ route: NavRoute; labelKey: string; Icon: LucideIcon }> = [
+  { route: 'map', labelKey: 'nav.map', Icon: Map },
+  { route: 'gets', labelKey: 'nav.rewards', Icon: Gift },
+  { route: 'ranks', labelKey: 'nav.leaderboard', Icon: Trophy },
+  { route: 'feed', labelKey: 'nav.feed', Icon: Activity },
+  { route: 'profile', labelKey: 'nav.profile', Icon: User },
 ]
 
 export function BottomNav({ active, onNavigate }: BottomNavProps) {
@@ -49,7 +50,7 @@ export function BottomNav({ active, onNavigate }: BottomNavProps) {
             aria-current={isActive ? 'page' : undefined}
             aria-label={t(item.labelKey)}
           >
-            <span className="text-lg">{item.icon}</span>
+            <item.Icon size={20} strokeWidth={isActive ? 2.5 : 1.5} />
             <span className="text-[10px] mt-0.5">{t(item.labelKey)}</span>
           </button>
         )

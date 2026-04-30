@@ -33,24 +33,7 @@ locals {
   env = "dev"
 }
 
-# --- Data sources for secrets ---
-data "aws_secretsmanager_secret" "db_url" {
-  name = "area-code/${local.env}/db-url"
-}
-
-data "aws_secretsmanager_secret" "redis_url" {
-  name = "area-code/${local.env}/redis-url"
-}
-
-data "aws_secretsmanager_secret" "qr_hmac" {
-  name = "area-code/${local.env}/qr-hmac-secret"
-}
-
-data "aws_secretsmanager_secret" "sentry_dsn" {
-  name = "area-code/${local.env}/sentry-dsn"
-}
-
-# --- VPC / Networking (NAT disabled — using VPC endpoints to save ~$32/mo) ---
+# --- VPC (kept for Lambda VPC access — VPC itself is free) ---
 module "vpc" {
   source             = "../../modules/vpc"
   env                = local.env
@@ -125,7 +108,6 @@ module "cognito_triggers_staff" {
 }
 
 # --- SMS (End User Messaging v2 — Sender ID, Configuration Set) ---
-# Event destinations and Protect Configuration are set up via scripts/setup-sms.sh
 module "sms" {
   source    = "../../modules/sms"
   env       = local.env
@@ -144,27 +126,7 @@ module "s3_media" {
   ]
 }
 
-# --- RDS ---
-module "rds" {
-  source                 = "../../modules/rds"
-  env                    = local.env
-  instance_class         = "db.t4g.micro"
-  multi_az               = false
-  vpc_security_group_ids = module.vpc.db_security_group_ids
-  subnet_group_name      = module.vpc.db_subnet_group_name
-}
-
-# --- ElastiCache (Redis) ---
-module "elasticache" {
-  source             = "../../modules/elasticache"
-  env                = local.env
-  node_type          = "cache.t4g.micro"
-  num_cache_clusters = 1
-  subnet_group_name  = module.vpc.elasticache_subnet_group_name
-  security_group_ids = module.vpc.redis_security_group_ids
-}
-
-# --- Lambda functions (no provisioned concurrency in dev to save ~$40/mo) ---
+# --- Lambda functions ---
 module "lambda_check_in" {
   source                 = "../../modules/lambda"
   env                    = local.env
@@ -350,21 +312,6 @@ resource "aws_iam_role_policy" "reward_eval_sqs" {
   })
 }
 
-# --- Lambda IAM: ECS task → SQS send ---
-resource "aws_iam_role_policy" "ecs_sqs_send" {
-  name = "sqs-send"
-  role = module.ecs_api.task_role_name
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["sqs:SendMessage"]
-      Resource = [module.sqs_reward_eval.queue_arn, module.sqs_push_sender.queue_arn]
-    }]
-  })
-}
-
 # --- EventBridge Schedules ---
 module "eventbridge_schedules" {
   source = "../../modules/eventbridge"
@@ -456,77 +403,11 @@ resource "aws_lambda_permission" "apigw_yoco_webhook" {
   source_arn    = "${module.api_gateway.api_execution_arn}/*/*"
 }
 
-# --- ECS (API server for WebSocket / long-running) ---
-module "ecs_api" {
-  source             = "../../modules/ecs-service"
-  env                = local.env
-  service_name       = "api"
-  desired_count      = 1
-  cpu                = 256
-  memory             = 512
-  vpc_id             = module.vpc.vpc_id
-  subnet_ids         = module.vpc.private_subnet_ids
-  security_group_ids = module.vpc.ecs_security_group_ids
-  environment_variables = {
-    AREA_CODE_ENV                          = local.env
-    NODE_ENV                               = "development"
-    AWS_REGION                             = "us-east-1"
-    AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID = module.cognito_consumer.user_pool_id
-    AREA_CODE_COGNITO_CONSUMER_CLIENT_ID    = module.cognito_consumer.client_id
-    AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID = module.cognito_business.user_pool_id
-    AREA_CODE_COGNITO_BUSINESS_CLIENT_ID    = module.cognito_business.client_id
-    AREA_CODE_COGNITO_STAFF_USER_POOL_ID    = module.cognito_staff.user_pool_id
-    AREA_CODE_COGNITO_STAFF_CLIENT_ID       = module.cognito_staff.client_id
-    AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
-    AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
-    AREA_CODE_REWARD_QUEUE_URL              = module.sqs_reward_eval.queue_url
-    AREA_CODE_S3_MEDIA_BUCKET               = "area-code-${local.env}-media"
-    AREA_CODE_CONSENT_VERSION               = "v1.0"
-  }
-  secrets = {
-    AREA_CODE_DB_URL         = data.aws_secretsmanager_secret.db_url.arn
-    AREA_CODE_REDIS_URL      = data.aws_secretsmanager_secret.redis_url.arn
-    AREA_CODE_QR_HMAC_SECRET = data.aws_secretsmanager_secret.qr_hmac.arn
-    SENTRY_DSN               = data.aws_secretsmanager_secret.sentry_dsn.arn
-  }
-}
-
-# --- WAF (attached to ALB — WAFv2 doesn't support HTTP API Gateway) ---
-module "waf" {
-  source  = "../../modules/waf"
-  env     = local.env
-  alb_arn = module.ecs_api.alb_arn
-}
-
-# --- VPC Endpoints (replaces NAT for AWS service access) ---
-resource "aws_vpc_endpoint" "secretsmanager" {
-  vpc_id              = module.vpc.vpc_id
-  service_name        = "com.amazonaws.us-east-1.secretsmanager"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = module.vpc.private_subnet_ids
-  security_group_ids  = module.vpc.lambda_security_group_ids
-  private_dns_enabled = true
-}
-
-resource "aws_vpc_endpoint" "logs" {
-  vpc_id              = module.vpc.vpc_id
-  service_name        = "com.amazonaws.us-east-1.logs"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = module.vpc.private_subnet_ids
-  security_group_ids  = module.vpc.lambda_security_group_ids
-  private_dns_enabled = true
-}
-
-resource "aws_vpc_endpoint" "s3" {
-  vpc_id       = module.vpc.vpc_id
-  service_name = "com.amazonaws.us-east-1.s3"
-}
-
 # --- Budget alert ---
 resource "aws_budgets_budget" "monthly" {
   name         = "area-code-${local.env}-monthly"
   budget_type  = "COST"
-  limit_amount = "500"
+  limit_amount = "50"
   limit_unit   = "USD"
   time_unit    = "MONTHLY"
 
@@ -566,18 +447,6 @@ output "media_bucket" {
 
 output "vpc_id" {
   value = module.vpc.vpc_id
-}
-
-output "rds_endpoint" {
-  value = module.rds.primary_endpoint
-}
-
-output "redis_endpoint" {
-  value = module.elasticache.primary_endpoint
-}
-
-output "ecs_api_url" {
-  value = module.ecs_api.alb_dns_name
 }
 
 output "sqs_reward_eval_url" {
