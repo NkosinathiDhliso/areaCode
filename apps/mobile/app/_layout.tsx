@@ -35,11 +35,13 @@ export default function RootLayout() {
 
   useEffect(() => {
     const socket = getSocket(accessToken ?? undefined)
-    socket.on('connect', () => setOnline())
-    socket.on('disconnect', () => setApiOnly())
+    const onConnect = () => setOnline()
+    const onDisconnect = () => setApiOnly()
+    socket.on('connect', onConnect)
+    socket.on('disconnect', onDisconnect)
     return () => {
-      socket.off('connect')
-      socket.off('disconnect')
+      socket.off('connect', onConnect)
+      socket.off('disconnect', onDisconnect)
     }
   }, [accessToken, setOnline, setApiOnly, setOffline])
 
