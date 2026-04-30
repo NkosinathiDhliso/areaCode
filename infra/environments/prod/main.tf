@@ -106,8 +106,6 @@ module "cognito_triggers_consumer" {
   env          = local.env
   pool_name    = "consumer"
   user_pool_id = module.cognito_consumer.user_pool_id
-  sms_configuration_set_name = module.sms.configuration_set_name
-  sms_sender_id              = "AREACODE"
 }
 
 module "cognito_triggers_business" {
@@ -115,8 +113,6 @@ module "cognito_triggers_business" {
   env          = local.env
   pool_name    = "business"
   user_pool_id = module.cognito_business.user_pool_id
-  sms_configuration_set_name = module.sms.configuration_set_name
-  sms_sender_id              = "AREACODE"
 }
 
 module "cognito_triggers_staff" {
@@ -124,16 +120,6 @@ module "cognito_triggers_staff" {
   env          = local.env
   pool_name    = "staff"
   user_pool_id = module.cognito_staff.user_pool_id
-  sms_configuration_set_name = module.sms.configuration_set_name
-  sms_sender_id              = "AREACODE"
-}
-
-# --- SMS (End User Messaging v2 — Sender ID, Configuration Set) ---
-# Event destinations and Protect Configuration are set up via scripts/setup-sms.sh
-module "sms" {
-  source    = "../../modules/sms"
-  env       = local.env
-  sender_id = "AREACODE"
 }
 
 # --- S3 media bucket ---
@@ -635,37 +621,6 @@ resource "aws_iam_role_policy" "api_cognito" {
         module.cognito_admin.user_pool_arn
       ]
     }]
-  })
-}
-
-# --- Lambda IAM: API Lambda -> SMS feedback + OTP tracking tables ---
-resource "aws_iam_role_policy" "api_sms_feedback" {
-  name = "sms-feedback"
-  role = module.lambda_api.role_name
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "OTPTrackingTables"
-        Effect = "Allow"
-        Action = [
-          "dynamodb:GetItem",
-          "dynamodb:DeleteItem",
-        ]
-        Resource = [
-          module.cognito_triggers_consumer.otp_tracking_table_arn,
-          module.cognito_triggers_business.otp_tracking_table_arn,
-          module.cognito_triggers_staff.otp_tracking_table_arn,
-        ]
-      },
-      {
-        Sid    = "SMSMessageFeedback"
-        Effect = "Allow"
-        Action = ["sms-voice:PutMessageFeedback"]
-        Resource = "*"
-      },
-    ]
   })
 }
 
