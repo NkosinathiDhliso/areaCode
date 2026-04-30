@@ -55,7 +55,7 @@ export const accountTypeQuerySchema = z.object({
 })
 
 export const adminLoginBodySchema = z.object({
-  email: z.string().min(1),
+  email: z.string().email(),
   password: z.string().min(1).max(256),
 })
 
