@@ -14,6 +14,10 @@ tfplan
 
 # Markdown files — internal docs, specs, prompts
 *.md
+!CLAUDE.md
+!ENGINEERING_STANDARDS.md
+!README.md
+!.kiro/**/*.md
 
 # Secrets
 .env
