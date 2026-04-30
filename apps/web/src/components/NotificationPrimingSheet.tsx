@@ -105,7 +105,7 @@ export function NotificationPrimingSheet({
             })
           }
         } catch {
-          // Push registration failed — still close the sheet
+          // Push registration failed, still close the sheet
         }
       }
       onClose()

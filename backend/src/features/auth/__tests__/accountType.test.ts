@@ -32,7 +32,7 @@ describe('account-type endpoint', () => {
     )
   })
 
-  it('returns not_found for unknown phones — never distinguishes wrong pool', () => {
+  it('returns not_found for unknown phones , never distinguishes wrong pool', () => {
     fc.assert(
       fc.property(phoneArb, phoneArb, (knownPhone, unknownPhone) => {
         const db = new Map<string, AccountType>()

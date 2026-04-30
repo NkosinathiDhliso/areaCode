@@ -14,7 +14,7 @@ export interface AuthPayload {
   citySlug?: string | undefined;
 }
 
-// Cognito pool config — each pool has its own JWKS endpoint
+// Cognito pool config , each pool has its own JWKS endpoint
 interface PoolConfig {
   poolId: string;
   clientId: string;
@@ -152,7 +152,7 @@ export function requireAuth(...roles: AuthRole[]) {
 }
 
 /**
- * Optional auth — attaches auth payload if token present, otherwise continues.
+ * Optional auth , attaches auth payload if token present, otherwise continues.
  * If a token is present but invalid/expired, returns 401 so the client knows to re-auth.
  */
 export function optionalAuth(...roles: AuthRole[]) {
@@ -184,7 +184,7 @@ export function optionalAuth(...roles: AuthRole[]) {
         // Try next role
       }
     }
-    // Token present but invalid — inform client so they can refresh
+    // Token present but invalid , inform client so they can refresh
     throw AppError.unauthorized('Token expired or invalid');
   };
 }

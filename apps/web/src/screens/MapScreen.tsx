@@ -55,7 +55,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const [primingOpen, setPrimingOpen] = useState(false)
   const [primingShownThisSession, setPrimingShownThisSession] = useState(false)
 
-  // Socket subscriptions — citySlug passed for anonymous room join
+  // Socket subscriptions, citySlug passed for anonymous room join
   const userId = useConsumerAuthStore((s) => s.userId)
   useMapSockets(citySlug, accessToken ?? undefined, userId)
 
@@ -86,7 +86,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Node tap handler — dismiss onboarding hint on first tap
+  // Node tap handler, dismiss onboarding hint on first tap
   const handleNodeTap = useCallback((node: Node) => {
     setSelectedNode(node)
     setSheetOpen(true)
@@ -136,7 +136,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   }
 
   function handleEnableLocation() {
-    // Re-request location — browser will show the native permission prompt
+    // Re-request location. Browser will show the native permission prompt
     void requestLocation().then((pos) => {
       if (pos) {
         mapRef.current?.flyTo({

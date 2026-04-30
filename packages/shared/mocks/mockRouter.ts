@@ -1,5 +1,5 @@
 /**
- * Mock route resolver — maps (method, path) to handler functions.
+ * Mock route resolver , maps (method, path) to handler functions.
  * Maintains mutable MockState for session-level state changes.
  */
 import type { Reward, Report, ConsentRecord, User, NodeState, MusicGenre } from '../types'
@@ -249,7 +249,7 @@ register('POST', '/v1/rewards/:code/redeem', ({ body }) => {
 })
 
 // ---------------------------------------------------------------------------
-// Social — Leaderboard & Feed
+// Social , Leaderboard & Feed
 // ---------------------------------------------------------------------------
 register('GET', '/v1/leaderboard/:citySlug', () => ({
   entries: MOCK_LEADERBOARD,
@@ -279,7 +279,7 @@ register('GET', '/v1/feed', () => ({
 }))
 
 // ---------------------------------------------------------------------------
-// Social — Follow / Friends
+// Social , Follow / Friends
 // ---------------------------------------------------------------------------
 register('POST', '/v1/users/:id/follow', ({ pathParams }) => {
   addFollow(CURRENT_USER_ID, pathParams['id']!)
@@ -701,17 +701,17 @@ export function resolve(method: string, fullPath: string, body?: unknown): unkno
   return { error: 'not_found', message: 'Mock route not registered', statusCode: 404 }
 }
 
-/** Exported for testing — returns the registered route count */
+/** Exported for testing , returns the registered route count */
 export function getRegisteredRouteCount(): number {
   return routes.length
 }
 
-/** Exported for testing — returns all registered route patterns */
+/** Exported for testing , returns all registered route patterns */
 export function getRegisteredRoutes(): Array<{ method: string; pattern: string }> {
   return routes.map((r) => ({ method: r.method, pattern: r.pattern.source }))
 }
 
-/** Exported for testing — reset mutable state */
+/** Exported for testing , reset mutable state */
 export function resetState(): void {
   state.pulseScores = { ...MOCK_PULSE_SCORES }
   state.currentUser = { ...MOCK_USERS.find((u) => u.id === CURRENT_USER_ID)! }

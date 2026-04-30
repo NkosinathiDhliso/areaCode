@@ -39,7 +39,7 @@ async function evaluateRewards(userId: string, nodeId: string) {
         rewardId: reward.id, userId, redemptionCode: code, codeExpiresAt,
       })
     } catch {
-      continue // ON CONFLICT — already claimed
+      continue // ON CONFLICT , already claimed
     }
 
     await repo.incrementClaimedCount(reward.id)
@@ -78,7 +78,7 @@ async function emitClaimEvents(
       await incrementRewardPushCount(userId)
       await notifyUser(userId, 'reward:claimed', {
         title: 'Reward unlocked!',
-        message: `You earned "${reward.title}" — claim it before it expires.`,
+        message: `You earned "${reward.title}" , claim it before it expires.`,
         rewardId: reward.id,
         rewardTitle: reward.title,
         redemptionCode: code,

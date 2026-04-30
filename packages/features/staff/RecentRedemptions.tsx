@@ -20,7 +20,7 @@ export function RecentRedemptions() {
         const res = await api.get<{ items: Redemption[] }>('/v1/staff/recent-redemptions')
         if (!cancelled) setRedemptions(res.items)
       } catch {
-        // Fail silently — non-critical
+        // Fail silently , non-critical
       }
     }
 

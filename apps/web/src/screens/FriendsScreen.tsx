@@ -54,7 +54,7 @@ export function FriendsScreen() {
                 : 'text-[var(--text-secondary)]'
             }`}
           >
-            {t === 'search' ? '🔍' : t.charAt(0).toUpperCase() + t.slice(1)}
+            {t === 'search' ? 'Search' : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>

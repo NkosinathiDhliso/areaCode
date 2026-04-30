@@ -130,7 +130,7 @@ export function StreamingSection() {
               title="Apple Music coming soon (Beta)"
               className="flex-1 bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl py-2 text-[var(--text-muted)] text-sm opacity-50 cursor-not-allowed"
             >
-              🔒 {t('profile.streaming.connectApple')}
+              {t('profile.streaming.connectApple')} (Coming soon)
             </button>
           </div>
           <ManualGenreSelector />

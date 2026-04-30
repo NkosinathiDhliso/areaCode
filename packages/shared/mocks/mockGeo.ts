@@ -4,7 +4,7 @@
  *
  * Patches navigator.geolocation.getCurrentPosition directly, which is
  * what platform.ts calls internally. ES module exports are read-only
- * so we can't patch the module — but patching the browser API works.
+ * so we can't patch the module , but patching the browser API works.
  */
 
 const MOCK_LAT = -26.15

@@ -16,7 +16,7 @@ export async function initSentry(): Promise<void> {
   if (!dsn) return
 
   try {
-    // Dynamic import — won't fail the build if package is missing
+    // Dynamic import, won't fail the build if package is missing
     const mod = await (new Function('return import("@sentry/react")')() as Promise<Record<string, unknown>>)
     SentryModule = mod as Record<string, any>
     SentryModule['init']({
@@ -30,7 +30,7 @@ export async function initSentry(): Promise<void> {
       SentryModule?.['captureException']?.(event.reason)
     })
   } catch {
-    // @sentry/react not installed — monitoring disabled, app runs fine
+    // @sentry/react not installed, monitoring disabled, app runs fine
   }
 }
 

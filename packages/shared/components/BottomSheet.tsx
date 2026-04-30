@@ -43,7 +43,7 @@ export function BottomSheet({ isOpen, onClose, children }: BottomSheetProps) {
         onClick={handleBackdropClick}
         role="presentation"
       />
-      {/* Sheet panel — positioned above the nav bar */}
+      {/* Sheet panel , positioned above the nav bar */}
       <div
         style={{
           position: 'relative',

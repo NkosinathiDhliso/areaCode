@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest'
  * These test the logical flow without requiring live DB/Redis connections.
  * In CI, these would run against test containers.
  *
- * Task 27.5 — validates end-to-end flow logic.
+ * Task 27.5 , validates end-to-end flow logic.
  */
 
 // ─── Check-in → Reward Evaluation → Socket Notification ────────────────────

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
  * Lambda-compatible migration runner.
  *
  * Runs `prisma migrate deploy` which applies all pending migrations
- * from the migrations directory. Safe to call on every cold start —
+ * from the migrations directory. Safe to call on every cold start ,
  * Prisma tracks applied migrations in the `_prisma_migrations` table
  * and skips already-applied ones.
  *

@@ -40,7 +40,7 @@ export async function getUserByCognitoSub(cognitoSub: string): Promise<User | nu
 }
 
 export async function getUserByPhone(phone: string): Promise<User | null> {
-  // No PhoneIndex GSI — scan is fine for auth lookups at current scale
+  // No PhoneIndex GSI , scan is fine for auth lookups at current scale
   const result = await documentClient.send(
     new ScanCommand({
       TableName: TableNames.users,
@@ -141,7 +141,7 @@ export async function getBusinessById(businessId: string): Promise<BusinessAccou
 }
 
 export async function getBusinessByCognitoSub(cognitoSub: string): Promise<BusinessAccount | null> {
-  // No CognitoIndex on businesses — scan is acceptable at current scale
+  // No CognitoIndex on businesses , scan is acceptable at current scale
   const result = await documentClient.send(
     new ScanCommand({
       TableName: TableNames.businesses,

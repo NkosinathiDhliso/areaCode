@@ -33,7 +33,7 @@ export async function updatePreferences(
 }
 
 /**
- * Send notification to user — socket primary, push fallback.
+ * Send notification to user , socket primary, push fallback.
  * Never push for toast events, pulse changes, or other users' check-ins.
  */
 export async function notifyUser(
@@ -50,7 +50,7 @@ export async function notifyUser(
     return { delivered: 'socket' }
   }
 
-  // No active socket — deliver via push
+  // No active socket , deliver via push
   const tokens = await repo.getActivePushTokens(userId)
   if (tokens.length === 0) {
     return { delivered: 'no_tokens' }

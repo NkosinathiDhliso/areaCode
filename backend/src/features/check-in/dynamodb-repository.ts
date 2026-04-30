@@ -261,7 +261,7 @@ export async function getCheckInVelocity(
 }
 
 export async function markCheckInForDeletion(checkInId: string): Promise<void> {
-  // Need timestamp to address the item — query first
+  // Need timestamp to address the item , query first
   const item = await getCheckInById(checkInId)
   if (!item) return
   const ts = (item as unknown as Record<string, unknown>)['timestamp'] as number

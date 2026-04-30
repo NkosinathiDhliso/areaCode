@@ -2,7 +2,7 @@ import type { Reward } from '../../types'
 import { hoursAgo, daysFromNow } from '../helpers'
 
 export const MOCK_REWARDS: Reward[] = [
-  // Nando's Rosebank — food (mock-node-1)
+  // Nando's Rosebank , food (mock-node-1)
   { id: 'mock-reward-1', nodeId: 'mock-node-1', type: 'nth_checkin', title: 'Free starter with any main',
     description: 'Get a free starter when you order any main course', triggerValue: 5,
     totalSlots: 50, claimedCount: 48, slotsLocked: true, isActive: true,

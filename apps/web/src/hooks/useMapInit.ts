@@ -43,7 +43,7 @@ export function useMapInit() {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
   const setMapInstance = useMapStore((s) => s.setMapInstance)
-  // Increment counter when map becomes ready — this is more reliable than a
+  // Increment counter when map becomes ready. This is more reliable than a
   // boolean that can flip false→true→false during React strict-mode remounts.
   const [mapReadyKey, setMapReadyKey] = useState(0)
 
@@ -92,7 +92,7 @@ export function useMapInit() {
 
     // Only expose the map ref AFTER it's fully loaded
     map.on('load', () => {
-      console.log('[useMapInit] Map loaded — markers can now be added')
+      console.log('[useMapInit] Map loaded, markers can now be added')
       singletonLoaded = true
       mapRef.current = map
       setMapInstance(buildMapInstance(map))

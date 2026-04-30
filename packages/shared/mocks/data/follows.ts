@@ -10,10 +10,10 @@ import { CURRENT_USER_ID } from './users'
  *   - mock-user-7 (Kagiso)
  *
  * Current user follows but is NOT followed back by:
- *   - mock-user-8 (Naledi) — one-way
+ *   - mock-user-8 (Naledi) , one-way
  *
  * mock-user-5 follows current user but current user does NOT follow back:
- *   - mock-user-5 (Neo) — one-way inbound
+ *   - mock-user-5 (Neo) , one-way inbound
  */
 export const MOCK_FOLLOWS: Array<[string, string]> = [
   // Mutual: current user <-> mock-user-1
@@ -36,7 +36,7 @@ export const MOCK_FOLLOWS: Array<[string, string]> = [
   ['mock-user-1', 'mock-user-3'],
 ]
 
-/** Mutable follow set — used by mock router for follow/unfollow */
+/** Mutable follow set , used by mock router for follow/unfollow */
 export const followSet = new Set(MOCK_FOLLOWS.map(([a, b]) => `${a}:${b}`))
 
 export function isFollowing(followerId: string, followingId: string): boolean {

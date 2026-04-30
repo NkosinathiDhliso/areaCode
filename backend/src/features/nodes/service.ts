@@ -146,7 +146,7 @@ export async function claimNode(
     throw AppError.conflict('Claim in progress')
   }
 
-  // CIPC verification — in production, call CIPC API
+  // CIPC verification , in production, call CIPC API
   // For now, simulate validation
   let cipcStatus: string
   const cipcAvailable = true // Would be actual API call

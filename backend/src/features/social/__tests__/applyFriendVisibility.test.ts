@@ -41,7 +41,7 @@ describe('applyFriendVisibility', () => {
     expect(result).toEqual([])
   })
 
-  it('handles empty friend set — all non-viewer entries anonymised', () => {
+  it('handles empty friend set , all non-viewer entries anonymised', () => {
     const entries = [makeEntry('a'), makeEntry('b'), makeEntry('c')]
     const result = applyFriendVisibility(entries, new Set(), 'viewer-1')
 
@@ -63,7 +63,7 @@ describe('applyFriendVisibility', () => {
     })
   })
 
-  it('is idempotent — applying twice gives same result', () => {
+  it('is idempotent , applying twice gives same result', () => {
     const entries = [makeEntry('friend-1'), makeEntry('stranger-1')]
     const friendIds = new Set(['friend-1'])
     const viewerId = 'viewer-1'
@@ -93,7 +93,7 @@ describe('applyFriendVisibility', () => {
     expect(result[0]!.isFriend).toBe(true)
   })
 
-  it('mixed list — viewer, friend, and stranger', () => {
+  it('mixed list , viewer, friend, and stranger', () => {
     const entries = [
       makeEntry('viewer-1', 'Me', 'me_user'),
       makeEntry('friend-1', 'Friend', 'friend_user'),

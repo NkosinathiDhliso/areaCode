@@ -103,7 +103,7 @@ export async function buildApp() {
     })
   })
 
-  // Health check — no auth, no rate limit
+  // Health check , no auth, no rate limit
   app.get('/health', async (_request, reply) => {
     return reply.send({
       status: 'ok',
@@ -113,7 +113,7 @@ export async function buildApp() {
     })
   })
 
-  // Register all feature routes — await to catch registration errors
+  // Register all feature routes , await to catch registration errors
   await app.register(authRoutes)
   await app.register(nodeRoutes)
   await app.register(checkInRoutes)

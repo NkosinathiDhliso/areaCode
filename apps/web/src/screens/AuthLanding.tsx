@@ -5,8 +5,8 @@ interface AuthLandingProps {
 }
 
 const trending = [
-  { name: 'Maboneng Precinct', area: 'Johannesburg', vibe: '🔥 Building', checkins: 34 },
-  { name: 'Umhlanga Promenade', area: 'Durban', vibe: '📈 Trending', checkins: 21 },
+  { name: 'Maboneng Precinct', area: 'Johannesburg', vibe: 'Building', checkins: 34 },
+  { name: 'Umhlanga Promenade', area: 'Durban', vibe: 'Trending', checkins: 21 },
 ]
 
 export function AuthLanding({ onNavigate }: AuthLandingProps) {

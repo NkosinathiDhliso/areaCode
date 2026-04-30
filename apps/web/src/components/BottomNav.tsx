@@ -9,7 +9,7 @@ interface BottomNavProps {
   onNavigate: (route: AppRoute) => void
 }
 
-/** SVG-safe icon characters — no emoji per CLAUDE.md rule 5. */
+/** SVG-safe icon characters. No emoji per CLAUDE.md rules. */
 const NAV_ITEMS: ReadonlyArray<{ route: NavRoute; labelKey: string; icon: string }> = [
   { route: 'map', labelKey: 'nav.map', icon: '◉' },
   { route: 'gets', labelKey: 'nav.rewards', icon: '★' },

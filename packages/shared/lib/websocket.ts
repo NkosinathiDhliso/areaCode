@@ -203,7 +203,7 @@ const WEBSOCKET_URL = getWebSocketUrl()
 
 export function getWebSocket(token?: string, opts?: { userId?: string; citySlug?: string; businessId?: string }): WebSocketManager {
   if (!WEBSOCKET_URL) {
-    // No WebSocket API configured — return a no-op manager
+    // No WebSocket API configured , return a no-op manager
     if (!wsManager) {
       wsManager = new WebSocketManager('ws://disabled')
     }

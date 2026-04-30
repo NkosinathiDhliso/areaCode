@@ -241,13 +241,13 @@ export async function authRoutes(app: FastifyInstance) {
       try {
         await service.revokeUserTokens(auth.role, auth.cognitoSub)
       } catch {
-        // Best-effort — don't fail the logout if revocation fails
+        // Best-effort , don't fail the logout if revocation fails
       }
       return reply.status(200).send({ success: true })
     },
   )
 
-  // DELETE /v1/users/me — POPIA right-to-erasure
+  // DELETE /v1/users/me , POPIA right-to-erasure
   app.delete(
     '/v1/users/me',
     { preHandler: [requireAuth('consumer')] },

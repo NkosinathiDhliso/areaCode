@@ -60,7 +60,7 @@ describe('location coordinates never persisted', () => {
     _lng: number,
     type: string,
   ): CheckInRecord {
-    // lat/lng used for validation then discarded — POPIA compliance
+    // lat/lng used for validation then discarded , POPIA compliance
     return {
       userId,
       nodeId,

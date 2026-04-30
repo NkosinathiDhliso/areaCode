@@ -12,6 +12,12 @@ variable "alb_arn" {
   default = ""
 }
 
+variable "attach_to_alb" {
+  description = "Whether to associate the WAF with an ALB. Set to true when alb_arn is known."
+  type        = bool
+  default     = true
+}
+
 resource "aws_wafv2_web_acl" "this" {
   name  = "area-code-${var.env}-waf"
   scope = "REGIONAL"
@@ -144,7 +150,7 @@ resource "aws_wafv2_web_acl" "this" {
 }
 
 resource "aws_wafv2_web_acl_association" "alb" {
-  count        = var.alb_arn != "" ? 1 : 0
+  count        = var.attach_to_alb ? 1 : 0
   resource_arn = var.alb_arn
   web_acl_arn  = aws_wafv2_web_acl.this.arn
 }

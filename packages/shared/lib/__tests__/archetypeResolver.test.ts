@@ -93,7 +93,7 @@ describe('matchesArchetype', () => {
     expect(matchesArchetype(lowScores, grooveSeeker)).toBe(false)
   })
 
-  it('handles The Smooth Operator special case — requires energy < 0.5', () => {
+  it('handles The Smooth Operator special case , requires energy < 0.5', () => {
     const smoothOp = ARCHETYPE_CATALOG.find((a) => a.name === 'The Smooth Operator')!
     // High sophistication but high energy → should NOT match
     const highEnergy: DimensionScoreVector = {

@@ -125,7 +125,7 @@ export { getBusinessByEmail as findBusinessByEmail }
 
 export async function findBusinessByPhone(phone: string) {
   if (!phone) return null
-  // No PhoneIndex GSI — scan at current scale
+  // No PhoneIndex GSI , scan at current scale
   const result = await documentClient.send(
     new ScanCommand({
       TableName: TableNames.businesses,

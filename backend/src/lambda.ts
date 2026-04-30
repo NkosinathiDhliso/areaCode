@@ -1,4 +1,4 @@
-// Lambda entry point — wraps the Fastify app for API Gateway v2
+// Lambda entry point , wraps the Fastify app for API Gateway v2
 import awsLambdaFastify from '@fastify/aws-lambda'
 import { buildApp } from './app.js'
 

@@ -1,6 +1,6 @@
 /**
  * Mock layer utility functions.
- * No external dependencies — pure JS helpers for data generation and time manipulation.
+ * No external dependencies , pure JS helpers for data generation and time manipulation.
  */
 
 /** Returns a random integer between min and max inclusive. */

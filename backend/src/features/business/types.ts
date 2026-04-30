@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-// Business plans — never hardcoded in frontend
+// Business plans , never hardcoded in frontend
 export const BUSINESS_PLANS = {
   starter: { name: 'Starter', monthlyPrice: 0, yearlyPrice: 0, maxNodes: 1, maxRewards: 3, maxStaff: 2 },
   growth: { name: 'Growth', monthlyPrice: 29900, yearlyPrice: 299000, maxNodes: 5, maxRewards: 10, maxStaff: 5, trialDays: 14 },

@@ -139,10 +139,10 @@ export async function processCheckIn(
       state: getNodeState(pulseScore),
     })
 
-    // Always emit anonymous city toast — no identity fields
+    // Always emit anonymous city toast , no identity fields
     emitToast(citySlug, {
       type: 'checkin',
-      message: `${node.name} is heating up — ${dailyCount} check-ins`,
+      message: `${node.name} is heating up , ${dailyCount} check-ins`,
       nodeId: input.nodeId,
       nodeLat: node.lat,
       nodeLng: node.lng,
@@ -173,7 +173,7 @@ export async function processCheckIn(
         }
       }
     } catch {
-      // Friend toast failures are non-critical — don't affect check-in response
+      // Friend toast failures are non-critical , don't affect check-in response
     }
   }
 
@@ -202,7 +202,7 @@ export async function processCheckIn(
         }),
       }))
     } else {
-      // SQS not configured — skip reward evaluation silently in dev
+      // SQS not configured , skip reward evaluation silently in dev
     }
   }
 

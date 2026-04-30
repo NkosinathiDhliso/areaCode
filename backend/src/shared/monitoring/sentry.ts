@@ -35,7 +35,7 @@ export async function initSentry(): Promise<void> {
 
     sentryInitialized = true
   } catch {
-    // Sentry package not installed — monitoring disabled
+    // Sentry package not installed , monitoring disabled
     process.stderr.write('[sentry] @sentry/node not installed, monitoring disabled\n')
   }
 }

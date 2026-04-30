@@ -6,7 +6,7 @@ export type TypedServer = Server<ClientToServerEvents, ServerToClientEvents>;
 
 let io: TypedServer | null = null;
 
-// Valid city slugs — prevents joining arbitrary rooms via citySlug
+// Valid city slugs , prevents joining arbitrary rooms via citySlug
 const VALID_CITY_SLUGS = new Set(['johannesburg', 'cape-town', 'durban']);
 
 /**
@@ -18,7 +18,7 @@ function isRoomAllowed(room: string, socket: { data: { userId?: string; business
     return VALID_CITY_SLUGS.has(room.slice(5));
   }
   if (room.startsWith('node:')) {
-    // Node rooms are public — anyone can observe a node
+    // Node rooms are public , anyone can observe a node
     return room.length > 5;
   }
   if (room.startsWith('user:')) {
@@ -34,7 +34,7 @@ function isRoomAllowed(room: string, socket: { data: { userId?: string; business
 
 /**
  * Initialise Socket.io server with JWT auth at handshake.
- * Token is optional — anonymous clients join city rooms only.
+ * Token is optional , anonymous clients join city rooms only.
  */
 export function initSocketServer(httpServer: HttpServer): TypedServer {
   if (io) return io;
@@ -74,7 +74,7 @@ export function initSocketServer(httpServer: HttpServer): TypedServer {
     socket.data.userId = userId;
     socket.data.businessId = businessId;
 
-    // Join city room (all clients including anonymous) — validated
+    // Join city room (all clients including anonymous) , validated
     if (citySlug && VALID_CITY_SLUGS.has(citySlug)) {
       void socket.join(`city:${citySlug}`);
     }
@@ -89,7 +89,7 @@ export function initSocketServer(httpServer: HttpServer): TypedServer {
       void socket.join(`business:${businessId}`);
     }
 
-    // Room management events — with authorization
+    // Room management events , with authorization
     socket.on('room:join', ({ room }) => {
       if (isRoomAllowed(room, socket)) {
         void socket.join(room);

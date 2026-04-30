@@ -1,4 +1,4 @@
-// Shared type aliases used by the music service — avoids cross-package imports at runtime
+// Shared type aliases used by the music service , avoids cross-package imports at runtime
 
 export type MusicGenre =
   | 'amapiano' | 'deep_house' | 'afrobeats' | 'hip_hop' | 'rnb'

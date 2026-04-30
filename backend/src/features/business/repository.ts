@@ -241,7 +241,7 @@ export async function getMusicAudience(_businessId: string) {
 // ─── Recent Redemptions ─────────────────────────────────────────────────────
 
 export async function getRecentRedemptions(businessId: string) {
-  // Simplified — scan redemptions from appData
+  // Simplified , scan redemptions from appData
   const result = await documentClient.send(
     new ScanCommand({
       TableName: TableNames.appData,

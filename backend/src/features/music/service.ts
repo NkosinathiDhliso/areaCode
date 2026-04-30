@@ -99,7 +99,7 @@ export async function connectStreaming(userId: string, provider: string, musicUs
 
   if (provider === 'spotify') {
     if (!oauth.isSpotifyConfigured()) {
-      // Spotify credentials not set — fall back to manual genre selection
+      // Spotify credentials not set , fall back to manual genre selection
       await repo.updateStreamingProvider(userId, provider)
       return { success: true, provider, genres: [] as string[] }
     }
@@ -112,7 +112,7 @@ export async function connectStreaming(userId: string, provider: string, musicUs
 
   if (provider === 'apple_music') {
     if (!oauth.isAppleMusicConfigured() || !musicUserToken) {
-      // Apple Music credentials not set or no user token — fall back to manual
+      // Apple Music credentials not set or no user token , fall back to manual
       await repo.updateStreamingProvider(userId, provider)
       return { success: true, provider, genres: [] as string[] }
     }
@@ -281,7 +281,7 @@ export async function getBusinessAudienceMusic(businessId: string): Promise<Busi
   return {
     genreDistribution,
     archetypeBreakdown,
-    peakArchetypeByTime: [], // Requires time-bucketed query — deferred
+    peakArchetypeByTime: [], // Requires time-bucketed query , deferred
     totalWithMusicPrefs: total,
   }
 }

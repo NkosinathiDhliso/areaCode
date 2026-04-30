@@ -80,7 +80,7 @@ export async function getActivityFeed(
     }
   }
   const result = await repo.getActivityFeed(userId, cursor, limit)
-  // Feed only contains mutual follows — all entries are friends
+  // Feed only contains mutual follows , all entries are friends
   return {
     ...result,
     items: result.items.map((item: Record<string, unknown>) => ({ ...item, isFriend: true })),

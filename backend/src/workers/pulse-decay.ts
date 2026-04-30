@@ -5,7 +5,7 @@ import { kvGet, kvSet, kvDel } from '../shared/kv/dynamodb-kv.js'
 import { emitStateChange } from '../shared/socket/events.js'
 
 /**
- * Pulse decay worker — EventBridge Lambda every 5 minutes.
+ * Pulse decay worker , EventBridge Lambda every 5 minutes.
  * Applies time-weighted decay to all node pulse scores.
  * Off-peak (00:00–17:59 SAST): score × 0.90
  * Peak (18:00–23:59 SAST): score × 0.95

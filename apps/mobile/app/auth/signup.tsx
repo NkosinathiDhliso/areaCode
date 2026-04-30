@@ -127,7 +127,7 @@ export default function ConsumerSignup() {
           placeholderTextColor={colors.textMuted}
         />
 
-        {/* City selector — simple text buttons for SA cities */}
+        {/* City selector, simple text buttons for SA cities */}
         <View style={styles.cityRow}>
           {SA_CITIES.slice(0, 4).map((city) => (
             <TouchableOpacity

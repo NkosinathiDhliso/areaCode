@@ -53,7 +53,7 @@ export function StaffValidator() {
   }
 
   const resultMessage = result?.success
-    ? `${result.rewardTitle} — redeemed`
+    ? `${result.rewardTitle} , redeemed`
     : result?.error === 'expired_code'
       ? 'Code has expired'
       : result?.error === 'already_redeemed'

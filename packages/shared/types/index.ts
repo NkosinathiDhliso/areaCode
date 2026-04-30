@@ -13,7 +13,7 @@ export type BusinessTier = 'free' | 'starter' | 'growth' | 'pro' | 'payg'
 // Check-in types
 export type CheckInType = 'reward' | 'presence'
 
-// Reward types (V1 only — referral and surprise are V2)
+// Reward types (V1 only , referral and surprise are V2)
 export type RewardType = 'nth_checkin' | 'daily_first' | 'streak' | 'milestone'
 
 // Toast types with priority
@@ -40,28 +40,28 @@ export type PushPlatform = 'expo' | 'web'
 // Device platforms
 export type DevicePlatform = 'web' | 'ios' | 'android'
 
-// Music genres — 12 South African-relevant genres
+// Music genres , 12 South African-relevant genres
 export type MusicGenre =
   | 'amapiano' | 'deep_house' | 'afrobeats' | 'hip_hop' | 'rnb'
   | 'kwaito' | 'gqom' | 'jazz' | 'rock' | 'pop' | 'gospel' | 'maskandi'
 
-// Personality dimensions — 5 scoring axes
+// Personality dimensions , 5 scoring axes
 export type PersonalityDimension =
   | 'energy' | 'cultural_rootedness' | 'sophistication' | 'edge' | 'spirituality'
 
-// Dimension score vector — maps each dimension to 0.0–1.0
+// Dimension score vector , maps each dimension to 0.0–1.0
 export type DimensionScoreVector = Record<PersonalityDimension, number>
 
 // Streaming provider
 export type StreamingProvider = 'spotify' | 'apple_music'
 
-// Genre weight entry — one row of the 12×5 matrix
+// Genre weight entry , one row of the 12×5 matrix
 export interface GenreWeightEntry {
   genre: MusicGenre
   weights: DimensionScoreVector
 }
 
-// Personality archetype — stored in DB, managed by admins
+// Personality archetype , stored in DB, managed by admins
 export interface PersonalityArchetype {
   id: string
   name: string
@@ -72,7 +72,7 @@ export interface PersonalityArchetype {
   isActive: boolean
 }
 
-// Crowd vibe snapshot — aggregated per node
+// Crowd vibe snapshot , aggregated per node
 export interface CrowdVibeSnapshot {
   genreCounts: Partial<Record<MusicGenre, number>>
   archetypePercentages: Record<string, number>
@@ -270,7 +270,7 @@ export interface NotificationPreferences {
   followedUserCheckin: boolean
 }
 
-// MapInstance — generic interface abstracting Mapbox GL JS / @rnmapbox/maps
+// MapInstance , generic interface abstracting Mapbox GL JS / @rnmapbox/maps
 export interface MapInstance {
   flyTo(options: { center: [number, number]; zoom?: number }): void
   setFeatureState(feature: { source: string; id: string }, state: Record<string, unknown>): void

@@ -5,7 +5,7 @@ import { kvGet, kvSet } from '../shared/kv/dynamodb-kv.js'
 import { emitStateSurge, emitToast } from '../shared/socket/events.js'
 
 /**
- * Node state evaluator sidecar — runs every 30s per city (staggered).
+ * Node state evaluator sidecar , runs every 30s per city (staggered).
  * Detects state tier changes and emits surge events.
  */
 
@@ -88,7 +88,7 @@ async function getCities() {
 }
 
 /**
- * Main loop for Lambda/sidecar — evaluates all cities with staggered offsets.
+ * Main loop for Lambda/sidecar , evaluates all cities with staggered offsets.
  */
 export async function startEvaluatorLoop() {
   const cities = await getCities()

@@ -16,7 +16,7 @@ async function getCities() {
 }
 
 /**
- * Leaderboard reset worker — EventBridge Lambda Monday 00:00 SAST.
+ * Leaderboard reset worker , EventBridge Lambda Monday 00:00 SAST.
  */
 export async function handler() {
   console.log('[leaderboard-reset] Starting weekly leaderboard reset')
@@ -76,7 +76,7 @@ export async function handler() {
 }
 
 /**
- * Pre-reset notification — EventBridge Lambda Sunday 20:00 SAST.
+ * Pre-reset notification , EventBridge Lambda Sunday 20:00 SAST.
  */
 export async function preResetHandler() {
   console.log('[leaderboard-reset] Sending pre-reset notifications')

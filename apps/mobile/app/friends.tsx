@@ -36,7 +36,7 @@ export default function FriendsScreen() {
             onPress={() => setTab(tb)}
           >
             <Text style={[styles.tabText, tab === tb && styles.tabTextActive]}>
-              {tb === 'search' ? '🔍' : tb.charAt(0).toUpperCase() + tb.slice(1)}
+              {tb === 'search' ? 'Search' : tb.charAt(0).toUpperCase() + tb.slice(1)}
             </Text>
           </TouchableOpacity>
         ))}

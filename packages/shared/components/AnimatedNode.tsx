@@ -10,7 +10,7 @@ const STATE_ANIMATION: Record<string, string> = {
 }
 
 /**
- * AnimatedNode — renders a node marker with state-driven animation.
+ * AnimatedNode , renders a node marker with state-driven animation.
  * Web uses CSS keyframes. Mobile would use Reanimated.
  */
 export function AnimatedNode({

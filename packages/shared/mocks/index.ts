@@ -62,7 +62,7 @@ export async function initDevMocks(): Promise<void> {
   // 6. Start consumer emitter
   startConsumerEmitter(mockSocket)
 
-  console.log('[DevMock] Mock layer active — all API calls intercepted')
+  console.log('[DevMock] Mock layer active , all API calls intercepted')
 }
 
 export function getDevMockSocket(): MockSocket | null {

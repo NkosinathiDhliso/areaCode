@@ -8,7 +8,7 @@ import { getCheckInsByNode, getCheckInsByUser } from '../features/check-in/dynam
 
 /**
  * Repository layer for reward-evaluator worker.
- * All DynamoDB calls isolated here — zero business logic.
+ * All DynamoDB calls isolated here , zero business logic.
  */
 
 export async function getActiveRewardsForNode(nodeId: string) {

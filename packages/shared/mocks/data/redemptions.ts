@@ -20,7 +20,7 @@ export const MOCK_REDEMPTIONS: RewardRedemption[] = [
   { id: 'mock-redemption-2', rewardId: 'mock-reward-12', userId: 'mock-user-4',
     redemptionCode: 'AC-PLNWZ-7193', codeExpiresAt: expiresAfterCreation(1),
     redeemedAt: null, createdAt: hoursAgo(1) },
-  // Recent redeemed — for staff view (within last 8 hours)
+  // Recent redeemed , for staff view (within last 8 hours)
   { id: 'mock-redemption-3', rewardId: 'mock-reward-1', userId: 'mock-user-1',
     redemptionCode: 'AC-BQFHD-5042', codeExpiresAt: expiresAfterCreation(1.5),
     redeemedAt: hoursAgo(1), createdAt: hoursAgo(1.5) },

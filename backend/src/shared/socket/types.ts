@@ -1,5 +1,5 @@
 /**
- * Socket event types — local copy for standalone Docker builds.
+ * Socket event types , local copy for standalone Docker builds.
  * Source of truth: packages/shared/types/index.ts
  */
 

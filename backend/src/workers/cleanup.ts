@@ -4,7 +4,7 @@ import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 import { deleteUser } from '../features/auth/dynamodb-repository.js'
 
 /**
- * Cleanup worker — processes right-to-erasure queue + housekeeping.
+ * Cleanup worker , processes right-to-erasure queue + housekeeping.
  * Runs daily via EventBridge.
  * DynamoDB TTL handles most expiration automatically; this worker
  * processes explicit erasure requests and cleans orphaned data.

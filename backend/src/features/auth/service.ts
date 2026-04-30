@@ -2,6 +2,7 @@ import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet, kvSet, kvDel, kvIncr, kvTtl } from '../../shared/kv/dynamodb-kv.js'
 import * as repo from './repository.js'
 import * as cognito from '../../shared/cognito/client.js'
+import { reportOtpFeedback } from '../../shared/sms/feedback.js'
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
@@ -84,6 +85,9 @@ export async function consumerVerifyOtp(phone: string, code: string) {
     const tokens = await cognito.respondToAuthChallenge('consumer', phone, code, session)
     await kvDel(`otp:session:${phone}`)
 
+    // Report successful OTP verification for message feedback tracking
+    await reportOtpFeedback(phone, 'consumer', 'RECEIVED')
+
     const user = await repo.findUserByPhone(phone)
     if (!user) throw AppError.unauthorized('Invalid credentials')
 
@@ -94,6 +98,8 @@ export async function consumerVerifyOtp(phone: string, code: string) {
     }
   } catch (err) {
     if (err instanceof AppError) throw err
+    // Report failed OTP verification
+    await reportOtpFeedback(phone, 'consumer', 'FAILED')
     throw AppError.unauthorized('Invalid or expired OTP')
   }
 }
@@ -158,6 +164,9 @@ export async function businessVerifyOtp(phone: string, code: string) {
     const tokens = await cognito.respondToAuthChallenge('business', phone, code, session)
     await kvDel(`otp:session:${phone}`)
 
+    // Report successful OTP verification for message feedback tracking
+    await reportOtpFeedback(phone, 'business', 'RECEIVED')
+
     // Look up businessId from Cognito custom attributes
     const cognitoUser = await cognito.getCognitoUser('business', phone)
     const businessId = cognitoUser?.attributes['custom:businessId'] ?? ''
@@ -169,6 +178,7 @@ export async function businessVerifyOtp(phone: string, code: string) {
     }
   } catch (err) {
     if (err instanceof AppError) throw err
+    await reportOtpFeedback(phone, 'business', 'FAILED')
     throw AppError.unauthorized('Invalid or expired OTP')
   }
 }
@@ -202,6 +212,9 @@ export async function staffVerifyOtp(phone: string, code: string) {
     const tokens = await cognito.respondToAuthChallenge('staff', phone, code, session)
     await kvDel(`otp:session:${phone}`)
 
+    // Report successful OTP verification for message feedback tracking
+    await reportOtpFeedback(phone, 'staff', 'RECEIVED')
+
     const staff = await repo.findStaffByPhone(phone)
     if (!staff) throw AppError.unauthorized('Invalid credentials')
 
@@ -212,6 +225,7 @@ export async function staffVerifyOtp(phone: string, code: string) {
     }
   } catch (err) {
     if (err instanceof AppError) throw err
+    await reportOtpFeedback(phone, 'staff', 'FAILED')
     throw AppError.unauthorized('Invalid or expired OTP')
   }
 }

@@ -1,7 +1,7 @@
 import type { MapViewProps } from '../types/map'
 
 /**
- * MapView — platform abstraction wrapper.
+ * MapView , platform abstraction wrapper.
  * Web: Mapbox GL JS (implemented in apps/web)
  * Mobile: @rnmapbox/maps (implemented in apps/mobile)
  *

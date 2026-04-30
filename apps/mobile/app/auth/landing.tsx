@@ -22,7 +22,7 @@ export default function AuthLanding() {
 
         <TouchableOpacity
           style={styles.secondaryButton}
-          onPress={() => {/* Business login — handled by business app */}}
+          onPress={() => {/* Business login, handled by business app */}}
         >
           <Text style={styles.secondaryButtonText}>{t('auth.landing.business')}</Text>
         </TouchableOpacity>

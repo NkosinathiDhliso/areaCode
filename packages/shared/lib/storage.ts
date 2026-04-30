@@ -15,7 +15,7 @@ export const storage = {
     try {
       window.localStorage.setItem(key, value)
     } catch {
-      // Storage full or unavailable — fail silently
+      // Storage full or unavailable , fail silently
     }
   },
 
