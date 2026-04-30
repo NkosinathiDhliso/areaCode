@@ -6,13 +6,13 @@ import { RecentRedemptions } from '../components/RecentRedemptions'
 
 export function StaffHome() {
   const { t } = useTranslation()
-  const { nodeName, logout } = useStaffAuthStore()
+  const { staffName, logout } = useStaffAuthStore()
 
   return (
     <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
       <header className="flex flex-row items-center justify-between px-5 py-4 border-b border-[var(--border)]">
         <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">
-          {nodeName ?? 'Area Code'}
+          {staffName ?? 'Area Code'}
         </span>
         <button
           onClick={logout}

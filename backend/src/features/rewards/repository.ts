@@ -5,6 +5,8 @@ import * as dynamo from './dynamodb-repository.js'
 import { getNodeById } from '../nodes/dynamodb-repository.js'
 import { getStaffById } from '../auth/dynamodb-repository.js'
 
+export { getNodeById }
+
 export async function createReward(data: {
   nodeId: string; type: string; title: string;
   description?: string; triggerValue?: number;
