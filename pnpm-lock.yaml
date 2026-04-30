@@ -90,6 +90,9 @@ importers:
       '@area-code/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@tanstack/react-query':
+        specifier: ^5.95.2
+        version: 5.95.2(react@18.3.1)
       i18next:
         specifier: ^24.0.0
         version: 24.2.3(typescript@5.9.3)

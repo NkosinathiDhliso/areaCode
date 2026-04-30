@@ -6,8 +6,9 @@ interface ConsumerAuthState {
   accessToken: string | null
   refreshToken: string | null
   userId: string | null
+  sessionId: string | null
   isAuthenticated: boolean
-  setAuth: (accessToken: string, refreshToken: string, userId: string) => void
+  setAuth: (accessToken: string, refreshToken: string, userId: string, sessionId?: string) => void
   setAccessToken: (token: string) => void
   logout: () => void
 }
@@ -16,12 +17,14 @@ export const useConsumerAuthStore = create<ConsumerAuthState>()((set) => ({
   accessToken: storage.get('consumer:accessToken'),
   refreshToken: storage.get('consumer:refreshToken'),
   userId: storage.get('consumer:userId'),
+  sessionId: storage.get('consumer:sessionId'),
   isAuthenticated: storage.get('consumer:accessToken') !== null,
-  setAuth: (accessToken, refreshToken, userId) => {
+  setAuth: (accessToken, refreshToken, userId, sessionId) => {
     storage.set('consumer:accessToken', accessToken)
     storage.set('consumer:refreshToken', refreshToken)
     storage.set('consumer:userId', userId)
-    set({ accessToken, refreshToken, userId, isAuthenticated: true })
+    if (sessionId) storage.set('consumer:sessionId', sessionId)
+    set({ accessToken, refreshToken, userId, sessionId: sessionId ?? null, isAuthenticated: true })
   },
   setAccessToken: (token) => {
     storage.set('consumer:accessToken', token)
@@ -31,6 +34,7 @@ export const useConsumerAuthStore = create<ConsumerAuthState>()((set) => ({
     storage.remove('consumer:accessToken')
     storage.remove('consumer:refreshToken')
     storage.remove('consumer:userId')
-    set({ accessToken: null, refreshToken: null, userId: null, isAuthenticated: false })
+    storage.remove('consumer:sessionId')
+    set({ accessToken: null, refreshToken: null, userId: null, sessionId: null, isAuthenticated: false })
   },
 }))

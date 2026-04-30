@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 
 import { api, type ApiError } from '../lib/api'
 import type { CheckInRequest, CheckInResponse } from '../types'
@@ -7,8 +7,10 @@ export function useCheckIn() {
   const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [qrFallback, setQrFallback] = useState(false)
+  const lastPayloadRef = useRef<CheckInRequest | null>(null)
 
   const checkIn = useCallback(async (payload: CheckInRequest): Promise<CheckInResponse | null> => {
+    lastPayloadRef.current = payload
     setIsPending(true)
     setError(null)
     setQrFallback(false)
@@ -30,9 +32,14 @@ export function useCheckIn() {
     }
   }, [])
 
+  const retry = useCallback(async (): Promise<CheckInResponse | null> => {
+    if (!lastPayloadRef.current) return null
+    return checkIn(lastPayloadRef.current)
+  }, [checkIn])
+
   const resetQrFallback = useCallback(() => {
     setQrFallback(false)
   }, [])
 
-  return { checkIn, isPending, error, qrFallback, resetQrFallback }
+  return { checkIn, retry, isPending, error, qrFallback, resetQrFallback }
 }

@@ -67,9 +67,9 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
     setError(null)
     try {
       const res = await api.post<{
-        accessToken: string; refreshToken: string; user: { id: string }
+        accessToken: string; refreshToken: string; sessionId?: string; user: { id: string }
       }>('/v1/auth/consumer/verify-otp', { phone: toE164(phone), code: otp })
-      setAuth(res.accessToken, res.refreshToken, res.user.id)
+      setAuth(res.accessToken, res.refreshToken, res.user.id, res.sessionId)
       onNavigate('map')
     } catch {
       setError(t('auth.login.otpFailed'))

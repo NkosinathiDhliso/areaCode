@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@area-code/shared": "workspace:*",
+    "@tanstack/react-query": "^5.95.2",
     "i18next": "^24.0.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",

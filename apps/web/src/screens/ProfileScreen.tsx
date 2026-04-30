@@ -13,6 +13,7 @@ import { PrivacyIndicator } from '@area-code/shared/components/PrivacyIndicator'
 import type { User, PrivacyLevel } from '@area-code/shared/types'
 import type { AppRoute } from '../types'
 import { StreamingSection } from '../components/StreamingSection'
+import { SessionsSection } from '../components/SessionsSection'
 
 interface ProfileScreenProps {
   onNavigate: (route: AppRoute) => void
@@ -20,7 +21,7 @@ interface ProfileScreenProps {
 
 export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   const { t } = useTranslation()
-  const { isAuthenticated, logout } = useConsumerAuthStore()
+  const { isAuthenticated, logout, sessionId } = useConsumerAuthStore()
   const { user, tier, totalCheckIns, streakCount, setUser } = useUserStore()
   const { preference, setPreference } = useTheme()
 
@@ -144,6 +145,8 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
       )}
 
       <StreamingSection />
+
+      {isAuthenticated && <SessionsSection currentSessionId={sessionId} />}
 
       <button
         onClick={() => onNavigate('history')}

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useQuery } from '@tanstack/react-query'
 
 import { api } from '@area-code/shared/lib/api'
 import { getSocket } from '@area-code/shared/lib/socket'
@@ -20,26 +21,21 @@ interface LiveAvatar {
 }
 
 const MAX_AVATARS = 8
+const POLL_INTERVAL_MS = 30_000
 
 export function LivePanel() {
   const { t } = useTranslation()
   const { accessToken, businessId } = useBusinessAuthStore()
-  const [stats, setStats] = useState<LiveStats | null>(null)
   const [rewardsClaimed, setRewardsClaimed] = useState(0)
   const [avatars, setAvatars] = useState<LiveAvatar[]>([])
 
-  // Fetch initial stats
-  useEffect(() => {
-    async function fetch() {
-      try {
-        const res = await api.get<LiveStats>('/v1/business/me/live-stats')
-        setStats(res)
-      } catch {
-        // Fail silently
-      }
-    }
-    fetch()
-  }, [])
+  // Fetch live stats with 30s polling
+  const { data: stats } = useQuery({
+    queryKey: ['business', 'live-stats'],
+    queryFn: () => api.get<LiveStats>('/v1/business/me/live-stats'),
+    refetchInterval: POLL_INTERVAL_MS,
+    staleTime: POLL_INTERVAL_MS,
+  })
 
   // Join business:{businessId} room with symmetric cleanup via useSocketRoom
   const room = businessId ? `business:${businessId}` : null
@@ -47,11 +43,6 @@ export function LivePanel() {
 
   // Listen for business:checkin events
   const handleCheckin = useCallback((payload: BusinessCheckinPayload) => {
-    setStats((prev) =>
-      prev
-        ? { ...prev, checkInsToday: payload.checkInCount }
-        : { checkInsToday: payload.checkInCount, pulseScore: 0, totalCheckIns: 0 },
-    )
     setAvatars((prev) => {
       const next: LiveAvatar[] = [
         { username: payload.username, avatarUrl: payload.avatarUrl, timestamp: payload.timestamp },

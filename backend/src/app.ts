@@ -12,6 +12,8 @@ import { nodeRoutes } from './features/nodes/handler.js'
 import { rewardRoutes } from './features/rewards/handler.js'
 import { checkInRoutes } from './features/check-in/handler.js'
 import { authRoutes } from './features/auth/handler.js'
+import { sessionRoutes } from './features/auth/session-handler.js'
+import { profileRoutes } from './features/auth/profile-handler.js'
 import { adminRoutes } from './features/admin/handler.js'
 import { notificationRoutes } from './features/notifications/handler.js'
 import { musicRoutes } from './features/music/handler.js'
@@ -142,6 +144,8 @@ export async function buildApp() {
 
   // Register all feature routes , await to catch registration errors
   await app.register(authRoutes)
+  await app.register(sessionRoutes)
+  await app.register(profileRoutes)
   await app.register(nodeRoutes)
   await app.register(checkInRoutes)
   await app.register(rewardRoutes)

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import { useTheme } from '@area-code/shared/hooks/useTheme'
@@ -9,10 +10,14 @@ import { BusinessLogin } from './screens/BusinessLogin'
 import { BusinessSignup } from './screens/BusinessSignup'
 import { BusinessDashboard } from './screens/BusinessDashboard'
 
+const queryClient = new QueryClient()
+
 export function App() {
   return (
     <ErrorBoundary>
-      <AppContent />
+      <QueryClientProvider client={queryClient}>
+        <AppContent />
+      </QueryClientProvider>
     </ErrorBoundary>
   )
 }
