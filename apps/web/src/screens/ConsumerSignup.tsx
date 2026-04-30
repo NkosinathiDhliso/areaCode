@@ -23,6 +23,35 @@ export function ConsumerSignup({ onNavigate }: ConsumerSignupProps) {
   const [step, setStep] = useState<'form' | 'otp'>('form')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [resendCooldown, setResendCooldown] = useState(0)
+
+  function startResendTimer() {
+    setResendCooldown(60)
+    const interval = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) { clearInterval(interval); return 0 }
+        return prev - 1
+      })
+    }, 1000)
+  }
+
+  async function handleResendOtp() {
+    setLoading(true)
+    setError(null)
+    try {
+      await api.post('/v1/auth/consumer/login', { phone: toE164(phone) })
+      startResendTimer()
+    } catch (err: unknown) {
+      const apiErr = err as { statusCode?: number } | undefined
+      if (apiErr?.statusCode === 429) {
+        setError('Too many attempts. Please wait and try again.')
+        return
+      }
+      setError('Failed to resend OTP.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function handleSignup() {
     setLoading(true)
@@ -42,6 +71,7 @@ export function ConsumerSignup({ onNavigate }: ConsumerSignupProps) {
         setError(null)
       }
       setStep('otp')
+      startResendTimer()
     } catch (err) {
       const apiErr = err as { message?: string; statusCode?: number }
       if (apiErr.statusCode === 429) {
@@ -93,6 +123,13 @@ export function ConsumerSignup({ onNavigate }: ConsumerSignupProps) {
             className="bg-[var(--accent)] text-white font-semibold rounded-xl py-4 text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
           >
             {loading ? '...' : t('auth.login.verifyOtp')}
+          </button>
+          <button
+            onClick={handleResendOtp}
+            disabled={loading || resendCooldown > 0}
+            className="text-[var(--accent)] text-sm mt-1 disabled:text-[var(--text-muted)]"
+          >
+            {resendCooldown > 0 ? `Resend OTP (${resendCooldown}s)` : 'Resend OTP'}
           </button>
         </div>
         {error && <p className="text-xs text-[var(--danger)] mt-3">{error}</p>}

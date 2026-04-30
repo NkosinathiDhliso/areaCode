@@ -24,6 +24,12 @@ export async function createReward(
     totalSlots?: number | undefined; expiresAt?: string | undefined;
   },
 ) {
+  // Verify the node belongs to this business
+  const node = await repo.getNodeById(data.nodeId)
+  if (!node || node.businessId !== businessId) {
+    throw AppError.forbidden('Node does not belong to your business')
+  }
+
   const business = await findBusinessById(businessId)
   const tier = business?.tier ?? 'free'
   const count = await repo.countActiveRewardsForBusiness(businessId)

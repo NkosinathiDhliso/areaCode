@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { validate } from '../../shared/middleware/validation.js'
 import * as service from './service.js'
@@ -10,10 +10,22 @@ import {
 } from './types.js'
 import type { AdminRole } from './types.js'
 import { z } from 'zod'
+import * as cognito from '../../shared/cognito/client.js'
 
-function getAdminRole(request: { headers: Record<string, unknown> }): AdminRole {
-  // In production, extracted from Cognito custom:role claim
-  return (request.headers['x-admin-role'] as AdminRole) ?? 'support_agent'
+const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
+
+async function getAdminRole(request: FastifyRequest): Promise<AdminRole> {
+  if (DEV_MODE) {
+    return (request.headers['x-admin-role'] as AdminRole) ?? 'super_admin'
+  }
+  // Read from verified Cognito JWT claims, NOT from client header
+  const auth = getAuth(request)
+  try {
+    const cognitoUser = await cognito.getCognitoUser('admin', auth.cognitoSub)
+    return (cognitoUser?.attributes['custom:admin_role'] as AdminRole) ?? 'support_agent'
+  } catch {
+    return 'support_agent'
+  }
 }
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -24,7 +36,7 @@ export async function adminRoutes(app: FastifyInstance) {
     '/v1/admin/consumers',
     { preHandler: [adminAuth] },
     async (request) => {
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       const query = (request.query as Record<string, string>)['q'] ?? ''
       return service.searchConsumers(role, query)
     },
@@ -36,7 +48,7 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: [adminAuth, validate({ params: userIdParamsSchema })] },
     async (request) => {
       const auth = getAuth(request)
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       const params = request.params as z.infer<typeof userIdParamsSchema> & { action: string }
       const body = request.body as { note?: string } | undefined
       return service.consumerAction(auth.userId, role, params.userId, params.action, body?.note)
@@ -48,7 +60,7 @@ export async function adminRoutes(app: FastifyInstance) {
     '/v1/admin/businesses',
     { preHandler: [adminAuth] },
     async (request) => {
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       const query = (request.query as Record<string, string>)['q'] ?? ''
       return service.searchBusinesses(role, query)
     },
@@ -60,7 +72,7 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: [adminAuth, validate({ params: businessIdParamsSchema })] },
     async (request) => {
       const auth = getAuth(request)
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       const params = request.params as z.infer<typeof businessIdParamsSchema> & { action: string }
       return service.businessAction(auth.userId, role, params.businessId, params.action)
     },
@@ -71,7 +83,7 @@ export async function adminRoutes(app: FastifyInstance) {
     '/v1/admin/consent',
     { preHandler: [adminAuth] },
     async (request) => {
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       return service.listConsents(role)
     },
   )
@@ -81,7 +93,7 @@ export async function adminRoutes(app: FastifyInstance) {
     '/v1/admin/consent/export-reconsent',
     { preHandler: [adminAuth] },
     async (request) => {
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       return service.getReconsentList(role)
     },
   )
@@ -91,7 +103,7 @@ export async function adminRoutes(app: FastifyInstance) {
     '/v1/admin/erasure-queue',
     { preHandler: [adminAuth] },
     async (request) => {
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       return service.getErasureQueue(role)
     },
   )
@@ -101,7 +113,7 @@ export async function adminRoutes(app: FastifyInstance) {
     '/v1/admin/users/:userId',
     { preHandler: [adminAuth, validate({ params: userIdParamsSchema })] },
     async (request) => {
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       const params = request.params as z.infer<typeof userIdParamsSchema>
       return service.getUser(role, params.userId)
     },
@@ -112,7 +124,7 @@ export async function adminRoutes(app: FastifyInstance) {
     '/v1/admin/users/:userId/check-ins',
     { preHandler: [adminAuth, validate({ params: userIdParamsSchema })] },
     async (request) => {
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       const params = request.params as z.infer<typeof userIdParamsSchema>
       return service.getUserCheckInHistory(role, params.userId)
     },
@@ -124,7 +136,7 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: [adminAuth, validate({ params: userIdParamsSchema })] },
     async (request) => {
       const auth = getAuth(request)
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       const params = request.params as z.infer<typeof userIdParamsSchema>
       await service.resetAbuseFlags(auth.userId, role, params.userId)
       return { success: true }
@@ -142,7 +154,7 @@ export async function adminRoutes(app: FastifyInstance) {
     },
     async (request) => {
       const auth = getAuth(request)
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       const params = request.params as z.infer<typeof userIdParamsSchema>
       const body = request.body as z.infer<typeof adminMessageBodySchema>
       return service.sendMessage(auth.userId, role, params.userId, body.message)
@@ -154,7 +166,7 @@ export async function adminRoutes(app: FastifyInstance) {
     '/v1/admin/businesses/:businessId',
     { preHandler: [adminAuth, validate({ params: businessIdParamsSchema })] },
     async (request) => {
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       const params = request.params as z.infer<typeof businessIdParamsSchema>
       return service.getBusiness(role, params.businessId)
     },
@@ -171,7 +183,7 @@ export async function adminRoutes(app: FastifyInstance) {
     },
     async (request) => {
       const auth = getAuth(request)
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       const params = request.params as z.infer<typeof businessIdParamsSchema>
       const body = request.body as z.infer<typeof extendTrialBodySchema>
       return service.extendTrial(auth.userId, role, params.businessId, body.days)
@@ -183,7 +195,7 @@ export async function adminRoutes(app: FastifyInstance) {
     '/v1/admin/reports',
     { preHandler: [adminAuth] },
     async (request) => {
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       return service.getReportQueue(role)
     },
   )
@@ -199,7 +211,7 @@ export async function adminRoutes(app: FastifyInstance) {
     },
     async (request) => {
       const auth = getAuth(request)
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       const params = request.params as z.infer<typeof reportIdParamsSchema>
       const body = request.body as z.infer<typeof reportActionBodySchema>
       return service.actionReport(auth.userId, role, params.reportId, body.action)
@@ -212,7 +224,7 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: [adminAuth, validate({ body: impersonateBodySchema })] },
     async (request) => {
       const auth = getAuth(request)
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       const body = request.body as z.infer<typeof impersonateBodySchema>
       return service.startImpersonation(
         auth.userId, role,
@@ -226,7 +238,7 @@ export async function adminRoutes(app: FastifyInstance) {
     '/v1/admin/consent/:userId',
     { preHandler: [adminAuth, validate({ params: userIdParamsSchema })] },
     async (request) => {
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       const params = request.params as z.infer<typeof userIdParamsSchema>
       return service.getConsentHistory(role, params.userId)
     },
@@ -237,7 +249,7 @@ export async function adminRoutes(app: FastifyInstance) {
     '/v1/admin/consent/reconsent-list',
     { preHandler: [adminAuth] },
     async (request) => {
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       return service.getReconsentList(role)
     },
   )
@@ -249,7 +261,7 @@ export async function adminRoutes(app: FastifyInstance) {
     '/v1/admin/abuse-flags',
     { preHandler: [adminAuth] },
     async (request) => {
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       return service.getAbuseFlags(role)
     },
   )
@@ -260,7 +272,7 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: [adminAuth, validate({ params: abuseFlagIdParamsSchema })] },
     async (request) => {
       const auth = getAuth(request)
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       const params = request.params as z.infer<typeof abuseFlagIdParamsSchema>
       return service.reviewAbuseFlag(auth.userId, role, params.flagId)
     },
@@ -283,7 +295,7 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: [adminAuth] },
     async (request) => {
       const auth = getAuth(request)
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       return service.createArchetype(auth.userId, role, request.body as Record<string, unknown>)
     },
   )
@@ -294,7 +306,7 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: [adminAuth] },
     async (request) => {
       const auth = getAuth(request)
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       const params = request.params as { id: string }
       return service.updateArchetype(auth.userId, role, params.id, request.body as Record<string, unknown>)
     },
@@ -327,7 +339,7 @@ export async function adminRoutes(app: FastifyInstance) {
     { preHandler: [adminAuth] },
     async (request) => {
       const auth = getAuth(request)
-      const role = getAdminRole(request)
+      const role = await getAdminRole(request)
       return service.updateGenreWeights(auth.userId, role, request.body as Record<string, unknown>)
     },
   )

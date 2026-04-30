@@ -29,6 +29,10 @@ export async function consumerSignup(data: {
   const city = await repo.getCityBySlug(data.citySlug)
   if (!city) throw AppError.unprocessable('Invalid city')
 
+  // Check username uniqueness
+  const existingUsername = await repo.findUserByUsername(data.username)
+  if (existingUsername) throw AppError.conflict('Username already taken')
+
   await checkOtpRateLimit(data.phone)
 
   // Create Cognito user
@@ -153,6 +157,15 @@ export async function businessSignup(data: {
 
 export async function businessLogin(phone: string) {
   if (DEV_MODE) return
+
+  // Verify business account exists before sending OTP
+  const business = await repo.findBusinessByPhone(phone)
+  if (!business) {
+    // Check Cognito as fallback (partial signup)
+    const cognitoUser = await cognito.getCognitoUser('business', phone).catch(() => null)
+    if (!cognitoUser) throw AppError.notFound('Business account not found')
+  }
+
   await checkOtpRateLimit(phone)
 
   const { session } = await cognito.initiateAuth('business', phone)
@@ -180,7 +193,8 @@ export async function businessVerifyOtp(phone: string, code: string) {
 
     // Look up businessId from Cognito custom attributes
     const cognitoUser = await cognito.getCognitoUser('business', phone)
-    const businessId = cognitoUser?.attributes['custom:businessId'] ?? ''
+    const businessId = cognitoUser?.attributes['custom:businessId']
+    if (!businessId) throw AppError.internal('Business ID not found in user attributes')
 
     return {
       accessToken: tokens.accessToken,

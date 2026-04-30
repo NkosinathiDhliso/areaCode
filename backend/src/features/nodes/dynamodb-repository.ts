@@ -23,15 +23,20 @@ export async function getNodeById(nodeId: string): Promise<Node | null> {
 }
 
 export async function getNodeBySlug(slug: string): Promise<Node | null> {
-  const result = await documentClient.send(
-    new ScanCommand({
-      TableName: TableNames.nodes,
-      FilterExpression: 'slug = :slug',
-      ExpressionAttributeValues: { ':slug': slug },
-      Limit: 1,
-    })
-  )
-  return result.Items?.[0] ? (result.Items[0] as Node) : null
+  let lastKey: Record<string, unknown> | undefined
+  do {
+    const result = await documentClient.send(
+      new ScanCommand({
+        TableName: TableNames.nodes,
+        FilterExpression: 'slug = :slug',
+        ExpressionAttributeValues: { ':slug': slug },
+        ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
+      })
+    )
+    if (result.Items?.[0]) return result.Items[0] as Node
+    lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (lastKey)
+  return null
 }
 
 export async function getNodesByBusinessId(businessId: string): Promise<Node[]> {

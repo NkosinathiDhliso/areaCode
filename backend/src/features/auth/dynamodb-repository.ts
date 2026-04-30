@@ -40,15 +40,21 @@ export async function getUserByCognitoSub(cognitoSub: string): Promise<User | nu
 }
 
 export async function getUserByPhone(phone: string): Promise<User | null> {
-  // No PhoneIndex GSI , scan is fine for auth lookups at current scale
-  const result = await documentClient.send(
-    new ScanCommand({
-      TableName: TableNames.users,
-      FilterExpression: 'phone = :phone',
-      ExpressionAttributeValues: { ':phone': phone },
-    })
-  )
-  return result.Items?.[0] ? mapUser(result.Items[0]) : null
+  // Paginated scan for phone lookup (no PhoneIndex GSI)
+  let lastKey: Record<string, unknown> | undefined
+  do {
+    const result = await documentClient.send(
+      new ScanCommand({
+        TableName: TableNames.users,
+        FilterExpression: 'phone = :phone',
+        ExpressionAttributeValues: { ':phone': phone },
+        ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
+      })
+    )
+    if (result.Items?.[0]) return mapUser(result.Items[0])
+    lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (lastKey)
+  return null
 }
 
 export async function getUserByEmail(email: string): Promise<User | null> {
@@ -141,26 +147,37 @@ export async function getBusinessById(businessId: string): Promise<BusinessAccou
 }
 
 export async function getBusinessByCognitoSub(cognitoSub: string): Promise<BusinessAccount | null> {
-  // No CognitoIndex on businesses , scan is acceptable at current scale
-  const result = await documentClient.send(
-    new ScanCommand({
-      TableName: TableNames.businesses,
-      FilterExpression: 'cognitoSub = :sub',
-      ExpressionAttributeValues: { ':sub': cognitoSub },
-    })
-  )
-  return result.Items?.[0] ? mapBiz(result.Items[0]) : null
+  let lastKey: Record<string, unknown> | undefined
+  do {
+    const result = await documentClient.send(
+      new ScanCommand({
+        TableName: TableNames.businesses,
+        FilterExpression: 'cognitoSub = :sub',
+        ExpressionAttributeValues: { ':sub': cognitoSub },
+        ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
+      })
+    )
+    if (result.Items?.[0]) return mapBiz(result.Items[0])
+    lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (lastKey)
+  return null
 }
 
 export async function getBusinessByEmail(email: string): Promise<BusinessAccount | null> {
-  const result = await documentClient.send(
-    new ScanCommand({
-      TableName: TableNames.businesses,
-      FilterExpression: 'email = :email',
-      ExpressionAttributeValues: { ':email': email },
-    })
-  )
-  return result.Items?.[0] ? mapBiz(result.Items[0]) : null
+  let lastKey: Record<string, unknown> | undefined
+  do {
+    const result = await documentClient.send(
+      new ScanCommand({
+        TableName: TableNames.businesses,
+        FilterExpression: 'email = :email',
+        ExpressionAttributeValues: { ':email': email },
+        ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
+      })
+    )
+    if (result.Items?.[0]) return mapBiz(result.Items[0])
+    lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (lastKey)
+  return null
 }
 
 export async function getBusinessByOwnerId(ownerId: string): Promise<BusinessAccount | null> {

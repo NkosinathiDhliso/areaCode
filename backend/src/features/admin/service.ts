@@ -252,7 +252,14 @@ export async function consumerAction(
   adminId: string, adminRole: AdminRole,
   userId: string, action: string, note?: string,
 ) {
-  checkPermission(adminRole, action === 'process-erasure' ? 'process_erasure' : 'view_user')
+  // Map actions to required permissions
+  const destructiveActions = ['disable', 'delete', 'reset-flags', 'override-streak', 'recalculate-tier']
+  const requiredPermission = action === 'process-erasure'
+    ? 'process_erasure'
+    : destructiveActions.includes(action)
+      ? 'manage_user'
+      : 'view_user'
+  checkPermission(adminRole, requiredPermission)
   await repo.createAuditLog({
     adminId, adminRole, action: `consumer_${action}`,
     entityType: 'user', entityId: userId,
@@ -273,7 +280,10 @@ export async function businessAction(
   adminId: string, adminRole: AdminRole,
   businessId: string, action: string,
 ) {
-  checkPermission(adminRole, 'view_business')
+  // Map actions to required permissions
+  const destructiveActions = ['deactivate', 'revoke', 'delete', 'downgrade']
+  const requiredPermission = destructiveActions.includes(action) ? 'manage_business' : 'view_business'
+  checkPermission(adminRole, requiredPermission)
   await repo.createAuditLog({
     adminId, adminRole, action: `business_${action}`,
     entityType: 'business', entityId: businessId,

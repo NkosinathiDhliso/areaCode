@@ -45,7 +45,10 @@ export async function authRoutes(app: FastifyInstance) {
   // POST /v1/auth/consumer/verify-otp
   app.post(
     '/v1/auth/consumer/verify-otp',
-    { preHandler: [validate({ body: verifyOtpBodySchema })] },
+    { preHandler: [
+      rateLimitMiddleware({ key: 'consumer-verify-otp', max: 5, windowSeconds: 300 }),
+      validate({ body: verifyOtpBodySchema }),
+    ] },
     async (request) => {
       const body = request.body as z.infer<typeof verifyOtpBodySchema>
       return service.consumerVerifyOtp(body.phone, body.code)
@@ -95,10 +98,23 @@ export async function authRoutes(app: FastifyInstance) {
   // POST /v1/auth/business/verify-otp
   app.post(
     '/v1/auth/business/verify-otp',
-    { preHandler: [validate({ body: verifyOtpBodySchema })] },
+    { preHandler: [
+      rateLimitMiddleware({ key: 'business-verify-otp', max: 5, windowSeconds: 300 }),
+      validate({ body: verifyOtpBodySchema }),
+    ] },
     async (request) => {
       const body = request.body as z.infer<typeof verifyOtpBodySchema>
       return service.businessVerifyOtp(body.phone, body.code)
+    },
+  )
+
+  // POST /v1/auth/business/refresh
+  app.post(
+    '/v1/auth/business/refresh',
+    { preHandler: [validate({ body: refreshBodySchema })] },
+    async (request) => {
+      const body = request.body as z.infer<typeof refreshBodySchema>
+      return service.refreshToken(body.refreshToken, 'business')
     },
   )
 
@@ -121,10 +137,23 @@ export async function authRoutes(app: FastifyInstance) {
   // POST /v1/auth/staff/verify-otp
   app.post(
     '/v1/auth/staff/verify-otp',
-    { preHandler: [validate({ body: verifyOtpBodySchema })] },
+    { preHandler: [
+      rateLimitMiddleware({ key: 'staff-verify-otp', max: 5, windowSeconds: 300 }),
+      validate({ body: verifyOtpBodySchema }),
+    ] },
     async (request) => {
       const body = request.body as z.infer<typeof verifyOtpBodySchema>
       return service.staffVerifyOtp(body.phone, body.code)
+    },
+  )
+
+  // POST /v1/auth/staff/refresh
+  app.post(
+    '/v1/auth/staff/refresh',
+    { preHandler: [validate({ body: refreshBodySchema })] },
+    async (request) => {
+      const body = request.body as z.infer<typeof refreshBodySchema>
+      return service.refreshToken(body.refreshToken, 'staff')
     },
   )
 
@@ -133,7 +162,10 @@ export async function authRoutes(app: FastifyInstance) {
   // POST /v1/auth/admin/login
   app.post(
     '/v1/auth/admin/login',
-    { preHandler: [validate({ body: adminLoginBodySchema })] },
+    { preHandler: [
+      rateLimitMiddleware({ key: 'admin-login', max: 5, windowSeconds: 300 }),
+      validate({ body: adminLoginBodySchema }),
+    ] },
     async (request) => {
       const body = request.body as z.infer<typeof adminLoginBodySchema>
       return service.adminLogin(body.email, body.password)
@@ -260,7 +292,10 @@ export async function authRoutes(app: FastifyInstance) {
   // POST /v1/staff-invite/accept
   app.post(
     '/v1/staff-invite/accept',
-    { preHandler: [validate({ body: staffInviteAcceptBodySchema })] },
+    { preHandler: [
+      rateLimitMiddleware({ key: 'staff-invite-accept', max: 5, windowSeconds: 300 }),
+      validate({ body: staffInviteAcceptBodySchema }),
+    ] },
     async (request, reply) => {
       const body = request.body as z.infer<typeof staffInviteAcceptBodySchema>
       const staff = await service.acceptStaffInvite(body.token, body.name, body.phone)

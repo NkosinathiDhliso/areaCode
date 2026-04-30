@@ -63,17 +63,25 @@ export async function signUpUser(
       : []),
   ]
 
-  await cognitoClient.send(
-    new AdminCreateUserCommand({
-      UserPoolId: pool.userPoolId,
-      Username: phone,
-      UserAttributes: userAttributes,
-      MessageAction: 'SUPPRESS', // We handle OTP ourselves via CUSTOM_AUTH
-    }),
-  )
+  try {
+    await cognitoClient.send(
+      new AdminCreateUserCommand({
+        UserPoolId: pool.userPoolId,
+        Username: phone,
+        UserAttributes: userAttributes,
+        MessageAction: 'SUPPRESS', // We handle OTP ourselves via CUSTOM_AUTH
+      }),
+    )
+  } catch (err: unknown) {
+    if ((err as { name?: string }).name === 'UsernameExistsException') {
+      // User already exists in Cognito — this is OK for retry-after-partial-signup
+      return
+    }
+    throw err
+  }
 
   // Set a random password (required by Cognito but unused with CUSTOM_AUTH)
-  const tempPassword = `Tmp${Date.now()}!${Math.random().toString(36).slice(2)}`
+  const tempPassword = `Tmp${Date.now()}!${crypto.randomUUID().replace(/-/g, '')}`
   await cognitoClient.send(
     new AdminSetUserPasswordCommand({
       UserPoolId: pool.userPoolId,
@@ -100,8 +108,12 @@ export async function initiateAuth(role: AuthRole, phone: string) {
     }),
   )
 
+  if (!result.Session) {
+    throw new Error('Cognito did not return a session for CUSTOM_AUTH challenge')
+  }
+
   return {
-    session: result.Session ?? '',
+    session: result.Session,
     challengeName: result.ChallengeName,
   }
 }

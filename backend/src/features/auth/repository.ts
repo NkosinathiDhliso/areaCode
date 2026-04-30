@@ -42,6 +42,7 @@ export async function getUserCheckInHistory(
       TableName: TableNames.checkins,
       IndexName: 'UserIndex',
       KeyConditionExpression: 'userId = :userId',
+      ExpressionAttributeValues: { ':userId': userId },
       ...(cursor ? { ExclusiveStartKey: JSON.parse(Buffer.from(cursor, 'base64').toString()) } : {}),
       ScanIndexForward: false,
       Limit: limit + 1,
@@ -123,6 +124,19 @@ export async function getLatestConsent(userId: string) {
 export { getUserByPhone as findUserByPhone }
 export { getBusinessByEmail as findBusinessByEmail }
 
+export async function findUserByUsername(username: string): Promise<unknown | null> {
+  if (!username) return null
+  const result = await documentClient.send(
+    new ScanCommand({
+      TableName: TableNames.users,
+      FilterExpression: 'username = :username',
+      ExpressionAttributeValues: { ':username': username },
+      Limit: 1,
+    })
+  )
+  return result.Items?.[0] || null
+}
+
 export async function findBusinessByPhone(phone: string) {
   if (!phone) return null
   // No PhoneIndex GSI , scan at current scale
@@ -167,15 +181,16 @@ export async function findStaffInviteByToken(token: string) {
 }
 
 export async function acceptStaffInvite(inviteId: string) {
-  // Update invite status
+  // Update invite status without overwriting existing data
+  const { UpdateCommand } = await import('@aws-sdk/lib-dynamodb')
   await documentClient.send(
-    new PutCommand({
+    new UpdateCommand({
       TableName: TableNames.appData,
-      Item: {
-        pk: `INVITE#${inviteId}`,
-        sk: `INVITE#${inviteId}`,
-        accepted: true,
-        acceptedAt: new Date().toISOString(),
+      Key: { pk: `INVITE#${inviteId}`, sk: `INVITE#${inviteId}` },
+      UpdateExpression: 'SET accepted = :accepted, acceptedAt = :acceptedAt',
+      ExpressionAttributeValues: {
+        ':accepted': true,
+        ':acceptedAt': new Date().toISOString(),
       },
     })
   )

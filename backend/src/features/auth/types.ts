@@ -18,8 +18,8 @@ export const checkInHistoryQuerySchema = z.object({
 
 export const consumerSignupBodySchema = z.object({
   phone: z.string().regex(/^\+\d{10,15}$/, 'E.164 format required'),
-  username: z.string().min(3).max(30),
-  displayName: z.string().min(1).max(50),
+  username: z.string().min(3).max(30).regex(/^[a-z0-9_]+$/, 'Only lowercase letters, numbers, and underscores'),
+  displayName: z.string().min(1).max(50).trim(),
   citySlug: z.string().min(1),
   consentAnalytics: z.boolean().optional().default(false),
 })
@@ -56,7 +56,7 @@ export const accountTypeQuerySchema = z.object({
 
 export const adminLoginBodySchema = z.object({
   email: z.string().email(),
-  password: z.string().min(1),
+  password: z.string().min(1).max(256),
 })
 
 // ============================================================================

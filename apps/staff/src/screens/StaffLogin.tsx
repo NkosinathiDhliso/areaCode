@@ -60,9 +60,10 @@ export function StaffLogin() {
     try {
       const res = await api.post<{
         accessToken: string
+        refreshToken: string
         staff: { id: string; name: string; businessId: string }
       }>('/v1/auth/staff/verify-otp', { phone: normalizePhone(phone), code: otp })
-      setAuth(res.accessToken, res.staff.id, res.staff.businessId, res.staff.name)
+      setAuth(res.accessToken, res.refreshToken, res.staff.id, res.staff.businessId, res.staff.name)
     } catch (err: unknown) {
       const apiErr = err as { statusCode?: number } | undefined
       if (apiErr?.statusCode === 429) {

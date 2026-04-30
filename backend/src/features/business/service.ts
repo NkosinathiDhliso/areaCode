@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto'
+import { createHmac, timingSafeEqual } from 'node:crypto'
 import { AppError } from '../../shared/errors/AppError.js'
 import * as repo from './repository.js'
 import {
@@ -143,7 +143,14 @@ export async function processYocoWebhook(
     .update(bodyToSign)
     .digest('hex')
 
-  if (!signature || !expected || signature !== expected) {
+  if (!signature || !expected) {
+    throw AppError.unauthorized('Invalid webhook signature')
+  }
+
+  // Use timing-safe comparison to prevent timing attacks
+  const sigBuffer = Buffer.from(signature, 'utf-8')
+  const expectedBuffer = Buffer.from(expected, 'utf-8')
+  if (sigBuffer.length !== expectedBuffer.length || !timingSafeEqual(sigBuffer, expectedBuffer)) {
     throw AppError.unauthorized('Invalid webhook signature')
   }
 
