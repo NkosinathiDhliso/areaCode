@@ -2,65 +2,97 @@
 
 ## Project
 
-Area Code is a map-first social discovery app for South African cities.
-Users check in at venues, earn rewards, and see live activity on a map.
+Area Code: map-first social discovery app for South African cities.
+Users check in at venues, earn rewards, see live activity on a map.
 Three cities: Johannesburg, Cape Town, Durban.
+Live at areacode.co.za.
 
 ## Architecture
 
-Monorepo. pnpm workspaces. TypeScript everywhere.
+Monorepo. pnpm workspaces. TypeScript everywhere. Serverless on AWS.
 
 ```
-apps/web          React + Vite (consumer, mobile-first)
-apps/mobile       Expo (React Native, shares packages/)
-apps/business     React + Vite (business dashboard, responsive)
-apps/admin        React + Vite (admin panel, responsive)
-apps/staff        React + Vite (staff validator, mobile-first)
+apps/web          Consumer app (React + Vite, mobile-first)
+apps/mobile       Expo React Native (shares packages/)
+apps/business     Business dashboard (React + Vite, responsive)
+apps/admin        Admin panel (React + Vite, responsive)
+apps/staff        Staff validator (React + Vite, mobile-first)
 packages/shared   Hooks, stores, lib, types, constants
-backend           Fastify + DynamoDB + Cognito (Lambda monolith)
-infra             Terraform (AWS serverless)
+backend           Fastify monolith (Lambda + API Gateway)
+infra             Terraform modules and environments
 ```
 
 ## Stack
 
 - Frontend: React 18, Vite, Tailwind (CSS variables only), Zustand, i18next
-- Backend: Fastify 5, DynamoDB (not Prisma/RDS), AWS Cognito (4 pools), SQS, SNS
-- Infra: Lambda (nodejs20.x arm64), API Gateway v2 (HTTP + WebSocket), DynamoDB, S3, Amplify
-- Auth: Cognito CUSTOM_AUTH (phone OTP) for consumer/business/staff, ADMIN_USER_PASSWORD_AUTH for admin
+- Backend: Fastify 5, DynamoDB, AWS Cognito (4 pools), SQS, SNS
+- Infra: Lambda nodejs20.x arm64, API Gateway v2 (HTTP + WebSocket), S3, Amplify
+- Auth: Cognito CUSTOM_AUTH phone OTP for consumer/business/staff, password auth for admin
 
 ## Commands
 
 ```bash
-pnpm typecheck              # root-level tsc --noEmit
-pnpm test                   # vitest run (188 tests)
-pnpm --filter backend build:lambda   # esbuild monolith + websocket + workers
-pnpm --filter @area-code/web build   # vite build
+pnpm typecheck                        # TypeScript check
+pnpm test                             # vitest run
+pnpm --filter backend build:lambda    # esbuild Lambda bundles
+pnpm --filter @area-code/web build    # vite build (web)
 ```
-
-## Rules
-
-1. No hardcoded colors. Use CSS variables: `text-[var(--text-muted)]`, `bg-[var(--accent)]`
-2. No em dashes in any output, comments, or documentation
-3. No emojis in system UI (nav, headings, buttons, labels). SVG icons only
-4. File max 400 lines. Function max 150 lines. Component max 300 lines
-5. No CSS grid in shared components (breaks React Native). Flex only
-6. Cards use `rounded-2xl`. Bottom sheets use `rounded-t-3xl`
-7. Hooks above all conditional returns
-8. Disable buttons during API calls
-9. Clean up useEffect subscriptions on unmount
-10. All infrastructure through Terraform. Never create AWS resources manually
 
 ## Platform Focus
 
-- Consumer web + mobile: mobile-first design, touch targets, no desktop chrome
+- Consumer web + mobile: mobile-first, 375px baseline, touch targets
 - Staff: mobile-first, simple validator UI
-- Business: responsive (works on both mobile and desktop)
-- Admin: responsive (works on both mobile and desktop)
+- Business: responsive, works on phone and desktop
+- Admin: responsive, works on phone and desktop
+
+## Writing Rules
+
+- Never use em dashes. Use commas, periods, or restructure the sentence
+- Never use emojis in system UI (nav, headings, buttons, labels)
+- Keep comments short. No filler words
+- No superlatives or hyperbole in docs or UI copy
+
+## Code Limits
+
+| Metric         | Warning | Hard limit |
+|----------------|---------|------------|
+| File size      | 300     | 400 lines  |
+| Function       | 30      | 150 lines  |
+| Component      | 200     | 300 lines  |
+| Line length    | 100     | 120 chars  |
+
+## Styling Rules
+
+- All colors via CSS variables. Never use Tailwind color classes directly
+- Cards: `rounded-2xl`. Bottom sheets: `rounded-t-3xl`
+- No CSS grid in shared components (breaks React Native). Flex only
+- Buttons: `active:scale-95` for tactile feedback
+- Inputs: `rounded-xl` with `focus:border-[var(--accent)]`
+- Map fills 100dvh x 100dvw. No vertical scroll on map screen
+
+## Code Rules
+
+- Hooks above all conditional returns
+- Disable buttons during API calls with loading state
+- Clean up useEffect subscriptions on unmount
+- Check `statusCode` on API errors, show specific messages
+- Use `await app.register()` for Fastify plugins, never `void`
+- One component per file
+- No `any` in component props
+- No inline business logic in components
+
+## Dependency Direction
+
+Backend: handler calls service, service calls repository, repository calls DB.
+Never skip layers. Cross-domain logic goes through shared interfaces.
+
+Frontend: `apps/` imports from `packages/` only. `packages/shared` never imports
+from `apps/` or feature modules. Features import from shared only.
 
 ## Four Auth Contexts
 
-Each account type has its own Cognito pool, auth store, and token namespace.
-They share nothing. No generic `useAuth()` hook.
+Each type has its own Cognito pool, auth store, token namespace.
+No shared `useAuth()` hook. No role switching in a single store.
 
 | Type     | Store              | Namespace    |
 |----------|--------------------|--------------|
@@ -69,39 +101,77 @@ They share nothing. No generic `useAuth()` hook.
 | Staff    | staffAuthStore     | staff:       |
 | Admin    | adminAuthStore     | (admin app)  |
 
-## Backend Pattern
+## Backend Patterns
 
-Handler check order: JWT verify, role check, Zod validation, rate limit, service call, DynamoDB op, socket emit, return.
+Handler order: JWT verify, role check, Zod validation, rate limit, service, DB, socket emit, return.
 
-DynamoDB tables: users, nodes, checkins, rewards, businesses, app-data (KV + cities + consent).
-Table names from env vars with fallback defaults.
+DynamoDB tables: users, nodes, checkins, rewards, businesses, app-data.
+Table names from env vars with prod fallback defaults.
 
-## API Style
+API style: camelCase JSON. Errors: `{ error, message, statusCode }`.
+Auth: Bearer token. Rate limiting: DynamoDB TTL sliding window.
 
-- camelCase JSON keys
-- Errors: `{ error: string, message: string, statusCode: number }`
-- Auth: Bearer token in Authorization header
-- Rate limiting: DynamoDB TTL-based sliding window
+Never return raw errors. Use typed `AppError`.
 
-## Dependencies
+## Database
 
-- `packages/shared` never imports from `apps/` or `features/`
-- `apps/` imports from `packages/` only
-- Backend features never import from each other directly
+DynamoDB pay-per-request. No Prisma, no RDS.
 
-## Environment
+- app-data table: generic KV store (`pk: KV#{key}`, `sk: VALUE`)
+- Cities: `pk: CITY#{slug}`, `sk: CITY#{slug}`
+- Consent: `pk: USER#{id}`, `sk: CONSENT#{id}`
+- Rate limits and OTP sessions use TTL for auto-expiry
 
-- Production: `AREA_CODE_ENV=prod`, Lambda prefix `area-code-prod-`
-- Cognito pools: consumer, business, staff, admin (separate pool IDs + client IDs)
-- Secrets: Secrets Manager at `area-code/{env}/*`
-- Frontend env: `VITE_API_URL`, `VITE_WEBSOCKET_URL`, `VITE_VAPID_PUBLIC_KEY`
+## Real-Time
+
+WebSocket API Gateway with Lambda handler.
+Connection tracking in DynamoDB (websocket-connections table).
+Route keys: `joinroom`, `leaveroom`, `presencejoin`, `presenceleave` (no colons).
+
+Frontend: `packages/shared/lib/websocket.ts` singleton.
+Falls back to no-op when `VITE_WEBSOCKET_URL` is not set.
+
+## Infrastructure
+
+All resources through Terraform. Never create manually.
+Always `terraform plan` before `terraform apply`.
+
+Lambda: nodejs20.x, arm64, 128MB default, 256MB workers, 512MB API.
+Secrets in AWS Secrets Manager at `area-code/{env}/*`.
 
 ## Deployment
 
 ```bash
-./scripts/deploy-serverless.ps1    # build + terraform + lambda upload
-./scripts/update-all-amplify-apps.ps1  # update Amplify env vars + trigger builds
+./scripts/deploy-serverless.ps1       # build + terraform + lambda upload
+./scripts/update-all-amplify-apps.ps1 # Amplify env vars + trigger builds
+git push origin master                # auto-triggers Amplify rebuilds
 ```
 
-Amplify auto-deploys from master branch for all 4 frontend apps.
-Lambda code deployed via `aws lambda update-function-code`.
+## Environment Variables
+
+Backend (Lambda): AREA_CODE_ENV, table names, Cognito pool IDs + client IDs,
+S3 bucket, SQS URLs, QR HMAC secret, VAPID keys, consent version.
+
+Frontend (Amplify): VITE_API_URL, VITE_WEBSOCKET_URL, VITE_VAPID_PUBLIC_KEY.
+
+## Naming
+
+| Type              | Convention  | Example                    |
+|-------------------|-------------|----------------------------|
+| Components        | PascalCase  | NodeMarker.tsx             |
+| Hooks             | camelCase   | useCheckIn.ts              |
+| Stores            | camelCase   | mapStore.ts                |
+| Backend routes    | kebab-case  | /check-in                  |
+| DynamoDB tables   | kebab-case  | area-code-prod-users       |
+| Env vars          | UPPER_SNAKE | AREA_CODE_DB_URL           |
+| Lambda names      | kebab-case  | area-code-prod-api         |
+| Secrets           | slash-sep   | area-code/prod/qr-hmac     |
+
+## Common Gotchas
+
+- `awsLambdaFastify()` must be called BEFORE `app.ready()`
+- API Gateway WebSocket route keys cannot contain colons
+- PowerShell mangles JSON for AWS CLI. Use file-based JSON
+- Amplify builds from git. Local changes need push to take effect
+- SNS SMS sandbox: new accounts only send to verified numbers
+- Cognito custom attributes need app client read/write permissions

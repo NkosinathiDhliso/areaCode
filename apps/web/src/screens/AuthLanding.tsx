@@ -31,7 +31,7 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
           <span className="font-[Syne] text-xl font-extrabold tracking-tight">Area Code</span>
         </div>
 
-        {/* Hero — short and direct */}
+        {/* Hero, short and direct */}
         <h1 className="font-[Syne] text-3xl font-extrabold leading-tight tracking-[-0.02em]">
           See what's alive
           <span className="block bg-[linear-gradient(90deg,var(--accent-bright),var(--accent))] bg-clip-text text-transparent">
@@ -58,7 +58,7 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
           </button>
         </div>
 
-        {/* Trending now — live mini dashboard */}
+        {/* Trending now, live mini dashboard */}
         <div className="mt-8 rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-medium tracking-widest text-[var(--text-muted)] uppercase">Trending Now</span>
