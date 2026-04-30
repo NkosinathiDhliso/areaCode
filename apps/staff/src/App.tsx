@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useStaffAuthStore } from './stores/staffAuthStore'
 import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
+import { api } from '@area-code/shared/lib/api'
 import { StaffInvite } from './screens/StaffInvite'
 import { StaffLogin } from './screens/StaffLogin'
 import { StaffHome } from './screens/StaffHome'
@@ -22,6 +23,11 @@ function AppContent() {
     const path = window.location.pathname
     if (path.startsWith('/staff-invite/')) return 'invite'
     return isAuthenticated ? 'home' : 'login'
+  })
+
+  // Wire API token provider
+  useState(() => {
+    api.setTokenProvider(() => useStaffAuthStore.getState().accessToken)
   })
 
   if (route === 'invite') {

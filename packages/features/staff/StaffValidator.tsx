@@ -191,7 +191,7 @@ export function StaffValidator() {
         }`}
       >
         <Text className="text-white text-5xl">
-          {result.success ? '✓' : '✗'}
+          {result.success ? 'OK' : 'X'}
         </Text>
         <Text className="text-white font-bold text-xl font-[Syne] text-center">
           {result.success ? 'Redeemed!' : 'Failed'}
@@ -293,7 +293,7 @@ export function StaffValidator() {
             className="absolute top-2 right-2 bg-black bg-opacity-50 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm"
             aria-label="Close scanner"
           >
-            ✕
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </Box>
       )}
@@ -303,7 +303,7 @@ export function StaffValidator() {
           onClick={startCamera}
           className="w-full max-w-xs bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-primary)] font-medium rounded-xl py-4 text-sm transition-all duration-150 active:scale-95 flex items-center justify-center gap-2"
         >
-          <span>📷</span> Scan QR Code
+          <span>Scan QR Code</span>
         </button>
       )}
 
