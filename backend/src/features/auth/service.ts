@@ -18,7 +18,13 @@ export async function consumerSignup(data: {
   }
 
   const existing = await repo.findUserByPhone(data.phone)
-  if (existing) throw AppError.conflict('Phone number already registered')
+  if (existing) {
+    // Account exists. Re-send OTP so user can complete verification
+    await checkOtpRateLimit(data.phone)
+    const { session } = await cognito.initiateAuth('consumer', data.phone)
+    await kvSet(`otp:session:${data.phone}`, session, 300)
+    return { userId: existing.userId, message: 'OTP sent', existingAccount: true }
+  }
 
   const city = await repo.getCityBySlug(data.citySlug)
   if (!city) throw AppError.unprocessable('Invalid city')
@@ -61,7 +67,12 @@ export async function consumerLogin(phone: string) {
   if (DEV_MODE) return
 
   const user = await repo.findUserByPhone(phone)
-  if (!user) throw AppError.notFound('Account not found')
+  if (!user) {
+    // Check if user exists in Cognito (partial signup)
+    const cognitoUser = await cognito.getCognitoUser('consumer', phone).catch(() => null)
+    if (!cognitoUser) throw AppError.notFound('Account not found')
+    // User in Cognito but not DynamoDB, still allow login attempt
+  }
   await checkOtpRateLimit(phone)
 
   const { session } = await cognito.initiateAuth('consumer', phone)

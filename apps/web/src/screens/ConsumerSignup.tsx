@@ -28,17 +28,27 @@ export function ConsumerSignup({ onNavigate }: ConsumerSignupProps) {
     setLoading(true)
     setError(null)
     try {
-      await api.post('/v1/auth/consumer/signup', {
-        phone: toE164(phone),
-        username,
-        displayName,
-        citySlug,
-        consentAnalytics,
-      })
+      const res = await api.post<{ userId: string; message: string; existingAccount?: boolean }>(
+        '/v1/auth/consumer/signup',
+        {
+          phone: toE164(phone),
+          username,
+          displayName,
+          citySlug,
+          consentAnalytics,
+        },
+      )
+      if (res.existingAccount) {
+        setError(null)
+      }
       setStep('otp')
     } catch (err) {
-      const apiErr = err as { message?: string }
-      setError(apiErr.message ?? t('auth.signup.failed'))
+      const apiErr = err as { message?: string; statusCode?: number }
+      if (apiErr.statusCode === 429) {
+        setError('Too many attempts. Please wait and try again.')
+      } else {
+        setError(apiErr.message ?? t('auth.signup.failed'))
+      }
     } finally {
       setLoading(false)
     }
