@@ -214,7 +214,10 @@ export async function staffLogin(phone: string) {
   if (DEV_MODE) return
 
   const staff = await repo.findStaffByPhone(phone)
-  if (!staff) throw AppError.notFound('Staff account not found')
+  if (!staff) throw AppError.notFound('No staff account found for this number. Ask your manager to send you an invite link first.')
+  if ((staff as Record<string, unknown>).isActive === false) {
+    throw AppError.forbidden('This staff account has been deactivated. Contact your manager.')
+  }
   await checkOtpRateLimit(phone)
 
   const { session } = await cognito.initiateAuth('staff', phone)

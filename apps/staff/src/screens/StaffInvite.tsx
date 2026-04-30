@@ -34,9 +34,10 @@ export function StaffInvite({ token }: StaffInviteProps) {
         phone: normalizePhone(phone),
       })
       setStatus('success')
-    } catch {
+    } catch (err: unknown) {
       setStatus('error')
-      setError('Invite is invalid or has expired.')
+      const apiErr = err as { message?: string }
+      setError(apiErr.message ?? 'Invite is invalid or has expired.')
     }
   }
 
@@ -78,13 +79,16 @@ export function StaffInvite({ token }: StaffInviteProps) {
       )}
 
       {status === 'success' && (
-        <div className="flex flex-col items-center gap-4">
-          <p className="text-[var(--success)] font-medium">Account created.</p>
+        <div className="flex flex-col items-center gap-4 max-w-xs text-center">
+          <p className="text-[var(--success)] font-medium text-lg">Account created</p>
+          <p className="text-[var(--text-secondary)] text-sm">
+            Your staff account is ready. You can now sign in with your phone number to start validating redemptions.
+          </p>
           <a
             href="/"
-            className="text-[var(--accent)] underline text-sm"
+            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3 px-8 text-sm transition-all active:scale-95"
           >
-            Sign in
+            Go to Sign In
           </a>
         </div>
       )}

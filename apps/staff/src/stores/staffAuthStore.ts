@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 
 import { storage } from '@area-code/shared/lib/storage'
+import { api } from '@area-code/shared/lib/api'
 
 interface StaffAuthState {
   accessToken: string | null
@@ -34,6 +35,11 @@ export const useStaffAuthStore = create<StaffAuthState>()((set) => ({
     set({ accessToken: token })
   },
   logout: () => {
+    // Revoke tokens on the backend (best effort)
+    const refreshToken = storage.get('staff:refreshToken')
+    if (refreshToken) {
+      api.post('/v1/auth/logout', { refreshToken }).catch(() => {})
+    }
     storage.remove('staff:accessToken')
     storage.remove('staff:refreshToken')
     storage.remove('staff:staffId')
