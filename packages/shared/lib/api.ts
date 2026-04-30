@@ -74,11 +74,27 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${token}`
     }
 
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : null,
-    })
+    // 15 second timeout for all requests
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15000)
+
+    let response: Response
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : null,
+        signal: controller.signal,
+      })
+    } catch (err) {
+      clearTimeout(timeout)
+      if ((err as Error).name === 'AbortError') {
+        throw { error: 'timeout', message: 'Request timed out. Check your connection.', statusCode: 0 } as ApiError
+      }
+      throw { error: 'network', message: 'Unable to connect. Check your connection.', statusCode: 0 } as ApiError
+    } finally {
+      clearTimeout(timeout)
+    }
 
     // On 401, try refreshing the token once
     if (response.status === 401 && this.getRefreshToken) {

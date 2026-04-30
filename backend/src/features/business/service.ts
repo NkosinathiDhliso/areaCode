@@ -221,6 +221,11 @@ export async function inviteStaff(
   return repo.createStaffInvite(businessId, phone, email)
 }
 
+export async function listStaffInvites(businessId: string) {
+  if (DEV_MODE) return []
+  return repo.listStaffInvites(businessId)
+}
+
 export async function listStaff(businessId: string) {
   if (DEV_MODE) return []
   return repo.listStaffAccounts(businessId)
@@ -228,8 +233,22 @@ export async function listStaff(businessId: string) {
 
 export async function removeStaff(staffId: string, businessId: string) {
   if (DEV_MODE) return
+
+  // Soft-delete in DynamoDB
   const result = await repo.removeStaffAccount(staffId, businessId)
   if (result.count === 0) throw AppError.notFound('Staff member not found')
+
+  // Disable the Cognito user so they can't log in anymore
+  try {
+    const { getStaffById } = await import('../auth/dynamodb-repository.js')
+    const staff = await getStaffById(staffId)
+    if (staff?.cognitoSub) {
+      const cognito = await import('../../shared/cognito/client.js')
+      await cognito.disableCognitoUser('staff', staff.cognitoSub)
+    }
+  } catch {
+    // Best effort — staff is already deactivated in DynamoDB
+  }
 }
 
 // ─── QR Code ────────────────────────────────────────────────────────────────

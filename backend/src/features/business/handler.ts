@@ -179,6 +179,17 @@ export async function businessRoutes(app: FastifyInstance) {
     },
   )
 
+  // GET /v1/business/staff/invites
+  app.get(
+    '/v1/business/staff/invites',
+    { preHandler: [requireAuth('business')] },
+    async (request) => {
+      const auth = getAuth(request)
+      const invites = await service.listStaffInvites(auth.userId)
+      return { items: invites }
+    },
+  )
+
   // DELETE /v1/business/staff/:id
   app.delete(
     '/v1/business/staff/:id',

@@ -6,6 +6,8 @@ import {
   AdminGetUserCommand,
   AdminUpdateUserAttributesCommand,
   AdminSetUserPasswordCommand,
+  AdminDisableUserCommand,
+  AdminUserGlobalSignOutCommand,
   type AuthFlowType,
 } from '@aws-sdk/client-cognito-identity-provider'
 import type { AuthRole } from '../middleware/auth.js'
@@ -220,5 +222,28 @@ export async function adminPasswordAuth(email: string, password: string) {
     accessToken: result.AuthenticationResult.AccessToken ?? '',
     refreshToken: result.AuthenticationResult.RefreshToken ?? '',
     idToken: result.AuthenticationResult.IdToken ?? '',
+  }
+}
+
+// ─── Disable User ───────────────────────────────────────────────────────────
+
+export async function disableCognitoUser(role: AuthRole, cognitoSub: string) {
+  const pool = getPool(role)
+  await cognitoClient.send(
+    new AdminDisableUserCommand({
+      UserPoolId: pool.userPoolId,
+      Username: cognitoSub,
+    }),
+  )
+  // Also sign out all sessions
+  try {
+    await cognitoClient.send(
+      new AdminUserGlobalSignOutCommand({
+        UserPoolId: pool.userPoolId,
+        Username: cognitoSub,
+      }),
+    )
+  } catch {
+    // Best effort — user may already be signed out
   }
 }

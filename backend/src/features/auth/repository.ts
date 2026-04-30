@@ -174,19 +174,18 @@ export async function findStaffInviteByToken(token: string) {
   const result = await documentClient.send(
     new GetCommand({
       TableName: TableNames.appData,
-      Key: { pk: `INVITE#${token}`, sk: `INVITE#${token}` },
+      Key: { pk: `STAFF_INVITE#${token}`, sk: `STAFF_INVITE#${token}` },
     })
   )
   return result.Item || null
 }
 
-export async function acceptStaffInvite(inviteId: string) {
-  // Update invite status without overwriting existing data
+export async function acceptStaffInvite(inviteToken: string) {
   const { UpdateCommand } = await import('@aws-sdk/lib-dynamodb')
   await documentClient.send(
     new UpdateCommand({
       TableName: TableNames.appData,
-      Key: { pk: `INVITE#${inviteId}`, sk: `INVITE#${inviteId}` },
+      Key: { pk: `STAFF_INVITE#${inviteToken}`, sk: `STAFF_INVITE#${inviteToken}` },
       UpdateExpression: 'SET accepted = :accepted, acceptedAt = :acceptedAt',
       ExpressionAttributeValues: {
         ':accepted': true,
@@ -194,7 +193,7 @@ export async function acceptStaffInvite(inviteId: string) {
       },
     })
   )
-  return { id: inviteId, accepted: true }
+  return { accepted: true }
 }
 
 export async function createStaffAccount(data: {

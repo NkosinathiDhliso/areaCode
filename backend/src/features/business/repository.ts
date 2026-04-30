@@ -62,17 +62,32 @@ export async function createStaffInvite(
   const inviteToken = randomBytes(32).toString('hex')
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
   const inviteId = generateId()
+  const now = new Date().toISOString()
   const item = {
-    pk: `STAFF_INVITE#${inviteId}`,
-    sk: `BIZ#${businessId}`,
+    pk: `STAFF_INVITE#${inviteToken}`,
+    sk: `STAFF_INVITE#${inviteToken}`,
     gsi1pk: `BIZ_INVITES#${businessId}`,
-    gsi1sk: new Date().toISOString(),
-    inviteId, businessId, inviteToken,
-    invitedPhone: phone, invitedEmail: email,
-    expiresAt, createdAt: new Date().toISOString(),
+    gsi1sk: now,
+    id: inviteId, businessId, inviteToken,
+    invitedPhone: phone ?? null, invitedEmail: email ?? null,
+    accepted: false,
+    expiresAt, createdAt: now,
   }
   await documentClient.send(new PutCommand({ TableName: TableNames.appData, Item: item }))
   return item
+}
+
+export async function listStaffInvites(businessId: string) {
+  const result = await documentClient.send(
+    new QueryCommand({
+      TableName: TableNames.appData,
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'gsi1pk = :pk',
+      ExpressionAttributeValues: { ':pk': `BIZ_INVITES#${businessId}` },
+      ScanIndexForward: false,
+    })
+  )
+  return result.Items ?? []
 }
 
 export async function listStaffAccounts(businessId: string) {
