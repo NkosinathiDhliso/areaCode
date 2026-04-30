@@ -19,6 +19,7 @@ export function ConsumerManagement() {
   const [selected, setSelected] = useState<ConsumerDetail | null>(null)
   const [loading, setLoading] = useState(false)
   const [actionNote, setActionNote] = useState('')
+  const [confirmDisable, setConfirmDisable] = useState<string | null>(null)
 
   async function handleSearch() {
     if (!query.trim()) return
@@ -41,6 +42,17 @@ export function ConsumerManagement() {
         note: actionNote || undefined,
       })
       setActionNote('')
+      setConfirmDisable(null)
+      handleSearch()
+    } catch {
+      // Fail silently
+    }
+  }
+
+  async function handleDisableUser(userId: string) {
+    try {
+      await api.post(`/v1/admin/users/${userId}/disable`)
+      setConfirmDisable(null)
       handleSearch()
     } catch {
       // Fail silently
@@ -106,10 +118,19 @@ export function ConsumerManagement() {
                   className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-3 py-2 text-xs placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
                 />
                 <div className="flex flex-row flex-wrap gap-2">
-                  <ActionButton
-                    label={user.isDisabled ? t('admin.consumers.enable') : t('admin.consumers.disable')}
-                    onClick={() => handleAction(user.isDisabled ? 'enable' : 'disable', user.id)}
-                  />
+                  {!user.isDisabled && role === 'super_admin' && (
+                    <ActionButton
+                      label={t('admin.consumers.disable', 'Disable Account')}
+                      onClick={() => setConfirmDisable(user.id)}
+                      danger
+                    />
+                  )}
+                  {user.isDisabled && (
+                    <ActionButton
+                      label={t('admin.consumers.enable', 'Enable Account')}
+                      onClick={() => handleAction('enable', user.id)}
+                    />
+                  )}
                   <ActionButton
                     label={t('admin.consumers.resetFlags')}
                     onClick={() => handleAction('reset-flags', user.id)}
@@ -139,6 +160,34 @@ export function ConsumerManagement() {
           </div>
         ))}
       </div>
+
+      {/* Disable confirmation dialog */}
+      {confirmDisable && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
+              Disable Account?
+            </h3>
+            <p className="text-[var(--text-secondary)] text-sm mb-4">
+              This will revoke the user's session and prevent them from checking in or claiming rewards. This action creates an audit log entry.
+            </p>
+            <div className="flex flex-row gap-3">
+              <button
+                onClick={() => setConfirmDisable(null)}
+                className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDisableUser(confirmDisable)}
+                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium"
+              >
+                Disable
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

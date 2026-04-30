@@ -2,19 +2,25 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useAdminAuthStore } from '../stores/adminAuthStore'
+import { DashboardOverview } from './DashboardOverview'
 import { ConsumerManagement } from './ConsumerManagement'
 import { BusinessManagement } from './BusinessManagement'
 import { ReportQueue } from './ReportQueue'
 import { ConsentAudit } from './ConsentAudit'
+import { AbuseFlagDashboard } from './AbuseFlagDashboard'
+import { AuditTrailViewer } from './AuditTrailViewer'
 import { ArchetypeManagement } from '../components/ArchetypeManagement'
 import { GenreWeightEditor } from '../components/GenreWeightEditor'
 
-type Tab = 'consumers' | 'businesses' | 'reports' | 'consent' | 'archetypes' | 'genre-weights'
+type Tab = 'dashboard' | 'consumers' | 'businesses' | 'reports' | 'abuse-flags' | 'audit-trail' | 'consent' | 'archetypes' | 'genre-weights'
 
 const TAB_LABELS: Record<Tab, string> = {
+  dashboard: 'admin.nav.dashboard',
   consumers: 'admin.nav.consumers',
   businesses: 'admin.nav.businesses',
   reports: 'admin.nav.reports',
+  'abuse-flags': 'admin.nav.abuseFlags',
+  'audit-trail': 'admin.nav.auditTrail',
   consent: 'admin.nav.consent',
   archetypes: 'admin.nav.archetypes',
   'genre-weights': 'admin.nav.genreWeights',
@@ -23,11 +29,11 @@ const TAB_LABELS: Record<Tab, string> = {
 function getVisibleTabs(role: string | null): Tab[] {
   switch (role) {
     case 'super_admin':
-      return ['consumers', 'businesses', 'reports', 'consent', 'archetypes', 'genre-weights']
+      return ['dashboard', 'consumers', 'businesses', 'reports', 'abuse-flags', 'audit-trail', 'consent', 'archetypes', 'genre-weights']
     case 'support_agent':
       return ['consumers', 'businesses']
     case 'content_moderator':
-      return ['reports']
+      return ['reports', 'abuse-flags']
     default:
       return []
   }
@@ -37,7 +43,7 @@ export function AdminDashboard() {
   const { t } = useTranslation()
   const { role, logout } = useAdminAuthStore()
   const tabs = getVisibleTabs(role)
-  const [activeTab, setActiveTab] = useState<Tab>(tabs[0] ?? 'consumers')
+  const [activeTab, setActiveTab] = useState<Tab>(tabs[0] ?? 'dashboard')
 
   return (
     <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
@@ -70,9 +76,12 @@ export function AdminDashboard() {
       </nav>
 
       <main className="flex-1 overflow-y-auto">
+        {activeTab === 'dashboard' && <DashboardOverview />}
         {activeTab === 'consumers' && <ConsumerManagement />}
         {activeTab === 'businesses' && <BusinessManagement />}
         {activeTab === 'reports' && <ReportQueue />}
+        {activeTab === 'abuse-flags' && <AbuseFlagDashboard />}
+        {activeTab === 'audit-trail' && <AuditTrailViewer />}
         {activeTab === 'consent' && <ConsentAudit />}
         {activeTab === 'archetypes' && <ArchetypeManagement />}
         {activeTab === 'genre-weights' && <GenreWeightEditor />}

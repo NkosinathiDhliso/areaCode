@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import { api } from '@area-code/shared/lib/api'
 import type { BusinessAccount } from '@area-code/shared/types'
+import { useAdminAuthStore } from '../stores/adminAuthStore'
 
 interface BusinessDetail extends BusinessAccount {
   staffCount: number
@@ -12,10 +13,12 @@ interface BusinessDetail extends BusinessAccount {
 
 export function BusinessManagement() {
   const { t } = useTranslation()
+  const role = useAdminAuthStore((s) => s.role)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<BusinessDetail[]>([])
   const [selected, setSelected] = useState<BusinessDetail | null>(null)
   const [loading, setLoading] = useState(false)
+  const [confirmDisable, setConfirmDisable] = useState<string | null>(null)
 
   async function handleSearch() {
     if (!query.trim()) return
@@ -35,6 +38,16 @@ export function BusinessManagement() {
   async function handleAction(action: string, businessId: string) {
     try {
       await api.post(`/v1/admin/businesses/${businessId}/${action}`)
+      handleSearch()
+    } catch {
+      // Fail silently
+    }
+  }
+
+  async function handleDisableBusiness(businessId: string) {
+    try {
+      await api.post(`/v1/admin/businesses/${businessId}/disable`)
+      setConfirmDisable(null)
       handleSearch()
     } catch {
       // Fail silently
@@ -100,11 +113,47 @@ export function BusinessManagement() {
                 >
                   {t('admin.businesses.overrideCipc')}
                 </button>
+                {role === 'super_admin' && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setConfirmDisable(biz.id) }}
+                    className="border border-[var(--danger)] text-[var(--danger)] rounded-xl px-3 py-1.5 text-xs font-medium"
+                  >
+                    {t('admin.businesses.disable', 'Disable Business')}
+                  </button>
+                )}
               </div>
             )}
           </div>
         ))}
       </div>
+
+      {/* Disable confirmation dialog */}
+      {confirmDisable && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
+              Disable Business?
+            </h3>
+            <p className="text-[var(--text-secondary)] text-sm mb-4">
+              This will deactivate all nodes owned by this business. Consumers will no longer be able to check in or claim rewards at their venues. This action creates an audit log entry.
+            </p>
+            <div className="flex flex-row gap-3">
+              <button
+                onClick={() => setConfirmDisable(null)}
+                className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDisableBusiness(confirmDisable)}
+                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium"
+              >
+                Disable
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

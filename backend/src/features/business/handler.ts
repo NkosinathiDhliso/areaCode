@@ -11,9 +11,15 @@ import {
 } from './types.js'
 import { z } from 'zod'
 import { getRedemptionsByStaffId } from '../rewards/repository.js'
+import { QueryCommand } from '@aws-sdk/lib-dynamodb'
+import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 
 const nodeIdParamsSchema = z.object({ nodeId: z.string().uuid() })
 const staffRedemptionParamsSchema = z.object({ staffId: z.string().uuid() })
+const checkInQuerySchema = z.object({
+  date: z.string().optional(),
+  cursor: z.string().optional(),
+})
 
 export async function businessRoutes(app: FastifyInstance) {
   // GET /v1/business/me
@@ -220,6 +226,48 @@ export async function businessRoutes(app: FastifyInstance) {
       const params = request.params as z.infer<typeof staffRedemptionParamsSchema>
       const items = await getRedemptionsByStaffId(params.staffId, auth.userId)
       return { items }
+    },
+  )
+
+  // GET /v1/business/check-ins
+  app.get(
+    '/v1/business/check-ins',
+    {
+      preHandler: [
+        requireAuth('business'),
+        validate({ query: checkInQuerySchema }),
+      ],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      const query = request.query as z.infer<typeof checkInQuerySchema>
+      return service.getCheckInDetails(auth.userId, query.date, query.cursor)
+    },
+  )
+
+  // GET /v1/business/rewards/:rewardId/metrics
+  app.get(
+    '/v1/business/rewards/:rewardId/metrics',
+    {
+      preHandler: [
+        requireAuth('business'),
+        validate({ params: z.object({ rewardId: z.string().uuid() }) }),
+      ],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      const params = request.params as { rewardId: string }
+      return service.getRewardMetrics(params.rewardId, auth.userId)
+    },
+  )
+
+  // GET /v1/business/rewards/summary
+  app.get(
+    '/v1/business/rewards/summary',
+    { preHandler: [requireAuth('business')] },
+    async (request) => {
+      const auth = getAuth(request)
+      return service.getRewardsSummary(auth.userId)
     },
   )
 }

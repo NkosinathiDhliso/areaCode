@@ -385,4 +385,15 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.status(201).send(staff)
     },
   )
+
+  // POST /v1/users/me/onboarding/complete
+  app.post(
+    '/v1/users/me/onboarding/complete',
+    { preHandler: [requireAuth('consumer')] },
+    async (request) => {
+      const auth = getAuth(request)
+      await service.completeOnboarding(auth.userId)
+      return { success: true }
+    },
+  )
 }

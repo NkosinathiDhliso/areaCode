@@ -7,6 +7,7 @@ import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { api } from '@area-code/shared/lib/api'
 import { getSocket } from '@area-code/shared/lib/socket'
 import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
+import { OnboardingFlow } from '@area-code/shared/components/OnboardingFlow'
 
 import { MapScreen } from './screens/MapScreen'
 import { RewardsScreen } from './screens/RewardsScreen'
@@ -39,6 +40,9 @@ function AppContent() {
 
   // Activate SAST time-based theme (06:00–18:00 light, 18:00–06:00 dark)
   useTheme()
+
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [onboardingChecked, setOnboardingChecked] = useState(false)
 
   const [route, setRoute] = useState<AppRoute>(() => {
     const path = window.location.pathname
@@ -84,6 +88,24 @@ function AppContent() {
     }
   }, [accessToken, setOnline, setApiOnly, setOffline])
 
+  // Check onboarding status after login
+  useEffect(() => {
+    if (!isAuthenticated || onboardingChecked) return
+    async function checkOnboarding() {
+      try {
+        const profile = await api.get<{ onboardingComplete?: boolean }>('/v1/users/me')
+        if (profile.onboardingComplete === false) {
+          setShowOnboarding(true)
+        }
+      } catch {
+        // Fail silently
+      } finally {
+        setOnboardingChecked(true)
+      }
+    }
+    void checkOnboarding()
+  }, [isAuthenticated, onboardingChecked])
+
   // Auth screens render without bottom nav
   if (route === 'landing') return <AuthLanding onNavigate={setRoute} />
   if (route === 'login') return <ConsumerLogin onNavigate={setRoute} />
@@ -92,6 +114,9 @@ function AppContent() {
   return (
     <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
       <ConnectivityBanner />
+      {showOnboarding && (
+        <OnboardingFlow onComplete={() => setShowOnboarding(false)} />
+      )}
       <div className="flex-1 relative overflow-hidden">
         {route === 'map' && <MapScreen onNavigate={setRoute} />}
         {route === 'gets' && <RewardsScreen />}

@@ -252,6 +252,97 @@ export async function getRecentRedemptions(businessId: string) {
   return (result.Items || []).slice(0, 20)
 }
 
+// ─── Check-In Details ────────────────────────────────────────────────────────
+
+export async function getCheckInDetails(businessId: string, date?: string, cursor?: string) {
+  const targetDate = date ?? new Date().toISOString().slice(0, 10)
+  // Query BIZ_CHECKIN cache from app-data table
+  const params: Record<string, unknown> = {
+    TableName: TableNames.appData,
+    KeyConditionExpression: 'pk = :pk',
+    ExpressionAttributeValues: { ':pk': `BIZ_CHECKIN#${businessId}#${targetDate}` } as Record<string, string>,
+    ScanIndexForward: false,
+    Limit: 50,
+  }
+  if (cursor) {
+    (params as any).ExclusiveStartKey = JSON.parse(Buffer.from(cursor, 'base64url').toString())
+  }
+  const result = await documentClient.send(new QueryCommand(params as any))
+  const items = (result.Items || []).map((i) => ({
+    displayName: i['displayName'] as string,
+    tier: i['tier'] as string,
+    visitCount: (i['visitCount'] as number) ?? 1,
+    timestamp: i['timestamp'] as string ?? i['sk'] as string,
+  }))
+  const nextCursor = result.LastEvaluatedKey
+    ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64url')
+    : null
+  return { items, nextCursor }
+}
+
+// ─── Reward Metrics ─────────────────────────────────────────────────────────
+
+export async function getRewardMetrics(rewardId: string, businessId: string) {
+  // Get the reward from rewards table
+  const rewardResult = await documentClient.send(
+    new GetCommand({ TableName: TableNames.rewards, Key: { rewardId } })
+  )
+  const reward = rewardResult.Item
+  if (!reward) return { claimRate: 0, timeToClaimMinutes: 0, redemptionRate: 0 }
+
+  const totalSlots = (reward['totalSlots'] as number) ?? 0
+  const claimedCount = (reward['claimedCount'] as number) ?? 0
+  const redeemedCount = (reward['redeemedCount'] as number) ?? 0
+  const firstClaimedAt = reward['firstClaimedAt'] as string | undefined
+  const createdAt = reward['createdAt'] as string
+
+  const claimRate = totalSlots > 0 ? claimedCount / totalSlots : 0
+  const redemptionRate = claimedCount > 0 ? redeemedCount / claimedCount : 0
+  const timeToClaimMinutes = firstClaimedAt && createdAt
+    ? Math.round((new Date(firstClaimedAt).getTime() - new Date(createdAt).getTime()) / 60000)
+    : 0
+
+  return { claimRate, timeToClaimMinutes, redemptionRate }
+}
+
+export async function getRewardsSummary(businessId: string) {
+  const rewards = await getRewardsForBusiness(businessId)
+  const now = Date.now()
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000
+
+  const items = rewards
+    .filter((r) => (r as Record<string, unknown>)['isActive'] !== false)
+    .map((r) => {
+      const rec = r as Record<string, unknown>
+      const totalSlots = (rec['totalSlots'] as number) ?? 0
+      const claimedCount = (rec['claimedCount'] as number) ?? 0
+      const redeemedCount = (rec['redeemedCount'] as number) ?? 0
+      const firstClaimedAt = rec['firstClaimedAt'] as string | undefined
+      const createdAt = rec['createdAt'] as string
+
+      const claimRate = totalSlots > 0 ? claimedCount / totalSlots : 0
+      const redemptionRate = claimedCount > 0 ? redeemedCount / claimedCount : 0
+      const timeToClaimMinutes = firstClaimedAt && createdAt
+        ? Math.round((new Date(firstClaimedAt).getTime() - new Date(createdAt).getTime()) / 60000)
+        : 0
+
+      const isOlderThan7Days = createdAt && (now - new Date(createdAt).getTime()) > sevenDaysMs
+      const isLowPerformance = isOlderThan7Days && claimedCount === 0
+
+      return {
+        rewardId: rec['id'] as string,
+        title: (rec['title'] as string) ?? '',
+        claimRate,
+        timeToClaimMinutes,
+        redemptionRate,
+        isLowPerformance: !!isLowPerformance,
+      }
+    })
+    .sort((a, b) => b.claimRate - a.claimRate)
+
+  return { items }
+}
+
 // ─── Business Rewards ───────────────────────────────────────────────────────
 
 export async function getRewardsForBusiness(businessId: string) {

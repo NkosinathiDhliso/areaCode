@@ -147,7 +147,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
 - [x] 4. Checkpoint — Backend enrichment complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [-] 5. Consumer Portal Features (Requirements 1, 2, 3, 4, 5, 6, 7)
+- [x] 5. Consumer Portal Features (Requirements 1, 2, 3, 4, 5, 6, 7)
   - [x] 5.1 Implement check-in history API and UI (Req 1)
     - Create `GET /v1/users/me/check-in-history` endpoint with cursor-based pagination (the existing `getCheckInHistory` in auth service can be extended or a new route registered)
     - Create `PaginatedList` shared component in `packages/shared/components/` — cursor-based infinite scroll with error/retry
@@ -188,7 +188,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Create `backend/src/__tests__/properties/streak.property.test.ts`
     - **Validates: Requirements 3.3**
 
-  - [-] 5.7 Implement venue text search for mobile (Req 4)
+  - [x] 5.7 Implement venue text search for mobile (Req 4)
     - Create `GET /v1/nodes/search?q=` endpoint in `backend/src/features/nodes/handler.ts` — text search by venue name (case-insensitive, min 2 chars)
     - Create `SearchInput` shared component in `packages/shared/components/` — debounced text input with 300ms delay
     - Create `VenueSearchOverlay` in mobile app (`apps/mobile/`) — search input overlaying the map screen, results list, tap to center map and open venue detail sheet
@@ -207,7 +207,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Call OTP cancel endpoint on back navigation to invalidate the session
     - _Requirements: 5.1, 5.2, 5.3_
 
-  - [ ] 5.10 Implement consumer onboarding flow (Req 6)
+  - [x] 5.10 Implement consumer onboarding flow (Req 6)
     - Add `onboardingComplete` attribute to users table (default `false`)
     - Create `POST /v1/users/me/onboarding/complete` endpoint — set `onboardingComplete = true`
     - Create `OnboardingFlow` shared component in `packages/shared/components/` — step-based carousel with skip action
@@ -232,8 +232,8 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
 - [x] 6. Checkpoint — Consumer portal features complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. Business Portal Features (Requirements 8, 9)
-  - [ ] 7.1 Implement individual check-in details API and UI (Req 8)
+- [x] 7. Business Portal Features (Requirements 8, 9)
+  - [x] 7.1 Implement individual check-in details API and UI (Req 8)
     - Create `GET /v1/business/check-ins?date=&cursor=` endpoint in `backend/src/features/business/handler.ts` — returns individual check-in details for the business's nodes, filtered by date, with cursor pagination
     - Query business check-in cache from app-data table (populated by task 3.1)
     - Create `CheckInDetailPanel` in `apps/business/src/screens/panels/` — list of individual check-ins with display name, tier, visit frequency (first-time / returning / regular), timestamp
@@ -242,7 +242,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Respect consumer privacy — display only display names and tiers, never phone numbers or personal identifiers
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
-  - [ ] 7.2 Implement reward performance metrics API and UI (Req 9)
+  - [x] 7.2 Implement reward performance metrics API and UI (Req 9)
     - Create `GET /v1/business/rewards/:rewardId/metrics` endpoint — returns claim rate, time-to-claim, redemption rate
     - Create `GET /v1/business/rewards/summary` endpoint — returns all active rewards ranked by claim rate descending
     - Add `claimedCount`, `firstClaimedAt`, `redeemedCount` attributes to rewards table records
@@ -257,17 +257,17 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Create `backend/src/__tests__/properties/reward-metrics.property.test.ts`
     - **Validates: Requirements 9.1, 9.3, 9.5**
 
-  - [ ] 7.4 Implement staff redemption attribution UI (Req 19 — business portal side)
+  - [x] 7.4 Implement staff redemption attribution UI (Req 19 — business portal side)
     - Create `StaffRedemptionPanel` in `apps/business/src/screens/panels/` — redemptions filtered by staff member
     - Display staff member name, reward title, and redemption timestamp for each entry
     - Add staff member filter dropdown
     - _Requirements: 19.2, 19.3_
 
-- [ ] 8. Checkpoint — Business portal features complete
+- [x] 8. Checkpoint — Business portal features complete
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 9. Staff Portal Features (Requirements 10, 11, 12)
-  - [ ] 9.1 Implement QR code scanner (Req 10)
+  - [x] 9.1 Implement QR code scanner (Req 10)
     - Create `QrScanner` shared component in `packages/shared/components/` — camera-based QR code scanner with viewfinder overlay
     - Create `POST /v1/staff/redeem/scan` endpoint in `backend/src/features/staff/handler.ts` — accepts scanned redemption code
     - Add QR scanner button to `apps/staff/src/screens/StaffHome.tsx`
@@ -276,14 +276,14 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Display error for unrecognized QR format
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
 
-  - [ ] 9.2 Implement reward preview before validation (Req 11)
+  - [x] 9.2 Implement reward preview before validation (Req 11)
     - Create `GET /v1/staff/redeem/:code/preview` endpoint — returns reward title, type, description, consumer display name, and tier
     - Create `RedemptionPreview` shared component in `packages/shared/components/` — displays reward details before confirmation
     - Display specific error reason (invalid_code, already_redeemed, expired_code) without proceeding to confirmation if code is invalid
     - Require explicit confirm action from staff member
     - _Requirements: 11.1, 11.2, 11.3, 11.4_
 
-  - [ ] 9.3 Implement redemption confirmation screen (Req 12)
+  - [x] 9.3 Implement redemption confirmation screen (Req 12)
     - Create `POST /v1/staff/redeem/:code/confirm` endpoint — confirms redemption, records `staffId` attribution
     - Create `RedemptionResult` shared component in `packages/shared/components/` — success/failure confirmation screen
     - Display success screen with reward title and redemption timestamp (minimum 3 seconds before allowing navigation)
@@ -291,17 +291,17 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Provide button to return to scanner/code entry for next redemption
     - _Requirements: 12.1, 12.2, 12.3, 12.4_
 
-  - [ ] 9.4 Wire the 4-step redemption flow in Staff Portal
+  - [x] 9.4 Wire the 4-step redemption flow in Staff Portal
     - Integrate QR scanner → preview → confirm → result as a single `RedemptionFlow` in `apps/staff/src/screens/`
     - Connect to existing `StaffHome` screen with a prominent "Scan Redemption" button
     - Ensure the flow handles all error states from the design's error handling table (invalid_code, already_redeemed, expired_code, camera permission denied)
     - _Requirements: 10.1, 11.1, 12.1_
 
-- [ ] 10. Checkpoint — Staff portal features complete
+- [x] 10. Checkpoint — Staff portal features complete
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 11. Admin Portal Features (Requirements 13, 14, 15)
-  - [ ] 11.1 Implement admin dashboard overview API and UI (Req 13)
+  - [x] 11.1 Implement admin dashboard overview API and UI (Req 13)
     - Create `GET /v1/admin/dashboard` endpoint in `backend/src/features/admin/handler.ts` — returns summary metrics: total consumers, total businesses, total check-ins (all-time + today), active rewards, pending reports count, pending erasure requests count
     - Store daily metrics in app-data table (pk `METRICS#DAILY`, sk `METRICS#{date}`) computed on-demand with 60s KV cache
     - Create `DashboardOverview` screen in `apps/admin/src/screens/` — display all metrics, set as default landing view for super_admin
@@ -309,7 +309,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Display unreviewed abuse flag count (from task 3.11)
     - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5_
 
-  - [ ] 11.2 Implement abuse flag dashboard API and UI (Reqs 14, 21)
+  - [x] 11.2 Implement abuse flag dashboard API and UI (Reqs 14, 21)
     - Create `GET /v1/admin/abuse-flags` endpoint — returns unreviewed abuse flags ordered by creation date descending, including harassment reports from Req 22
     - Create `POST /v1/admin/abuse-flags/:flagId/review` endpoint — mark flag as reviewed, create audit log entry
     - Create `POST /v1/admin/abuse-flags/:flagId/action` endpoint — take action (reset flags, disable user) from flag detail view
@@ -324,7 +324,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Add to `backend/src/__tests__/properties/admin-ordering.property.test.ts`
     - **Validates: Requirements 14.1, 18.4**
 
-  - [ ] 11.4 Implement admin audit trail viewer API and UI (Req 15)
+  - [x] 11.4 Implement admin audit trail viewer API and UI (Req 15)
     - Create `GET /v1/admin/audit-logs` endpoint — paginated audit log with filters for adminId, action type, date range
     - Use existing audit log data pattern (pk `AUDIT#{logId}`, GSI1 `AUDIT_LOGS`) with FilterExpression for action type filtering
     - Create `AuditTrailViewer` screen in `apps/admin/src/screens/` — chronological list with admin ID, action type, target entity, timestamp, before/after state
@@ -338,14 +338,14 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Create `backend/src/__tests__/properties/admin-ordering.property.test.ts`
     - **Validates: Requirements 15.3, 15.5**
 
-  - [ ] 11.6 Wire admin disable actions to downstream consequences (Req 18 — admin UI side)
+  - [x] 11.6 Wire admin disable actions to downstream consequences (Req 18 — admin UI side)
     - Add "Disable User" and "Disable Business" actions to admin consumer/business management screens
     - Connect to `POST /v1/admin/users/:userId/disable` and `POST /v1/admin/businesses/:businessId/disable` endpoints (implemented in task 3.9)
     - Display confirmation dialog before executing disable action
     - Show audit log entry creation confirmation
     - _Requirements: 18.1, 18.2, 18.3, 18.4_
 
-- [ ] 12. Final Checkpoint — All Tier 1 features complete
+- [x] 12. Final Checkpoint — All Tier 1 features complete
   - Ensure all tests pass, ask the user if questions arise.
   - Verify all 22 Tier 1 requirements have corresponding implementations.
   - Verify privacy model (Req 22) is enforced across all data flows.

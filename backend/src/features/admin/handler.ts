@@ -256,6 +256,46 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // ─── Abuse Flags ─────────────────────────────────────────────────────────
 
+  // GET /v1/admin/dashboard
+  app.get(
+    '/v1/admin/dashboard',
+    { preHandler: [adminAuth] },
+    async (request) => {
+      const role = await getAdminRole(request)
+      return service.getDashboardMetrics(role)
+    },
+  )
+
+  // GET /v1/admin/audit-logs
+  app.get(
+    '/v1/admin/audit-logs',
+    { preHandler: [adminAuth] },
+    async (request) => {
+      const role = await getAdminRole(request)
+      const query = request.query as Record<string, string>
+      return service.getAuditLogs(role, {
+        cursor: query['cursor'],
+        adminId: query['adminId'],
+        action: query['action'],
+        startDate: query['startDate'],
+        endDate: query['endDate'],
+      })
+    },
+  )
+
+  // POST /v1/admin/abuse-flags/:flagId/action
+  app.post(
+    '/v1/admin/abuse-flags/:flagId/action',
+    { preHandler: [adminAuth, validate({ params: abuseFlagIdParamsSchema })] },
+    async (request) => {
+      const auth = getAuth(request)
+      const role = await getAdminRole(request)
+      const params = request.params as z.infer<typeof abuseFlagIdParamsSchema>
+      const body = request.body as { action: string }
+      return service.actionAbuseFlag(auth.userId, role, params.flagId, body.action)
+    },
+  )
+
   // GET /v1/admin/abuse-flags
   app.get(
     '/v1/admin/abuse-flags',

@@ -10,7 +10,12 @@ export async function updateUserGenres(
   dimensionScores: Record<string, number> | null,
   archetypeId: string,
 ) {
-  const updated = await updateUser(userId, { musicGenres, dimensionScores, archetypeId } as any)
+  const updated = await updateUser(userId, {
+    musicGenres,
+    dimensionScores,
+    archetypeId,
+    genresUpdatedAt: new Date().toISOString(),
+  } as any)
   return updated ? { id: updated.userId, musicGenres, dimensionScores, archetypeId } : null
 }
 

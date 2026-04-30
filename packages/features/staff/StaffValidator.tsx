@@ -1,67 +1,318 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 
 import { api, type ApiError } from '../../shared/lib/api'
 import { Box, Text } from '../../shared/components/primitives'
 
-interface ValidationResult {
+type FlowState = 'idle' | 'preview' | 'confirming' | 'result'
+
+interface PreviewData {
+  rewardTitle: string
+  rewardType: string
+  rewardDescription: string
+  consumerDisplayName: string
+  consumerTier: string
+}
+
+interface ResultData {
   success: boolean
   rewardTitle?: string
   redeemedAt?: string
-  error?: 'invalid_code' | 'expired_code' | 'already_redeemed'
+  error?: string
 }
 
 export function StaffValidator() {
+  const [flowState, setFlowState] = useState<FlowState>('idle')
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<ValidationResult | null>(null)
+  const [preview, setPreview] = useState<PreviewData | null>(null)
+  const [result, setResult] = useState<ResultData | null>(null)
+  const [scanning, setScanning] = useState(false)
+  const [cameraError, setCameraError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
-    inputRef.current?.focus()
+    if (flowState === 'idle') {
+      inputRef.current?.focus()
+    }
+  }, [flowState])
+
+  // Auto-return to idle after result
+  useEffect(() => {
+    if (flowState !== 'result') return
+    const timer = setTimeout(() => {
+      setFlowState('idle')
+      setResult(null)
+      setCode('')
+      setPreview(null)
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [flowState])
+
+  // Cleanup camera on unmount
+  useEffect(() => {
+    return () => {
+      stopCamera()
+    }
   }, [])
 
-  useEffect(() => {
-    if (!result) return
-    const timer = setTimeout(() => setResult(null), 5000)
-    return () => clearTimeout(timer)
-  }, [result])
+  function stopCamera() {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current)
+      scanIntervalRef.current = null
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+    }
+    setScanning(false)
+  }
 
-  async function handleValidate() {
-    if (code.length !== 6 || loading) return
-    setLoading(true)
-    setResult(null)
+  async function startCamera() {
+    setCameraError(null)
     try {
-      const res = await api.post<{ success: true; rewardTitle: string; redeemedAt: string }>(
-        `/v1/rewards/${code}/redeem`,
-        { code },
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+      })
+      streamRef.current = stream
+      setScanning(true)
+
+      // Wait for video element to be available
+      requestAnimationFrame(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          videoRef.current.play()
+          startScanning()
+        }
+      })
+    } catch {
+      setCameraError('Camera access denied. Please use manual code entry.')
+      setScanning(false)
+    }
+  }
+
+  function startScanning() {
+    // Use BarcodeDetector API if available (Chrome/Edge)
+    const BarcodeDetectorAPI = (window as any).BarcodeDetector
+    if (BarcodeDetectorAPI) {
+      const detector = new BarcodeDetectorAPI({ formats: ['qr_code'] })
+      scanIntervalRef.current = setInterval(async () => {
+        if (!videoRef.current || videoRef.current.readyState < 2) return
+        try {
+          const barcodes = await detector.detect(videoRef.current)
+          if (barcodes.length > 0) {
+            const value = barcodes[0].rawValue
+            if (value) {
+              stopCamera()
+              handleCodeScanned(value)
+            }
+          }
+        } catch {
+          // Detection failed, continue scanning
+        }
+      }, 250)
+    } else {
+      // Fallback: canvas-based approach (limited without a QR library)
+      // Show message to use manual entry
+      setCameraError('QR scanning not supported in this browser. Please use manual code entry.')
+      stopCamera()
+    }
+  }
+
+  function handleCodeScanned(scannedCode: string) {
+    // Extract code from URL if it's a full URL, otherwise use as-is
+    const match = scannedCode.match(/\/qr\/[^/]+\/([a-zA-Z0-9]+)/)
+    const extractedCode = match ? match[1]! : scannedCode.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+    setCode(extractedCode)
+    handlePreview(extractedCode)
+  }
+
+  async function handlePreview(previewCode?: string) {
+    const targetCode = previewCode ?? code
+    if (!targetCode || loading) return
+    setLoading(true)
+    try {
+      const res = await api.get<PreviewData>(
+        `/v1/staff/redeem/${encodeURIComponent(targetCode)}/preview`,
       )
-      setResult({ success: true, rewardTitle: res.rewardTitle, redeemedAt: res.redeemedAt })
-      setCode('')
+      setPreview(res)
+      setFlowState('preview')
     } catch (err) {
       const apiErr = err as ApiError
-      const errorType = apiErr.error as ValidationResult['error'] ?? 'invalid_code'
-      setResult({ success: false, error: errorType ?? 'invalid_code' })
-      setCode('')
+      const errorType = apiErr.error ?? apiErr.message ?? 'invalid_code'
+      setResult({ success: false, error: errorType })
+      setFlowState('result')
     } finally {
       setLoading(false)
-      inputRef.current?.focus()
+    }
+  }
+
+  async function handleConfirm() {
+    if (!code || loading) return
+    setFlowState('confirming')
+    setLoading(true)
+    try {
+      const res = await api.post<{ success: true; rewardTitle: string; redeemedAt: string }>(
+        `/v1/staff/redeem/${encodeURIComponent(code)}/confirm`,
+      )
+      setResult({ success: true, rewardTitle: res.rewardTitle, redeemedAt: res.redeemedAt })
+      setFlowState('result')
+    } catch (err) {
+      const apiErr = err as ApiError
+      const errorType = apiErr.error ?? apiErr.message ?? 'invalid_code'
+      setResult({ success: false, error: errorType })
+      setFlowState('result')
+    } finally {
+      setLoading(false)
     }
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter') handleValidate()
+    if (e.key === 'Enter') handlePreview()
   }
 
-  const resultMessage = result?.success
-    ? `${result.rewardTitle} , redeemed`
-    : result?.error === 'expired_code'
-      ? 'Code has expired'
-      : result?.error === 'already_redeemed'
-        ? 'Already redeemed'
-        : 'Invalid code'
+  function getErrorMessage(error: string): string {
+    switch (error) {
+      case 'expired_code': return 'Code has expired'
+      case 'already_redeemed': return 'Already redeemed'
+      default: return 'Invalid code'
+    }
+  }
 
+  // ─── Result Screen ──────────────────────────────────────────────────────
+  if (flowState === 'result' && result) {
+    return (
+      <Box
+        className={`flex flex-col items-center justify-center px-5 py-12 gap-4 min-h-[300px] rounded-2xl mx-5 mt-4 ${
+          result.success ? 'bg-[var(--success)]' : 'bg-[var(--danger)]'
+        }`}
+      >
+        <Text className="text-white text-5xl">
+          {result.success ? '✓' : '✗'}
+        </Text>
+        <Text className="text-white font-bold text-xl font-[Syne] text-center">
+          {result.success ? 'Redeemed!' : 'Failed'}
+        </Text>
+        {result.success && result.rewardTitle && (
+          <Text className="text-white text-sm opacity-90">{result.rewardTitle}</Text>
+        )}
+        {result.success && result.redeemedAt && (
+          <Text className="text-white text-xs opacity-75">
+            {new Date(result.redeemedAt).toLocaleString()}
+          </Text>
+        )}
+        {!result.success && result.error && (
+          <Text className="text-white text-sm opacity-90">{getErrorMessage(result.error)}</Text>
+        )}
+        <Text className="text-white text-xs opacity-60 mt-2">Returning to scanner...</Text>
+      </Box>
+    )
+  }
+
+  // ─── Preview Screen ─────────────────────────────────────────────────────
+  if (flowState === 'preview' && preview) {
+    return (
+      <Box className="flex flex-col items-center px-5 pt-6 gap-5">
+        <Box className="w-full max-w-sm bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-5 flex flex-col gap-3">
+          <Text className="text-[var(--text-primary)] font-bold text-lg font-[Syne] text-center">
+            {preview.rewardTitle}
+          </Text>
+          {preview.rewardType && (
+            <Text className="text-[var(--accent)] text-xs text-center uppercase tracking-wider">
+              {preview.rewardType}
+            </Text>
+          )}
+          {preview.rewardDescription && (
+            <Text className="text-[var(--text-secondary)] text-sm text-center">
+              {preview.rewardDescription}
+            </Text>
+          )}
+          <Box className="border-t border-[var(--border)] pt-3 mt-1 flex flex-col items-center gap-1">
+            <Text className="text-[var(--text-primary)] font-medium text-sm">
+              {preview.consumerDisplayName}
+            </Text>
+            <Text className="text-[var(--text-muted)] text-xs capitalize">
+              {preview.consumerTier}
+            </Text>
+          </Box>
+        </Box>
+
+        <button
+          onClick={handleConfirm}
+          disabled={loading}
+          className="w-full max-w-sm bg-[var(--success)] text-white font-semibold rounded-xl py-4 text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
+        >
+          {loading ? 'Confirming...' : 'Confirm Redemption'}
+        </button>
+
+        <button
+          onClick={() => {
+            setFlowState('idle')
+            setPreview(null)
+            setCode('')
+          }}
+          className="text-[var(--text-muted)] text-sm"
+        >
+          Cancel
+        </button>
+      </Box>
+    )
+  }
+
+  // ─── Confirming Screen ──────────────────────────────────────────────────
+  if (flowState === 'confirming') {
+    return (
+      <Box className="flex flex-col items-center justify-center px-5 pt-12 gap-4">
+        <Text className="text-[var(--text-muted)] text-sm">Processing redemption...</Text>
+      </Box>
+    )
+  }
+
+  // ─── Idle Screen (Scanner + Manual Entry) ───────────────────────────────
   return (
     <Box className="flex flex-col items-center px-5 pt-8 gap-6">
+      {/* QR Scanner */}
+      {scanning && (
+        <Box className="w-full max-w-xs relative rounded-2xl overflow-hidden bg-black aspect-square">
+          <video
+            ref={videoRef}
+            className="w-full h-full object-cover"
+            playsInline
+            muted
+          />
+          {/* Viewfinder overlay */}
+          <Box className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <Box className="w-48 h-48 border-2 border-white rounded-xl opacity-60" />
+          </Box>
+          <canvas ref={canvasRef} className="hidden" />
+          <button
+            onClick={stopCamera}
+            className="absolute top-2 right-2 bg-black bg-opacity-50 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm"
+            aria-label="Close scanner"
+          >
+            ✕
+          </button>
+        </Box>
+      )}
+
+      {!scanning && (
+        <button
+          onClick={startCamera}
+          className="w-full max-w-xs bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-primary)] font-medium rounded-xl py-4 text-sm transition-all duration-150 active:scale-95 flex items-center justify-center gap-2"
+        >
+          <span>📷</span> Scan QR Code
+        </button>
+      )}
+
+      {cameraError && (
+        <Text className="text-[var(--warning)] text-xs text-center max-w-xs">
+          {cameraError}
+        </Text>
+      )}
+
       <input
         ref={inputRef}
         type="text"
@@ -76,25 +327,12 @@ export function StaffValidator() {
       />
 
       <button
-        onClick={handleValidate}
-        disabled={loading || code.length !== 6}
+        onClick={() => handlePreview()}
+        disabled={loading || code.length < 1}
         className="w-full max-w-xs bg-[var(--accent)] text-white font-semibold rounded-xl py-4 text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
       >
-        {loading ? 'Validating...' : 'Validate'}
+        {loading ? 'Looking up...' : 'Validate'}
       </button>
-
-      {result && (
-        <Box
-          role="alert"
-          className={`w-full max-w-xs rounded-2xl p-4 text-center text-sm font-medium transition-all duration-300 ${
-            result.success
-              ? 'bg-[var(--success)] bg-opacity-15 text-[var(--success)]'
-              : 'bg-[var(--danger)] bg-opacity-15 text-[var(--danger)]'
-          }`}
-        >
-          <Text>{resultMessage}</Text>
-        </Box>
-      )}
     </Box>
   )
 }

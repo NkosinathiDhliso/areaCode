@@ -10,15 +10,21 @@ import { NodeEditorPanel } from './panels/NodeEditorPanel'
 import { BoostPanel } from './panels/BoostPanel'
 import { PlansPanel } from './panels/PlansPanel'
 import { SettingsPanel } from './panels/SettingsPanel'
+import { CheckInDetailPanel } from './panels/CheckInDetailPanel'
+import { RewardMetricsPanel } from './panels/RewardMetricsPanel'
+import { StaffRedemptionPanel } from './panels/StaffRedemptionPanel'
 
-const PANELS: DashboardPanel[] = ['live', 'rewards', 'audience', 'node', 'boost', 'plans', 'settings']
+const PANELS: DashboardPanel[] = ['live', 'check-ins', 'rewards', 'reward-metrics', 'audience', 'node', 'boost', 'staff-redemptions', 'plans', 'settings']
 
 const PANEL_LABELS: Record<DashboardPanel, string> = {
   live: 'biz.panel.live',
+  'check-ins': 'biz.panel.checkIns',
   rewards: 'biz.panel.rewards',
+  'reward-metrics': 'biz.panel.rewardMetrics',
   audience: 'biz.panel.audience',
   node: 'biz.panel.node',
   boost: 'biz.panel.boost',
+  'staff-redemptions': 'biz.panel.staffRedemptions',
   plans: 'biz.panel.plans',
   settings: 'biz.panel.settings',
 }
@@ -104,10 +110,13 @@ export function BusinessDashboard() {
           {PANELS.map((panel) => (
             <div key={panel} className="h-full overflow-y-auto" style={{ width: `${100 / PANELS.length}%` }}>
               {panel === 'live' && <LivePanel />}
+              {panel === 'check-ins' && <CheckInDetailPanel />}
               {panel === 'rewards' && <RewardsPanel />}
+              {panel === 'reward-metrics' && <RewardMetricsPanel />}
               {panel === 'audience' && <AudiencePanel />}
               {panel === 'node' && <NodeEditorPanel />}
               {panel === 'boost' && <BoostPanel />}
+              {panel === 'staff-redemptions' && <StaffRedemptionPanel />}
               {panel === 'plans' && <PlansPanel />}
               {panel === 'settings' && <SettingsPanel />}
             </div>

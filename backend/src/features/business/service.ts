@@ -347,6 +347,44 @@ export async function getBusinessRewards(businessId: string) {
   return { items }
 }
 
+// ─── Check-In Details ───────────────────────────────────────────────────────
+
+export async function getCheckInDetails(businessId: string, date?: string, cursor?: string) {
+  if (DEV_MODE) {
+    return {
+      items: [
+        { displayName: 'Thabo M.', tier: 'regular', visitCount: 12, timestamp: new Date(Date.now() - 600000).toISOString() },
+        { displayName: 'Naledi K.', tier: 'fixture', visitCount: 3, timestamp: new Date(Date.now() - 1800000).toISOString() },
+        { displayName: 'Sipho D.', tier: 'local', visitCount: 1, timestamp: new Date(Date.now() - 3600000).toISOString() },
+      ],
+      nextCursor: null,
+    }
+  }
+  return repo.getCheckInDetails(businessId, date, cursor)
+}
+
+// ─── Reward Metrics ─────────────────────────────────────────────────────────
+
+export async function getRewardMetrics(rewardId: string, businessId: string) {
+  if (DEV_MODE) {
+    return { claimRate: 0.65, timeToClaimMinutes: 42, redemptionRate: 0.38 }
+  }
+  return repo.getRewardMetrics(rewardId, businessId)
+}
+
+export async function getRewardsSummary(businessId: string) {
+  if (DEV_MODE) {
+    return {
+      items: [
+        { rewardId: 'rew-1', title: 'Free Coffee', claimRate: 0.65, timeToClaimMinutes: 42, redemptionRate: 0.38, isLowPerformance: false },
+        { rewardId: 'rew-2', title: '20% Off Cocktails', claimRate: 0.22, timeToClaimMinutes: 120, redemptionRate: 0.10, isLowPerformance: false },
+        { rewardId: 'rew-3', title: 'Free Starter', claimRate: 0, timeToClaimMinutes: 0, redemptionRate: 0, isLowPerformance: true },
+      ],
+    }
+  }
+  return repo.getRewardsSummary(businessId)
+}
+
 // ─── Current Node QR (convenience) ──────────────────────────────────────────
 
 export async function getCurrentNodeQr(businessId: string) {

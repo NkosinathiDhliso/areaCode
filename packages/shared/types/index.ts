@@ -180,6 +180,8 @@ export interface User {
   dimensionScores?: DimensionScoreVector | null
   archetypeId?: string | null
   streamingProvider?: StreamingProvider | null
+  genresUpdatedAt?: string | null
+  onboardingComplete?: boolean
 }
 
 export interface BusinessAccount {

@@ -80,6 +80,7 @@ export interface User {
   dimensionScores?: Record<string, unknown>
   archetypeId?: string
   streamingProvider?: string
+  genresUpdatedAt?: string
   privacyLevel?: string
   isDisabled?: boolean
   disabledAt?: string

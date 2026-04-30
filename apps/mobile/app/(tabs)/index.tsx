@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { View, Text, TouchableOpacity, TextInput, FlatList, StyleSheet } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import MapboxGL from '@rnmapbox/maps'
@@ -15,6 +15,16 @@ import { colors } from '../../src/theme'
 
 const CITY_SLUG = 'johannesburg'
 const DEFAULT_CENTER: [number, number] = [28.0473, -26.2041]
+const SEARCH_DEBOUNCE_MS = 300
+
+interface SearchResult {
+  id: string
+  name: string
+  slug: string
+  category: string
+  lat: number
+  lng: number
+}
 
 export default function MapScreen() {
   const { t } = useTranslation()
@@ -32,6 +42,13 @@ export default function MapScreen() {
   const [browseOnly, setBrowseOnly] = useState(false)
   const [cameraCenter, setCameraCenter] = useState(DEFAULT_CENTER)
 
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [showSearchResults, setShowSearchResults] = useState(false)
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const { data: nodeList } = useQuery({
     queryKey: ['nodes', CITY_SLUG],
     queryFn: () => api.get<Node[]>(`/v1/nodes/${CITY_SLUG}`),
@@ -46,6 +63,70 @@ export default function MapScreen() {
     void requestLocation().then((pos) => {
       if (pos) setCameraCenter([pos.lng, pos.lat])
     })
+  }, [])
+
+  // Debounced search
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+
+    if (searchQuery.length < 2) {
+      setSearchResults([])
+      setShowSearchResults(false)
+      return
+    }
+
+    setSearchLoading(true)
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const [lng, lat] = cameraCenter
+        const res = await api.get<SearchResult[]>(
+          `/v1/nodes/search?q=${encodeURIComponent(searchQuery)}&lat=${lat}&lng=${lng}`,
+        )
+        setSearchResults(res)
+        setShowSearchResults(true)
+      } catch {
+        setSearchResults([])
+      } finally {
+        setSearchLoading(false)
+      }
+    }, SEARCH_DEBOUNCE_MS)
+
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    }
+  }, [searchQuery])
+
+  const handleSearchResultTap = useCallback((result: SearchResult) => {
+    const node: Node = {
+      id: result.id,
+      name: result.name,
+      slug: result.slug,
+      category: result.category as NodeCategory,
+      lat: result.lat,
+      lng: result.lng,
+      cityId: '',
+      businessId: null,
+      submittedBy: null,
+      claimStatus: 'unclaimed',
+      claimCipcStatus: null,
+      nodeColour: 'default',
+      nodeIcon: null,
+      qrCheckinEnabled: false,
+      isVerified: false,
+      isActive: true,
+      createdAt: '',
+    }
+    setSelectedNode(node)
+    setSheetOpen(true)
+    setCameraCenter([result.lng, result.lat])
+    setSearchQuery('')
+    setShowSearchResults(false)
+  }, [])
+
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery('')
+    setSearchResults([])
+    setShowSearchResults(false)
   }, [])
 
   const handleNodePress = useCallback((node: Node) => {
@@ -122,6 +203,57 @@ export default function MapScreen() {
         ))}
       </MapboxGL.MapView>
 
+      {/* Search bar */}
+      <View style={styles.searchOverlay}>
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder={t('map.searchPlaceholder', { defaultValue: 'Search venues...' })}
+            placeholderTextColor={colors.textMuted}
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={handleClearSearch} style={styles.clearButton}>
+              <Text style={styles.clearButtonText}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {showSearchResults && (
+          <View style={styles.searchResultsContainer}>
+            {searchLoading ? (
+              <View style={styles.searchResultItem}>
+                <Text style={styles.searchResultMuted}>Searching...</Text>
+              </View>
+            ) : searchResults.length === 0 ? (
+              <View style={styles.searchResultItem}>
+                <Text style={styles.searchResultMuted}>
+                  {t('map.noResults', { defaultValue: 'No results found' })}
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={searchResults}
+                keyExtractor={(item) => item.id}
+                keyboardShouldPersistTaps="handled"
+                style={styles.searchResultsList}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.searchResultItem}
+                    onPress={() => handleSearchResultTap(item)}
+                  >
+                    <Text style={styles.searchResultName}>{item.name}</Text>
+                    <Text style={styles.searchResultCategory}>{item.category}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        )}
+      </View>
+
       <View style={styles.filterOverlay}>
         <CategoryFilterBar onFilter={setCategoryFilter} />
       </View>
@@ -152,9 +284,71 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
-  filterOverlay: {
+  searchOverlay: {
     position: 'absolute',
     top: 50,
+    left: 12,
+    right: 12,
+    zIndex: 20,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.bgRaised,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: 14,
+    paddingVertical: 12,
+  },
+  clearButton: {
+    padding: 4,
+  },
+  clearButtonText: {
+    color: colors.textMuted,
+    fontSize: 14,
+  },
+  searchResultsContainer: {
+    backgroundColor: colors.bgRaised,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: 4,
+    maxHeight: 240,
+    overflow: 'hidden',
+  },
+  searchResultsList: {
+    maxHeight: 240,
+  },
+  searchResultItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  searchResultName: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  searchResultCategory: {
+    color: colors.textMuted,
+    fontSize: 11,
+    textTransform: 'capitalize',
+    marginTop: 2,
+  },
+  searchResultMuted: {
+    color: colors.textMuted,
+    fontSize: 13,
+  },
+  filterOverlay: {
+    position: 'absolute',
+    top: 110,
     left: 0,
     right: 0,
     zIndex: 10,

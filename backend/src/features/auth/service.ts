@@ -334,11 +334,16 @@ export async function refreshToken(refreshTokenValue: string, pool: string) {
 
 export async function getUserProfile(cognitoSub: string) {
   if (DEV_MODE) {
-    return { id: 'dev-user-1', username: 'dev_user', displayName: 'Dev User', phone: '+27000000000', tier: 'explorer', cityId: null, neighbourhoodId: null, totalCheckIns: 8, streakCount: 3, avatarUrl: null, cognitoSub, createdAt: new Date().toISOString() }
+    return { id: 'dev-user-1', username: 'dev_user', displayName: 'Dev User', phone: '+27000000000', tier: 'explorer', cityId: null, neighbourhoodId: null, totalCheckIns: 8, streakCount: 3, avatarUrl: null, cognitoSub, createdAt: new Date().toISOString(), onboardingComplete: false }
   }
   const user = await repo.getUserByCognitoSub(cognitoSub)
   if (!user) throw AppError.notFound('User not found')
   return user
+}
+
+export async function completeOnboarding(userId: string) {
+  if (DEV_MODE) return { success: true }
+  return repo.updateUserProfile(userId, { onboardingComplete: true } as any)
 }
 
 export async function updateProfile(

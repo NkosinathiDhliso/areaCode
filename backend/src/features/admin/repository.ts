@@ -382,3 +382,176 @@ export async function reviewAbuseFlag(flagId: string) {
   )
   return { ...item, reviewed: true }
 }
+
+
+// ─── Dashboard Metrics ──────────────────────────────────────────────────────
+
+// Simple KV cache for dashboard metrics (60s TTL)
+let metricsCache: { data: Record<string, unknown>; expiresAt: number } | null = null
+
+export async function getDashboardMetrics() {
+  if (metricsCache && metricsCache.expiresAt > Date.now()) {
+    return metricsCache.data
+  }
+
+  // Count consumers
+  const usersResult = await documentClient.send(
+    new ScanCommand({ TableName: TableNames.users, Select: 'COUNT' })
+  )
+  const totalConsumers = usersResult.Count ?? 0
+
+  // Count businesses
+  const bizResult = await documentClient.send(
+    new ScanCommand({ TableName: TableNames.businesses, Select: 'COUNT' })
+  )
+  const totalBusinesses = bizResult.Count ?? 0
+
+  // Count all check-ins
+  const checkInsResult = await documentClient.send(
+    new ScanCommand({ TableName: TableNames.checkins, Select: 'COUNT' })
+  )
+  const totalCheckInsAllTime = checkInsResult.Count ?? 0
+
+  // Count today's check-ins
+  const today = new Date().toISOString().slice(0, 10)
+  const todayResult = await documentClient.send(
+    new ScanCommand({
+      TableName: TableNames.checkins,
+      FilterExpression: 'begins_with(checkedInAt, :today)',
+      ExpressionAttributeValues: { ':today': today },
+      Select: 'COUNT',
+    })
+  )
+  const totalCheckInsToday = todayResult.Count ?? 0
+
+  // Count active rewards
+  const rewardsResult = await documentClient.send(
+    new ScanCommand({
+      TableName: TableNames.rewards,
+      FilterExpression: 'isActive = :active',
+      ExpressionAttributeValues: { ':active': true },
+      Select: 'COUNT',
+    })
+  )
+  const activeRewards = rewardsResult.Count ?? 0
+
+  // Count pending reports
+  const reportsResult = await documentClient.send(
+    new ScanCommand({
+      TableName: TableNames.appData,
+      FilterExpression: 'begins_with(pk, :prefix) AND #status = :pending',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: { ':prefix': 'REPORT#', ':pending': 'pending' },
+      Select: 'COUNT',
+    })
+  )
+  const pendingReports = reportsResult.Count ?? 0
+
+  // Count pending erasures
+  const erasureResult = await documentClient.send(
+    new ScanCommand({
+      TableName: TableNames.appData,
+      FilterExpression: 'begins_with(pk, :prefix) AND #status = :pending',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: { ':prefix': 'ERASURE#', ':pending': 'pending' },
+      Select: 'COUNT',
+    })
+  )
+  const pendingErasures = erasureResult.Count ?? 0
+
+  // Count unreviewed abuse flags
+  const flagsResult = await documentClient.send(
+    new ScanCommand({
+      TableName: TableNames.appData,
+      FilterExpression: 'begins_with(pk, :prefix) AND reviewed = :rev',
+      ExpressionAttributeValues: { ':prefix': 'ABUSE#', ':rev': false },
+      Select: 'COUNT',
+    })
+  )
+  const unreviewedAbuseFlags = flagsResult.Count ?? 0
+
+  const data = {
+    totalConsumers,
+    totalBusinesses,
+    totalCheckInsAllTime,
+    totalCheckInsToday,
+    activeRewards,
+    pendingReports,
+    pendingErasures,
+    unreviewedAbuseFlags,
+  }
+
+  metricsCache = { data, expiresAt: Date.now() + 60_000 }
+  return data
+}
+
+// ─── Audit Logs ─────────────────────────────────────────────────────────────
+
+export async function getAuditLogs(filters: {
+  cursor?: string
+  adminId?: string
+  action?: string
+  startDate?: string
+  endDate?: string
+}) {
+  // Query audit logs from GSI1 (AUDIT_LOGS)
+  const params: Record<string, unknown> = {
+    TableName: TableNames.appData,
+    IndexName: 'GSI1',
+    KeyConditionExpression: 'gsi1pk = :pk',
+    ExpressionAttributeValues: { ':pk': 'AUDIT_LOGS' } as Record<string, unknown>,
+    ScanIndexForward: false,
+    Limit: 50,
+  }
+
+  // Add date range to key condition if provided
+  if (filters.startDate && filters.endDate) {
+    (params as any).KeyConditionExpression += ' AND gsi1sk BETWEEN :start AND :end';
+    (params as any).ExpressionAttributeValues[':start'] = filters.startDate;
+    (params as any).ExpressionAttributeValues[':end'] = filters.endDate + 'T23:59:59.999Z'
+  } else if (filters.startDate) {
+    (params as any).KeyConditionExpression += ' AND gsi1sk >= :start';
+    (params as any).ExpressionAttributeValues[':start'] = filters.startDate
+  } else if (filters.endDate) {
+    (params as any).KeyConditionExpression += ' AND gsi1sk <= :end';
+    (params as any).ExpressionAttributeValues[':end'] = filters.endDate + 'T23:59:59.999Z'
+  }
+
+  // Build filter expressions for adminId and action
+  const filterParts: string[] = []
+  if (filters.adminId) {
+    filterParts.push('adminId = :adminId');
+    (params as any).ExpressionAttributeValues[':adminId'] = filters.adminId
+  }
+  if (filters.action) {
+    filterParts.push('#action = :actionFilter');
+    (params as any).ExpressionAttributeNames = { ...(params as any).ExpressionAttributeNames, '#action': 'action' };
+    (params as any).ExpressionAttributeValues[':actionFilter'] = filters.action
+  }
+  if (filterParts.length > 0) {
+    (params as any).FilterExpression = filterParts.join(' AND ')
+  }
+
+  if (filters.cursor) {
+    (params as any).ExclusiveStartKey = JSON.parse(Buffer.from(filters.cursor, 'base64url').toString())
+  }
+
+  const result = await documentClient.send(new QueryCommand(params as any))
+  const items = (result.Items || []).map((i) => ({
+    id: i['logId'] ?? i['pk'],
+    adminId: i['adminId'],
+    adminRole: i['adminRole'],
+    action: i['action'],
+    entityType: i['entityType'],
+    entityId: i['entityId'],
+    beforeState: i['beforeState'] ?? null,
+    afterState: i['afterState'] ?? null,
+    createdAt: i['createdAt'],
+  }))
+
+  const nextCursor = result.LastEvaluatedKey
+    ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64url')
+    : null
+
+  return { items, nextCursor }
+}

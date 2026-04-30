@@ -327,6 +327,61 @@ export async function reviewAbuseFlag(
   return flag
 }
 
+export async function actionAbuseFlag(
+  adminId: string, adminRole: AdminRole, flagId: string, action: string,
+) {
+  checkPermission(adminRole, 'reset_flags')
+  if (action === 'disable_user') {
+    const flags = await repo.getUnreviewedAbuseFlags()
+    const flag = flags.find((f) => (f.id ?? (f as Record<string, unknown>)['flagId']) === flagId)
+    if (flag) {
+      const entityId = (flag as Record<string, unknown>)['entityId'] as string
+      if (entityId) {
+        await disableUser(adminId, adminRole, entityId)
+      }
+    }
+  } else if (action === 'reset_flags') {
+    const flags = await repo.getUnreviewedAbuseFlags()
+    const flag = flags.find((f) => (f.id ?? (f as Record<string, unknown>)['flagId']) === flagId)
+    if (flag) {
+      const entityId = (flag as Record<string, unknown>)['entityId'] as string
+      if (entityId) {
+        await resetAbuseFlags(adminId, adminRole, entityId)
+      }
+    }
+  }
+  await repo.reviewAbuseFlag(flagId)
+  await repo.createAuditLog({
+    adminId, adminRole, action: `abuse_flag_${action}`,
+    entityType: 'abuse_flag', entityId: flagId,
+    afterState: { action },
+  })
+  return { success: true }
+}
+
+// ─── Dashboard Metrics ──────────────────────────────────────────────────────
+
+export async function getDashboardMetrics(adminRole: AdminRole) {
+  checkPermission(adminRole, 'view_user')
+  return repo.getDashboardMetrics()
+}
+
+// ─── Audit Logs ─────────────────────────────────────────────────────────────
+
+export async function getAuditLogs(
+  adminRole: AdminRole,
+  filters: {
+    cursor?: string
+    adminId?: string
+    action?: string
+    startDate?: string
+    endDate?: string
+  },
+) {
+  checkPermission(adminRole, 'view_user')
+  return repo.getAuditLogs(filters)
+}
+
 // ─── Disable User / Business ────────────────────────────────────────────────
 
 export async function disableUser(
