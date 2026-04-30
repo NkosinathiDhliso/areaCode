@@ -385,15 +385,12 @@ resource "aws_dynamodb_table" "app_data" {
 
 # Monolith API Lambda — serves all Fastify routes via API Gateway catch-all
 module "lambda_api" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "api"
-  handler                = "index.handler"
-  timeout                = 30
-  memory_size            = 512
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "api"
+  handler       = "index.handler"
+  timeout       = 30
+  memory_size   = 512
   environment_variables = {
     AREA_CODE_ENV                           = local.env
     USERS_TABLE                             = aws_dynamodb_table.users.name
