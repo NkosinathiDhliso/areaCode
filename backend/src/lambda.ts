@@ -7,10 +7,12 @@ let proxy: ReturnType<typeof awsLambdaFastify> | null = null
 async function getProxy() {
   if (!proxy) {
     const app = await buildApp()
-    await app.ready()
+    // awsLambdaFastify must be called BEFORE app.ready() so it can
+    // register its decorator during the plugin phase
     proxy = awsLambdaFastify(app, {
       decorateRequest: true,
     })
+    await app.ready()
   }
   return proxy
 }

@@ -23,9 +23,9 @@ function Write-Warn($msg) { Write-Host $msg -ForegroundColor Yellow }
 # Your 4 Amplify Apps
 $AmplifyApps = @(
     @{ Name = "Web (Main)"; AppId = "d3pm78r41ma6w6"; Branch = "master"; Domain = "areacode.co.za" },
-    @{ Name = "Admin"; AppId = "d1ay6jict0ql9w"; Branch = "main"; Domain = "admin.areacode.co.za" },
-    @{ Name = "Business"; AppId = "dbp54yxhyjvk0"; Branch = "main"; Domain = "business.areacode.co.za" },
-    @{ Name = "Staff"; AppId = "d166bb81tg4k61"; Branch = "main"; Domain = "staff.areacode.co.za" }
+    @{ Name = "Admin"; AppId = "d1ay6jict0ql9w"; Branch = "master"; Domain = "admin.areacode.co.za" },
+    @{ Name = "Business"; AppId = "dbp54yxhyjvk0"; Branch = "master"; Domain = "business.areacode.co.za" },
+    @{ Name = "Staff"; AppId = "d166bb81tg4k61"; Branch = "master"; Domain = "staff.areacode.co.za" }
 )
 
 Write-Host ""

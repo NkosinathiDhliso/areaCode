@@ -128,6 +128,8 @@
   "friends.noResults": "No users found",
   "auth.login.otpFailed": "Invalid or expired OTP.",
   "auth.login.sendFailed": "Failed to send OTP. Check your phone number.",
+  "auth.login.accountNotFound": "No account found for this number. Sign up first.",
+  "auth.login.rateLimited": "Too many attempts. Please wait a moment and try again.",
   "auth.login.resendOtp": "Resend OTP",
   "auth.signup.failed": "Signup failed. Try again.",
   "crowdVibe.title": "Crowd Vibe",

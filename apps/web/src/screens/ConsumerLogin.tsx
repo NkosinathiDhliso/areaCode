@@ -35,7 +35,18 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
           return prev - 1
         })
       }, 1000)
-    } catch {
+    } catch (err: unknown) {
+      // Check if this is an "account not found" error (404)
+      const apiErr = err as { statusCode?: number; error?: string } | undefined
+      if (apiErr?.statusCode === 404 || apiErr?.error === 'not_found') {
+        setError(t('auth.login.accountNotFound', 'No account found for this number. Please sign up first.'))
+        return
+      }
+      // Check if this is a rate limit error (429)
+      if (apiErr?.statusCode === 429) {
+        setError(t('auth.login.rateLimited', 'Too many attempts. Please wait a moment and try again.'))
+        return
+      }
       try {
         const typeRes = await api.get<{ accountType: string }>(
           `/v1/auth/account-type?phone=${encodeURIComponent(e164)}`,

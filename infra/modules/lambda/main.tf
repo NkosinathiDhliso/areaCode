@@ -94,7 +94,7 @@ resource "aws_lambda_function" "this" {
   function_name    = "area-code-${var.env}-${var.function_name}"
   role             = aws_iam_role.lambda.arn
   handler          = var.handler
-  runtime          = "provided.al2023"
+  runtime          = "nodejs20.x"
   architectures    = ["arm64"]
   memory_size      = var.memory_size
   timeout          = var.timeout

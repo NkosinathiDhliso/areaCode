@@ -26,7 +26,16 @@ export function StaffLogin() {
     try {
       await api.post('/v1/auth/staff/login', { phone: normalizePhone(phone) })
       setStep('otp')
-    } catch {
+    } catch (err: unknown) {
+      const apiErr = err as { statusCode?: number; error?: string } | undefined
+      if (apiErr?.statusCode === 404 || apiErr?.error === 'not_found') {
+        setError('No staff account found for this number.')
+        return
+      }
+      if (apiErr?.statusCode === 429) {
+        setError('Too many attempts. Please wait and try again.')
+        return
+      }
       setError('Failed to send OTP. Check your phone number.')
     } finally {
       setLoading(false)
@@ -42,7 +51,12 @@ export function StaffLogin() {
         staff: { id: string; name: string; businessId: string }
       }>('/v1/auth/staff/verify-otp', { phone: normalizePhone(phone), code: otp })
       setAuth(res.accessToken, res.staff.id, res.staff.businessId, res.staff.name)
-    } catch {
+    } catch (err: unknown) {
+      const apiErr = err as { statusCode?: number } | undefined
+      if (apiErr?.statusCode === 429) {
+        setError('Too many attempts. Please wait and try again.')
+        return
+      }
       setError('Invalid or expired OTP.')
     } finally {
       setLoading(false)

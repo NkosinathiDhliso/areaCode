@@ -2,14 +2,11 @@ import { build } from 'esbuild'
 import { readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-// Build the monolith Lambda (API Gateway handler)
-await build({
-  entryPoints: ['src/lambda.ts'],
+const sharedBuildOptions = {
   bundle: true,
-  platform: 'node',
+  platform: 'node' as const,
   target: 'node20',
-  format: 'esm',
-  outfile: 'dist/lambda/index.mjs',
+  format: 'esm' as const,
   minify: true,
   sourcemap: true,
   treeShaking: true,
@@ -28,37 +25,34 @@ await build({
       'const __dirname = _dn(__filename);',
     ].join(''),
   },
+}
+
+// Build the monolith Lambda (API Gateway handler)
+await build({
+  ...sharedBuildOptions,
+  entryPoints: ['src/lambda.ts'],
+  outfile: 'dist/lambda/index.mjs',
+})
+
+// Build the WebSocket Lambda (API Gateway WebSocket handler)
+await build({
+  ...sharedBuildOptions,
+  entryPoints: ['src/lambdas/websocket.ts'],
+  outfile: 'dist/websocket/index.mjs',
 })
 
 // Build individual worker Lambdas
 const workerDir = resolve('src/workers')
 const workers = readdirSync(workerDir)
-  .filter((f) => f.endsWith('.ts') && !f.includes('.test.'))
+  .filter((f) => f.endsWith('.ts') && !f.includes('.test.') && !f.endsWith('-repository.ts'))
   .map((f) => f.replace('.ts', ''))
 
 for (const worker of workers) {
   await build({
+    ...sharedBuildOptions,
     entryPoints: [`src/workers/${worker}.ts`],
-    bundle: true,
-    platform: 'node',
-    target: 'node20',
-    format: 'esm',
     outfile: `dist/workers/${worker}/index.mjs`,
-    minify: true,
-    sourcemap: true,
-    treeShaking: true,
-    external: ['@aws-sdk/*'],
-    banner: {
-      js: [
-        'import { createRequire as _cr } from "module";',
-        'import { fileURLToPath as _fp } from "url";',
-        'import { dirname as _dn } from "path";',
-        'const require = _cr(import.meta.url);',
-        'const __filename = _fp(import.meta.url);',
-        'const __dirname = _dn(__filename);',
-      ].join(''),
-    },
   })
 }
 
-console.log(`✓ Built monolith Lambda + ${workers.length} worker Lambdas`)
+console.log(`✓ Built monolith Lambda + WebSocket Lambda + ${workers.length} worker Lambdas`)

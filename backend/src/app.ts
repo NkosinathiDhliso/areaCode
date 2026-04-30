@@ -113,17 +113,17 @@ export async function buildApp() {
     })
   })
 
-  // Register all feature routes
-  void app.register(authRoutes)
-  void app.register(nodeRoutes)
-  void app.register(checkInRoutes)
-  void app.register(rewardRoutes)
-  void app.register(businessRoutes)
-  void app.register(socialRoutes)
-  void app.register(adminRoutes)
-  void app.register(notificationRoutes)
-  void app.register(musicRoutes)
-  void app.register(staffRoutes)
+  // Register all feature routes — await to catch registration errors
+  await app.register(authRoutes)
+  await app.register(nodeRoutes)
+  await app.register(checkInRoutes)
+  await app.register(rewardRoutes)
+  await app.register(businessRoutes)
+  await app.register(socialRoutes)
+  await app.register(adminRoutes)
+  await app.register(notificationRoutes)
+  await app.register(musicRoutes)
+  await app.register(staffRoutes)
 
   return app
 }

@@ -57,13 +57,13 @@ export async function handler(event: WebSocketEvent, context: WebSocketContext):
         return await handleConnect(connectionId, event)
       case '$disconnect':
         return await handleDisconnect(connectionId)
-      case 'room:join':
+      case 'joinroom':
         return await handleJoinRoom(connectionId, event)
-      case 'room:leave':
+      case 'leaveroom':
         return await handleLeaveRoom(connectionId, event)
-      case 'presence:join':
+      case 'presencejoin':
         return await handlePresenceJoin(connectionId, event)
-      case 'presence:leave':
+      case 'presenceleave':
         return await handlePresenceLeave(connectionId, event)
       case '$default':
         return await handleDefault(connectionId, event)

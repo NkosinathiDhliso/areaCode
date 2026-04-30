@@ -24,7 +24,16 @@ export function BusinessLogin({ onSwitchToSignup }: BusinessLoginProps) {
     try {
       await api.post('/v1/auth/business/login', { phone: toE164(phone) })
       setStep('otp')
-    } catch {
+    } catch (err: unknown) {
+      const apiErr = err as { statusCode?: number; error?: string } | undefined
+      if (apiErr?.statusCode === 404 || apiErr?.error === 'not_found') {
+        setError('No business account found for this number. Please sign up first.')
+        return
+      }
+      if (apiErr?.statusCode === 429) {
+        setError('Too many attempts. Please wait and try again.')
+        return
+      }
       setError('Failed to send OTP.')
     } finally {
       setLoading(false)
@@ -41,7 +50,12 @@ export function BusinessLogin({ onSwitchToSignup }: BusinessLoginProps) {
         businessId: string
       }>('/v1/auth/business/verify-otp', { phone: toE164(phone), code: otp })
       setAuth(res.accessToken, res.refreshToken, res.businessId)
-    } catch {
+    } catch (err: unknown) {
+      const apiErr = err as { statusCode?: number } | undefined
+      if (apiErr?.statusCode === 429) {
+        setError('Too many attempts. Please wait and try again.')
+        return
+      }
       setError('Invalid or expired OTP.')
     } finally {
       setLoading(false)

@@ -18,8 +18,17 @@ variable "lambda_function_arn" {
   type = string
 }
 
+variable "lambda_function_name" {
+  type = string
+}
+
 variable "lambda_invoke_arn" {
   type = string
+}
+
+variable "lambda_role_name" {
+  type        = string
+  description = "IAM role name for the WebSocket Lambda (for attaching policies)"
 }
 
 # WebSocket API
@@ -97,25 +106,25 @@ resource "aws_apigatewayv2_route" "default" {
 # Custom routes for app events
 resource "aws_apigatewayv2_route" "join_room" {
   api_id    = aws_apigatewayv2_api.websocket.id
-  route_key = "room:join"
+  route_key = "joinroom"
   target    = "integrations/${aws_apigatewayv2_integration.websocket.id}"
 }
 
 resource "aws_apigatewayv2_route" "leave_room" {
   api_id    = aws_apigatewayv2_api.websocket.id
-  route_key = "room:leave"
+  route_key = "leaveroom"
   target    = "integrations/${aws_apigatewayv2_integration.websocket.id}"
 }
 
 resource "aws_apigatewayv2_route" "presence_join" {
   api_id    = aws_apigatewayv2_api.websocket.id
-  route_key = "presence:join"
+  route_key = "presencejoin"
   target    = "integrations/${aws_apigatewayv2_integration.websocket.id}"
 }
 
 resource "aws_apigatewayv2_route" "presence_leave" {
   api_id    = aws_apigatewayv2_api.websocket.id
-  route_key = "presence:leave"
+  route_key = "presenceleave"
   target    = "integrations/${aws_apigatewayv2_integration.websocket.id}"
 }
 
@@ -150,7 +159,7 @@ resource "aws_apigatewayv2_stage" "websocket" {
 resource "aws_lambda_permission" "websocket" {
   statement_id  = "AllowExecutionFromAPIGateway"
   action        = "lambda:InvokeFunction"
-  function_name = var.lambda_function_arn
+  function_name = var.lambda_function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.websocket.execution_arn}/*/*"
 }
@@ -158,7 +167,7 @@ resource "aws_lambda_permission" "websocket" {
 # IAM role for Lambda to manage connections
 resource "aws_iam_role_policy" "websocket_connections" {
   name = "websocket-connections-${var.env}"
-  role = split("/", var.lambda_function_arn)[1]
+  role = var.lambda_role_name
 
   policy = jsonencode({
     Version = "2012-10-17"

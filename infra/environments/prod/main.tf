@@ -63,31 +63,31 @@ module "vpc" {
 
 # --- Cognito pools (4 separate pools) ---
 module "cognito_consumer" {
-  source    = "../../modules/cognito"
-  env       = local.env
-  pool_name = "consumer"
-  define_auth_challenge_arn  = module.cognito_triggers_consumer.define_auth_arn
-  create_auth_challenge_arn  = module.cognito_triggers_consumer.create_auth_arn
-  verify_auth_challenge_arn  = module.cognito_triggers_consumer.verify_auth_arn
+  source                    = "../../modules/cognito"
+  env                       = local.env
+  pool_name                 = "consumer"
+  define_auth_challenge_arn = module.cognito_triggers_consumer.define_auth_arn
+  create_auth_challenge_arn = module.cognito_triggers_consumer.create_auth_arn
+  verify_auth_challenge_arn = module.cognito_triggers_consumer.verify_auth_arn
 }
 
 module "cognito_business" {
-  source    = "../../modules/cognito"
-  env       = local.env
-  pool_name = "business"
-  define_auth_challenge_arn  = module.cognito_triggers_business.define_auth_arn
-  create_auth_challenge_arn  = module.cognito_triggers_business.create_auth_arn
-  verify_auth_challenge_arn  = module.cognito_triggers_business.verify_auth_arn
+  source                    = "../../modules/cognito"
+  env                       = local.env
+  pool_name                 = "business"
+  define_auth_challenge_arn = module.cognito_triggers_business.define_auth_arn
+  create_auth_challenge_arn = module.cognito_triggers_business.create_auth_arn
+  verify_auth_challenge_arn = module.cognito_triggers_business.verify_auth_arn
 }
 
 module "cognito_staff" {
-  source                 = "../../modules/cognito"
-  env                    = local.env
-  pool_name              = "staff"
-  access_token_ttl_hours = 8
-  define_auth_challenge_arn  = module.cognito_triggers_staff.define_auth_arn
-  create_auth_challenge_arn  = module.cognito_triggers_staff.create_auth_arn
-  verify_auth_challenge_arn  = module.cognito_triggers_staff.verify_auth_arn
+  source                    = "../../modules/cognito"
+  env                       = local.env
+  pool_name                 = "staff"
+  access_token_ttl_hours    = 8
+  define_auth_challenge_arn = module.cognito_triggers_staff.define_auth_arn
+  create_auth_challenge_arn = module.cognito_triggers_staff.create_auth_arn
+  verify_auth_challenge_arn = module.cognito_triggers_staff.verify_auth_arn
 }
 
 module "cognito_admin" {
@@ -394,14 +394,25 @@ module "lambda_api" {
   vpc_subnet_ids         = module.vpc.private_subnet_ids
   vpc_security_group_ids = module.vpc.lambda_security_group_ids
   environment_variables = {
-    AREA_CODE_ENV        = local.env
-    USERS_TABLE          = aws_dynamodb_table.users.name
-    NODES_TABLE          = aws_dynamodb_table.nodes.name
-    CHECKINS_TABLE       = aws_dynamodb_table.checkins.name
-    REWARDS_TABLE        = aws_dynamodb_table.rewards.name
-    BUSINESSES_TABLE     = aws_dynamodb_table.businesses.name
-    APP_DATA_TABLE       = aws_dynamodb_table.app_data.name
-    AREA_CODE_REWARD_QUEUE_URL = module.sqs_reward_eval.queue_url
+    AREA_CODE_ENV                           = local.env
+    USERS_TABLE                             = aws_dynamodb_table.users.name
+    NODES_TABLE                             = aws_dynamodb_table.nodes.name
+    CHECKINS_TABLE                          = aws_dynamodb_table.checkins.name
+    REWARDS_TABLE                           = aws_dynamodb_table.rewards.name
+    BUSINESSES_TABLE                        = aws_dynamodb_table.businesses.name
+    APP_DATA_TABLE                          = aws_dynamodb_table.app_data.name
+    AREA_CODE_REWARD_QUEUE_URL              = module.sqs_reward_eval.queue_url
+    AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID = module.cognito_consumer.user_pool_id
+    AREA_CODE_COGNITO_CONSUMER_CLIENT_ID    = module.cognito_consumer.client_id
+    AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID = module.cognito_business.user_pool_id
+    AREA_CODE_COGNITO_BUSINESS_CLIENT_ID    = module.cognito_business.client_id
+    AREA_CODE_COGNITO_STAFF_USER_POOL_ID    = module.cognito_staff.user_pool_id
+    AREA_CODE_COGNITO_STAFF_CLIENT_ID       = module.cognito_staff.client_id
+    AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
+    AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
+    AREA_CODE_S3_MEDIA_BUCKET               = module.s3_media.bucket_name
+    AREA_CODE_SQS_PUSH_QUEUE_URL            = module.sqs_push_sender.queue_url
+    AREA_CODE_CONSENT_VERSION               = "v1.0"
   }
 }
 
@@ -415,9 +426,9 @@ module "lambda_check_in" {
   vpc_subnet_ids         = module.vpc.private_subnet_ids
   vpc_security_group_ids = module.vpc.lambda_security_group_ids
   environment_variables = {
-    AREA_CODE_ENV = local.env
-    USERS_TABLE   = aws_dynamodb_table.users.name
-    NODES_TABLE   = aws_dynamodb_table.nodes.name
+    AREA_CODE_ENV  = local.env
+    USERS_TABLE    = aws_dynamodb_table.users.name
+    NODES_TABLE    = aws_dynamodb_table.nodes.name
     CHECKINS_TABLE = aws_dynamodb_table.checkins.name
   }
 }
@@ -527,7 +538,7 @@ module "lambda_yoco_webhook" {
   function_name = "yoco-webhook"
   timeout       = 30
   environment_variables = {
-    AREA_CODE_ENV = local.env
+    AREA_CODE_ENV    = local.env
     BUSINESSES_TABLE = aws_dynamodb_table.businesses.name
   }
 }
@@ -535,15 +546,16 @@ module "lambda_yoco_webhook" {
 # --- Lambda DynamoDB IAM permissions ---
 resource "aws_iam_role_policy" "lambda_dynamodb" {
   for_each = {
-    api             = module.lambda_api.role_name
-    check_in        = module.lambda_check_in.role_name
-    node_detail     = module.lambda_node_detail.role_name
-    rewards_near_me = module.lambda_rewards_near_me.role_name
-    pulse_decay     = module.lambda_pulse_decay.role_name
-    yoco_webhook    = module.lambda_yoco_webhook.role_name
-    reward_evaluator = module.lambda_reward_evaluator.role_name
+    api               = module.lambda_api.role_name
+    check_in          = module.lambda_check_in.role_name
+    node_detail       = module.lambda_node_detail.role_name
+    rewards_near_me   = module.lambda_rewards_near_me.role_name
+    pulse_decay       = module.lambda_pulse_decay.role_name
+    yoco_webhook      = module.lambda_yoco_webhook.role_name
+    reward_evaluator  = module.lambda_reward_evaluator.role_name
     leaderboard_reset = module.lambda_leaderboard_reset.role_name
-    cleanup         = module.lambda_cleanup.role_name
+    cleanup           = module.lambda_cleanup.role_name
+    websocket         = module.lambda_websocket.role_name
   }
 
   name = "dynamodb-access"
@@ -574,6 +586,39 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
         "${aws_dynamodb_table.rewards.arn}/index/*",
         "${aws_dynamodb_table.businesses.arn}/index/*",
         "${aws_dynamodb_table.app_data.arn}/index/*"
+      ]
+    }]
+  })
+}
+
+# --- Lambda IAM: API Lambda -> Cognito (auth operations) ---
+resource "aws_iam_role_policy" "api_cognito" {
+  name = "cognito-access"
+  role = module.lambda_api.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "cognito-idp:AdminGetUser",
+        "cognito-idp:AdminCreateUser",
+        "cognito-idp:AdminSetUserPassword",
+        "cognito-idp:AdminUpdateUserAttributes",
+        "cognito-idp:AdminDeleteUser",
+        "cognito-idp:AdminInitiateAuth",
+        "cognito-idp:AdminRespondToAuthChallenge",
+        "cognito-idp:ListUsers",
+        "cognito-idp:SignUp",
+        "cognito-idp:InitiateAuth",
+        "cognito-idp:RespondToAuthChallenge",
+        "cognito-idp:GlobalSignOut"
+      ]
+      Resource = [
+        module.cognito_consumer.user_pool_arn,
+        module.cognito_business.user_pool_arn,
+        module.cognito_staff.user_pool_arn,
+        module.cognito_admin.user_pool_arn
       ]
     }]
   })
@@ -740,7 +785,7 @@ resource "aws_cloudwatch_metric_alarm" "checkin_errors" {
 resource "aws_budgets_budget" "monthly" {
   name         = "area-code-${local.env}-monthly"
   budget_type  = "COST"
-  limit_amount = "100"  # Lowered for serverless
+  limit_amount = "100" # Lowered for serverless
   limit_unit   = "USD"
   time_unit    = "MONTHLY"
 
@@ -806,12 +851,12 @@ output "api_endpoint" {
 
 output "dynamodb_tables" {
   value = {
-    users     = aws_dynamodb_table.users.name
-    nodes     = aws_dynamodb_table.nodes.name
-    checkins  = aws_dynamodb_table.checkins.name
-    rewards   = aws_dynamodb_table.rewards.name
+    users      = aws_dynamodb_table.users.name
+    nodes      = aws_dynamodb_table.nodes.name
+    checkins   = aws_dynamodb_table.checkins.name
+    rewards    = aws_dynamodb_table.rewards.name
     businesses = aws_dynamodb_table.businesses.name
-    app_data  = aws_dynamodb_table.app_data.name
+    app_data   = aws_dynamodb_table.app_data.name
   }
 }
 
@@ -843,21 +888,30 @@ output "sqs_push_sender_url" {
   value = module.sqs_push_sender.queue_url
 }
 
-# --- WebSocket API (TODO: deploy after backend zip is built) ---
-# module "websocket" {
-#   source              = "../../modules/websocket"
-#   env                 = local.env
-#   lambda_function_arn = aws_lambda_function.websocket.arn
-#   lambda_invoke_arn   = aws_lambda_function.websocket.invoke_arn
-# }
-#
-# resource "aws_lambda_function" "websocket" {
-#   function_name = "area-code-${local.env}-websocket"
-#   role          = module.lambda_check_in.role_arn
-#   handler       = "src/lambdas/websocket.handler"
-#   runtime       = "nodejs20.x"
-#   timeout       = 10
-#   memory_size   = 256
-#   filename         = "${path.module}/../../../backend/dist/websocket-lambda.zip"
-#   source_code_hash = filebase64sha256("${path.module}/../../../backend/dist/websocket-lambda.zip")
-# }
+# --- WebSocket API Gateway + Lambda ---
+module "lambda_websocket" {
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "websocket"
+  handler       = "index.handler"
+  timeout       = 10
+  memory_size   = 256
+  environment_variables = {
+    AREA_CODE_ENV     = local.env
+    CONNECTIONS_TABLE = "area-code-${local.env}-websocket-connections"
+    # WEBSOCKET_ENDPOINT is set post-deploy via deploy script (avoids circular dep)
+  }
+}
+
+module "websocket" {
+  source               = "../../modules/websocket"
+  env                  = local.env
+  lambda_function_arn  = module.lambda_websocket.function_arn
+  lambda_function_name = module.lambda_websocket.function_name
+  lambda_invoke_arn    = module.lambda_websocket.invoke_arn
+  lambda_role_name     = module.lambda_websocket.role_name
+}
+
+output "websocket_api_endpoint" {
+  value = module.websocket.websocket_api_endpoint
+}
