@@ -57,8 +57,9 @@ data "aws_secretsmanager_secret" "qr_hmac" {
 
 # --- VPC / Networking ---
 module "vpc" {
-  source = "../../modules/vpc"
-  env    = local.env
+  source             = "../../modules/vpc"
+  env                = local.env
+  enable_nat_gateway = false
 }
 
 # --- Cognito pools (4 separate pools) ---
