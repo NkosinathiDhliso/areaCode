@@ -2,11 +2,20 @@ import { useState } from 'react'
 
 import { useStaffAuthStore } from './stores/staffAuthStore'
 import { useTheme } from '@area-code/shared/hooks/useTheme'
+import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
 import { StaffInvite } from './screens/StaffInvite'
 import { StaffLogin } from './screens/StaffLogin'
 import { StaffHome } from './screens/StaffHome'
 
 export function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  )
+}
+
+function AppContent() {
   const isAuthenticated = useStaffAuthStore((s) => s.isAuthenticated)
   useTheme()
   const [route] = useState(() => {

@@ -167,6 +167,12 @@ export function BusinessSignup({ onSwitchToLogin }: BusinessSignupProps) {
           >
             {resendCooldown > 0 ? `Resend OTP (${resendCooldown}s)` : 'Resend OTP'}
           </button>
+          <button
+            onClick={() => { setStep('details'); setOtp(''); setError(null) }}
+            className="text-[var(--text-secondary)] text-sm mt-1"
+          >
+            ← {t('biz.login.changeNumber', 'Change number')}
+          </button>
         </div>
       )}
 

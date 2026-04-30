@@ -119,6 +119,13 @@ export default function ConsumerLogin() {
               {resendCooldown > 0 ? `Resend OTP (${resendCooldown}s)` : 'Resend OTP'}
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => { setStep('phone'); setOtp(''); setError(null) }}
+          >
+            <Text style={styles.changeNumberText}>
+              ← {t('auth.login.changeNumber', 'Change number')}
+            </Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -167,6 +174,7 @@ const styles = StyleSheet.create({
   error: { color: colors.danger, fontSize: 12, marginTop: 12 },
   resendText: { color: colors.accent, fontSize: 13, textAlign: 'center', marginTop: 8 },
   resendDisabled: { color: colors.textMuted },
+  changeNumberText: { color: colors.textSecondary, fontSize: 13, textAlign: 'center', marginTop: 8 },
   link: { color: colors.accent, fontSize: 14, marginTop: 24 },
   mutedLink: { color: colors.textMuted, fontSize: 12, marginTop: 12 },
 })

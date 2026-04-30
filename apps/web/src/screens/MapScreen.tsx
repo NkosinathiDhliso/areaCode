@@ -51,7 +51,6 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const [signupOpen, setSignupOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState<NodeCategory | null>(null)
-  const [browseOnly, setBrowseOnly] = useState(false)
   const [primingOpen, setPrimingOpen] = useState(false)
   const [primingShownThisSession, setPrimingShownThisSession] = useState(false)
 
@@ -143,18 +142,15 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
           zoom: DEFAULT_ZOOM,
         })
       } else {
-        // Permission still denied, dismiss overlay and let them browse
-        setBrowseOnly(true)
+        // Permission still denied, dismiss banner
+        setLocationBannerDismissed(true)
       }
     })
   }
 
-  function handleBrowseOnly() {
-    setBrowseOnly(true)
-  }
-
   const selectedScore = selectedNode ? (pulseScores[selectedNode.id] ?? 0) : 0
-  const showPermissionPrompt = permissionState === 'denied' && !browseOnly
+  const [locationBannerDismissed, setLocationBannerDismissed] = useState(false)
+  const showLocationBanner = permissionState === 'denied' && !locationBannerDismissed
 
   return (
     <div className="h-full w-full relative">
@@ -163,6 +159,31 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       <div className="absolute top-4 left-0 right-0 z-10">
         <CategoryFilterBar onFilter={setCategoryFilter} />
       </div>
+
+      {/* Location banner, non-blocking */}
+      {showLocationBanner && (
+        <div className="absolute top-16 left-4 right-4 z-20">
+          <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl px-4 py-3 flex items-center justify-between">
+            <div className="flex-1 mr-3">
+              <p className="text-[var(--text-primary)] text-xs font-medium">
+                {t('location.permissionTitle')}
+              </p>
+            </div>
+            <button
+              onClick={handleEnableLocation}
+              className="bg-[var(--accent)] text-white text-xs font-semibold rounded-lg px-3 py-1.5 mr-2"
+            >
+              {t('location.enable')}
+            </button>
+            <button
+              onClick={() => setLocationBannerDismissed(true)}
+              className="text-[var(--text-muted)]"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       {!onboarding.hintSeen && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
@@ -182,31 +203,6 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       )}
 
       <ToastOverlay />
-
-      {/* Full-screen location permission prompt */}
-      {showPermissionPrompt && (
-        <div className="absolute inset-0 z-30 bg-[var(--bg-surface)] flex flex-col items-center justify-center px-6">
-          <div className="text-center max-w-sm">
-            <p className="text-[var(--text-primary)] text-lg font-semibold font-[Syne] mb-6">
-              {t('location.permissionTitle')}
-            </p>
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={handleEnableLocation}
-                className="w-full bg-[var(--accent)] text-white font-semibold rounded-xl py-4 text-base"
-              >
-                {t('location.enable')}
-              </button>
-              <button
-                onClick={handleBrowseOnly}
-                className="w-full bg-[var(--bg-raised)] text-[var(--text-secondary)] font-semibold rounded-xl py-4 text-base border border-[var(--border)]"
-              >
-                {t('location.browseOnly')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <NodeDetailSheet
         node={selectedNode}

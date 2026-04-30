@@ -4,11 +4,20 @@ import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore
 import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { api } from '@area-code/shared/lib/api'
 import { getSocket } from '@area-code/shared/lib/socket'
+import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
 import { BusinessLogin } from './screens/BusinessLogin'
 import { BusinessSignup } from './screens/BusinessSignup'
 import { BusinessDashboard } from './screens/BusinessDashboard'
 
 export function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  )
+}
+
+function AppContent() {
   const isAuthenticated = useBusinessAuthStore((s) => s.isAuthenticated)
   const accessToken = useBusinessAuthStore((s) => s.accessToken)
   const businessId = useBusinessAuthStore((s) => s.businessId)

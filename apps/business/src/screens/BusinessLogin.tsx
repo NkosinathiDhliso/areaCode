@@ -123,6 +123,12 @@ export function BusinessLogin({ onSwitchToSignup }: BusinessLoginProps) {
           >
             {resendCooldown > 0 ? `Resend OTP (${resendCooldown}s)` : 'Resend OTP'}
           </button>
+          <button
+            onClick={() => { setStep('phone'); setOtp(''); setError(null) }}
+            className="text-[var(--text-secondary)] text-sm mt-1"
+          >
+            ← {t('biz.login.changeNumber', 'Change number')}
+          </button>
         </div>
       )}
 

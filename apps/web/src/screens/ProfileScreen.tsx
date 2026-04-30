@@ -7,6 +7,7 @@ import { useTheme } from '@area-code/shared/hooks/useTheme'
 import type { ThemePreference } from '@area-code/shared/hooks/useTheme'
 import { TierBadge } from '@area-code/shared/components/TierBadge'
 import { TierProgressBar } from '@area-code/shared/components/TierProgressBar'
+import { StreakDisplay } from '@area-code/shared/components/StreakDisplay'
 import { Avatar } from '@area-code/shared/components/Avatar'
 import { PrivacyIndicator } from '@area-code/shared/components/PrivacyIndicator'
 import type { User, PrivacyLevel } from '@area-code/shared/types'
@@ -59,6 +60,18 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   const { data: tierProgress } = useQuery({
     queryKey: ['tier-progress'],
     queryFn: () => api.get<TierProgressData>('/v1/users/me/tier-progress'),
+    staleTime: 60_000,
+  })
+
+  interface StreakData {
+    streakCount: number
+    streakStartDate: string | null
+    atRisk: boolean
+  }
+
+  const { data: streakData } = useQuery({
+    queryKey: ['streak'],
+    queryFn: () => api.get<StreakData>('/v1/users/me/streak'),
     staleTime: 60_000,
   })
 
@@ -116,6 +129,16 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
             nextTier={tierProgress.nextTier}
             nextTierThreshold={tierProgress.nextTierThreshold}
             checkInsRemaining={tierProgress.checkInsRemaining}
+          />
+        </div>
+      )}
+
+      {streakData && (
+        <div className="mb-3">
+          <StreakDisplay
+            streakCount={streakData.streakCount}
+            streakStartDate={streakData.streakStartDate}
+            atRisk={streakData.atRisk}
           />
         </div>
       )}

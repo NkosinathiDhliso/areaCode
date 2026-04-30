@@ -270,6 +270,46 @@ export async function authRoutes(app: FastifyInstance) {
     },
   )
 
+  // GET /v1/users/me/streak
+  app.get(
+    '/v1/users/me/streak',
+    { preHandler: [requireAuth('consumer')] },
+    async (request) => {
+      const auth = getAuth(request)
+      const profile = await service.getUserProfile(auth.cognitoSub) as Record<string, unknown>
+      const streakCount = (profile.streakCount as number) ?? 0
+      const streakStartDate = (profile.streakStartDate as string) ?? null
+
+      // At-risk logic: streak > 0 AND last check-in date (SAST) is before today (SAST)
+      // SAST = UTC+2
+      let atRisk = false
+      if (streakCount > 0) {
+        const history = await service.getCheckInHistory(auth.userId, undefined, 1)
+        if (history.items.length > 0) {
+          const lastCheckIn = new Date((history.items[0] as { checkedInAt: string }).checkedInAt)
+          // Convert to SAST by adding 2 hours
+          const sastOffset = 2 * 60 * 60 * 1000
+          const lastCheckInSAST = new Date(lastCheckIn.getTime() + sastOffset)
+          const nowSAST = new Date(Date.now() + sastOffset)
+
+          const lastCheckInDate = lastCheckInSAST.toISOString().slice(0, 10)
+          const todayDate = nowSAST.toISOString().slice(0, 10)
+
+          atRisk = lastCheckInDate < todayDate
+        } else {
+          // No check-ins found but streak > 0 — at risk
+          atRisk = true
+        }
+      }
+
+      return {
+        streakCount,
+        streakStartDate,
+        atRisk,
+      }
+    },
+  )
+
   // PUT /v1/users/me/consent
   app.put(
     '/v1/users/me/consent',

@@ -148,7 +148,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
   - Ensure all tests pass, ask the user if questions arise.
 
 - [-] 5. Consumer Portal Features (Requirements 1, 2, 3, 4, 5, 6, 7)
-  - [ ] 5.1 Implement check-in history API and UI (Req 1)
+  - [x] 5.1 Implement check-in history API and UI (Req 1)
     - Create `GET /v1/users/me/check-in-history` endpoint with cursor-based pagination (the existing `getCheckInHistory` in auth service can be extended or a new route registered)
     - Create `PaginatedList` shared component in `packages/shared/components/` — cursor-based infinite scroll with error/retry
     - Create `CheckInHistoryScreen` in consumer web (`apps/web/src/screens/`) and mobile (`apps/mobile/app/`) — paginated list showing venue name, category, timestamp per entry
@@ -162,7 +162,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Create `backend/src/__tests__/properties/pagination.property.test.ts`
     - **Validates: Requirements 1.1, 1.2, 1.3**
 
-  - [ ] 5.3 Implement tier progression API and UI (Req 2)
+  - [x] 5.3 Implement tier progression API and UI (Req 2)
     - Create `GET /v1/users/me/tier-progress` endpoint in `backend/src/features/auth/handler.ts` — returns current tier, next tier threshold, check-ins remaining, and benefits per tier
     - Create `TierProgressBar` shared component in `packages/shared/components/` — visual progress toward next tier
     - Create `TierProgressionPanel` in consumer web and mobile — tier ladder with thresholds (local: 0–9, regular: 10–49, fixture: 50–149, institution: 150–499, legend: 500+) and benefits per tier
@@ -175,7 +175,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Create `backend/src/__tests__/properties/tier-computation.property.test.ts`
     - **Validates: Requirements 2.4, 2.5**
 
-  - [ ] 5.5 Implement streak mechanics API and UI (Req 3)
+  - [x] 5.5 Implement streak mechanics API and UI (Req 3)
     - Create `GET /v1/users/me/streak` endpoint — returns streak count, start date, at-risk status
     - Add `streakStartDate` attribute to users table if not already present
     - At-risk logic: streak > 0 AND last check-in date (SAST) is before today (SAST)
@@ -188,7 +188,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Create `backend/src/__tests__/properties/streak.property.test.ts`
     - **Validates: Requirements 3.3**
 
-  - [ ] 5.7 Implement venue text search for mobile (Req 4)
+  - [-] 5.7 Implement venue text search for mobile (Req 4)
     - Create `GET /v1/nodes/search?q=` endpoint in `backend/src/features/nodes/handler.ts` — text search by venue name (case-insensitive, min 2 chars)
     - Create `SearchInput` shared component in `packages/shared/components/` — debounced text input with 300ms delay
     - Create `VenueSearchOverlay` in mobile app (`apps/mobile/`) — search input overlaying the map screen, results list, tap to center map and open venue detail sheet
@@ -200,7 +200,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Create `backend/src/__tests__/properties/venue-search.property.test.ts`
     - **Validates: Requirements 4.2**
 
-  - [ ] 5.9 Implement OTP back navigation for all portals (Req 5)
+  - [x] 5.9 Implement OTP back navigation for all portals (Req 5)
     - Create `POST /v1/auth/consumer/otp/cancel` endpoint — invalidate current OTP session by deleting `otp:session:{phone}` from KV store
     - Add back button to OTP verification screens in all portals: consumer web (`apps/web/`), consumer mobile (`apps/mobile/`), business (`apps/business/`), staff (`apps/staff/`)
     - Preserve previously entered phone number when navigating back
@@ -216,7 +216,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Persist completion state so flow is not shown again
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-  - [ ] 5.11 Implement global error boundary and API error interceptor (Req 7)
+  - [x] 5.11 Implement global error boundary and API error interceptor (Req 7)
     - Create `ErrorBoundary` shared component in `packages/shared/components/` — catches unhandled React errors, logs to Sentry, displays recovery screen with reload button
     - Create `ErrorToast` shared component — contextual error messages with retry action
     - Create shared API error interceptor in `packages/shared/lib/` (or `packages/shared/hooks/`):
@@ -229,7 +229,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Ensure staff redemption failure displays specific error (invalid_code, already_redeemed, expired_code)
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6_
 
-- [ ] 6. Checkpoint — Consumer portal features complete
+- [x] 6. Checkpoint — Consumer portal features complete
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 7. Business Portal Features (Requirements 8, 9)

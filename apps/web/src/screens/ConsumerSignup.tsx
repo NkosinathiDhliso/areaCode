@@ -131,6 +131,12 @@ export function ConsumerSignup({ onNavigate }: ConsumerSignupProps) {
           >
             {resendCooldown > 0 ? `Resend OTP (${resendCooldown}s)` : 'Resend OTP'}
           </button>
+          <button
+            onClick={() => { setStep('form'); setOtp(''); setError(null) }}
+            className="text-[var(--text-secondary)] text-sm mt-1"
+          >
+            ← {t('auth.login.changeNumber', 'Change number')}
+          </button>
         </div>
         {error && <p className="text-xs text-[var(--danger)] mt-3">{error}</p>}
       </div>

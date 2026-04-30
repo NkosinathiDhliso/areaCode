@@ -6,6 +6,7 @@ import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore
 import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { api } from '@area-code/shared/lib/api'
 import { getSocket } from '@area-code/shared/lib/socket'
+import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
 
 import { MapScreen } from './screens/MapScreen'
 import { RewardsScreen } from './screens/RewardsScreen'
@@ -23,6 +24,14 @@ import { ConnectivityBanner } from './components/ConnectivityBanner'
 import type { AppRoute } from './types'
 
 export function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  )
+}
+
+function AppContent() {
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
   const accessToken = useConsumerAuthStore((s) => s.accessToken)
   const resetNavigation = useNavigationStore((s) => s.resetNavigation)

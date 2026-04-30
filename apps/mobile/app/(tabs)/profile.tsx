@@ -91,6 +91,40 @@ export default function ProfileScreen() {
         <StatCard value={tier} label={t('profile.currentTier')} />
       </View>
 
+      {tierProgress && (
+        <View style={styles.tierProgressContainer}>
+          <View style={styles.tierProgressHeader}>
+            <Text style={styles.tierProgressLabel}>{tierProgress.currentTier}</Text>
+            {tierProgress.nextTier && (
+              <Text style={styles.tierProgressNext}>→ {tierProgress.nextTier}</Text>
+            )}
+          </View>
+          <View style={styles.tierProgressTrack}>
+            <View
+              style={[
+                styles.tierProgressFill,
+                {
+                  width: tierProgress.nextTierThreshold
+                    ? `${Math.min(100, ((tierProgress.currentCheckIns - (TIER_LEVELS.find((l: TierLevel) => l.tier === tierProgress.currentTier)?.minCheckIns ?? 0)) / (tierProgress.nextTierThreshold - (TIER_LEVELS.find((l: TierLevel) => l.tier === tierProgress.currentTier)?.minCheckIns ?? 0))) * 100)}%`
+                    : '100%',
+                  backgroundColor: TIER_LEVELS.find((l: TierLevel) => l.tier === tierProgress.currentTier)?.colour ?? colors.accent,
+                },
+              ]}
+            />
+          </View>
+          <View style={styles.tierProgressFooter}>
+            <Text style={styles.tierProgressCount}>{tierProgress.currentCheckIns} check-ins</Text>
+            {tierProgress.checkInsRemaining > 0 ? (
+              <Text style={styles.tierProgressRemaining}>
+                {tierProgress.checkInsRemaining} more to {tierProgress.nextTier}
+              </Text>
+            ) : (
+              <Text style={styles.tierProgressRemaining}>Max tier ✨</Text>
+            )}
+          </View>
+        </View>
+      )}
+
       <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/friends')}>
         <Text style={styles.menuText}>{t('friends.title')}</Text>
         <Text style={styles.menuArrow}>→</Text>
@@ -198,4 +232,53 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   primaryButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  tierProgressContainer: {
+    backgroundColor: colors.bgSurface,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 4,
+  },
+  tierProgressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  tierProgressLabel: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  tierProgressNext: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  tierProgressTrack: {
+    height: 8,
+    backgroundColor: colors.bgRaised,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  tierProgressFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  tierProgressFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  tierProgressCount: {
+    color: colors.textMuted,
+    fontSize: 11,
+  },
+  tierProgressRemaining: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '500',
+  },
 })

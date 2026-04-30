@@ -125,6 +125,12 @@ export function StaffLogin() {
           >
             {resendCooldown > 0 ? `Resend OTP (${resendCooldown}s)` : 'Resend OTP'}
           </button>
+          <button
+            onClick={() => { setStep('phone'); setOtp(''); setError(null) }}
+            className="text-[var(--text-secondary)] text-sm mt-1"
+          >
+            ← {t('staff.login.changeNumber', 'Change number')}
+          </button>
         </div>
       )}
 

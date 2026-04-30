@@ -127,6 +127,12 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
           >
             {resendCooldown > 0 ? `${t('auth.login.resendOtp')} (${resendCooldown}s)` : t('auth.login.resendOtp')}
           </button>
+          <button
+            onClick={() => { setStep('phone'); setOtp(''); setError(null) }}
+            className="text-[var(--text-secondary)] text-sm mt-1"
+          >
+            ← {t('auth.login.changeNumber', 'Change number')}
+          </button>
         </div>
       )}
 
