@@ -28,6 +28,35 @@ export default function ConsumerSignup() {
   const [step, setStep] = useState<'form' | 'otp'>('form')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [resendCooldown, setResendCooldown] = useState(0)
+
+  function startResendTimer() {
+    setResendCooldown(60)
+    const interval = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) { clearInterval(interval); return 0 }
+        return prev - 1
+      })
+    }, 1000)
+  }
+
+  async function handleResendOtp() {
+    setLoading(true)
+    setError(null)
+    try {
+      await api.post('/v1/auth/consumer/login', { phone: toE164(phone) })
+      startResendTimer()
+    } catch (err: unknown) {
+      const apiErr = err as { statusCode?: number } | undefined
+      if (apiErr?.statusCode === 429) {
+        setError('Too many attempts. Please wait and try again.')
+        return
+      }
+      setError('Failed to resend OTP.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function handleSignup() {
     setLoading(true)
@@ -41,6 +70,7 @@ export default function ConsumerSignup() {
         consentAnalytics,
       })
       setStep('otp')
+      startResendTimer()
     } catch (err) {
       const apiErr = err as { message?: string }
       setError(apiErr.message ?? t('auth.signup.failed'))
@@ -87,6 +117,14 @@ export default function ConsumerSignup() {
           >
             <Text style={styles.primaryButtonText}>
               {loading ? '...' : t('auth.login.verifyOtp')}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleResendOtp}
+            disabled={loading || resendCooldown > 0}
+          >
+            <Text style={[styles.resendText, (loading || resendCooldown > 0) && styles.resendDisabled]}>
+              {resendCooldown > 0 ? `Resend OTP (${resendCooldown}s)` : 'Resend OTP'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -229,5 +267,7 @@ const styles = StyleSheet.create({
   primaryButtonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
   disabled: { opacity: 0.5 },
   error: { color: colors.danger, fontSize: 12, marginTop: 12 },
+  resendText: { color: colors.accent, fontSize: 13, textAlign: 'center', marginTop: 8 },
+  resendDisabled: { color: colors.textMuted },
   link: { color: colors.accent, fontSize: 14, marginTop: 16 },
 })

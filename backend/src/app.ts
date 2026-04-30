@@ -41,6 +41,12 @@ export async function buildApp() {
 
   // CORS
   const isProd = process.env['AREA_CODE_ENV'] === 'prod'
+  const amplifyOrigins = [
+    'https://master.d3pm78r41ma6w6.amplifyapp.com',  // web
+    'https://master.dbp54yxhyjvk0.amplifyapp.com',   // business
+    'https://master.d166bb81tg4k61.amplifyapp.com',   // staff
+    'https://master.d1ay6jict0ql9w.amplifyapp.com',   // admin
+  ]
   void app.register(cors, {
     origin: isProd
       ? [
@@ -49,14 +55,17 @@ export async function buildApp() {
           'https://business.areacode.co.za',
           'https://staff.areacode.co.za',
           'https://admin.areacode.co.za',
+          ...amplifyOrigins,
         ]
       : [
           'http://localhost:3000',
           'http://localhost:3001',
           'http://localhost:3002',
           'http://localhost:3003',
+          'http://localhost:4000',
+          ...amplifyOrigins,
         ],
-    credentials: true,
+    credentials: false,
   })
 
   // Global error handler

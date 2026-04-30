@@ -10,29 +10,39 @@ variable "lambda_integrations" {
   default = {}
 }
 
+variable "additional_cors_origins" {
+  description = "Extra origins to allow (e.g. Amplify preview URLs)"
+  type        = list(string)
+  default     = []
+}
+
 resource "aws_apigatewayv2_api" "this" {
   name          = "area-code-${var.env}-api"
   protocol_type = "HTTP"
 
   cors_configuration {
-    allow_origins = var.env == "prod" ? [
-      "https://areacode.co.za",
-      "https://www.areacode.co.za",
-      "https://business.areacode.co.za",
-      "https://www.business.areacode.co.za",
-      "https://staff.areacode.co.za",
-      "https://www.staff.areacode.co.za",
-      "https://admin.areacode.co.za",
-      "https://www.admin.areacode.co.za"
-    ] : [
-      "http://localhost:3000",
-      "http://localhost:3001",
-      "http://localhost:3002",
-      "http://localhost:3003"
-    ]
+    allow_origins = concat(
+      var.env == "prod" ? [
+        "https://areacode.co.za",
+        "https://www.areacode.co.za",
+        "https://business.areacode.co.za",
+        "https://www.business.areacode.co.za",
+        "https://staff.areacode.co.za",
+        "https://www.staff.areacode.co.za",
+        "https://admin.areacode.co.za",
+        "https://www.admin.areacode.co.za"
+      ] : [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:3002",
+        "http://localhost:3003",
+        "http://localhost:4000",
+      ],
+      var.additional_cors_origins
+    )
     allow_methods     = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-    allow_headers     = ["Content-Type", "Authorization"]
-    allow_credentials = true
+    allow_headers     = ["Content-Type", "Authorization", "X-Requested-With"]
+    allow_credentials = false
     max_age           = 3600
   }
 }

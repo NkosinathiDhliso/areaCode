@@ -774,6 +774,13 @@ module "api_gateway" {
   source = "../../modules/api-gateway"
   env    = local.env
 
+  additional_cors_origins = [
+    "https://master.d3pm78r41ma6w6.amplifyapp.com",
+    "https://master.dbp54yxhyjvk0.amplifyapp.com",
+    "https://master.d166bb81tg4k61.amplifyapp.com",
+    "https://master.d1ay6jict0ql9w.amplifyapp.com",
+  ]
+
   lambda_integrations = {
     # Monolith catch-all — serves all Fastify routes
     api_catchall = {

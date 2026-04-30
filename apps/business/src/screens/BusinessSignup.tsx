@@ -19,12 +19,41 @@ export function BusinessSignup({ onSwitchToLogin }: BusinessSignupProps) {
   const [otp, setOtp] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [resendCooldown, setResendCooldown] = useState(0)
 
   function normalizePhone(raw: string): string {
     const digits = raw.replace(/\s+/g, '')
     if (digits.startsWith('+')) return digits
     if (digits.startsWith('0')) return `+27${digits.slice(1)}`
     return `+${digits}`
+  }
+
+  function startResendTimer() {
+    setResendCooldown(60)
+    const interval = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) { clearInterval(interval); return 0 }
+        return prev - 1
+      })
+    }, 1000)
+  }
+
+  async function handleResendOtp() {
+    setLoading(true)
+    setError(null)
+    try {
+      await api.post('/v1/auth/business/login', { phone: normalizePhone(phone) })
+      startResendTimer()
+    } catch (err: unknown) {
+      const apiErr = err as { statusCode?: number } | undefined
+      if (apiErr?.statusCode === 429) {
+        setError('Too many attempts. Please wait and try again.')
+        return
+      }
+      setError('Failed to resend OTP.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function handleSignup() {
@@ -38,6 +67,7 @@ export function BusinessSignup({ onSwitchToLogin }: BusinessSignupProps) {
         ...(registrationNumber ? { registrationNumber } : {}),
       })
       setStep('otp')
+      startResendTimer()
     } catch {
       setError(t('biz.signup.error'))
     } finally {
@@ -129,6 +159,13 @@ export function BusinessSignup({ onSwitchToLogin }: BusinessSignupProps) {
             className="bg-[var(--accent)] text-white font-semibold rounded-xl py-4 text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
           >
             {loading ? '...' : t('biz.login.verifyOtp')}
+          </button>
+          <button
+            onClick={handleResendOtp}
+            disabled={loading || resendCooldown > 0}
+            className="text-[var(--accent)] text-sm mt-1 disabled:text-[var(--text-muted)]"
+          >
+            {resendCooldown > 0 ? `Resend OTP (${resendCooldown}s)` : 'Resend OTP'}
           </button>
         </div>
       )}

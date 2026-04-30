@@ -12,6 +12,7 @@ export function StaffLogin() {
   const [step, setStep] = useState<'phone' | 'otp'>('phone')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [resendCooldown, setResendCooldown] = useState(0)
 
   function normalizePhone(raw: string): string {
     const digits = raw.replace(/\s+/g, '')
@@ -20,12 +21,23 @@ export function StaffLogin() {
     return `+${digits}`
   }
 
+  function startResendTimer() {
+    setResendCooldown(60)
+    const interval = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) { clearInterval(interval); return 0 }
+        return prev - 1
+      })
+    }, 1000)
+  }
+
   async function handleSendOtp() {
     setLoading(true)
     setError(null)
     try {
       await api.post('/v1/auth/staff/login', { phone: normalizePhone(phone) })
       setStep('otp')
+      startResendTimer()
     } catch (err: unknown) {
       const apiErr = err as { statusCode?: number; error?: string } | undefined
       if (apiErr?.statusCode === 404 || apiErr?.error === 'not_found') {
@@ -104,6 +116,13 @@ export function StaffLogin() {
             className="bg-[var(--accent)] text-white font-semibold rounded-xl py-4 text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
           >
             {loading ? '...' : t('staff.login.verifyOtp')}
+          </button>
+          <button
+            onClick={handleSendOtp}
+            disabled={loading || resendCooldown > 0}
+            className="text-[var(--accent)] text-sm mt-1 disabled:text-[var(--text-muted)]"
+          >
+            {resendCooldown > 0 ? `Resend OTP (${resendCooldown}s)` : 'Resend OTP'}
           </button>
         </div>
       )}
