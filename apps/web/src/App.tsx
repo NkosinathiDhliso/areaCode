@@ -60,9 +60,17 @@ function AppContent() {
     return 'landing' // Default to landing page for root and unknown paths
   })
 
-  // Wire API token provider once
+  // Wire API token provider and refresh handler
   useEffect(() => {
     api.setTokenProvider(() => useConsumerAuthStore.getState().accessToken)
+    api.setRefreshHandler({
+      getRefreshToken: () => useConsumerAuthStore.getState().refreshToken,
+      onTokenRefreshed: (token) => useConsumerAuthStore.getState().setAccessToken(token),
+      onAuthExpired: () => {
+        useConsumerAuthStore.getState().logout()
+        setRoute('login')
+      },
+    })
   }, [])
 
   // Reset time-based nav default on fresh app open

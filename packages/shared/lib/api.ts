@@ -6,9 +6,15 @@ interface ApiError {
   statusCode: number
 }
 
+type TokenRefresher = () => Promise<string | null>
+
 class ApiClient {
   private baseUrl: string
   private getToken: (() => string | null) | null = null
+  private getRefreshToken: (() => string | null) | null = null
+  private onTokenRefreshed: ((token: string) => void) | null = null
+  private onAuthExpired: (() => void) | null = null
+  private refreshing: Promise<string | null> | null = null
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl
@@ -16,6 +22,46 @@ class ApiClient {
 
   setTokenProvider(provider: () => string | null) {
     this.getToken = provider
+  }
+
+  setRefreshHandler(opts: {
+    getRefreshToken: () => string | null
+    onTokenRefreshed: (token: string) => void
+    onAuthExpired: () => void
+  }) {
+    this.getRefreshToken = opts.getRefreshToken
+    this.onTokenRefreshed = opts.onTokenRefreshed
+    this.onAuthExpired = opts.onAuthExpired
+  }
+
+  private async tryRefreshToken(): Promise<string | null> {
+    if (this.refreshing) return this.refreshing
+
+    const refreshToken = this.getRefreshToken?.()
+    if (!refreshToken) return null
+
+    this.refreshing = (async () => {
+      try {
+        const res = await fetch(`${this.baseUrl}/v1/auth/consumer/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        })
+        if (!res.ok) return null
+        const data = await res.json() as { accessToken?: string }
+        if (data.accessToken) {
+          this.onTokenRefreshed?.(data.accessToken)
+          return data.accessToken
+        }
+        return null
+      } catch {
+        return null
+      } finally {
+        this.refreshing = null
+      }
+    })()
+
+    return this.refreshing
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -33,6 +79,22 @@ class ApiClient {
       headers,
       body: body ? JSON.stringify(body) : null,
     })
+
+    // On 401, try refreshing the token once
+    if (response.status === 401 && this.getRefreshToken) {
+      const newToken = await this.tryRefreshToken()
+      if (newToken) {
+        headers['Authorization'] = `Bearer ${newToken}`
+        const retry = await fetch(`${this.baseUrl}${path}`, {
+          method,
+          headers,
+          body: body ? JSON.stringify(body) : null,
+        })
+        if (retry.ok) return retry.json() as Promise<T>
+      }
+      // Refresh failed, session is dead
+      this.onAuthExpired?.()
+    }
 
     if (!response.ok) {
       const error: ApiError = await response.json().catch(() => ({
