@@ -81,6 +81,9 @@ export async function createUser(data: Omit<User, 'userId' | 'createdAt'>): Prom
     tier: data.tier || 'local',
     totalCheckIns: data.totalCheckIns || 0,
     streakCount: data.streakCount || 0,
+    privacyLevel: (data as Record<string, unknown>).privacyLevel || 'friends_only',
+    isDisabled: false,
+    onboardingComplete: false,
     createdAt: now,
     updatedAt: now,
   }

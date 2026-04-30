@@ -1,4 +1,5 @@
 import { AppError } from '../../shared/errors/AppError.js'
+import { filterByPrivacy } from '../../shared/privacy/privacy-guard.js'
 import * as repo from './repository.js'
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
@@ -80,10 +81,34 @@ export async function getActivityFeed(
     }
   }
   const result = await repo.getActivityFeed(userId, cursor, limit)
-  // Feed only contains mutual follows , all entries are friends
+  // Apply privacy filtering — excluded users are removed, anonymous users have identity nulled
+  const filteredItems = await filterByPrivacy(
+    result.items.map((item: Record<string, unknown>) => ({
+      userId: (item.user as Record<string, unknown>)?.id as string ?? '',
+      displayName: (item.user as Record<string, unknown>)?.displayName as string | null ?? null,
+      username: (item.user as Record<string, unknown>)?.username as string | null ?? null,
+      avatarUrl: (item.user as Record<string, unknown>)?.avatarUrl as string | null ?? null,
+      _original: item,
+    })),
+    userId,
+  )
+  // Reconstruct feed items with privacy applied
+  const privacyFilteredItems = filteredItems.map((f) => {
+    const original = f._original as Record<string, unknown>
+    return {
+      ...original,
+      user: {
+        ...(original.user as Record<string, unknown>),
+        displayName: f.displayName,
+        username: f.username,
+        avatarUrl: f.avatarUrl,
+      },
+      isFriend: true,
+    }
+  })
   return {
     ...result,
-    items: result.items.map((item: Record<string, unknown>) => ({ ...item, isFriend: true })),
+    items: privacyFilteredItems,
   }
 }
 
@@ -114,21 +139,28 @@ export async function getWhoIsHere(nodeId: string, viewerId?: string) {
   }
 
   const entries = await repo.getWhoIsHere(nodeId)
-  const totalCount = entries.length
 
-  // Build tier distribution
+  // Apply privacy filtering — excluded users are removed entirely,
+  // anonymous users contribute to counts but not the friends list
+  const privacyFiltered = await filterByPrivacy(entries, viewerId ?? null)
+
+  const totalCount = privacyFiltered.length
+  // Build tier distribution from all non-excluded entries (including anonymous)
   const tierDistribution: Record<string, number> = {}
-  for (const e of entries) {
+  for (const e of privacyFiltered) {
     const t = e.tier ?? 'unknown'
     tierDistribution[t] = (tierDistribution[t] ?? 0) + 1
   }
 
-  // Resolve friends for authenticated viewer
+  // Resolve friends for authenticated viewer — only fully visible entries
   let friends: typeof entries = []
   if (viewerId) {
-    const userIds = entries.map((e) => e.userId)
+    const visibleEntries = privacyFiltered.filter((e) => e.privacyVisibility === 'full')
+    const userIds = visibleEntries.map((e) => e.userId)
     const friendIds = await repo.getMutualFollowIds(viewerId, userIds)
-    friends = entries.filter((e) => e.userId === viewerId || friendIds.has(e.userId))
+    friends = visibleEntries
+      .filter((e) => e.userId === viewerId || friendIds.has(e.userId))
+      .map(({ privacyVisibility, ...rest }) => rest)
   }
 
   return { totalCount, tierDistribution, friends }
@@ -177,12 +209,19 @@ export async function getCityLeaderboard(citySlug: string, viewerId?: string) {
     }
   })
 
-  // Apply friend visibility
+  // Apply privacy filtering via PrivacyGuard — replaces applyFriendVisibility
+  // Excluded users are removed, anonymous users have identity nulled
+  const privacyFiltered = await filterByPrivacy(rawEntries, viewerId ?? null)
+
+  // Also apply friend visibility for the isFriend flag (backward compat)
   const friendIds = viewerId
-    ? await repo.getMutualFollowIds(viewerId, rawEntries.map((e) => e.userId))
+    ? await repo.getMutualFollowIds(viewerId, privacyFiltered.map((e) => e.userId))
     : new Set<string>()
 
-  const entries = applyFriendVisibility(rawEntries, friendIds, viewerId ?? '')
+  const entries = privacyFiltered.map((entry) => ({
+    ...entry,
+    isFriend: entry.userId === (viewerId ?? '') || friendIds.has(entry.userId),
+  }))
 
   return { entries, userRank }
 }

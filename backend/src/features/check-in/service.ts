@@ -4,6 +4,7 @@ import { kvGet, kvSet, kvIncr, kvTtl } from '../../shared/kv/dynamodb-kv.js'
 import { emitPulseUpdate, emitToast, emitBusinessCheckin, emitFriendToast } from '../../shared/socket/events.js'
 import { getMutualFollowIds, getFollowingIds } from '../social/repository.js'
 import { getUserById } from '../auth/repository.js'
+import { canEmitIdentity } from '../../shared/privacy/privacy-guard.js'
 import { runAbuseChecks } from './abuse.js'
 import * as repo from './repository.js'
 import type { CheckInInput, CheckInResponse } from './types.js'
@@ -149,27 +150,31 @@ export async function processCheckIn(
     })
 
     // Emit personalised friend toasts to each mutual follow's user room
+    // Only emit if the user's privacy allows identity sharing
     try {
-      const followingIds = await getFollowingIds(userId)
-      const friendIds = await getMutualFollowIds(userId, followingIds)
-      if (friendIds.size > 0) {
-        const user = await getUserById(userId)
-        const displayName = user?.displayName ?? 'Someone'
-        const friendPayload: {
-          type: 'checkin';
-          message: string;
-          nodeId: string;
-          avatarUrl?: string;
-        } = {
-          type: 'checkin',
-          message: `${displayName} just checked in at ${node.name}`,
-          nodeId: input.nodeId,
-        }
-        if (user?.avatarUrl) {
-          friendPayload.avatarUrl = user.avatarUrl
-        }
-        for (const friendId of friendIds) {
-          emitFriendToast(friendId, friendPayload)
+      const canEmit = await canEmitIdentity(userId)
+      if (canEmit) {
+        const followingIds = await getFollowingIds(userId)
+        const friendIds = await getMutualFollowIds(userId, followingIds)
+        if (friendIds.size > 0) {
+          const user = await getUserById(userId)
+          const displayName = user?.displayName ?? 'Someone'
+          const friendPayload: {
+            type: 'checkin';
+            message: string;
+            nodeId: string;
+            avatarUrl?: string;
+          } = {
+            type: 'checkin',
+            message: `${displayName} just checked in at ${node.name}`,
+            nodeId: input.nodeId,
+          }
+          if (user?.avatarUrl) {
+            friendPayload.avatarUrl = user.avatarUrl
+          }
+          for (const friendId of friendIds) {
+            emitFriendToast(friendId, friendPayload)
+          }
         }
       }
     } catch {
@@ -178,12 +183,27 @@ export async function processCheckIn(
   }
 
   // 7b. Emit to business room if node is owned by a business
+  // Business owners see aggregate data; strip username/avatarUrl for non-public users
   if (node.businessId) {
-    emitBusinessCheckin(node.businessId, {
+    const canShowIdentity = await canEmitIdentity(userId)
+    const businessPayload: Record<string, unknown> = {
       nodeId: input.nodeId,
       nodeName: node.name,
       checkInCount: dailyCount,
       timestamp: new Date().toISOString(),
+    }
+    if (canShowIdentity) {
+      const user = await getUserById(userId)
+      if (user?.displayName) {
+        businessPayload.consumerDisplayName = user.displayName
+      }
+    }
+    emitBusinessCheckin(node.businessId, businessPayload as {
+      nodeId: string;
+      nodeName: string;
+      checkInCount: number;
+      timestamp: string;
+      consumerDisplayName?: string;
     })
   }
 

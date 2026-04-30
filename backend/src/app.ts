@@ -2,6 +2,10 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import { AppError } from './shared/errors/AppError.js'
 import { initSentry, captureError } from './shared/monitoring/sentry.js'
+import { initPrivacyGuard } from './shared/privacy/privacy-guard.js'
+import { getUserById } from './features/auth/dynamodb-repository.js'
+import { isBlocked } from './features/social/block-repository.js'
+import { isFollowing } from './features/social/repository.js'
 import { businessRoutes } from './features/business/handler.js'
 import { socialRoutes } from './features/social/handler.js'
 import { nodeRoutes } from './features/nodes/handler.js'
@@ -12,10 +16,24 @@ import { adminRoutes } from './features/admin/handler.js'
 import { notificationRoutes } from './features/notifications/handler.js'
 import { musicRoutes } from './features/music/handler.js'
 import { staffRoutes } from './features/staff/handler.js'
+import { privacyRoutes } from './features/privacy/handler.js'
 
 export async function buildApp() {
   // Initialize error monitoring before anything else
   await initSentry()
+
+  // Initialize PrivacyGuard with repository dependencies
+  initPrivacyGuard({
+    getUserById,
+    isBlocked,
+    areMutualFollows: async (userA: string, userB: string) => {
+      const [forward, reverse] = await Promise.all([
+        isFollowing(userA, userB),
+        isFollowing(userB, userA),
+      ])
+      return forward && reverse
+    },
+  })
 
   const app = Fastify({
     logger: {
@@ -133,6 +151,7 @@ export async function buildApp() {
   await app.register(notificationRoutes)
   await app.register(musicRoutes)
   await app.register(staffRoutes)
+  await app.register(privacyRoutes)
 
   return app
 }

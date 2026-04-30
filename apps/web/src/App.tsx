@@ -13,6 +13,7 @@ import { LeaderboardScreen } from './screens/LeaderboardScreen'
 import { FeedScreen } from './screens/FeedScreen'
 import { FriendsScreen } from './screens/FriendsScreen'
 import { ProfileScreen } from './screens/ProfileScreen'
+import { PrivacySettingsScreen } from './screens/PrivacySettingsScreen'
 import { ConsumerLogin } from './screens/ConsumerLogin'
 import { ConsumerSignup } from './screens/ConsumerSignup'
 import { AuthLanding } from './screens/AuthLanding'
@@ -40,6 +41,7 @@ export function App() {
     if (path === '/feed') return 'feed'
     if (path === '/friends') return 'friends'
     if (path === '/profile') return 'profile'
+    if (path === '/privacy') return 'privacy'
     return 'landing' // Default to landing page for root and unknown paths
   })
 
@@ -86,6 +88,7 @@ export function App() {
         {route === 'feed' && <FeedScreen />}
         {route === 'friends' && <FriendsScreen />}
         {route === 'profile' && <ProfileScreen onNavigate={setRoute} />}
+        {route === 'privacy' && <PrivacySettingsScreen onNavigate={setRoute} />}
       </div>
       <BottomNav active={route} onNavigate={setRoute} />
     </div>

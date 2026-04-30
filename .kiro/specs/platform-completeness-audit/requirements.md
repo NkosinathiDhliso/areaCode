@@ -643,28 +643,16 @@ Area Code is a South African location-based loyalty and check-in platform with f
 3. THE Business_Portal SHALL provide an export action for reward performance data in CSV format
 4. THE Business_Portal SHALL include date range selection for all data exports
 
-### Requirement 54: Staff Shift Management
-
-**User Story:** As a staff member, I want to clock in and out of my shifts, so that the business can track my working hours.
-
-#### Acceptance Criteria
-
-1. THE Staff_Portal SHALL provide a clock-in and clock-out button on the home screen
-2. WHEN a staff member clocks in, THE Staff_Portal SHALL record the shift start time
-3. WHEN a staff member clocks out, THE Staff_Portal SHALL record the shift end time and calculate the shift duration
-4. THE Business_Portal SHALL display shift history for each staff member in the staff management section
-
-### Requirement 55: Staff Personal Performance Stats
+### Requirement 54: Staff Personal Performance Stats
 
 **User Story:** As a staff member, I want to see my own redemption statistics, so that I can track my performance.
 
 #### Acceptance Criteria
 
 1. THE Staff_Portal SHALL display the staff member's total redemption count for the current day and current week
-2. THE Staff_Portal SHALL display the staff member's average redemptions per shift
-3. THE Staff_Portal SHALL display a list of the staff member's recent redemptions with reward title and timestamp
+2. THE Staff_Portal SHALL display a list of the staff member's recent redemptions with reward title and timestamp
 
-### Requirement 56: Refund and Reversal Capability
+### Requirement 55: Refund and Reversal Capability
 
 **User Story:** As a staff member, I want to reverse an incorrect redemption, so that mistakes can be corrected.
 
@@ -754,26 +742,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Admin_Portal SHALL allow filtering webhook events by event type (payment.succeeded, payment.failed) and date range
 3. THE Admin_Portal SHALL display the full webhook payload for each event in an expandable detail view
 
-### Requirement 65: USSD Fallback Channel
-
-**User Story:** As a consumer using a feature phone, I want to interact with Area Code via USSD, so that I can participate without a smartphone.
-
-#### Acceptance Criteria
-
-1. THE Platform SHALL provide a USSD shortcode that allows consumers to check in by entering a venue code
-2. THE USSD_Service SHALL validate the venue code and record the check-in in the same pipeline as GPS and QR check-ins
-3. THE USSD_Service SHALL send an SMS confirmation to the consumer after a successful USSD check-in
-
-### Requirement 67: Additional Mobile Payment Integration
-
-**User Story:** As a business owner, I want to accept payments via additional South African payment methods, so that I can reach more customers.
-
-#### Acceptance Criteria
-
-1. WHERE the business owner selects an alternative payment method, THE Business_Portal SHALL support at least one additional payment provider beyond Yoco (such as Ozow for instant EFT)
-2. THE Business_Service SHALL process webhook events from the additional payment provider using the same idempotency and signature verification patterns as Yoco
-
-### Requirement 68: Township and Informal Settlement Venue Support
+### Requirement 65: Township and Informal Settlement Venue Support
 
 **User Story:** As a business owner in a township or informal settlement, I want to register my venue even if GPS coordinates are imprecise, so that my business is represented on the platform.
 
