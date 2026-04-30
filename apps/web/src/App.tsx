@@ -97,8 +97,14 @@ function AppContent() {
         if (profile.onboardingComplete === false) {
           setShowOnboarding(true)
         }
-      } catch {
-        // Fail silently
+      } catch (err: unknown) {
+        const apiErr = err as { statusCode?: number } | undefined
+        if (apiErr?.statusCode === 401) {
+          // Token expired, force re-login
+          useConsumerAuthStore.getState().logout()
+          setRoute('login')
+          return
+        }
       } finally {
         setOnboardingChecked(true)
       }
