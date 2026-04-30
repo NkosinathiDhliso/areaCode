@@ -1,6 +1,7 @@
 import { AppError } from '../../shared/errors/AppError.js'
 import { findBusinessById } from '../business/repository.js'
 import * as repo from './repository.js'
+import { notifyNewRewardConsumers } from '../notifications/service.js'
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
@@ -48,7 +49,16 @@ export async function createReward(
   if (data.totalSlots !== undefined) createData.totalSlots = data.totalSlots
   if (data.expiresAt !== undefined) createData.expiresAt = data.expiresAt
 
-  return repo.createReward(createData)
+  const reward = await repo.createReward(createData)
+
+  // Fire-and-forget: notify consumers who checked in at this node recently
+  // This runs asynchronously so it doesn't slow down the reward creation response
+  const nodeName = node.name ?? ''
+  notifyNewRewardConsumers(data.nodeId, nodeName, reward.rewardId, data.title).catch(() => {
+    // Silently ignore — fire-and-forget
+  })
+
+  return reward
 }
 
 export async function updateReward(
@@ -119,6 +129,7 @@ export async function redeemReward(code: string, staffId?: string) {
 
   // Validate staff belongs to the business that owns this reward
   const rewardId = redemption.rewardId ?? redemption.id
+  let staffName: string | undefined
   if (staffId) {
     const rewardDetail = await repo.getRewardById(rewardId)
     if (rewardDetail?.node?.businessId) {
@@ -127,10 +138,11 @@ export async function redeemReward(code: string, staffId?: string) {
       if (!staff || staff.businessId !== rewardDetail.node.businessId) {
         throw AppError.forbidden('You cannot redeem rewards for this business')
       }
+      staffName = staff?.name
     }
   }
 
-  await repo.markRedeemed(redemption.id as string)
+  await repo.markRedeemed(redemption.id as string, staffId, staffName)
   return {
     success: true,
     rewardTitle: redemption.reward?.title ?? '',

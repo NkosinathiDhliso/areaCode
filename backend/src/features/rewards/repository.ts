@@ -129,8 +129,8 @@ export async function findRedemptionByCode(code: string) {
   }
 }
 
-export async function markRedeemed(redemptionId: string) {
-  return dynamo.markRedemptionAsRedeemed(redemptionId)
+export async function markRedeemed(redemptionId: string, staffId?: string, staffName?: string) {
+  return dynamo.markRedemptionAsRedeemed(redemptionId, undefined, staffId, staffName)
 }
 
 export async function getRecentRedemptions(businessId: string, limit = 20) {
@@ -166,4 +166,36 @@ export async function getStaffRecentRedemptions(staffId: string, limit = 20) {
   const staff = await getStaffById(staffId)
   if (!staff) return []
   return getRecentRedemptions(staff.businessId, limit)
+}
+
+export async function getRedemptionsByStaffId(staffId: string, businessId: string, limit = 50) {
+  // Scan redemptions from appData filtered by staffId
+  const result = await documentClient.send(
+    new ScanCommand({
+      TableName: TableNames.appData,
+      FilterExpression: 'begins_with(pk, :prefix) AND staffId = :staffId',
+      ExpressionAttributeValues: { ':prefix': 'REDEMPTION#', ':staffId': staffId },
+    })
+  )
+  const items = (result.Items || []).slice(0, limit)
+  const enriched = []
+  for (const rdm of items) {
+    const reward = rdm['rewardId'] ? await dynamo.getRewardById(rdm['rewardId'] as string) : null
+    let nodeName = ''
+    if (reward) {
+      const node = await getNodeById(reward.nodeId)
+      nodeName = node?.name ?? ''
+    }
+    enriched.push({
+      redemptionId: rdm['redemptionId'] ?? rdm['pk'],
+      redemptionCode: rdm['redemptionCode'],
+      rewardTitle: reward?.title ?? '',
+      nodeName,
+      staffId: rdm['staffId'],
+      staffName: rdm['staffName'],
+      redeemedAt: rdm['redeemedAt'],
+      createdAt: rdm['createdAt'],
+    })
+  }
+  return enriched
 }

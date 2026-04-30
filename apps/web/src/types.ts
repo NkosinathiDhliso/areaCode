@@ -7,6 +7,7 @@ export type AppRoute =
   | 'friends'
   | 'profile'
   | 'privacy'
+  | 'history'
   | 'login'
   | 'signup'
   | 'landing'

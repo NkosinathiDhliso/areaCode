@@ -14,6 +14,21 @@ export interface BusinessCheckinPayload {
   timestamp: string
 }
 
+export interface BusinessCheckinDetailPayload {
+  nodeId: string
+  nodeName: string
+  displayName?: string
+  tier: string
+  visitCount: number
+  timestamp: string
+}
+
+export interface TierChangedPayload {
+  oldTier: string
+  newTier: string
+  benefits?: string[]
+}
+
 export interface BusinessRewardClaimedPayload {
   nodeId: string
   nodeName: string
@@ -21,6 +36,14 @@ export interface BusinessRewardClaimedPayload {
   rewardTitle?: string
   consumerDisplayName?: string
   timestamp: string
+}
+
+export interface NotificationNewPayload {
+  type: string
+  title: string
+  body: string
+  data: Record<string, unknown>
+  createdAt: string
 }
 
 export interface ServerToClientEvents {
@@ -32,8 +55,11 @@ export interface ServerToClientEvents {
   'reward:slots_update': (payload: { rewardId: string; slotsRemaining: number }) => void
   'leaderboard:update': (payload: { userId: string; rank: number; delta: number }) => void
   'business:checkin': (payload: BusinessCheckinPayload) => void
+  'business:checkin_detail': (payload: BusinessCheckinDetailPayload) => void
   'business:reward_claimed': (payload: BusinessRewardClaimedPayload) => void
   'toast:friend_checkin': (payload: { type: ToastType; message: string; nodeId?: string; avatarUrl?: string }) => void
+  'tier:changed': (payload: TierChangedPayload) => void
+  'notification:new': (payload: NotificationNewPayload) => void
 }
 
 export interface ClientToServerEvents {

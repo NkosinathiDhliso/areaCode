@@ -213,14 +213,28 @@ export async function createRedemption(
 
 export async function markRedemptionAsRedeemed(
   redemptionId: string,
-  redeemedAt: string = new Date().toISOString()
+  redeemedAt: string = new Date().toISOString(),
+  staffId?: string,
+  staffName?: string,
 ): Promise<void> {
+  let updateExpr = 'SET redeemedAt = :redeemedAt'
+  const exprValues: Record<string, unknown> = { ':redeemedAt': redeemedAt }
+
+  if (staffId) {
+    updateExpr += ', staffId = :staffId'
+    exprValues[':staffId'] = staffId
+  }
+  if (staffName) {
+    updateExpr += ', staffName = :staffName'
+    exprValues[':staffName'] = staffName
+  }
+
   await documentClient.send(
     new UpdateCommand({
       TableName: TableNames.appData,
       Key: { pk: `REDEMPTION#${redemptionId}`, sk: `REDEMPTION#${redemptionId}` },
-      UpdateExpression: 'SET redeemedAt = :redeemedAt',
-      ExpressionAttributeValues: { ':redeemedAt': redeemedAt },
+      UpdateExpression: updateExpr,
+      ExpressionAttributeValues: exprValues,
     })
   )
 }

@@ -1,4 +1,4 @@
-import type { NodeState, ToastType, BusinessCheckinPayload, BusinessRewardClaimedPayload } from './types.js';
+import type { NodeState, ToastType, BusinessCheckinPayload, BusinessCheckinDetailPayload, BusinessRewardClaimedPayload, TierChangedPayload } from './types.js';
 import { getIO } from './server.js';
 import { cityRoom, nodeRoom, userRoom, businessRoom } from './rooms.js';
 
@@ -91,4 +91,18 @@ export function emitFriendToast(
   }
 ) {
   getIO().to(userRoom(userId)).emit('toast:friend_checkin', payload);
+}
+
+export function emitBusinessCheckinDetail(
+  businessId: string,
+  payload: BusinessCheckinDetailPayload,
+) {
+  getIO().to(businessRoom(businessId)).emit('business:checkin_detail', payload);
+}
+
+export function emitTierChanged(
+  userId: string,
+  payload: TierChangedPayload,
+) {
+  getIO().to(userRoom(userId)).emit('tier:changed', payload);
 }

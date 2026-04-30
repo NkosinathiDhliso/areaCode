@@ -326,3 +326,72 @@ export async function reviewAbuseFlag(
   })
   return flag
 }
+
+// ─── Disable User / Business ────────────────────────────────────────────────
+
+export async function disableUser(
+  adminId: string, adminRole: AdminRole, userId: string,
+) {
+  checkPermission(adminRole, 'disable_user')
+  const user = await repo.getUserById(userId)
+  if (!user) throw AppError.notFound('User not found')
+
+  // Set isDisabled on user record
+  const { updateUser } = await import('../auth/dynamodb-repository.js')
+  await updateUser(userId, {
+    isDisabled: true,
+    disabledAt: new Date().toISOString(),
+  } as any)
+
+  // Revoke Cognito tokens
+  const cognitoSub = (user as Record<string, unknown>)['cognitoSub'] as string | undefined
+  if (cognitoSub) {
+    try {
+      const { CognitoIdentityProviderClient, AdminUserGlobalSignOutCommand } = await import('@aws-sdk/client-cognito-identity-provider')
+      const region = process.env['AWS_REGION'] ?? 'us-east-1'
+      const userPoolId = process.env['AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID'] ?? ''
+      if (userPoolId) {
+        const client = new CognitoIdentityProviderClient({ region })
+        await client.send(new AdminUserGlobalSignOutCommand({
+          UserPoolId: userPoolId,
+          Username: cognitoSub,
+        }))
+      }
+    } catch {
+      // Cognito sign-out failure is non-critical — user is still disabled in DB
+    }
+  }
+
+  // Create audit log
+  await repo.createAuditLog({
+    adminId, adminRole, action: 'disable_user',
+    entityType: 'user', entityId: userId,
+    afterState: { isDisabled: true },
+  })
+
+  return { success: true, userId, isDisabled: true }
+}
+
+export async function disableBusiness(
+  adminId: string, adminRole: AdminRole, businessId: string,
+) {
+  checkPermission(adminRole, 'disable_user') // super_admin permission
+  const biz = await repo.getBusinessById(businessId)
+  if (!biz) throw AppError.notFound('Business not found')
+
+  // Set isActive = false on all nodes owned by this business
+  const { getNodesByBusinessId, updateNode } = await import('../nodes/dynamodb-repository.js')
+  const nodes = await getNodesByBusinessId(businessId)
+  for (const node of nodes) {
+    await updateNode(node.nodeId, { isActive: false })
+  }
+
+  // Create audit log
+  await repo.createAuditLog({
+    adminId, adminRole, action: 'disable_business',
+    entityType: 'business', entityId: businessId,
+    afterState: { isActive: false, nodesDeactivated: nodes.length },
+  })
+
+  return { success: true, businessId, nodesDeactivated: nodes.length }
+}

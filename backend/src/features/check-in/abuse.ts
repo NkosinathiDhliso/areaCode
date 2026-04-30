@@ -85,12 +85,18 @@ async function persistFlags(
   try {
     for (const f of flags) {
       const flagId = generateId()
+      const now = new Date().toISOString()
+      // Priority: reward_drain is high, others are normal
+      const priority = f.type === 'reward_drain' ? 'high' : 'normal'
       await documentClient.send(
         new PutCommand({
           TableName: TableNames.appData,
           Item: {
             pk: `ABUSE#${flagId}`,
             sk: `USER#${userId}`,
+            // GSI1 keys for admin abuse queue ordering
+            gsi1pk: 'ABUSE_QUEUE',
+            gsi1sk: `${priority}#${now}`,
             flagId,
             type: f.type,
             entityId: userId,
@@ -98,7 +104,8 @@ async function persistFlags(
             evidenceJson: f.evidence,
             autoActioned: f.type === 'reward_drain',
             reviewed: false,
-            createdAt: new Date().toISOString(),
+            priority,
+            createdAt: now,
           },
         })
       )

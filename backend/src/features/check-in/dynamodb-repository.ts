@@ -168,6 +168,27 @@ export async function getRecentCheckInCount(
   return result.Count || 0
 }
 
+export async function getUserCheckInCountAtNode(
+  userId: string,
+  nodeId: string,
+): Promise<number> {
+  const result = await documentClient.send(
+    new QueryCommand({
+      TableName: TableNames.checkins,
+      IndexName: 'UserIndex',
+      KeyConditionExpression: 'userId = :userId',
+      FilterExpression: 'nodeId = :nodeId',
+      ExpressionAttributeValues: {
+        ':userId': userId,
+        ':nodeId': nodeId,
+      },
+      Select: 'COUNT',
+    })
+  )
+
+  return result.Count || 0
+}
+
 export async function getUserCheckInCount(userId: string): Promise<number> {
   const result = await documentClient.send(
     new QueryCommand({

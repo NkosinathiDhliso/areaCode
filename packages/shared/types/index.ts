@@ -7,6 +7,9 @@ export type NodeCategory = 'food' | 'coffee' | 'nightlife' | 'retail' | 'fitness
 // User tiers
 export type Tier = 'local' | 'regular' | 'fixture' | 'institution' | 'legend'
 
+// Privacy levels
+export type PrivacyLevel = 'public' | 'friends_only' | 'private'
+
 // Business tiers
 export type BusinessTier = 'free' | 'starter' | 'growth' | 'pro' | 'payg'
 

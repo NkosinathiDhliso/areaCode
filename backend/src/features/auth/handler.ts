@@ -10,6 +10,8 @@ import {
   refreshBodySchema, businessSignupBodySchema, adminLoginBodySchema,
 } from './types.js'
 import { z } from 'zod'
+import { TIER_LEVELS, getTier } from '@area-code/shared/constants/tier-levels'
+import type { TierLevel } from '@area-code/shared/constants/tier-levels'
 
 export async function authRoutes(app: FastifyInstance) {
   // ─── Consumer Auth ──────────────────────────────────────────────────────
@@ -224,6 +226,47 @@ export async function authRoutes(app: FastifyInstance) {
       const auth = getAuth(request)
       await service.deleteCheckInHistory(auth.userId)
       return reply.status(204).send()
+    },
+  )
+
+  // GET /v1/users/me/tier-progress
+  app.get(
+    '/v1/users/me/tier-progress',
+    { preHandler: [requireAuth('consumer')] },
+    async (request) => {
+      const auth = getAuth(request)
+      const profile = await service.getUserProfile(auth.cognitoSub)
+      const totalCheckIns = (profile as Record<string, unknown>).totalCheckIns as number ?? 0
+      const currentTier = getTier(totalCheckIns)
+
+      const currentLevel = TIER_LEVELS.find((l: TierLevel) => l.tier === currentTier)!
+      const currentIdx = TIER_LEVELS.indexOf(currentLevel)
+      const nextLevel = currentIdx < TIER_LEVELS.length - 1 ? TIER_LEVELS[currentIdx + 1] : null
+
+      const tierBenefits: Record<string, string[]> = {
+        local: ['Access to basic rewards'],
+        regular: ['Priority reward access', 'Profile badge'],
+        fixture: ['Exclusive venue rewards', 'Leaderboard boost'],
+        institution: ['VIP rewards', 'Early access to new venues'],
+        legend: ['All benefits unlocked', 'Legend-only rewards', 'Permanent leaderboard status'],
+      }
+
+      return {
+        currentTier,
+        nextTier: nextLevel?.tier ?? null,
+        currentCheckIns: totalCheckIns,
+        nextTierThreshold: nextLevel?.minCheckIns ?? null,
+        checkInsRemaining: nextLevel ? Math.max(0, nextLevel.minCheckIns - totalCheckIns) : 0,
+        benefits: tierBenefits[currentTier] ?? [],
+        tiers: TIER_LEVELS.map((l: TierLevel) => ({
+          tier: l.tier,
+          label: l.label,
+          minCheckIns: l.minCheckIns,
+          maxCheckIns: l.maxCheckIns,
+          colour: l.colour,
+          benefits: tierBenefits[l.tier] ?? [],
+        })),
+      }
     },
   )
 

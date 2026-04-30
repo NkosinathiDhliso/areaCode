@@ -6,6 +6,9 @@ import { api } from '@area-code/shared/lib/api'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useUserStore } from '@area-code/shared/stores/userStore'
 import type { User } from '@area-code/shared/types'
+import type { Tier } from '@area-code/shared/types'
+import { TIER_LEVELS, getTier } from '@area-code/shared/constants/tier-levels'
+import type { TierLevel } from '@area-code/shared/constants/tier-levels'
 import { AvatarCircle } from '../../src/components/AvatarCircle'
 import { NativeTierBadge } from '../../src/components/NativeTierBadge'
 import { colors } from '../../src/theme'
@@ -31,6 +34,21 @@ export default function ProfileScreen() {
 
   const deleteHistoryMutation = useMutation({
     mutationFn: () => api.delete('/v1/users/me/check-in-history'),
+  })
+
+  interface TierProgressData {
+    currentTier: Tier
+    nextTier: Tier | null
+    currentCheckIns: number
+    nextTierThreshold: number | null
+    checkInsRemaining: number
+    benefits: string[]
+  }
+
+  const { data: tierProgress } = useQuery({
+    queryKey: ['tier-progress'],
+    queryFn: () => api.get<TierProgressData>('/v1/users/me/tier-progress'),
+    staleTime: 60_000,
   })
 
   function handleLogout() {

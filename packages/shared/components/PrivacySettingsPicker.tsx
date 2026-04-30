@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../lib/api'
-import type { PrivacyLevel } from '../../../backend/src/shared/privacy/types'
+import type { PrivacyLevel } from '../types'
 
 interface PrivacyOption {
   level: PrivacyLevel

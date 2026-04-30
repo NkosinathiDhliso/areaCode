@@ -14,5 +14,11 @@ export const notificationPrefsSchema = z.object({
   followedUserCheckin: z.boolean().optional(),
 }).strict()
 
+export const notificationHistoryQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).optional().default(20),
+  cursor: z.string().optional(),
+})
+
 export type PushTokenBody = z.infer<typeof pushTokenBodySchema>
 export type NotificationPrefsBody = z.infer<typeof notificationPrefsSchema>
+export type NotificationHistoryQuery = z.infer<typeof notificationHistoryQuerySchema>

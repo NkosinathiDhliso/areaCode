@@ -278,6 +278,32 @@ export async function adminRoutes(app: FastifyInstance) {
     },
   )
 
+  // ─── Disable User / Business ────────────────────────────────────────────
+
+  // POST /v1/admin/users/:userId/disable
+  app.post(
+    '/v1/admin/users/:userId/disable',
+    { preHandler: [adminAuth, validate({ params: userIdParamsSchema })] },
+    async (request) => {
+      const auth = getAuth(request)
+      const role = await getAdminRole(request)
+      const params = request.params as z.infer<typeof userIdParamsSchema>
+      return service.disableUser(auth.userId, role, params.userId)
+    },
+  )
+
+  // POST /v1/admin/businesses/:businessId/disable
+  app.post(
+    '/v1/admin/businesses/:businessId/disable',
+    { preHandler: [adminAuth, validate({ params: businessIdParamsSchema })] },
+    async (request) => {
+      const auth = getAuth(request)
+      const role = await getAdminRole(request)
+      const params = request.params as z.infer<typeof businessIdParamsSchema>
+      return service.disableBusiness(auth.userId, role, params.businessId)
+    },
+  )
+
   // ─── Archetype Management ───────────────────────────────────────────────
 
   // GET /v1/admin/archetypes

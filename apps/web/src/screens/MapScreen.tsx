@@ -136,13 +136,15 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   }
 
   function handleEnableLocation() {
-    // Re-request location. Browser will show the native permission prompt
     void requestLocation().then((pos) => {
       if (pos) {
         mapRef.current?.flyTo({
           center: [pos.lng, pos.lat],
           zoom: DEFAULT_ZOOM,
         })
+      } else {
+        // Permission still denied, dismiss overlay and let them browse
+        setBrowseOnly(true)
       }
     })
   }

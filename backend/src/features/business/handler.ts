@@ -10,8 +10,10 @@ import {
   staffIdParamsSchema,
 } from './types.js'
 import { z } from 'zod'
+import { getRedemptionsByStaffId } from '../rewards/repository.js'
 
 const nodeIdParamsSchema = z.object({ nodeId: z.string().uuid() })
+const staffRedemptionParamsSchema = z.object({ staffId: z.string().uuid() })
 
 export async function businessRoutes(app: FastifyInstance) {
   // GET /v1/business/me
@@ -201,6 +203,23 @@ export async function businessRoutes(app: FastifyInstance) {
       const auth = getAuth(request)
       const params = request.params as z.infer<typeof nodeIdParamsSchema>
       return service.getQrData(params.nodeId, auth.userId)
+    },
+  )
+
+  // GET /v1/business/staff/:staffId/redemptions
+  app.get(
+    '/v1/business/staff/:staffId/redemptions',
+    {
+      preHandler: [
+        requireAuth('business'),
+        validate({ params: staffRedemptionParamsSchema }),
+      ],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      const params = request.params as z.infer<typeof staffRedemptionParamsSchema>
+      const items = await getRedemptionsByStaffId(params.staffId, auth.userId)
+      return { items }
     },
   )
 }

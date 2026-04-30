@@ -1,4 +1,4 @@
-import type { PrivacyLevel } from '../../../backend/src/shared/privacy/types'
+import type { PrivacyLevel } from '../types'
 import { Text } from './primitives'
 
 interface PrivacyIndicatorProps {

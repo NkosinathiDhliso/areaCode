@@ -6,9 +6,10 @@ import { useUserStore } from '@area-code/shared/stores/userStore'
 import { useTheme } from '@area-code/shared/hooks/useTheme'
 import type { ThemePreference } from '@area-code/shared/hooks/useTheme'
 import { TierBadge } from '@area-code/shared/components/TierBadge'
+import { TierProgressBar } from '@area-code/shared/components/TierProgressBar'
 import { Avatar } from '@area-code/shared/components/Avatar'
 import { PrivacyIndicator } from '@area-code/shared/components/PrivacyIndicator'
-import type { User } from '@area-code/shared/types'
+import type { User, PrivacyLevel } from '@area-code/shared/types'
 import type { AppRoute } from '../types'
 import { StreamingSection } from '../components/StreamingSection'
 
@@ -38,6 +39,27 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
 
   const deleteHistoryMutation = useMutation({
     mutationFn: () => api.delete('/v1/users/me/check-in-history'),
+  })
+
+  const { data: privacyData } = useQuery({
+    queryKey: ['privacy'],
+    queryFn: () => api.get<{ privacyLevel: PrivacyLevel }>('/v1/users/me/privacy'),
+    staleTime: 60_000,
+  })
+
+  interface TierProgressData {
+    currentTier: import('@area-code/shared/types').Tier
+    nextTier: import('@area-code/shared/types').Tier | null
+    currentCheckIns: number
+    nextTierThreshold: number | null
+    checkInsRemaining: number
+    benefits: string[]
+  }
+
+  const { data: tierProgress } = useQuery({
+    queryKey: ['tier-progress'],
+    queryFn: () => api.get<TierProgressData>('/v1/users/me/tier-progress'),
+    staleTime: 60_000,
   })
 
   function handleLogout() {
@@ -86,7 +108,27 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
         <StatCard value={tier} label={t('profile.currentTier')} capitalize />
       </div>
 
+      {tierProgress && (
+        <div className="mb-3">
+          <TierProgressBar
+            currentTier={tierProgress.currentTier}
+            currentCheckIns={tierProgress.currentCheckIns}
+            nextTier={tierProgress.nextTier}
+            nextTierThreshold={tierProgress.nextTierThreshold}
+            checkInsRemaining={tierProgress.checkInsRemaining}
+          />
+        </div>
+      )}
+
       <StreamingSection />
+
+      <button
+        onClick={() => onNavigate('history')}
+        className="w-full flex flex-row items-center justify-between bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3 mb-3 transition-all active:scale-[0.98]"
+      >
+        <span className="text-[var(--text-primary)] text-sm font-medium">{t('profile.checkInHistory', 'Check-in History')}</span>
+        <span className="text-[var(--text-muted)] text-sm">→</span>
+      </button>
 
       <button
         onClick={() => onNavigate('friends')}
@@ -96,14 +138,16 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
         <span className="text-[var(--text-muted)] text-sm">→</span>
       </button>
 
-      <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 mb-3">
-        <h3 className="text-[var(--text-secondary)] text-xs font-medium uppercase tracking-wider mb-3">
-          {t('profile.privacy')}
-        </h3>
-        <p className="text-[var(--text-secondary)] text-sm">
-          {t('profile.privacyExplainer')}
-        </p>
-      </div>
+      <button
+        onClick={() => onNavigate('privacy')}
+        className="w-full flex flex-row items-center justify-between bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3 mb-3 transition-all active:scale-[0.98]"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-[var(--text-primary)] text-sm font-medium">{t('privacy.settings.link')}</span>
+          {privacyData && <PrivacyIndicator privacyLevel={privacyData.privacyLevel} />}
+        </div>
+        <span className="text-[var(--text-muted)] text-sm">→</span>
+      </button>
 
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 mb-3">
         <h3 className="text-[var(--text-secondary)] text-xs font-medium uppercase tracking-wider mb-3">

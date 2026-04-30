@@ -1,12 +1,15 @@
 import { createHmac } from 'node:crypto'
 import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet, kvSet, kvIncr, kvTtl } from '../../shared/kv/dynamodb-kv.js'
-import { emitPulseUpdate, emitToast, emitBusinessCheckin, emitFriendToast } from '../../shared/socket/events.js'
+import { emitPulseUpdate, emitToast, emitBusinessCheckin, emitBusinessCheckinDetail, emitFriendToast, emitTierChanged } from '../../shared/socket/events.js'
 import { getMutualFollowIds, getFollowingIds } from '../social/repository.js'
 import { getUserById } from '../auth/repository.js'
-import { canEmitIdentity } from '../../shared/privacy/privacy-guard.js'
+import { canEmitIdentity, sanitizeForBusiness } from '../../shared/privacy/privacy-guard.js'
 import { runAbuseChecks } from './abuse.js'
 import * as repo from './repository.js'
+import { getUserCheckInCountAtNode } from './dynamodb-repository.js'
+import { PutCommand } from '@aws-sdk/lib-dynamodb'
+import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import type { CheckInInput, CheckInResponse } from './types.js'
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
@@ -56,6 +59,12 @@ export async function processCheckIn(
   if (DEV_MODE) {
     const cooldownUntil = new Date(Date.now() + 14400 * 1000).toISOString()
     return { success: true, cooldownUntil }
+  }
+
+  // 0. Check if user account is disabled
+  const userRecord = await getUserById(userId)
+  if (userRecord?.isDisabled === true) {
+    throw AppError.forbidden('account_disabled')
   }
 
   // 1. Get node
@@ -109,8 +118,43 @@ export async function processCheckIn(
     nodeId: input.nodeId,
     type: input.type,
   })
-  await repo.incrementTotalCheckIns(userId)
+
+  // Capture tier before incrementing for change detection
+  const userBeforeIncrement = await getUserById(userId)
+  const oldTier = userBeforeIncrement?.tier ?? 'local'
+
+  const incrementResult = await repo.incrementTotalCheckIns(userId)
+  const newTier = incrementResult.tier
   await repo.updateStreak(userId)
+
+  // Detect tier change and notify
+  if (oldTier !== newTier) {
+    const TIER_BENEFITS: Record<string, string[]> = {
+      local: ['Access to basic rewards'],
+      regular: ['Priority reward access', 'Profile badge'],
+      fixture: ['Exclusive rewards', 'Leaderboard boost'],
+      institution: ['VIP rewards', 'Early access to new venues'],
+      legend: ['All benefits unlocked', 'Legend badge', 'Exclusive events'],
+    }
+    try {
+      emitTierChanged(userId, {
+        oldTier,
+        newTier,
+        benefits: TIER_BENEFITS[newTier] ?? [],
+      })
+      // Also send via notification service for push fallback
+      const { notifyUser } = await import('../notifications/service.js')
+      await notifyUser(userId, 'tier:changed', {
+        title: 'Tier Upgrade!',
+        message: `Congratulations! You've reached ${newTier} tier.`,
+        oldTier,
+        newTier,
+        benefits: TIER_BENEFITS[newTier] ?? [],
+      })
+    } catch {
+      // Tier notification failure is non-critical
+    }
+  }
 
   // 5. Set cooldown
   await kvSet(cooldownKey, '1', cooldownTtl)
@@ -186,25 +230,67 @@ export async function processCheckIn(
   // Business owners see aggregate data; strip username/avatarUrl for non-public users
   if (node.businessId) {
     const canShowIdentity = await canEmitIdentity(userId)
+    const user = await getUserById(userId)
+    const tier = user?.tier ?? 'local'
+    const visitCount = await getUserCheckInCountAtNode(userId, input.nodeId)
+
     const businessPayload: Record<string, unknown> = {
       nodeId: input.nodeId,
       nodeName: node.name,
       checkInCount: dailyCount,
+      tier,
+      visitCount,
       timestamp: new Date().toISOString(),
+      type: input.type,
     }
-    if (canShowIdentity) {
-      const user = await getUserById(userId)
-      if (user?.displayName) {
-        businessPayload.consumerDisplayName = user.displayName
-      }
+    if (canShowIdentity && user?.displayName) {
+      businessPayload['displayName'] = user.displayName
     }
-    emitBusinessCheckin(node.businessId, businessPayload as {
+
+    // Sanitize payload to ensure only privacy-safe fields are emitted
+    const sanitizedPayload = sanitizeForBusiness(businessPayload)
+
+    emitBusinessCheckin(node.businessId, sanitizedPayload as {
       nodeId: string;
       nodeName: string;
       checkInCount: number;
       timestamp: string;
       consumerDisplayName?: string;
     })
+
+    emitBusinessCheckinDetail(node.businessId, {
+      nodeId: input.nodeId,
+      nodeName: node.name,
+      displayName: canShowIdentity ? (user?.displayName ?? undefined) : undefined,
+      tier,
+      visitCount,
+      timestamp: new Date().toISOString(),
+    })
+
+    // Write business check-in cache record to app-data table for later querying
+    const dateStr = new Date().toISOString().slice(0, 10)
+    const ts = Date.now()
+    const ttl = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60 // 30-day TTL
+    try {
+      await documentClient.send(
+        new PutCommand({
+          TableName: TableNames.appData,
+          Item: {
+            pk: `BIZ_CHECKIN#${node.businessId}#${dateStr}`,
+            sk: `CHECKIN#${ts}#${checkIn.checkInId}`,
+            displayName: canShowIdentity ? (user?.displayName ?? null) : null,
+            tier,
+            visitCount,
+            nodeId: input.nodeId,
+            nodeName: node.name,
+            timestamp: new Date().toISOString(),
+            ttl,
+          },
+        })
+      )
+    } catch {
+      // Cache write failure is non-critical
+    }
   }
 
   // 8. Publish to SQS reward queue

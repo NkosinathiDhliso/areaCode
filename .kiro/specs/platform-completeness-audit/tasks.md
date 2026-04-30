@@ -6,7 +6,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
 
 ## Tasks
 
-- [-] 1. Privacy and Safety Foundation (Requirement 22)
+- [x] 1. Privacy and Safety Foundation (Requirement 22)
   - [x] 1.1 Add privacy attributes to the Users table and create PrivacyGuard module
     - Add `privacyLevel` (default `"friends_only"`), `isDisabled`, `disabledAt` attributes to the users table schema in `backend/src/features/auth/repository.ts`
     - Create `backend/src/shared/privacy/privacy-guard.ts` module that checks `privacyLevel`, block records, and mutual follows before exposing user activity
@@ -52,7 +52,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Ensure blocked users are excluded from all social query results and WebSocket events
     - _Requirements: 22.3, 22.4, 22.5, 22.6, 22.7, 22.10_
 
-  - [-] 1.7 Build consumer privacy settings UI
+  - [x] 1.7 Build consumer privacy settings UI
     - Create `PrivacySettingsPicker` component in `packages/shared/components/` — three-level selector (public, friends_only, private)
     - Create `PrivacyIndicator` component in `packages/shared/components/` — shows current privacy level on profile
     - Create `BlockUserButton` component in `packages/shared/components/` — block action for profiles/lists
@@ -67,11 +67,11 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Test report submission creates high-priority flag for harassment category
     - _Requirements: 22.7, 22.8, 22.9_
 
-- [ ] 2. Checkpoint — Privacy foundation complete
+- [x] 2. Checkpoint — Privacy foundation complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 3. Backend Data Enrichment (Requirements 16, 19, 20, 17, 18, 21)
-  - [ ] 3.1 Enrich check-in events with consumer details for business portal (Req 16)
+- [x] 3. Backend Data Enrichment (Requirements 16, 19, 20, 17, 18, 21)
+  - [x] 3.1 Enrich check-in events with consumer details for business portal (Req 16)
     - Modify `processCheckIn` in `backend/src/features/check-in/service.ts` to include `displayName`, `tier`, and `visitCount` in the `emitBusinessCheckin` payload
     - Compute `visitCount` by querying the consumer's total check-ins at that specific node
     - Add new `business:checkin_detail` WebSocket event type in `backend/src/shared/socket/events.ts`
@@ -85,7 +85,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Create `backend/src/__tests__/properties/data-integrity.property.test.ts`
     - **Validates: Requirements 8.2, 8.5, 16.3, 16.4, 22.6**
 
-  - [ ] 3.3 Add staff redemption attribution (Req 19)
+  - [x] 3.3 Add staff redemption attribution (Req 19)
     - Modify the reward redemption flow in `backend/src/features/rewards/` to accept and persist `staffId` on the redemption record
     - Add `staffId` attribute to check-in/redemption records in the rewards table
     - Create `GET /v1/business/staff/:staffId/redemptions` endpoint in `backend/src/features/business/handler.ts` to query redemptions by staff member
@@ -96,7 +96,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Add to `backend/src/__tests__/properties/data-integrity.property.test.ts`
     - **Validates: Requirements 19.1**
 
-  - [ ] 3.5 Implement notification pipeline via SQS (Reqs 17, 20)
+  - [x] 3.5 Implement notification pipeline via SQS (Reqs 17, 20)
     - Create `notification-sender` SQS queue infrastructure reference (env var `AREA_CODE_NOTIFICATION_QUEUE_URL`)
     - Create notification history data pattern in app-data table (pk `NOTIF#{userId}`, sk `NOTIF#{createdAt}`, 90-day TTL)
     - Extend `backend/src/features/notifications/service.ts` with `sendNotification` function that: checks user preferences, checks rate limits (max 2 reward notifications/day), persists to history, delivers via WebSocket (primary) or push (fallback)
@@ -104,13 +104,13 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Add `tier:changed` WebSocket event in `backend/src/shared/socket/events.ts`
     - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5, 20.1, 20.2, 20.3_
 
-  - [ ] 3.6 Implement new reward notification targeting
+  - [x] 3.6 Implement new reward notification targeting
     - When a business creates a new reward, query consumers who checked in at that node within the past 30 days
     - Send notification via the notification pipeline with reward title, venue name, and reward type
     - Respect notification preferences and rate limits
     - _Requirements: 17.1, 17.2, 17.3, 17.4_
 
-  - [ ] 3.7 Implement tier change detection and notification
+  - [x] 3.7 Implement tier change detection and notification
     - Modify `backend/src/features/check-in/service.ts` — after `incrementTotalCheckIns` and tier recalculation, detect if tier changed
     - If tier changed, emit `tier:changed` WebSocket event with `{ oldTier, newTier, benefits[] }` and send notification via the notification pipeline
     - _Requirements: 20.1, 20.2, 20.3_
@@ -124,7 +124,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Create `backend/src/__tests__/properties/notification-pipeline.property.test.ts`
     - **Validates: Requirements 17.1, 17.3, 17.4, 17.5, 20.1, 20.2, 20.3**
 
-  - [ ] 3.9 Implement admin flag downstream actions (Req 18)
+  - [x] 3.9 Implement admin flag downstream actions (Req 18)
     - Create `POST /v1/admin/users/:userId/disable` in `backend/src/features/admin/handler.ts` — revoke Cognito tokens via `AdminUserGlobalSignOut`, set `isDisabled = true` on user record
     - Create `POST /v1/admin/businesses/:businessId/disable` — set `isActive = false` on all nodes owned by the business
     - Add `isDisabled` check to check-in and reward claim flows — reject with 403 `account_disabled`
@@ -138,16 +138,16 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Create `backend/src/__tests__/properties/disable-cascade.property.test.ts`
     - **Validates: Requirements 18.2, 18.3, 18.4**
 
-  - [ ] 3.11 Implement abuse flag surfacing to admin (Req 21)
+  - [x] 3.11 Implement abuse flag surfacing to admin (Req 21)
     - Ensure existing abuse flags from `backend/src/features/check-in/abuse.ts` are queryable via the admin API
     - Add `abuse:new_flag` WebSocket event emitted to `admin:flags` room when a new abuse flag is created
     - Ensure unreviewed flag count is included in admin dashboard metrics
     - _Requirements: 21.1, 21.2, 21.3_
 
-- [ ] 4. Checkpoint — Backend enrichment complete
+- [x] 4. Checkpoint — Backend enrichment complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 5. Consumer Portal Features (Requirements 1, 2, 3, 4, 5, 6, 7)
+- [-] 5. Consumer Portal Features (Requirements 1, 2, 3, 4, 5, 6, 7)
   - [ ] 5.1 Implement check-in history API and UI (Req 1)
     - Create `GET /v1/users/me/check-in-history` endpoint with cursor-based pagination (the existing `getCheckInHistory` in auth service can be extended or a new route registered)
     - Create `PaginatedList` shared component in `packages/shared/components/` — cursor-based infinite scroll with error/retry
