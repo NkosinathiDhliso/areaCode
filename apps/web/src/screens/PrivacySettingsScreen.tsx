@@ -5,6 +5,7 @@ import { Avatar } from '@area-code/shared/components/Avatar'
 import { Skeleton } from '@area-code/shared/components/Skeleton'
 import { PrivacySettingsPicker } from '@area-code/shared/components/PrivacySettingsPicker'
 import { BlockUserButton } from '@area-code/shared/components/BlockUserButton'
+import { ChevronLeft } from 'lucide-react'
 import type { Tier } from '@area-code/shared/types'
 import type { AppRoute } from '../types'
 
@@ -42,7 +43,7 @@ export function PrivacySettingsScreen({ onNavigate }: PrivacySettingsScreenProps
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4">
+    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4" data-scroll-container>
       {/* Header with back button */}
       <div className="flex flex-row items-center gap-3 mb-6">
         <button
@@ -50,7 +51,7 @@ export function PrivacySettingsScreen({ onNavigate }: PrivacySettingsScreenProps
           className="text-[var(--text-muted)] text-sm transition-all active:scale-95"
           aria-label={t('privacy.back')}
         >
-          ← {t('privacy.back')}
+          <ChevronLeft size={16} strokeWidth={2} className="inline" /> {t('privacy.back')}
         </button>
       </div>
 

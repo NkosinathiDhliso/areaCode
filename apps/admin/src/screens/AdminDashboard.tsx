@@ -59,12 +59,12 @@ export function AdminDashboard() {
         </div>
       </header>
 
-      <nav className="flex flex-row gap-1 px-5 pt-3 pb-2 border-b border-[var(--border)]">
+      <nav className="flex flex-row gap-1 px-5 pt-3 pb-2 border-b border-[var(--border)] overflow-x-auto no-scrollbar">
         {tabs.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-xl text-sm transition-all duration-150 ${
+            className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm transition-all duration-150 whitespace-nowrap ${
               activeTab === tab
                 ? 'bg-[var(--accent)] text-white'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'

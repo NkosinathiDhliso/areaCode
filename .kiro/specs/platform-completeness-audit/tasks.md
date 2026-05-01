@@ -266,7 +266,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
 - [x] 8. Checkpoint — Business portal features complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 9. Staff Portal Features (Requirements 10, 11, 12)
+- [x] 9. Staff Portal Features (Requirements 10, 11, 12)
   - [x] 9.1 Implement QR code scanner (Req 10)
     - Create `QrScanner` shared component in `packages/shared/components/` — camera-based QR code scanner with viewfinder overlay
     - Create `POST /v1/staff/redeem/scan` endpoint in `backend/src/features/staff/handler.ts` — accepts scanned redemption code
@@ -300,7 +300,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
 - [x] 10. Checkpoint — Staff portal features complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 11. Admin Portal Features (Requirements 13, 14, 15)
+- [x] 11. Admin Portal Features (Requirements 13, 14, 15)
   - [x] 11.1 Implement admin dashboard overview API and UI (Req 13)
     - Create `GET /v1/admin/dashboard` endpoint in `backend/src/features/admin/handler.ts` — returns summary metrics: total consumers, total businesses, total check-ins (all-time + today), active rewards, pending reports count, pending erasure requests count
     - Store daily metrics in app-data table (pk `METRICS#DAILY`, sk `METRICS#{date}`) computed on-demand with 60s KV cache

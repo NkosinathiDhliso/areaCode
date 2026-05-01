@@ -1,24 +1,26 @@
 /** Design tokens matching the web app's CSS custom properties (dark theme). */
 export const colors = {
-  bgBase: '#0a0a0f',
-  bgSurface: '#121218',
-  bgRaised: '#1a1a24',
-  bgOverlay: 'rgba(0,0,0,0.6)',
+  bgBase: '#0c1018',
+  bgSurface: 'rgba(18,26,38,0.65)',
+  bgRaised: 'rgba(26,36,52,0.70)',
+  bgOverlay: 'rgba(8,10,14,0.80)',
 
-  textPrimary: '#f5f5f7',
-  textSecondary: '#a1a1aa',
-  textMuted: '#6b7280',
+  textPrimary: '#e8ecf0',
+  textSecondary: '#9aa8b8',
+  textMuted: '#5c6878',
 
-  accent: '#6C5CE7',
-  success: '#10b981',
-  warning: '#f59e0b',
-  danger: '#ef4444',
+  accent: '#778CA9',
+  accentBright: '#A9CBE0',
+  accentDim: '#5A6F8A',
+  success: '#22d3a0',
+  warning: '#ffb830',
+  danger: '#ff4757',
 
   border: 'rgba(255,255,255,0.06)',
   borderStrong: 'rgba(255,255,255,0.12)',
 
-  tierLocal: '#6b7280',
-  tierRegular: '#3b82f6',
-  tierFixture: '#8b5cf6',
-  tierInstitution: '#f59e0b',
+  tierLocal: '#5c6878',
+  tierRegular: '#cd7f32',
+  tierFixture: '#c0c0c0',
+  tierInstitution: '#ffd700',
 } as const

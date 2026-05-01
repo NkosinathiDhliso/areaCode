@@ -20,13 +20,13 @@ export function SignupSheet({ isOpen, onClose, onNavigate }: SignupSheetProps) {
       <div className="flex flex-col gap-3">
         <button
           onClick={() => { onClose(); onNavigate('signup') }}
-          className="bg-[var(--accent)] text-white font-semibold rounded-xl py-4 text-base transition-all duration-150 active:scale-95"
+          className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95"
         >
           {t('auth.landing.customer')}
         </button>
         <button
           onClick={() => { onClose(); window.location.href = '/signup/business' }}
-          className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl py-3 px-5 bg-transparent transition-all duration-150"
+          className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl py-3.5 px-5 bg-transparent transition-all duration-150"
         >
           {t('auth.landing.business')}
         </button>

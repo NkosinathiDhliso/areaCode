@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useNavigationStore } from '@area-code/shared/stores/navigationStore'
@@ -7,6 +7,7 @@ import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { api } from '@area-code/shared/lib/api'
 import { getSocket } from '@area-code/shared/lib/socket'
 import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
+import { GlobalErrorToast } from '@area-code/shared/components/GlobalErrorToast'
 import { OnboardingFlow } from '@area-code/shared/components/OnboardingFlow'
 
 import { MapScreen } from './screens/MapScreen'
@@ -24,10 +25,39 @@ import { BottomNav } from './components/BottomNav'
 import { ConnectivityBanner } from './components/ConnectivityBanner'
 import type { AppRoute } from './types'
 
+const ROUTE_PATHS: Record<AppRoute, string> = {
+  landing: '/',
+  login: '/login',
+  signup: '/signup',
+  map: '/map',
+  gets: '/gets',
+  ranks: '/ranks',
+  feed: '/feed',
+  friends: '/friends',
+  profile: '/profile',
+  privacy: '/privacy',
+  history: '/history',
+}
+
+function pathToRoute(path: string): AppRoute {
+  if (path === '/login') return 'login'
+  if (path === '/signup/consumer' || path === '/signup') return 'signup'
+  if (path === '/map') return 'map'
+  if (path === '/gets') return 'gets'
+  if (path === '/ranks') return 'ranks'
+  if (path === '/feed') return 'feed'
+  if (path === '/friends') return 'friends'
+  if (path === '/profile') return 'profile'
+  if (path === '/privacy') return 'privacy'
+  if (path === '/history') return 'history'
+  return 'landing'
+}
+
 export function App() {
   return (
     <ErrorBoundary>
       <AppContent />
+      <GlobalErrorToast />
     </ErrorBoundary>
   )
 }
@@ -44,21 +74,34 @@ function AppContent() {
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [onboardingChecked, setOnboardingChecked] = useState(false)
 
-  const [route, setRoute] = useState<AppRoute>(() => {
-    const path = window.location.pathname
-    if (path === '/login') return 'login'
-    if (path === '/signup/consumer') return 'signup'
-    if (path === '/signup') return 'signup'
-    if (path === '/map') return 'map'
-    if (path === '/gets') return 'gets'
-    if (path === '/ranks') return 'ranks'
-    if (path === '/feed') return 'feed'
-    if (path === '/friends') return 'friends'
-    if (path === '/profile') return 'profile'
-    if (path === '/privacy') return 'privacy'
-    if (path === '/history') return 'history'
-    return 'landing' // Default to landing page for root and unknown paths
-  })
+  const [route, setRouteState] = useState<AppRoute>(() => pathToRoute(window.location.pathname))
+
+  // Ref for scroll-to-top on tab change (Issue #38)
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  // Navigate with browser history support (Issue #9)
+  const setRoute = useCallback((newRoute: AppRoute) => {
+    setRouteState(newRoute)
+    const path = ROUTE_PATHS[newRoute] ?? '/'
+    if (window.location.pathname !== path) {
+      window.history.pushState({ route: newRoute }, '', path)
+    }
+    // Scroll to top on tab change (Issue #38)
+    if (contentRef.current) {
+      const scrollable = contentRef.current.querySelector('[data-scroll-container]')
+      if (scrollable) scrollable.scrollTop = 0
+    }
+  }, [])
+
+  // Handle browser back/forward buttons (Issue #9)
+  useEffect(() => {
+    function handlePopState() {
+      const newRoute = pathToRoute(window.location.pathname)
+      setRouteState(newRoute)
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
 
   // Wire API token provider and refresh handler
   useEffect(() => {
@@ -71,7 +114,7 @@ function AppContent() {
         setRoute('login')
       },
     })
-  }, [])
+  }, [setRoute])
 
   // Reset time-based nav default on fresh app open
   useEffect(() => {
@@ -108,7 +151,6 @@ function AppContent() {
       } catch (err: unknown) {
         const apiErr = err as { statusCode?: number } | undefined
         if (apiErr?.statusCode === 401) {
-          // Token expired, force re-login
           useConsumerAuthStore.getState().logout()
           setRoute('login')
           return
@@ -118,20 +160,40 @@ function AppContent() {
       }
     }
     void checkOnboarding()
-  }, [isAuthenticated, onboardingChecked])
+  }, [isAuthenticated, onboardingChecked, setRoute])
 
   // Auth screens render without bottom nav
-  if (route === 'landing') return <AuthLanding onNavigate={setRoute} />
-  if (route === 'login') return <ConsumerLogin onNavigate={setRoute} />
-  if (route === 'signup') return <ConsumerSignup onNavigate={setRoute} />
+  if (!isAuthenticated) {
+    if (route === 'landing') return <AuthLanding onNavigate={setRoute} />
+    if (route === 'login') return <ConsumerLogin onNavigate={setRoute} />
+    if (route === 'signup') return <ConsumerSignup onNavigate={setRoute} />
+  }
+
+  // Redirect authenticated users from landing/map to their time-based default tab
+  const activeDefaultTab = useNavigationStore((s) => s.activeDefaultTab)
+  if (isAuthenticated && (route === 'landing' || route === 'map')) {
+    const defaultRoute = activeDefaultTab as AppRoute
+    if (route !== defaultRoute && (defaultRoute === 'gets' || defaultRoute === 'ranks')) {
+      // Use effect-free redirect by rendering the correct screen
+      return (
+        <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
+          <ConnectivityBanner />
+          {showOnboarding && <OnboardingFlow onComplete={() => setShowOnboarding(false)} />}
+          <div ref={contentRef} className="flex-1 relative overflow-hidden">
+            {defaultRoute === 'gets' && <RewardsScreen />}
+            {defaultRoute === 'ranks' && <LeaderboardScreen />}
+          </div>
+          <BottomNav active={defaultRoute} onNavigate={setRoute} />
+        </div>
+      )
+    }
+  }
 
   return (
     <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
       <ConnectivityBanner />
-      {showOnboarding && (
-        <OnboardingFlow onComplete={() => setShowOnboarding(false)} />
-      )}
-      <div className="flex-1 relative overflow-hidden">
+      {showOnboarding && <OnboardingFlow onComplete={() => setShowOnboarding(false)} />}
+      <div ref={contentRef} className="flex-1 relative overflow-hidden">
         {route === 'map' && <MapScreen onNavigate={setRoute} />}
         {route === 'gets' && <RewardsScreen />}
         {route === 'ranks' && <LeaderboardScreen />}

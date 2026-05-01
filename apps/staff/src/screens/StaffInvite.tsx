@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@area-code/shared/lib/api'
+import { Spinner } from '@area-code/shared/components/Spinner'
 
 interface StaffInviteProps {
   token: string
@@ -75,7 +76,10 @@ export function StaffInvite({ token }: StaffInviteProps) {
       )}
 
       {status === 'loading' && (
-        <p className="text-[var(--text-secondary)]">Setting up your account...</p>
+        <div className="flex flex-col items-center gap-3">
+          <Spinner size="lg" />
+          <p className="text-[var(--text-secondary)]">Setting up your account...</p>
+        </div>
       )}
 
       {status === 'success' && (

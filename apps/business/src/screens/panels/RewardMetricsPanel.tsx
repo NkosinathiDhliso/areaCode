@@ -95,7 +95,9 @@ export function RewardMetricsPanel() {
               }`}
             >
               <span className="text-[var(--text-primary)] text-sm font-medium flex items-center gap-1">
-                {item.isLowPerformance && <span title="Low performance">⚠️</span>}
+                {item.isLowPerformance && (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" title="Low performance"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                )}
                 {item.title}
               </span>
               <span className="text-[var(--text-secondary)] text-sm text-center">

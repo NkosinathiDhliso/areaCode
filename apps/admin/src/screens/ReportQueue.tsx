@@ -32,7 +32,7 @@ export function ReportQueue() {
 
   async function handleAction(reportId: string, action: 'reviewed' | 'dismissed' | 'actioned') {
     try {
-      await api.post(`/v1/admin/reports/${reportId}/${action}`)
+      await api.post(`/v1/admin/reports/${reportId}/action`, { action })
       fetchReports()
     } catch {
       // Fail silently
@@ -45,37 +45,26 @@ export function ReportQueue() {
 
   return (
     <div className="p-5">
-      <h2 className="text-[var(--text-primary)] font-bold text-xl mb-4 font-[Syne]">
-        {t('admin.reports.title')}
-      </h2>
+      <h2 className="text-[var(--text-primary)] font-bold text-xl mb-4 font-[Syne]">{t('admin.reports.title')}</h2>
 
       {reports.length === 0 ? (
         <p className="text-[var(--text-muted)]">No pending reports</p>
       ) : (
         <div className="flex flex-col gap-3">
           {reports.map((report) => (
-            <div
-              key={report.id}
-              className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4"
-            >
+            <div key={report.id} className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
               <div className="flex flex-row items-center justify-between mb-2">
                 <span className="text-[var(--text-primary)] font-medium">{report.nodeName}</span>
                 {report.sameTypeCount >= 3 && (
-                  <span className="text-[var(--danger)] text-xs">
-                    {report.sameTypeCount} similar reports
-                  </span>
+                  <span className="text-[var(--danger)] text-xs">{report.sameTypeCount} similar reports</span>
                 )}
               </div>
               <div className="text-[var(--text-secondary)] text-sm mb-1 capitalize">
                 {report.type.replace('_', ' ')}
               </div>
-              {report.detail && (
-                <p className="text-[var(--text-muted)] text-xs mb-3">{report.detail}</p>
-              )}
+              {report.detail && <p className="text-[var(--text-muted)] text-xs mb-3">{report.detail}</p>}
               <div className="flex flex-row items-center justify-between">
-                <span className="text-[var(--text-muted)] text-xs">
-                  {formatRelativeTime(report.createdAt)}
-                </span>
+                <span className="text-[var(--text-muted)] text-xs">{formatRelativeTime(report.createdAt)}</span>
                 <div className="flex flex-row gap-2">
                   <button
                     onClick={() => handleAction(report.id, 'reviewed')}

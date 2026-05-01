@@ -143,6 +143,7 @@ export function StreamingSection() {
         <div
           className="fixed inset-0 flex items-center justify-center"
           style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 50 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowConsent(null) }}
         >
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-5 mx-4" style={{ maxWidth: 360 }}>
             <p className="text-[var(--text-primary)] text-sm font-medium mb-2">

@@ -63,7 +63,7 @@ export function TierProgressBar({
           </Text>
         ) : (
           <Text className="text-[var(--text-secondary)] text-xs font-medium">
-            Max tier reached ✨
+            Max tier reached
           </Text>
         )}
       </Box>

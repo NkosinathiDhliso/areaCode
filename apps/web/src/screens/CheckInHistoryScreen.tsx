@@ -3,6 +3,9 @@ import { useTranslation } from 'react-i18next'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
 import { Skeleton } from '@area-code/shared/components/Skeleton'
+import { EmptyState } from '@area-code/shared/components/EmptyState'
+import { UtensilsCrossed, Coffee, Moon, ShoppingBag, Dumbbell, Palette, MapPin, ChevronLeft } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { AppRoute } from '../types'
 
 interface CheckInHistoryEntry {
@@ -74,24 +77,24 @@ export function CheckInHistoryScreen({ onNavigate }: CheckInHistoryScreenProps) 
     return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
   }
 
-  const categoryEmoji: Record<string, string> = {
-    food: '🍽️',
-    coffee: '☕',
-    nightlife: '🌙',
-    retail: '🛍️',
-    fitness: '💪',
-    arts: '🎨',
+  const CATEGORY_ICONS: Record<string, LucideIcon> = {
+    food: UtensilsCrossed,
+    coffee: Coffee,
+    nightlife: Moon,
+    retail: ShoppingBag,
+    fitness: Dumbbell,
+    arts: Palette,
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4">
+    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4" data-scroll-container>
       <div className="flex items-center gap-3 mb-6">
         <button
           onClick={() => onNavigate('profile')}
-          className="text-[var(--text-muted)] text-sm"
+          className="text-[var(--text-muted)] text-sm flex items-center gap-1"
           aria-label={t('common.back', 'Back')}
         >
-          ←
+          <ChevronLeft size={16} strokeWidth={2} />
         </button>
         <h1 className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">
           {t('profile.checkInHistory', 'Check-in History')}
@@ -125,11 +128,7 @@ export function CheckInHistoryScreen({ onNavigate }: CheckInHistoryScreenProps) 
       )}
 
       {!isLoading && !isError && allItems.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-12">
-          <p className="text-[var(--text-muted)] text-sm">
-            {t('profile.noCheckIns', 'No check-ins yet. Go explore!')}
-          </p>
-        </div>
+        <EmptyState icon="history" message={t('profile.noCheckIns', 'No check-ins yet. Go explore!')} />
       )}
 
       {!isLoading && !isError && allItems.length > 0 && (
@@ -139,9 +138,10 @@ export function CheckInHistoryScreen({ onNavigate }: CheckInHistoryScreenProps) 
               key={item.id}
               className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3 flex items-center gap-3"
             >
-              <span className="text-xl" aria-hidden="true">
-                {categoryEmoji[item.node.category] ?? '📍'}
-              </span>
+              {(() => {
+                const Icon = CATEGORY_ICONS[item.node.category] ?? MapPin
+                return <Icon size={20} strokeWidth={1.5} className="text-[var(--text-secondary)] shrink-0" aria-hidden="true" />
+              })()}
               <div className="flex-1 min-w-0">
                 <p className="text-[var(--text-primary)] text-sm font-medium truncate">
                   {item.node.name}

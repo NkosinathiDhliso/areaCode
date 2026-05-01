@@ -1,18 +1,21 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import { useBusinessStore, type DashboardPanel } from '@area-code/shared/stores/businessStore'
-import { LivePanel } from './panels/LivePanel'
-import { RewardsPanel } from './panels/RewardsPanel'
-import { AudiencePanel } from './panels/AudiencePanel'
-import { NodeEditorPanel } from './panels/NodeEditorPanel'
-import { BoostPanel } from './panels/BoostPanel'
-import { PlansPanel } from './panels/PlansPanel'
-import { SettingsPanel } from './panels/SettingsPanel'
-import { CheckInDetailPanel } from './panels/CheckInDetailPanel'
-import { RewardMetricsPanel } from './panels/RewardMetricsPanel'
-import { StaffRedemptionPanel } from './panels/StaffRedemptionPanel'
+import { Spinner } from '@area-code/shared/components/Spinner'
+
+// Lazy-load panels so only the active one mounts (Issue #27)
+const LivePanel = lazy(() => import('./panels/LivePanel').then((m) => ({ default: m.LivePanel })))
+const RewardsPanel = lazy(() => import('./panels/RewardsPanel').then((m) => ({ default: m.RewardsPanel })))
+const AudiencePanel = lazy(() => import('./panels/AudiencePanel').then((m) => ({ default: m.AudiencePanel })))
+const NodeEditorPanel = lazy(() => import('./panels/NodeEditorPanel').then((m) => ({ default: m.NodeEditorPanel })))
+const BoostPanel = lazy(() => import('./panels/BoostPanel').then((m) => ({ default: m.BoostPanel })))
+const PlansPanel = lazy(() => import('./panels/PlansPanel').then((m) => ({ default: m.PlansPanel })))
+const SettingsPanel = lazy(() => import('./panels/SettingsPanel').then((m) => ({ default: m.SettingsPanel })))
+const CheckInDetailPanel = lazy(() => import('./panels/CheckInDetailPanel').then((m) => ({ default: m.CheckInDetailPanel })))
+const RewardMetricsPanel = lazy(() => import('./panels/RewardMetricsPanel').then((m) => ({ default: m.RewardMetricsPanel })))
+const StaffRedemptionPanel = lazy(() => import('./panels/StaffRedemptionPanel').then((m) => ({ default: m.StaffRedemptionPanel })))
 
 const PANELS: DashboardPanel[] = ['live', 'check-ins', 'rewards', 'reward-metrics', 'audience', 'node', 'boost', 'staff-redemptions', 'plans', 'settings']
 
@@ -29,13 +32,22 @@ const PANEL_LABELS: Record<DashboardPanel, string> = {
   settings: 'biz.panel.settings',
 }
 
+function PanelFallback() {
+  return (
+    <div className="flex items-center justify-center h-full">
+      <Spinner size="lg" />
+    </div>
+  )
+}
+
 export function BusinessDashboard() {
   const { t } = useTranslation()
   const logout = useBusinessAuthStore((s) => s.logout)
   const { currentPanel, setPanel } = useBusinessStore()
-  const currentIdx = PANELS.indexOf(currentPanel)
+  const navRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [touchStart, setTouchStart] = useState<number | null>(null)
+  const currentIdx = PANELS.indexOf(currentPanel)
 
   function handleTouchStart(e: React.TouchEvent) {
     setTouchStart(e.touches[0]?.clientX ?? null)
@@ -54,6 +66,22 @@ export function BusinessDashboard() {
     setTouchStart(null)
   }
 
+  function renderPanel() {
+    switch (currentPanel) {
+      case 'live': return <LivePanel />
+      case 'check-ins': return <CheckInDetailPanel />
+      case 'rewards': return <RewardsPanel />
+      case 'reward-metrics': return <RewardMetricsPanel />
+      case 'audience': return <AudiencePanel />
+      case 'node': return <NodeEditorPanel />
+      case 'boost': return <BoostPanel />
+      case 'staff-redemptions': return <StaffRedemptionPanel />
+      case 'plans': return <PlansPanel />
+      case 'settings': return <SettingsPanel />
+      default: return <LivePanel />
+    }
+  }
+
   return (
     <div className="flex flex-col h-dvh bg-[var(--bg-base)] overflow-hidden">
       {/* Header */}
@@ -66,62 +94,37 @@ export function BusinessDashboard() {
         </button>
       </header>
 
-      {/* Panel indicator dots */}
-      <nav className="flex flex-row items-center justify-center gap-3 py-3">
-        {PANELS.map((panel, idx) => (
+      {/* Scrollable tab nav (Issue #3 — replaces 10 dots with scrollable pills) */}
+      <nav
+        ref={navRef}
+        className="flex flex-row items-center gap-1 px-4 py-2.5 border-b border-[var(--border)] overflow-x-auto no-scrollbar"
+      >
+        {PANELS.map((panel) => (
           <button
             key={panel}
             onClick={() => setPanel(panel)}
-            className="flex flex-col items-center gap-1"
+            className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-150 whitespace-nowrap ${
+              panel === currentPanel
+                ? 'bg-[var(--accent)] text-white'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
             aria-label={t(PANEL_LABELS[panel])}
           >
-            <div
-              className={`w-2 h-2 rounded-full transition-all duration-200 ${
-                idx === currentIdx
-                  ? 'bg-[var(--accent)] scale-125'
-                  : 'bg-[var(--text-muted)] scale-100'
-              }`}
-            />
-            <span
-              className={`text-[10px] transition-colors duration-200 ${
-                idx === currentIdx ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'
-              }`}
-            >
-              {t(PANEL_LABELS[panel])}
-            </span>
+            {t(PANEL_LABELS[panel])}
           </button>
         ))}
       </nav>
 
-      {/* Swipeable panel container */}
+      {/* Single active panel (Issue #27 — only active panel mounts) */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-hidden relative"
+        className="flex-1 overflow-y-auto"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        <div
-          className="flex flex-row h-full transition-transform duration-300"
-          style={{
-            width: `${PANELS.length * 100}%`,
-            transform: `translateX(-${currentIdx * (100 / PANELS.length)}%)`,
-          }}
-        >
-          {PANELS.map((panel) => (
-            <div key={panel} className="h-full overflow-y-auto" style={{ width: `${100 / PANELS.length}%` }}>
-              {panel === 'live' && <LivePanel />}
-              {panel === 'check-ins' && <CheckInDetailPanel />}
-              {panel === 'rewards' && <RewardsPanel />}
-              {panel === 'reward-metrics' && <RewardMetricsPanel />}
-              {panel === 'audience' && <AudiencePanel />}
-              {panel === 'node' && <NodeEditorPanel />}
-              {panel === 'boost' && <BoostPanel />}
-              {panel === 'staff-redemptions' && <StaffRedemptionPanel />}
-              {panel === 'plans' && <PlansPanel />}
-              {panel === 'settings' && <SettingsPanel />}
-            </div>
-          ))}
-        </div>
+        <Suspense fallback={<PanelFallback />}>
+          {renderPanel()}
+        </Suspense>
       </div>
     </div>
   )

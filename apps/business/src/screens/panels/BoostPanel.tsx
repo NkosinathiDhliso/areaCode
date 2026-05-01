@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import { api } from '@area-code/shared/lib/api'
 import { formatZAR } from '@area-code/shared/lib/formatters'
+import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 
 interface BoostPricing {
   '2hr': number
@@ -14,6 +15,8 @@ export function BoostPanel() {
   const { t } = useTranslation()
   const [pricing, setPricing] = useState<BoostPricing | null>(null)
   const [loading, setLoading] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const nodes = useBusinessStore((s) => s.nodes)
 
   useEffect(() => {
     async function fetch() {
@@ -28,15 +31,21 @@ export function BoostPanel() {
   }, [])
 
   async function handleBoost(duration: '2hr' | '6hr' | '24hr') {
+    const nodeId = nodes[0]?.id
+    if (!nodeId) {
+      setError(t('biz.boost.noNode', 'No node found. Please create a node first.'))
+      return
+    }
     setLoading(duration)
+    setError(null)
     try {
       const res = await api.post<{ checkoutUrl: string }>('/v1/business/boost', {
-        nodeId: 'current-node-id',
+        nodeId,
         duration,
       })
       window.location.href = res.checkoutUrl
     } catch {
-      // Fail silently
+      setError(t('biz.boost.error', 'Failed to start boost. Please try again.'))
     } finally {
       setLoading(null)
     }
@@ -67,6 +76,7 @@ export function BoostPanel() {
           ))}
         </div>
       )}
+      {error && <p className="text-[var(--danger)] text-xs mt-2">{error}</p>}
     </div>
   )
 }

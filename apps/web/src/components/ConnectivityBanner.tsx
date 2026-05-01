@@ -1,9 +1,18 @@
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
 
 export function ConnectivityBanner() {
   const { t } = useTranslation()
   const { state, lastUpdated } = useConnectivityStore()
+  const [, setTick] = useState(0)
+
+  // Re-render every 30s to keep relative time fresh (Issue #16)
+  useEffect(() => {
+    if (state === 'online') return
+    const interval = setInterval(() => setTick((t) => t + 1), 30_000)
+    return () => clearInterval(interval)
+  }, [state])
 
   if (state === 'online') return null
 

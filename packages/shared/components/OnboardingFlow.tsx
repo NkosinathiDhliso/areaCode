@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../lib/api'
+import { Spinner } from './Spinner'
 import type { MusicGenre } from '../types'
 
 const GENRES: { id: MusicGenre; label: string }[] = [
@@ -53,80 +54,27 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   }
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'var(--bg-base, #0f0f17)',
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: 380,
-          margin: '0 16px',
-          padding: '32px 20px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        <h1
-          style={{
-            color: 'var(--text-primary, #f0f0f5)',
-            fontSize: 24,
-            fontWeight: 800,
-            textAlign: 'center',
-            margin: '0 0 8px 0',
-            fontFamily: 'Syne, system-ui, sans-serif',
-          }}
-        >
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[var(--bg-base)]">
+      <div className="w-full max-w-[380px] mx-4 py-8 px-5 flex flex-col items-center">
+        <h1 className="text-[var(--text-primary)] text-2xl font-extrabold text-center mb-2 font-[Syne]">
           What do you listen to?
         </h1>
-        <p
-          style={{
-            color: 'var(--text-secondary, #a0a0b8)',
-            fontSize: 13,
-            textAlign: 'center',
-            margin: '0 0 24px 0',
-            lineHeight: '1.5',
-          }}
-        >
+        <p className="text-[var(--text-secondary)] text-[13px] text-center mb-6 leading-relaxed">
           Pick up to 5 genres. This powers the crowd vibe at venues you visit.
         </p>
 
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 8,
-            justifyContent: 'center',
-            marginBottom: 24,
-          }}
-        >
+        <div className="flex flex-wrap gap-2 justify-center mb-6">
           {GENRES.map((g) => {
             const active = selected.includes(g.id)
             return (
               <button
                 key={g.id}
                 onClick={() => toggle(g.id)}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: 12,
-                  fontSize: 13,
-                  fontWeight: 500,
-                  border: active ? 'none' : '1px solid var(--border, rgba(255,255,255,0.08))',
-                  backgroundColor: active
-                    ? 'var(--accent, #6c63ff)'
-                    : 'var(--bg-raised, #1e1e2e)',
-                  color: active ? '#fff' : 'var(--text-secondary, #a0a0b8)',
-                  cursor: 'pointer',
-                  transition: 'all 150ms',
-                }}
+                className={`px-4 py-2 rounded-xl text-[13px] font-medium transition-all duration-150 ${
+                  active
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)]'
+                }`}
               >
                 {g.label}
               </button>
@@ -134,26 +82,12 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           })}
         </div>
 
-        <p
-          style={{
-            color: 'var(--text-muted, #606078)',
-            fontSize: 11,
-            textAlign: 'center',
-            margin: '0 0 16px 0',
-          }}
-        >
+        <p className="text-[var(--text-muted)] text-[11px] text-center mb-4">
           {selected.length}/5 selected
         </p>
 
         {error && (
-          <p
-            style={{
-              color: 'var(--danger, #ff4757)',
-              fontSize: 12,
-              textAlign: 'center',
-              margin: '0 0 12px 0',
-            }}
-          >
+          <p className="text-[var(--danger)] text-xs text-center mb-3">
             {error}
           </p>
         )}
@@ -161,23 +95,13 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         <button
           onClick={handleContinue}
           disabled={saving || selected.length < 1}
-          style={{
-            width: '100%',
-            backgroundColor: selected.length >= 1
-              ? 'var(--accent, #6c63ff)'
-              : 'var(--bg-raised, #1e1e2e)',
-            color: selected.length >= 1 ? '#fff' : 'var(--text-muted, #606078)',
-            fontWeight: 600,
-            borderRadius: 12,
-            padding: '14px 0',
-            fontSize: 15,
-            border: 'none',
-            cursor: selected.length >= 1 ? 'pointer' : 'default',
-            opacity: saving ? 0.5 : 1,
-            transition: 'all 200ms',
-          }}
+          className={`w-full rounded-xl py-3.5 text-[15px] font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
+            selected.length >= 1
+              ? 'bg-[var(--accent)] text-white'
+              : 'bg-[var(--bg-raised)] text-[var(--text-muted)] cursor-default'
+          } ${saving ? 'opacity-50' : ''}`}
         >
-          {saving ? '...' : 'Continue'}
+          {saving ? <Spinner size="sm" className="border-white border-t-transparent" /> : 'Continue'}
         </button>
       </div>
     </div>

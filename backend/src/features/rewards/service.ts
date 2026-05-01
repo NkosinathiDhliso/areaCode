@@ -6,23 +6,86 @@ import { notifyNewRewardConsumers } from '../notifications/service.js'
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
 const DEV_REWARDS = [
-  { id: 'rew-1', title: 'Free Coffee', type: 'freebie', totalSlots: 50, claimedCount: 12, nodeId: 'dev-1', nodeName: 'Father Coffee', nodeSlug: 'father-coffee', distance: 150, expiresAt: null },
-  { id: 'rew-2', title: '20% Off Cocktails', type: 'discount', totalSlots: 30, claimedCount: 8, nodeId: 'dev-3', nodeName: "Kitchener's Bar", nodeSlug: 'kitcheners-bar', distance: 800, expiresAt: null },
-  { id: 'rew-3', title: 'Free Starter', type: 'freebie', totalSlots: 20, claimedCount: 5, nodeId: 'dev-7', nodeName: "Nando's Rosebank", nodeSlug: 'nandos-rosebank', distance: 1200, expiresAt: null },
-  { id: 'rew-4', title: 'Buy 1 Get 1 Free', type: 'bogo', totalSlots: 100, claimedCount: 45, nodeId: 'dev-9', nodeName: 'The Grillhouse', nodeSlug: 'the-grillhouse', distance: 600, expiresAt: null },
-  { id: 'rew-5', title: 'Free Day Pass', type: 'freebie', totalSlots: 10, claimedCount: 3, nodeId: 'dev-10', nodeName: 'Virgin Active Sandton', nodeSlug: 'virgin-active-sandton', distance: 2000, expiresAt: null },
+  {
+    id: 'rew-1',
+    title: 'Free Coffee',
+    type: 'freebie',
+    totalSlots: 50,
+    claimedCount: 12,
+    nodeId: 'dev-1',
+    nodeName: 'Father Coffee',
+    nodeSlug: 'father-coffee',
+    distance: 150,
+    expiresAt: null,
+  },
+  {
+    id: 'rew-2',
+    title: '20% Off Cocktails',
+    type: 'discount',
+    totalSlots: 30,
+    claimedCount: 8,
+    nodeId: 'dev-3',
+    nodeName: "Kitchener's Bar",
+    nodeSlug: 'kitcheners-bar',
+    distance: 800,
+    expiresAt: null,
+  },
+  {
+    id: 'rew-3',
+    title: 'Free Starter',
+    type: 'freebie',
+    totalSlots: 20,
+    claimedCount: 5,
+    nodeId: 'dev-7',
+    nodeName: "Nando's Rosebank",
+    nodeSlug: 'nandos-rosebank',
+    distance: 1200,
+    expiresAt: null,
+  },
+  {
+    id: 'rew-4',
+    title: 'Buy 1 Get 1 Free',
+    type: 'bogo',
+    totalSlots: 100,
+    claimedCount: 45,
+    nodeId: 'dev-9',
+    nodeName: 'The Grillhouse',
+    nodeSlug: 'the-grillhouse',
+    distance: 600,
+    expiresAt: null,
+  },
+  {
+    id: 'rew-5',
+    title: 'Free Day Pass',
+    type: 'freebie',
+    totalSlots: 10,
+    claimedCount: 3,
+    nodeId: 'dev-10',
+    nodeName: 'Virgin Active Sandton',
+    nodeSlug: 'virgin-active-sandton',
+    distance: 2000,
+    expiresAt: null,
+  },
 ]
 
 const TIER_REWARD_LIMITS: Record<string, number | null> = {
-  free: 3, starter: 3, growth: 10, pro: null, payg: 3,
+  free: 3,
+  starter: 3,
+  growth: 10,
+  pro: null,
+  payg: 3,
 }
 
 export async function createReward(
   businessId: string,
   data: {
-    nodeId: string; type: string; title: string;
-    description?: string | undefined; triggerValue?: number | undefined;
-    totalSlots?: number | undefined; expiresAt?: string | undefined;
+    nodeId: string
+    type: string
+    title: string
+    description?: string | undefined
+    triggerValue?: number | undefined
+    totalSlots?: number | undefined
+    expiresAt?: string | undefined
   },
 ) {
   // Verify the node belongs to this business
@@ -65,10 +128,10 @@ export async function updateReward(
   rewardId: string,
   businessId: string,
   data: {
-    title?: string | undefined;
-    description?: string | undefined;
-    isActive?: boolean | undefined;
-    expiresAt?: string | null | undefined;
+    title?: string | undefined
+    description?: string | undefined
+    isActive?: boolean | undefined
+    expiresAt?: string | null | undefined
   },
 ) {
   const reward = await repo.getRewardById(rewardId)
@@ -111,8 +174,20 @@ export async function getRewardsNearMe(lat: number, lng: number) {
 export async function getUnclaimedRewards(userId: string) {
   if (DEV_MODE) {
     return [
-      { id: 'claim-1', rewardTitle: 'Free Coffee', redemptionCode: 'AC-COFFEE-1234', codeExpiresAt: new Date(Date.now() + 86400000).toISOString(), nodeName: 'Father Coffee' },
-      { id: 'claim-2', rewardTitle: '20% Off Cocktails', redemptionCode: 'AC-DRINK-5678', codeExpiresAt: new Date(Date.now() + 86400000).toISOString(), nodeName: "Kitchener's Bar" },
+      {
+        id: 'claim-1',
+        rewardTitle: 'Free Coffee',
+        redemptionCode: 'AC-COFFEE-1234',
+        codeExpiresAt: new Date(Date.now() + 86400000).toISOString(),
+        nodeName: 'Father Coffee',
+      },
+      {
+        id: 'claim-2',
+        rewardTitle: '20% Off Cocktails',
+        redemptionCode: 'AC-DRINK-5678',
+        codeExpiresAt: new Date(Date.now() + 86400000).toISOString(),
+        nodeName: "Kitchener's Bar",
+      },
     ]
   }
   return repo.getUnclaimedRewards(userId)
@@ -125,7 +200,8 @@ export async function redeemReward(code: string, staffId?: string) {
   const redemption = await repo.findRedemptionByCode(code)
   if (!redemption) throw AppError.badRequest('invalid_code')
   if (redemption.redeemedAt) throw AppError.badRequest('already_redeemed')
-  if (redemption.codeExpiresAt && redemption.codeExpiresAt < new Date().toISOString()) throw AppError.badRequest('expired_code')
+  if (redemption.codeExpiresAt && redemption.codeExpiresAt < new Date().toISOString())
+    throw AppError.badRequest('expired_code')
 
   // Validate staff belongs to the business that owns this reward
   const rewardId = redemption.rewardId ?? redemption.id
@@ -169,11 +245,27 @@ export async function getStaffRecentRedemptions(staffId: string) {
   if (DEV_MODE) {
     return {
       items: [
-        { code: 'AC-MOCK-1234', rewardTitle: 'Free Coffee', displayName: 'Thabo M.', redeemedAt: new Date(Date.now() - 600000).toISOString() },
-        { code: 'AC-MOCK-5678', rewardTitle: '20% Off Cocktails', displayName: 'Naledi K.', redeemedAt: new Date(Date.now() - 3600000).toISOString() },
+        {
+          code: 'AC-MOCK-1234',
+          rewardTitle: 'Free Coffee',
+          displayName: 'Thabo M.',
+          redeemedAt: new Date(Date.now() - 600000).toISOString(),
+        },
+        {
+          code: 'AC-MOCK-5678',
+          rewardTitle: '20% Off Cocktails',
+          displayName: 'Naledi K.',
+          redeemedAt: new Date(Date.now() - 3600000).toISOString(),
+        },
       ],
     }
   }
-  const items = await repo.getStaffRecentRedemptions(staffId)
+  const rawItems = await repo.getStaffRecentRedemptions(staffId)
+  const items = rawItems.map((r: Record<string, unknown>) => ({
+    code: (r['redemptionCode'] ?? r['code'] ?? '') as string,
+    rewardTitle: (r['rewardTitle'] ?? '') as string,
+    displayName: (r['displayName'] ?? '') as string,
+    redeemedAt: (r['redeemedAt'] ?? '') as string,
+  }))
   return { items }
 }

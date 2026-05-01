@@ -90,7 +90,7 @@ export function CheckInDetailPanel() {
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-3 py-2 text-sm focus:border-[var(--accent)] focus:outline-none"
+          className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-3 py-2 text-sm focus:border-[var(--accent)] focus:outline-none appearance-none [color-scheme:dark]"
         />
       </div>
 

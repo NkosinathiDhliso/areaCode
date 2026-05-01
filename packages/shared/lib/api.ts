@@ -1,4 +1,18 @@
-const API_BASE_URL = typeof import.meta !== 'undefined' ? (import.meta as unknown as Record<string, Record<string, string>>).env?.VITE_API_URL ?? 'http://localhost:4000' : 'http://localhost:4000'
+const API_BASE_URL =
+  typeof import.meta !== 'undefined'
+    ? ((import.meta as unknown as Record<string, Record<string, string>>).env?.VITE_API_URL ?? 'http://localhost:4000')
+    : 'http://localhost:4000'
+
+// Error toast handler — wired at app startup via setApiErrorHandler()
+let _showError: ((msg: string) => void) | null = null
+function getShowError() {
+  return _showError
+}
+
+/** Call once at app startup to wire the error toast into the API client */
+export function setApiErrorHandler(handler: (msg: string) => void) {
+  _showError = handler
+}
 
 interface ApiError {
   error: string
@@ -34,6 +48,12 @@ class ApiClient {
     this.onAuthExpired = opts.onAuthExpired
   }
 
+  private refreshPath = '/v1/auth/consumer/refresh'
+
+  setRefreshPath(path: string) {
+    this.refreshPath = path
+  }
+
   private async tryRefreshToken(): Promise<string | null> {
     if (this.refreshing) return this.refreshing
 
@@ -42,13 +62,13 @@ class ApiClient {
 
     this.refreshing = (async () => {
       try {
-        const res = await fetch(`${this.baseUrl}/v1/auth/consumer/refresh`, {
+        const res = await fetch(`${this.baseUrl}${this.refreshPath}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken }),
         })
         if (!res.ok) return null
-        const data = await res.json() as { accessToken?: string }
+        const data = (await res.json()) as { accessToken?: string }
         if (data.accessToken) {
           this.onTokenRefreshed?.(data.accessToken)
           return data.accessToken
@@ -89,9 +109,21 @@ class ApiClient {
     } catch (err) {
       clearTimeout(timeout)
       if ((err as Error).name === 'AbortError') {
-        throw { error: 'timeout', message: 'Request timed out. Check your connection.', statusCode: 0 } as ApiError
+        const error = {
+          error: 'timeout',
+          message: 'Request timed out. Check your connection.',
+          statusCode: 0,
+        } as ApiError
+        getShowError()?.('Request timed out. Check your connection.')
+        throw error
       }
-      throw { error: 'network', message: 'Unable to connect. Check your connection.', statusCode: 0 } as ApiError
+      const error = {
+        error: 'network',
+        message: 'Unable to connect. Check your connection.',
+        statusCode: 0,
+      } as ApiError
+      getShowError()?.('Unable to connect. Check your connection.')
+      throw error
     } finally {
       clearTimeout(timeout)
     }
@@ -106,7 +138,10 @@ class ApiClient {
           headers,
           body: body ? JSON.stringify(body) : null,
         })
-        if (retry.ok) return retry.json() as Promise<T>
+        if (retry.ok) {
+          if (retry.status === 204) return undefined as T
+          return retry.json() as Promise<T>
+        }
       }
       // Refresh failed, session is dead
       this.onAuthExpired?.()
@@ -118,8 +153,15 @@ class ApiClient {
         message: response.statusText,
         statusCode: response.status,
       }))
+      // Show toast for server errors (5xx)
+      if (response.status >= 500) {
+        getShowError()?.(error.message || 'Something went wrong. Please try again.')
+      }
       throw error
     }
+
+    // Handle 204 No Content (e.g. DELETE operations)
+    if (response.status === 204) return undefined as T
 
     return response.json() as Promise<T>
   }

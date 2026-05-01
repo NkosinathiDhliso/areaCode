@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@area-code/shared/lib/api'
+import { BarChart3 } from 'lucide-react'
 
 interface DashboardMetrics {
   totalConsumers: number
@@ -46,8 +47,14 @@ export function DashboardOverview() {
 
   if (!metrics) {
     return (
-      <div className="p-5 text-[var(--text-muted)] text-sm text-center py-12">
-        Failed to load dashboard metrics
+      <div className="p-5 flex flex-col items-center gap-3 py-12">
+        <BarChart3 size={32} strokeWidth={1.5} className="text-[var(--text-muted)] opacity-40" aria-hidden="true" />
+        <p className="text-[var(--text-muted)] text-sm text-center">
+          Failed to load dashboard metrics
+        </p>
+        <button onClick={() => fetchMetrics()} className="text-[var(--accent)] text-sm">
+          {t('common.retry', 'Retry')}
+        </button>
       </div>
     )
   }

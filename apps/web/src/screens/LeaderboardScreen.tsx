@@ -4,6 +4,7 @@ import { api } from '@area-code/shared/lib/api'
 import { Avatar } from '@area-code/shared/components/Avatar'
 import { TierBadge } from '@area-code/shared/components/TierBadge'
 import { Skeleton } from '@area-code/shared/components/Skeleton'
+import { useUserStore } from '@area-code/shared/stores/userStore'
 import type { LeaderboardEntry, Tier } from '@area-code/shared/types'
 
 interface LeaderboardResponse {
@@ -13,7 +14,8 @@ interface LeaderboardResponse {
 
 export function LeaderboardScreen() {
   const { t } = useTranslation()
-  const citySlug = 'johannesburg'
+  const userCitySlug = useUserStore((s) => s.user?.citySlug)
+  const citySlug = userCitySlug ?? 'johannesburg'
 
   const { data, isLoading } = useQuery({
     queryKey: ['leaderboard', citySlug],
@@ -22,7 +24,7 @@ export function LeaderboardScreen() {
   })
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4">
+    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4" data-scroll-container>
       <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-1">
         {t('leaderboard.title')}
       </h1>

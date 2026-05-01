@@ -1,6 +1,7 @@
 import { useState, memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BottomSheet } from '@area-code/shared/components/BottomSheet'
+import { api } from '@area-code/shared/lib/api'
 import type { Node, Reward, NodeState } from '@area-code/shared/types'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
@@ -20,8 +21,14 @@ interface NodeDetailSheetProps {
 }
 
 export const NodeDetailSheet = memo(function NodeDetailSheet({
-  node, rewards, pulseScore: _pulseScore, state,
-  isOpen, onClose, onCheckIn, onSignup,
+  node,
+  rewards,
+  pulseScore: _pulseScore,
+  state,
+  isOpen,
+  onClose,
+  onCheckIn,
+  onSignup,
   qrFallback = false,
 }: NodeDetailSheetProps) {
   const { t } = useTranslation()
@@ -59,9 +66,7 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
       {/* Header */}
       <div className="flex flex-row items-start justify-between mb-4">
         <div className="flex-1">
-          <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">
-            {node.name}
-          </h2>
+          <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{node.name}</h2>
           <p className="text-[var(--text-secondary)] text-sm mt-1">
             {node.category} · {state}
           </p>
@@ -84,7 +89,16 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
               </button>
               {isAuthenticated && (
                 <button
-                  onClick={() => setMenuOpen(false)}
+                  onClick={() => {
+                    setMenuOpen(false)
+                    // Open a report flow — for now, use the browser prompt as a lightweight approach
+                    const detail = window.prompt(
+                      t('node.reportPrompt', 'What would you like to report about this venue?'),
+                    )
+                    if (detail && node) {
+                      void api.post(`/v1/nodes/${node.id}/report`, { type: 'other', detail }).catch(() => {})
+                    }
+                  }}
                   className="w-full text-left px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)]"
                 >
                   {t('node.report')}
@@ -97,9 +111,7 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
 
       {/* Dormant empty state */}
       {isDormant ? (
-        <p className="text-[var(--text-secondary)] text-sm mb-6">
-          {t('map.beFirst')}
-        </p>
+        <p className="text-[var(--text-secondary)] text-sm mb-6">{t('map.beFirst')}</p>
       ) : (
         <>
           {/* Rewards section */}
@@ -110,9 +122,7 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
               </h3>
               <div className="flex flex-col gap-2">
                 {activeRewards.map((reward) => {
-                  const slotsLeft = reward.totalSlots
-                    ? reward.totalSlots - reward.claimedCount
-                    : null
+                  const slotsLeft = reward.totalSlots ? reward.totalSlots - reward.claimedCount : null
                   const isLow = slotsLeft !== null && slotsLeft <= 5
 
                   return (
@@ -121,9 +131,7 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
                       className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-2xl px-4 py-3"
                     >
                       <div className="flex flex-row items-center justify-between">
-                        <span className="text-[var(--text-primary)] text-sm font-medium">
-                          {reward.title}
-                        </span>
+                        <span className="text-[var(--text-primary)] text-sm font-medium">{reward.title}</span>
                         {slotsLeft !== null && (
                           <span
                             className={`text-xs font-medium ${

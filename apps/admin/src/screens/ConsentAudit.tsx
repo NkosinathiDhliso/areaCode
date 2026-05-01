@@ -38,12 +38,24 @@ export function ConsentAudit() {
     }
     setLoading(true)
     fetch()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [tab])
 
   async function handleExport() {
     try {
-      const blob = await api.get<Blob>('/v1/admin/consent/export-reconsent')
+      const data = await api.get<Array<{ id: string; username: string; phone: string }>>(
+        '/v1/admin/consent/export-reconsent',
+      )
+      const items = Array.isArray(data) ? data : []
+      // Build CSV from JSON response
+      const csvHeader = 'userId,username,phone'
+      const csvRows = items.map(
+        (item) => `${item.id ?? ''},${(item.username ?? '').replace(/,/g, '')},${(item.phone ?? '').replace(/,/g, '')}`,
+      )
+      const csvContent = [csvHeader, ...csvRows].join('\n')
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -58,9 +70,7 @@ export function ConsentAudit() {
   return (
     <div className="p-5">
       <div className="flex flex-row items-center justify-between mb-4">
-        <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">
-          {t('admin.consent.title')}
-        </h2>
+        <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('admin.consent.title')}</h2>
         <button
           onClick={handleExport}
           className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-4 py-2 text-xs"
@@ -73,9 +83,7 @@ export function ConsentAudit() {
         <button
           onClick={() => setTab('consent')}
           className={`px-4 py-2 rounded-xl text-sm ${
-            tab === 'consent'
-              ? 'bg-[var(--accent)] text-white'
-              : 'text-[var(--text-secondary)]'
+            tab === 'consent' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-secondary)]'
           }`}
         >
           Consent Records
@@ -83,9 +91,7 @@ export function ConsentAudit() {
         <button
           onClick={() => setTab('erasure')}
           className={`px-4 py-2 rounded-xl text-sm ${
-            tab === 'erasure'
-              ? 'bg-[var(--accent)] text-white'
-              : 'text-[var(--text-secondary)]'
+            tab === 'erasure' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-secondary)]'
           }`}
         >
           {t('admin.consent.erasureQueue')}
@@ -101,9 +107,7 @@ export function ConsentAudit() {
               key={c.id}
               className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-3 flex flex-row items-center justify-between"
             >
-              <div className="text-[var(--text-primary)] text-sm">
-                User {c.userId.slice(0, 8)}...
-              </div>
+              <div className="text-[var(--text-primary)] text-sm">User {c.userId.slice(0, 8)}...</div>
               <div className="flex flex-row gap-3 text-xs">
                 <span className={c.analyticsOptIn ? 'text-[var(--success)]' : 'text-[var(--text-muted)]'}>
                   Analytics: {c.analyticsOptIn ? 'ON' : 'OFF'}
@@ -128,9 +132,7 @@ export function ConsentAudit() {
                   Requested {formatLocalDate(e.requestedAt)}
                 </span>
               </div>
-              <span className="text-[var(--danger)] text-xs">
-                Deletes {formatLocalDate(e.deletesAt)}
-              </span>
+              <span className="text-[var(--danger)] text-xs">Deletes {formatLocalDate(e.deletesAt)}</span>
             </div>
           ))}
         </div>

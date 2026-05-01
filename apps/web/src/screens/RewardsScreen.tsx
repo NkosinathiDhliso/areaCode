@@ -5,6 +5,7 @@ import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { Skeleton } from '@area-code/shared/components/Skeleton'
+import { EmptyState } from '@area-code/shared/components/EmptyState'
 
 interface NearbyReward {
   id: string
@@ -52,7 +53,7 @@ export function RewardsScreen() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4">
+    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4" data-scroll-container>
       <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-4">
         {t('rewards.nearYou')}
       </h1>
@@ -91,9 +92,7 @@ export function RewardsScreen() {
           })}
         </div>
       ) : (
-        <p className="text-[var(--text-muted)] text-sm text-center py-8">
-          {t('rewards.noneNearby')}
-        </p>
+        <EmptyState icon="reward" message={t('rewards.noneNearby')} />
       )}
     </div>
   )

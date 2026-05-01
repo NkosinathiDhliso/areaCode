@@ -33,6 +33,7 @@ export function SettingsPanel() {
   const [inviteResult, setInviteResult] = useState<{ token: string } | null>(null)
   const [inviteError, setInviteError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [confirmRemoveStaffId, setConfirmRemoveStaffId] = useState<string | null>(null)
 
   useEffect(() => {
     async function fetch() {
@@ -113,11 +114,19 @@ export function SettingsPanel() {
   }
 
   async function handleRemoveStaff(staffId: string) {
-    if (!confirm('Remove this staff member? They will no longer be able to validate redemptions.')) return
-    try {
-      await api.delete(`/v1/business/staff/${staffId}`)
-      setStaff((prev) => prev.filter((s) => s.id !== staffId))
-    } catch { /* Fail silently */ }
+    setConfirmRemoveStaffId(staffId)
+  }
+
+  function confirmRemoveStaff() {
+    if (!confirmRemoveStaffId) return
+    const staffId = confirmRemoveStaffId
+    setConfirmRemoveStaffId(null)
+    void (async () => {
+      try {
+        await api.delete(`/v1/business/staff/${staffId}`)
+        setStaff((prev) => prev.filter((s) => s.id !== staffId))
+      } catch { /* Fail silently */ }
+    })()
   }
 
   const pendingInvites = invites.filter((i) => !i.accepted && new Date(i.expiresAt) > new Date())
@@ -261,9 +270,46 @@ export function SettingsPanel() {
           Generate QR Code
         </button>
         {qrUrl && (
-          <p className="text-[var(--text-muted)] text-xs mt-2 break-all">{qrUrl}</p>
+          <div className="mt-3 flex flex-col items-center gap-2">
+            <img
+              src={qrUrl}
+              alt="QR Code for check-in"
+              className="w-48 h-48 rounded-xl bg-white p-2"
+            />
+            <p className="text-[var(--text-muted)] text-xs text-center">
+              Print or screenshot this QR code for your venue
+            </p>
+          </div>
         )}
       </div>
+
+      {/* Staff removal confirmation dialog */}
+      {confirmRemoveStaffId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-5">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
+              Remove staff member?
+            </h3>
+            <p className="text-[var(--text-secondary)] text-sm mb-4">
+              They will no longer be able to validate redemptions. You can re-invite them later.
+            </p>
+            <div className="flex flex-row gap-3">
+              <button
+                onClick={() => setConfirmRemoveStaffId(null)}
+                className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmRemoveStaff}
+                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
