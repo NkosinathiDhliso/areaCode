@@ -89,7 +89,7 @@ export async function updateGenres(userId: string, musicGenres: string[]) {
 
 // ─── Streaming Connect/Disconnect ───────────────────────────────────────────
 
-export async function connectStreaming(userId: string, provider: string, musicUserToken?: string) {
+export async function connectStreaming(userId: string, provider: string, musicUserToken?: string, frontendOrigin?: string) {
   if (DEV_MODE) {
     return { success: true, provider, genres: ['amapiano', 'deep_house'] }
   }
@@ -109,7 +109,7 @@ export async function connectStreaming(userId: string, provider: string, musicUs
     const stateSecret = process.env['AREA_CODE_QR_HMAC_SECRET'] ?? ''
     const payload = JSON.stringify({ userId, ts: Date.now() })
     const sig = createHmac('sha256', stateSecret).update(payload).digest('hex').slice(0, 16)
-    const state = Buffer.from(JSON.stringify({ userId, ts: Date.now(), sig })).toString('base64url')
+    const state = Buffer.from(JSON.stringify({ userId, ts: Date.now(), sig, origin: frontendOrigin })).toString('base64url')
     const redirectUrl = oauth.getSpotifyAuthorizeUrl(state)
     return { success: true, provider, redirectUrl, genres: [] as string[] }
   }
@@ -151,14 +151,20 @@ export async function connectStreaming(userId: string, provider: string, musicUs
  * updates the user's music profile, and redirects to the frontend.
  */
 export async function handleSpotifyCallback(code: string, state: string): Promise<string> {
-  const frontendBase = process.env['AREA_CODE_ENV'] === 'prod'
+  // Default frontend base — overridden by origin in state if present
+  let frontendBase = process.env['AREA_CODE_ENV'] === 'prod'
     ? 'https://areacode.co.za'
     : 'http://localhost:3000'
 
   try {
     // Decode and verify the signed state to get the userId
-    const decoded = JSON.parse(Buffer.from(state, 'base64url').toString()) as { userId: string; ts: number; sig?: string }
+    const decoded = JSON.parse(Buffer.from(state, 'base64url').toString()) as { userId: string; ts: number; sig?: string; origin?: string }
     const userId = decoded.userId
+
+    // Use the frontend origin from state if provided (supports Amplify preview URLs etc.)
+    if (decoded.origin) {
+      frontendBase = decoded.origin
+    }
 
     // Verify HMAC signature to prevent userId injection
     if (decoded.sig) {

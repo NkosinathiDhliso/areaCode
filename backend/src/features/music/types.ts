@@ -13,6 +13,8 @@ export const connectStreamingBodySchema = z.object({
   provider: z.enum(['spotify', 'apple_music']),
   /** Apple Music user token from MusicKit JS , required when provider is apple_music */
   musicUserToken: z.string().min(1).optional(),
+  /** Frontend origin to redirect back to after OAuth callback */
+  frontendOrigin: z.string().url().optional(),
 })
 
 export const spotifyCallbackQuerySchema = z.object({

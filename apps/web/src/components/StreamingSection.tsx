@@ -77,7 +77,10 @@ export function StreamingSection() {
     setLoading(true)
     setError(null)
     try {
-      const res = await api.post<ConnectResponse>('/v1/users/me/streaming/connect', { provider })
+      const res = await api.post<ConnectResponse>('/v1/users/me/streaming/connect', {
+        provider,
+        frontendOrigin: window.location.origin,
+      })
 
       // If the backend returns a redirectUrl, open it (OAuth flow)
       if (res.redirectUrl) {

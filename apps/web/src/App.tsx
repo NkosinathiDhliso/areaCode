@@ -174,10 +174,11 @@ function AppContent() {
     if (route === 'signup') return <ConsumerSignup onNavigate={setRoute} />
   }
 
-  // Redirect authenticated users from landing/map to their time-based default tab
-  if (isAuthenticated && (route === 'landing' || route === 'map')) {
+  // Redirect authenticated users from landing to their time-based default tab
+  // Map tab is always accessible when explicitly navigated to
+  if (isAuthenticated && route === 'landing') {
     const defaultRoute = activeDefaultTab as AppRoute
-    if (route !== defaultRoute && (defaultRoute === 'gets' || defaultRoute === 'ranks')) {
+    if (defaultRoute === 'gets' || defaultRoute === 'ranks') {
       // Use effect-free redirect by rendering the correct screen
       return (
         <div className="flex flex-col h-dvh bg-[var(--bg-base)]">

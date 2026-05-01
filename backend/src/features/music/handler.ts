@@ -41,7 +41,7 @@ export async function musicRoutes(app: FastifyInstance) {
     async (request) => {
       const auth = getAuth(request)
       const body = request.body as z.infer<typeof connectStreamingBodySchema>
-      return service.connectStreaming(auth.userId, body.provider, body.musicUserToken)
+      return service.connectStreaming(auth.userId, body.provider, body.musicUserToken, body.frontendOrigin)
     },
   )
 

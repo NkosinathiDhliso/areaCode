@@ -77,8 +77,13 @@ export function BusinessSignup({ onSwitchToLogin }: BusinessSignupProps) {
       })
       setStep('otp')
       startResendTimer()
-    } catch {
-      setError(t('biz.signup.error'))
+    } catch (err: unknown) {
+      const apiErr = err as { statusCode?: number } | undefined
+      if (apiErr?.statusCode === 429 || apiErr?.statusCode === 403) {
+        setError(t('biz.signup.rateLimited', 'Too many attempts. Please wait a few minutes and try again.'))
+      } else {
+        setError(t('biz.signup.error'))
+      }
     } finally {
       setLoading(false)
     }
