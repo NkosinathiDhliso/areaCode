@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@area-code/shared/lib/api'
-import { BarChart3 } from 'lucide-react'
 
 interface DashboardMetrics {
   totalConsumers: number
@@ -48,7 +47,7 @@ export function DashboardOverview() {
   if (!metrics) {
     return (
       <div className="p-5 flex flex-col items-center gap-3 py-12">
-        <BarChart3 size={32} strokeWidth={1.5} className="text-[var(--text-muted)] opacity-40" aria-hidden="true" />
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="opacity-40" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m7 11.207 3.5-3.5 4 4L21 5.207"/></svg>
         <p className="text-[var(--text-muted)] text-sm text-center">
           Failed to load dashboard metrics
         </p>

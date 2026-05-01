@@ -119,7 +119,7 @@ export default function ProfileScreen() {
                 {tierProgress.checkInsRemaining} more to {tierProgress.nextTier}
               </Text>
             ) : (
-              <Text style={styles.tierProgressRemaining}>Max tier ✨</Text>
+              <Text style={styles.tierProgressRemaining}>Max tier</Text>
             )}
           </View>
         </View>
