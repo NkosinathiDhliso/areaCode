@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
@@ -10,6 +11,7 @@ import { TierProgressBar } from '@area-code/shared/components/TierProgressBar'
 import { StreakDisplay } from '@area-code/shared/components/StreakDisplay'
 import { Avatar } from '@area-code/shared/components/Avatar'
 import { PrivacyIndicator } from '@area-code/shared/components/PrivacyIndicator'
+import { Spinner } from '@area-code/shared/components/Spinner'
 import type { User, PrivacyLevel } from '@area-code/shared/types'
 import type { AppRoute } from '../types'
 import { StreamingSection } from '../components/StreamingSection'
@@ -24,6 +26,7 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   const { isAuthenticated, logout, sessionId } = useConsumerAuthStore()
   const { user, tier, totalCheckIns, streakCount, setUser } = useUserStore()
   const { preference, setPreference } = useTheme()
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const { data: profile } = useQuery({
     queryKey: ['user', 'me'],
@@ -35,12 +38,12 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
       }
       return u
     },
-    // Allow fetching in browse mode so mock data is visible
     staleTime: 60_000,
   })
 
   const deleteHistoryMutation = useMutation({
     mutationFn: () => api.delete('/v1/users/me/check-in-history'),
+    onSuccess: () => setShowDeleteConfirm(false),
   })
 
   const { data: privacyData } = useQuery({
@@ -77,7 +80,8 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   })
 
   function handleLogout() {
-    void api.post('/v1/auth/logout', {}).catch(() => {})
+    const currentSessionId = useConsumerAuthStore.getState().sessionId
+    void api.post('/v1/auth/logout', { sessionId: currentSessionId ?? undefined }).catch(() => {})
     logout()
     onNavigate('map')
   }
@@ -99,7 +103,7 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4">
+    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4" data-scroll-container>
       <div className="flex flex-row items-center gap-4 mb-6">
         <Avatar
           url={displayUser?.avatarUrl ?? null}
@@ -108,9 +112,7 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
           tier={tier}
         />
         <div className="flex-1">
-          <h1 className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">
-            {displayUser?.displayName}
-          </h1>
+          <h1 className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">{displayUser?.displayName}</h1>
           <p className="text-[var(--text-muted)] text-sm">@{displayUser?.username}</p>
         </div>
         <TierBadge tier={tier} />
@@ -148,32 +150,14 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
 
       {isAuthenticated && <SessionsSection currentSessionId={sessionId} />}
 
-      <button
-        onClick={() => onNavigate('history')}
-        className="w-full flex flex-row items-center justify-between bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3 mb-3 transition-all active:scale-[0.98]"
-      >
-        <span className="text-[var(--text-primary)] text-sm font-medium">{t('profile.checkInHistory', 'Check-in History')}</span>
-        <span className="text-[var(--text-muted)] text-sm">→</span>
-      </button>
-
-      <button
-        onClick={() => onNavigate('friends')}
-        className="w-full flex flex-row items-center justify-between bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3 mb-3 transition-all active:scale-[0.98]"
-      >
-        <span className="text-[var(--text-primary)] text-sm font-medium">{t('friends.title')}</span>
-        <span className="text-[var(--text-muted)] text-sm">→</span>
-      </button>
-
-      <button
+      {/* Navigation links with proper chevron icons (Issue #24) */}
+      <NavLink label={t('profile.checkInHistory', 'Check-in History')} onClick={() => onNavigate('history')} />
+      <NavLink label={t('friends.title')} onClick={() => onNavigate('friends')} />
+      <NavLink
+        label={t('privacy.settings.link')}
         onClick={() => onNavigate('privacy')}
-        className="w-full flex flex-row items-center justify-between bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3 mb-3 transition-all active:scale-[0.98]"
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-[var(--text-primary)] text-sm font-medium">{t('privacy.settings.link')}</span>
-          {privacyData && <PrivacyIndicator privacyLevel={privacyData.privacyLevel} />}
-        </div>
-        <span className="text-[var(--text-muted)] text-sm">→</span>
-      </button>
+        trailing={privacyData ? <PrivacyIndicator privacyLevel={privacyData.privacyLevel} /> : undefined}
+      />
 
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 mb-3">
         <h3 className="text-[var(--text-secondary)] text-xs font-medium uppercase tracking-wider mb-3">
@@ -197,14 +181,22 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
       </div>
 
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 mb-3">
+        {/* Export as CSV (Issue #39) */}
         <button
           onClick={() => {
             void api.get<{ items: unknown[] }>('/v1/users/me/check-in-history?limit=50').then((data) => {
-              const blob = new Blob([JSON.stringify(data.items, null, 2)], { type: 'application/json' })
+              const items = data.items as Array<Record<string, unknown>>
+              if (!items.length) return
+              const headers = Object.keys(items[0]!)
+              const csv = [
+                headers.join(','),
+                ...items.map((row) => headers.map((h) => JSON.stringify(row[h] ?? '')).join(',')),
+              ].join('\n')
+              const blob = new Blob([csv], { type: 'text/csv' })
               const url = URL.createObjectURL(blob)
               const a = document.createElement('a')
               a.href = url
-              a.download = 'check-in-history.json'
+              a.download = 'check-in-history.csv'
               a.click()
               URL.revokeObjectURL(url)
             })
@@ -213,8 +205,9 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
         >
           {t('profile.exportHistory')}
         </button>
+        {/* Delete history with confirmation (Issue #4) */}
         <button
-          onClick={() => deleteHistoryMutation.mutate()}
+          onClick={() => setShowDeleteConfirm(true)}
           disabled={deleteHistoryMutation.isPending}
           className="w-full text-left text-[var(--danger)] text-sm py-2"
         >
@@ -222,21 +215,88 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
         </button>
       </div>
 
-      <button onClick={handleLogout} className="w-full border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl py-3 text-sm mt-4">
+      <button
+        onClick={handleLogout}
+        className="w-full border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl py-3 text-sm mt-4"
+      >
         {t('auth.gated.signOut')}
       </button>
+
+      {/* Delete confirmation dialog (Issue #4) */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-5">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
+              {t('profile.deleteHistoryConfirmTitle', 'Delete check-in history?')}
+            </h3>
+            <p className="text-[var(--text-secondary)] text-sm mb-4">
+              {t(
+                'profile.deleteHistoryConfirmBody',
+                'This will permanently delete all your check-in history. This action cannot be undone.',
+              )}
+            </p>
+            <div className="flex flex-row gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+              >
+                {t('common.cancel', 'Cancel')}
+              </button>
+              <button
+                onClick={() => deleteHistoryMutation.mutate()}
+                disabled={deleteHistoryMutation.isPending}
+                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2"
+              >
+                {deleteHistoryMutation.isPending ? (
+                  <Spinner size="sm" className="border-white border-t-transparent" />
+                ) : (
+                  t('profile.deleteHistory')
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-/** Extracted stat card to keep ProfileScreen focused. */
 function StatCard({ value, label, capitalize }: { value: string | number; label: string; capitalize?: boolean }) {
   return (
     <div className="flex-1 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 text-center">
-      <p className={`text-[var(--text-primary)] font-bold text-xl font-[Syne] ${capitalize ? 'capitalize' : ''}`} style={{ letterSpacing: '-0.03em' }}>
+      <p
+        className={`text-[var(--text-primary)] font-bold text-xl font-[Syne] ${capitalize ? 'capitalize' : ''}`}
+        style={{ letterSpacing: '-0.03em' }}
+      >
         {value}
       </p>
       <p className="text-[var(--text-muted)] text-xs mt-1">{label}</p>
     </div>
+  )
+}
+
+function NavLink({ label, onClick, trailing }: { label: string; onClick: () => void; trailing?: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex flex-row items-center justify-between bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3 mb-3 transition-all active:scale-[0.98]"
+    >
+      <div className="flex items-center gap-3">
+        <span className="text-[var(--text-primary)] text-sm font-medium">{label}</span>
+        {trailing}
+      </div>
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="var(--text-muted)"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <polyline points="9 18 15 12 9 6" />
+      </svg>
+    </button>
   )
 }

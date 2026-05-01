@@ -13,11 +13,56 @@ interface BottomSheetProps {
 export function BottomSheet({ isOpen, onClose, children }: BottomSheetProps) {
   const setBottomSheetOpen = useToastStore((s) => s.setBottomSheetOpen)
   const backdropMouseDownRef = useRef(false)
+  const sheetRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setBottomSheetOpen(isOpen)
     return () => setBottomSheetOpen(false)
   }, [isOpen, setBottomSheetOpen])
+
+  // Focus trap (Issue #8)
+  useEffect(() => {
+    if (!isOpen) return
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (e.key !== 'Tab' || !sheetRef.current) return
+
+      const focusable = sheetRef.current.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      )
+      if (focusable.length === 0) return
+
+      const first = focusable[0]!
+      const last = focusable[focusable.length - 1]!
+
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    // Focus the first focusable element
+    requestAnimationFrame(() => {
+      const first = sheetRef.current?.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      )
+      first?.focus()
+    })
+
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
 
   const handleBackdropMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
@@ -43,8 +88,11 @@ export function BottomSheet({ isOpen, onClose, children }: BottomSheetProps) {
         onClick={handleBackdropClick}
         role="presentation"
       />
-      {/* Sheet panel , positioned above the nav bar */}
+      {/* Sheet panel, positioned above the nav bar */}
       <div
+        ref={sheetRef}
+        role="dialog"
+        aria-modal="true"
         style={{
           position: 'relative',
           marginBottom: 'var(--nav-height, 56px)',

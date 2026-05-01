@@ -46,8 +46,14 @@ export function DashboardOverview() {
 
   if (!metrics) {
     return (
-      <div className="p-5 text-[var(--text-muted)] text-sm text-center py-12">
-        Failed to load dashboard metrics
+      <div className="p-5 flex flex-col items-center gap-3 py-12">
+        <span className="text-3xl opacity-40" aria-hidden="true">📊</span>
+        <p className="text-[var(--text-muted)] text-sm text-center">
+          Failed to load dashboard metrics
+        </p>
+        <button onClick={() => fetchMetrics()} className="text-[var(--accent)] text-sm">
+          {t('common.retry', 'Retry')}
+        </button>
       </div>
     )
   }

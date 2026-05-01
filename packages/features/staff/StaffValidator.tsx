@@ -191,7 +191,10 @@ export function StaffValidator() {
         }`}
       >
         <Text className="text-white text-5xl">
-          {result.success ? 'OK' : 'X'}
+          {result.success
+            ? <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            : <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          }
         </Text>
         <Text className="text-white font-bold text-xl font-[Syne] text-center">
           {result.success ? 'Redeemed!' : 'Failed'}
@@ -323,7 +326,7 @@ export function StaffValidator() {
         onKeyDown={handleKeyDown}
         placeholder="------"
         aria-label="Redemption code"
-        className="w-full max-w-xs bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-6 text-center text-3xl tracking-[0.4em] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none font-[DM_Sans]"
+        className="w-full max-w-xs bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-6 text-center text-3xl tracking-[0.4em] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
       />
 
       <button

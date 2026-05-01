@@ -9,6 +9,7 @@ export function RewardsPanel() {
   const { t } = useTranslation()
   const [rewards, setRewards] = useState<Reward[]>([])
   const [showForm, setShowForm] = useState(false)
+  const [fetchError, setFetchError] = useState(false)
 
   useEffect(() => {
     async function fetch() {
@@ -16,7 +17,7 @@ export function RewardsPanel() {
         const res = await api.get<{ items: Reward[] }>('/v1/business/rewards')
         setRewards(res.items ?? [])
       } catch {
-        // Fail silently
+        setFetchError(true)
       }
     }
     fetch()
@@ -44,6 +45,12 @@ export function RewardsPanel() {
         </div>
       )}
 
+      {fetchError && (
+        <p className="text-[var(--danger)] text-sm text-center py-4">
+          {t('errors.loadFailed', 'Failed to load rewards.')}
+        </p>
+      )}
+
       <div className="flex flex-col gap-3">
         {rewards.map((r) => (
           <div key={r.id} className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
@@ -69,9 +76,11 @@ function RewardForm({ onCreated }: { onCreated: () => void }) {
   const [type, setType] = useState('nth_checkin')
   const [slots, setSlots] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function handleSubmit() {
     setLoading(true)
+    setError(null)
     try {
       await api.post('/v1/business/rewards', {
         title,
@@ -80,7 +89,7 @@ function RewardForm({ onCreated }: { onCreated: () => void }) {
       })
       onCreated()
     } catch {
-      // Fail silently
+      setError('Failed to create reward. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -98,7 +107,7 @@ function RewardForm({ onCreated }: { onCreated: () => void }) {
       <select
         value={type}
         onChange={(e) => setType(e.target.value)}
-        className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none"
+        className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none appearance-none"
       >
         <option value="nth_checkin">Nth Check-in</option>
         <option value="daily_first">Daily First</option>
@@ -119,6 +128,7 @@ function RewardForm({ onCreated }: { onCreated: () => void }) {
       >
         {loading ? '...' : 'Create Get'}
       </button>
+      {error && <p className="text-[var(--danger)] text-xs mt-1">{error}</p>}
     </div>
   )
 }

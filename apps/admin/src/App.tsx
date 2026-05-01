@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useAdminAuthStore } from './stores/adminAuthStore'
 import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
+import { GlobalErrorToast } from '@area-code/shared/components/GlobalErrorToast'
 import { api } from '@area-code/shared/lib/api'
 import { AdminLogin } from './screens/AdminLogin'
 import { AdminDashboard } from './screens/AdminDashboard'
@@ -10,6 +11,7 @@ export function App() {
   return (
     <ErrorBoundary>
       <AppContent />
+      <GlobalErrorToast />
     </ErrorBoundary>
   )
 }
@@ -18,9 +20,15 @@ function AppContent() {
   const isAuthenticated = useAdminAuthStore((s) => s.isAuthenticated)
   useTheme()
 
-  // Wire API token provider so all requests include the admin access token
+  // Wire API token provider and refresh handler so all requests include the admin access token
   useEffect(() => {
     api.setTokenProvider(() => useAdminAuthStore.getState().accessToken)
+    api.setRefreshPath('/v1/auth/admin/refresh')
+    api.setRefreshHandler({
+      getRefreshToken: () => useAdminAuthStore.getState().refreshToken,
+      onTokenRefreshed: (token) => useAdminAuthStore.getState().setAccessToken(token),
+      onAuthExpired: () => useAdminAuthStore.getState().logout(),
+    })
   }, [])
 
   if (!isAuthenticated) return <AdminLogin />

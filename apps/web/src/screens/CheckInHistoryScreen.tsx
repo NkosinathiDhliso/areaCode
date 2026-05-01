@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
 import { Skeleton } from '@area-code/shared/components/Skeleton'
+import { EmptyState } from '@area-code/shared/components/EmptyState'
 import type { AppRoute } from '../types'
 
 interface CheckInHistoryEntry {
@@ -84,7 +85,7 @@ export function CheckInHistoryScreen({ onNavigate }: CheckInHistoryScreenProps) 
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4">
+    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4" data-scroll-container>
       <div className="flex items-center gap-3 mb-6">
         <button
           onClick={() => onNavigate('profile')}
@@ -125,11 +126,7 @@ export function CheckInHistoryScreen({ onNavigate }: CheckInHistoryScreenProps) 
       )}
 
       {!isLoading && !isError && allItems.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-12">
-          <p className="text-[var(--text-muted)] text-sm">
-            {t('profile.noCheckIns', 'No check-ins yet. Go explore!')}
-          </p>
-        </div>
+        <EmptyState icon="history" message={t('profile.noCheckIns', 'No check-ins yet. Go explore!')} />
       )}
 
       {!isLoading && !isError && allItems.length > 0 && (

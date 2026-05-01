@@ -13,6 +13,7 @@ interface AudienceData {
 export function AudiencePanel() {
   const { t } = useTranslation()
   const [data, setData] = useState<AudienceData | null>(null)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
     async function fetch() {
@@ -20,11 +21,24 @@ export function AudiencePanel() {
         const res = await api.get<AudienceData>('/v1/business/me/audience')
         setData(res)
       } catch {
-        // Fail silently
+        setError(true)
       }
     }
     fetch()
   }, [])
+
+  if (error) {
+    return (
+      <div className="p-5 flex flex-col items-center justify-center h-full gap-4">
+        <span className="text-[var(--danger)] text-sm text-center">
+          {t('errors.loadFailed', 'Failed to load. Please try again.')}
+        </span>
+        <button onClick={() => { setError(false); window.location.reload() }} className="text-[var(--accent)] text-sm">
+          {t('common.retry', 'Retry')}
+        </button>
+      </div>
+    )
+  }
 
   if (!data || data.totalUniqueVisitors < 20) {
     return (

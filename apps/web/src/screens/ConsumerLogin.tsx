@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@area-code/shared/lib/api'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { toE164 } from '@area-code/shared/lib/formatters'
+import { Spinner } from '@area-code/shared/components/Spinner'
 import type { AppRoute } from '../types'
 
 interface ConsumerLoginProps {
@@ -20,6 +21,14 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
   const [wrongDoor, setWrongDoor] = useState(false)
   const [resendCooldown, setResendCooldown] = useState(0)
 
+  // Auto-submit OTP when 6 digits entered (Issue #11)
+  useEffect(() => {
+    if (otp.length === 6 && step === 'otp' && !loading) {
+      handleVerifyOtp()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otp])
+
   async function handleSendOtp() {
     setLoading(true)
     setError(null)
@@ -36,13 +45,11 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
         })
       }, 1000)
     } catch (err: unknown) {
-      // Check if this is an "account not found" error (404)
       const apiErr = err as { statusCode?: number; error?: string } | undefined
       if (apiErr?.statusCode === 404 || apiErr?.error === 'not_found') {
         setError(t('auth.login.accountNotFound', 'No account found for this number. Please sign up first.'))
         return
       }
-      // Check if this is a rate limit error (429)
       if (apiErr?.statusCode === 429) {
         setError(t('auth.login.rateLimited', 'Too many attempts. Please wait a moment and try again.'))
         return
@@ -90,15 +97,16 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
             type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && phone && handleSendOtp()}
             placeholder={t('auth.login.phone')}
             className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
           />
           <button
             onClick={handleSendOtp}
             disabled={loading || !phone}
-            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-4 text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
+            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {loading ? '...' : t('auth.login.sendOtp')}
+            {loading ? <Spinner size="sm" className="border-white border-t-transparent" /> : t('auth.login.sendOtp')}
           </button>
         </div>
       ) : (
@@ -110,28 +118,31 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
             value={otp}
             onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
             placeholder={t('auth.login.otpPlaceholder')}
-            className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-center text-2xl tracking-[0.3em] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none font-[DM_Sans]"
+            className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-center text-2xl tracking-[0.3em] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
             autoFocus
           />
           <button
             onClick={handleVerifyOtp}
             disabled={loading || otp.length !== 6}
-            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-4 text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
+            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {loading ? '...' : t('auth.login.verifyOtp')}
+            {loading ? <Spinner size="sm" className="border-white border-t-transparent" /> : t('auth.login.verifyOtp')}
           </button>
           <button
             onClick={handleSendOtp}
             disabled={loading || resendCooldown > 0}
             className="text-[var(--accent)] text-sm mt-1 disabled:text-[var(--text-muted)]"
           >
-            {resendCooldown > 0 ? `${t('auth.login.resendOtp')} (${resendCooldown}s)` : t('auth.login.resendOtp')}
+            {resendCooldown > 0
+              ? t('auth.login.resendOtpCooldown', { seconds: resendCooldown, defaultValue: `Resend OTP (${resendCooldown}s)` })
+              : t('auth.login.resendOtp')}
           </button>
           <button
             onClick={() => { setStep('phone'); setOtp(''); setError(null) }}
-            className="text-[var(--text-secondary)] text-sm mt-1"
+            className="text-[var(--text-secondary)] text-sm mt-1 flex items-center gap-1 justify-center"
           >
-            ← {t('auth.login.changeNumber', 'Change number')}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            {t('auth.login.changeNumber', 'Change number')}
           </button>
         </div>
       )}

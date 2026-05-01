@@ -81,7 +81,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <button
             onClick={this.handleReload}
             style={{
-              backgroundColor: 'var(--accent, #6366f1)',
+              backgroundColor: 'var(--accent, #778CA9)',
               color: '#fff',
               fontWeight: '600',
               borderRadius: '12px',

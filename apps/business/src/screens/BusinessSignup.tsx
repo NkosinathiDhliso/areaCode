@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@area-code/shared/lib/api'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
+import { Spinner } from '@area-code/shared/components/Spinner'
 
 interface BusinessSignupProps {
   onSwitchToLogin: () => void
@@ -20,6 +21,14 @@ export function BusinessSignup({ onSwitchToLogin }: BusinessSignupProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [resendCooldown, setResendCooldown] = useState(0)
+
+  // Auto-submit OTP when 6 digits entered
+  useEffect(() => {
+    if (otp.length === 6 && step === 'otp' && !loading) {
+      handleVerifyOtp()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otp])
 
   function normalizePhone(raw: string): string {
     const digits = raw.replace(/\s+/g, '')
@@ -130,15 +139,15 @@ export function BusinessSignup({ onSwitchToLogin }: BusinessSignupProps) {
             type="text"
             value={registrationNumber}
             onChange={(e) => setRegistrationNumber(e.target.value)}
-            placeholder={t('biz.signup.regNumber')}
+            placeholder={`${t('biz.signup.regNumber')} (${t('common.optional', 'optional')})`}
             className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
           />
           <button
             onClick={handleSignup}
             disabled={loading || !isDetailsValid}
-            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-4 text-base transition-all duration-150 active:scale-95 disabled:opacity-50 mt-1"
+            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50 mt-1 flex items-center justify-center gap-2"
           >
-            {loading ? '...' : t('biz.signup.submit')}
+            {loading ? <Spinner size="sm" className="border-white border-t-transparent" /> : t('biz.signup.submit')}
           </button>
         </div>
       ) : (
@@ -149,29 +158,32 @@ export function BusinessSignup({ onSwitchToLogin }: BusinessSignupProps) {
             maxLength={6}
             value={otp}
             onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-            placeholder="------"
+            placeholder={t('auth.login.otpPlaceholder')}
             className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-center text-2xl tracking-[0.3em] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
             autoFocus
           />
           <button
             onClick={handleVerifyOtp}
             disabled={loading || otp.length !== 6}
-            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-4 text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
+            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {loading ? '...' : t('biz.login.verifyOtp')}
+            {loading ? <Spinner size="sm" className="border-white border-t-transparent" /> : t('biz.login.verifyOtp')}
           </button>
           <button
             onClick={handleResendOtp}
             disabled={loading || resendCooldown > 0}
             className="text-[var(--accent)] text-sm mt-1 disabled:text-[var(--text-muted)]"
           >
-            {resendCooldown > 0 ? `Resend OTP (${resendCooldown}s)` : 'Resend OTP'}
+            {resendCooldown > 0
+              ? t('auth.login.resendOtpCooldown', { seconds: resendCooldown, defaultValue: `Resend OTP (${resendCooldown}s)` })
+              : t('auth.login.resendOtp', 'Resend OTP')}
           </button>
           <button
             onClick={() => { setStep('details'); setOtp(''); setError(null) }}
-            className="text-[var(--text-secondary)] text-sm mt-1"
+            className="text-[var(--text-secondary)] text-sm mt-1 flex items-center gap-1 justify-center"
           >
-            ← {t('biz.login.changeNumber', 'Change number')}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            {t('biz.login.changeNumber', 'Change number')}
           </button>
         </div>
       )}

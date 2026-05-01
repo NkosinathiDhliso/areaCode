@@ -1,14 +1,12 @@
 // DynamoDB-backed Admin Repository (replaces Prisma)
-import {
-  GetCommand, PutCommand, QueryCommand,
-  ScanCommand, UpdateCommand,
-} from '@aws-sdk/lib-dynamodb'
+import { GetCommand, PutCommand, QueryCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
 import {
   getUserById as getDynamoUser,
   getBusinessById as getDynamoBusiness,
-  updateUser, updateBusiness,
+  updateUser,
+  updateBusiness,
   getStaffByBusinessId,
 } from '../auth/dynamodb-repository.js'
 import { getCheckInsByUser } from '../check-in/dynamodb-repository.js'
@@ -29,7 +27,7 @@ export async function getUserById(userId: string) {
       ExpressionAttributeValues: { ':pk': `CONSENT#${userId}` },
       ScanIndexForward: false,
       Limit: 5,
-    })
+    }),
   )
 
   const pushTokens = await getActivePushTokens(userId)
@@ -67,7 +65,7 @@ export async function resetAbuseFlags(entityId: string) {
       TableName: TableNames.appData,
       FilterExpression: 'entityId = :eid AND reviewed = :rev AND begins_with(pk, :prefix)',
       ExpressionAttributeValues: { ':eid': entityId, ':rev': false, ':prefix': 'ABUSE#' },
-    })
+    }),
   )
   let count = 0
   for (const item of result.Items || []) {
@@ -77,7 +75,7 @@ export async function resetAbuseFlags(entityId: string) {
         Key: { pk: item['pk'] as string, sk: item['sk'] as string },
         UpdateExpression: 'SET reviewed = :rev',
         ExpressionAttributeValues: { ':rev': true },
-      })
+      }),
     )
     count++
   }
@@ -97,10 +95,13 @@ export async function getBusinessById(businessId: string) {
       IndexName: 'BusinessIndex',
       KeyConditionExpression: 'businessId = :bid',
       ExpressionAttributeValues: { ':bid': businessId },
-    })
+    }),
   )
   const nodes = (nodesResult.Items || []).map((n) => ({
-    id: n['nodeId'] ?? n['id'], name: n['name'], slug: n['slug'], claimStatus: n['claimStatus'],
+    id: n['nodeId'] ?? n['id'],
+    name: n['name'],
+    slug: n['slug'],
+    claimStatus: n['claimStatus'],
   }))
 
   const staffAccounts = await getStaffByBusinessId(businessId)
@@ -113,9 +114,7 @@ export async function extendBusinessTrial(businessId: string, days: number) {
   if (!biz) return null
 
   const trialEndsAt = biz.trialEndsAt as string | undefined
-  const base = trialEndsAt && new Date(trialEndsAt) > new Date()
-    ? new Date(trialEndsAt)
-    : new Date()
+  const base = trialEndsAt && new Date(trialEndsAt) > new Date() ? new Date(trialEndsAt) : new Date()
   const newEnd = new Date(base.getTime() + days * 24 * 60 * 60 * 1000).toISOString()
 
   return updateBusiness(businessId, { trialEndsAt: newEnd } as any)
@@ -130,7 +129,7 @@ export async function getReportQueue() {
       FilterExpression: 'begins_with(pk, :prefix) AND #status = :pending',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':prefix': 'REPORT#', ':pending': 'pending' },
-    })
+    }),
   )
   const reports = (result.Items || []).slice(0, 50)
   const enriched = []
@@ -153,7 +152,7 @@ export async function updateReportStatus(reportId: string, status: string) {
       KeyConditionExpression: 'pk = :pk',
       ExpressionAttributeValues: { ':pk': `REPORT#${reportId}` },
       Limit: 1,
-    })
+    }),
   )
   if (!result.Items?.[0]) return null
   const item = result.Items[0]
@@ -164,7 +163,7 @@ export async function updateReportStatus(reportId: string, status: string) {
       UpdateExpression: 'SET #status = :status',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':status': status },
-    })
+    }),
   )
   return { ...item, status }
 }
@@ -172,9 +171,14 @@ export async function updateReportStatus(reportId: string, status: string) {
 // ─── Audit Log ──────────────────────────────────────────────────────────────
 
 export async function createAuditLog(data: {
-  adminId: string; adminRole: string; action: string;
-  entityType: string; entityId: string;
-  beforeState?: unknown; afterState?: unknown; note?: string;
+  adminId: string
+  adminRole: string
+  action: string
+  entityType: string
+  entityId: string
+  beforeState?: unknown
+  afterState?: unknown
+  note?: string
 }) {
   const logId = generateId()
   const now = new Date().toISOString()
@@ -183,7 +187,8 @@ export async function createAuditLog(data: {
     sk: `AUDIT#${now}`,
     gsi1pk: `AUDIT_LOGS`,
     gsi1sk: now,
-    logId, ...data,
+    logId,
+    ...data,
     beforeState: data.beforeState ?? null,
     afterState: data.afterState ?? null,
     createdAt: now,
@@ -195,15 +200,19 @@ export async function createAuditLog(data: {
 // ─── Impersonation ──────────────────────────────────────────────────────────
 
 export async function createImpersonationLog(data: {
-  adminId: string; targetUserId: string;
-  targetAccountType: string; note: string;
+  adminId: string
+  targetUserId: string
+  targetAccountType: string
+  note: string
 }) {
   const logId = generateId()
   const now = new Date().toISOString()
   const item = {
     pk: `IMPERSONATION#${logId}`,
     sk: `IMPERSONATION#${now}`,
-    logId, ...data, createdAt: now,
+    logId,
+    ...data,
+    createdAt: now,
   }
   await documentClient.send(new PutCommand({ TableName: TableNames.appData, Item: item }))
   return { id: logId, ...data, createdAt: now }
@@ -211,11 +220,7 @@ export async function createImpersonationLog(data: {
 
 // ─── Admin Messages ─────────────────────────────────────────────────────────
 
-export async function sendAdminMessage(
-  adminId: string,
-  targetUserId: string,
-  message: string,
-) {
+export async function sendAdminMessage(adminId: string, targetUserId: string, message: string) {
   const msgId = generateId()
   const now = new Date().toISOString()
   const item = {
@@ -223,7 +228,11 @@ export async function sendAdminMessage(
     sk: `USER#${targetUserId}`,
     gsi1pk: `USER_MESSAGES#${targetUserId}`,
     gsi1sk: now,
-    msgId, adminId, targetUserId, message, createdAt: now,
+    msgId,
+    adminId,
+    targetUserId,
+    message,
+    createdAt: now,
   }
   await documentClient.send(new PutCommand({ TableName: TableNames.appData, Item: item }))
   return { id: msgId, adminId, targetUserId, message, createdAt: now }
@@ -238,16 +247,14 @@ export async function getUserConsentHistory(userId: string) {
       KeyConditionExpression: 'pk = :pk',
       ExpressionAttributeValues: { ':pk': `CONSENT#${userId}` },
       ScanIndexForward: false,
-    })
+    }),
   )
   return result.Items || []
 }
 
 export async function getUsersNeedingReconsent(currentVersion: string) {
   // Scan all users and check consent
-  const usersResult = await documentClient.send(
-    new ScanCommand({ TableName: TableNames.users })
-  )
+  const usersResult = await documentClient.send(new ScanCommand({ TableName: TableNames.users }))
   const needReconsent = []
   for (const u of (usersResult.Items || []).slice(0, 200)) {
     const uid = (u['userId'] ?? u['id']) as string
@@ -258,7 +265,7 @@ export async function getUsersNeedingReconsent(currentVersion: string) {
         FilterExpression: 'consentVersion = :ver',
         ExpressionAttributeValues: { ':pk': `CONSENT#${uid}`, ':ver': currentVersion },
         Limit: 1,
-      })
+      }),
     )
     if (!consent.Items?.length) {
       needReconsent.push({ id: uid, username: u['username'], phone: u['phone'] })
@@ -271,42 +278,126 @@ export async function getUsersNeedingReconsent(currentVersion: string) {
 // ─── Consumer Search ────────────────────────────────────────────────────────
 
 export async function searchConsumers(query: string) {
-  const result = await documentClient.send(
-    new ScanCommand({ TableName: TableNames.users })
-  )
-  if (!query) {
-    return (result.Items || []).slice(0, 50).map((u) => ({ ...u, id: u['userId'] ?? u['id'] }))
-  }
-  const q = query.toLowerCase()
-  return (result.Items || [])
-    .filter((u) => {
-      const uname = ((u['username'] as string) || '').toLowerCase()
-      const phone = ((u['phone'] as string) || '')
-      const dname = ((u['displayName'] as string) || '').toLowerCase()
-      return uname.includes(q) || phone.includes(query) || dname.includes(q)
+  const result = await documentClient.send(new ScanCommand({ TableName: TableNames.users }))
+  const allUsers = result.Items || []
+  const filtered = query
+    ? allUsers.filter((u) => {
+        const q = query.toLowerCase()
+        const uname = ((u['username'] as string) || '').toLowerCase()
+        const phone = (u['phone'] as string) || ''
+        const dname = ((u['displayName'] as string) || '').toLowerCase()
+        return uname.includes(q) || phone.includes(query) || dname.includes(q)
+      })
+    : allUsers
+  const sliced = filtered.slice(0, 50)
+
+  // Compute additional fields for each user
+  const enriched = []
+  for (const u of sliced) {
+    const userId = (u['userId'] ?? u['id']) as string
+
+    // streakCount and isDisabled from user record
+    const streakCount = (u['streakCount'] as number) ?? 0
+    const isDisabled = (u['isDisabled'] as boolean) ?? false
+
+    // abuseFlags: count unreviewed abuse flags for this user
+    let abuseFlags = 0
+    try {
+      const flagsResult = await documentClient.send(
+        new ScanCommand({
+          TableName: TableNames.appData,
+          FilterExpression: 'begins_with(pk, :prefix) AND entityId = :eid AND reviewed = :rev',
+          ExpressionAttributeValues: { ':prefix': 'ABUSE#', ':eid': userId, ':rev': false },
+          Select: 'COUNT',
+        }),
+      )
+      abuseFlags = flagsResult.Count ?? 0
+    } catch {
+      // Non-critical
+    }
+
+    enriched.push({
+      ...u,
+      id: userId,
+      streakCount,
+      abuseFlags,
+      isDisabled,
     })
-    .slice(0, 50)
-    .map((u) => ({ ...u, id: u['userId'] ?? u['id'] }))
+  }
+  return enriched
 }
 
 // ─── Business Search ────────────────────────────────────────────────────────
 
 export async function searchBusinesses(query: string) {
-  const result = await documentClient.send(
-    new ScanCommand({ TableName: TableNames.businesses })
-  )
-  if (!query) {
-    return (result.Items || []).slice(0, 50).map((b) => ({ ...b, id: b['businessId'] ?? b['id'] }))
-  }
-  const q = query.toLowerCase()
-  return (result.Items || [])
-    .filter((b) => {
-      const name = ((b['businessName'] as string) || '').toLowerCase()
-      const email = ((b['email'] as string) || '').toLowerCase()
-      return name.includes(q) || email.includes(q)
+  const result = await documentClient.send(new ScanCommand({ TableName: TableNames.businesses }))
+  const allBiz = result.Items || []
+  const filtered = query
+    ? allBiz.filter((b) => {
+        const q = query.toLowerCase()
+        const name = ((b['businessName'] as string) || '').toLowerCase()
+        const email = ((b['email'] as string) || '').toLowerCase()
+        return name.includes(q) || email.includes(q)
+      })
+    : allBiz
+  const sliced = filtered.slice(0, 50)
+
+  // Compute additional fields for each business
+  const enriched = []
+  for (const b of sliced) {
+    const businessId = (b['businessId'] ?? b['id']) as string
+
+    // staffCount
+    let staffCount = 0
+    try {
+      const staffResult = await getStaffByBusinessId(businessId)
+      staffCount = staffResult.filter((s: any) => s.isActive !== false).length
+    } catch {
+      // Non-critical
+    }
+
+    // nodeCount
+    let nodeCount = 0
+    try {
+      const nodesResult = await documentClient.send(
+        new QueryCommand({
+          TableName: TableNames.nodes,
+          IndexName: 'BusinessIndex',
+          KeyConditionExpression: 'businessId = :bid',
+          ExpressionAttributeValues: { ':bid': businessId },
+          Select: 'COUNT',
+        }),
+      )
+      nodeCount = nodesResult.Count ?? 0
+    } catch {
+      // Non-critical
+    }
+
+    // activeRewardCount
+    let activeRewardCount = 0
+    try {
+      const rewardsResult = await documentClient.send(
+        new ScanCommand({
+          TableName: TableNames.rewards,
+          FilterExpression: 'businessId = :bid AND isActive = :active',
+          ExpressionAttributeValues: { ':bid': businessId, ':active': true },
+          Select: 'COUNT',
+        }),
+      )
+      activeRewardCount = rewardsResult.Count ?? 0
+    } catch {
+      // Non-critical
+    }
+
+    enriched.push({
+      ...b,
+      id: businessId,
+      staffCount,
+      nodeCount,
+      activeRewardCount,
     })
-    .slice(0, 50)
-    .map((b) => ({ ...b, id: b['businessId'] ?? b['id'] }))
+  }
+  return enriched
 }
 
 // ─── Consent List ───────────────────────────────────────────────────────────
@@ -317,9 +408,20 @@ export async function listConsents() {
       TableName: TableNames.appData,
       FilterExpression: 'begins_with(pk, :prefix)',
       ExpressionAttributeValues: { ':prefix': 'CONSENT#' },
-    })
+    }),
   )
-  return (result.Items || []).slice(0, 100)
+  return (result.Items || []).slice(0, 100).map((item) => {
+    const pk = (item['pk'] as string) ?? ''
+    // Extract userId from pk format CONSENT#{userId}
+    const userId = pk.startsWith('CONSENT#') ? pk.slice('CONSENT#'.length) : pk
+    // Use consentId or sk as the unique id, falling back to pk+sk combo
+    const id = (item['consentId'] as string) ?? `${pk}:${item['sk'] ?? ''}`
+    return {
+      ...item,
+      id,
+      userId,
+    }
+  })
 }
 
 // ─── Erasure Queue ──────────────────────────────────────────────────────────
@@ -331,7 +433,7 @@ export async function getErasureQueue() {
       FilterExpression: 'begins_with(pk, :prefix) AND #status = :pending',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':prefix': 'ERASURE#', ':pending': 'pending' },
-    })
+    }),
   )
   const items = (result.Items || []).slice(0, 100)
   const enriched = []
@@ -339,9 +441,10 @@ export async function getErasureQueue() {
     const uid = item['userId'] as string
     const user = uid ? await getDynamoUser(uid) : null
     enriched.push({
-      ...item,
-      id: item['requestId'] ?? item['pk'],
-      user: user ? { id: user.userId, username: user.username, displayName: user.displayName, phone: user.phone } : null,
+      userId: uid,
+      username: user?.username ?? 'Unknown',
+      requestedAt: (item['requestedAt'] ?? item['createdAt'] ?? '') as string,
+      deletesAt: (item['deletesAt'] ?? item['expiresAt'] ?? '') as string,
     })
   }
   return enriched
@@ -355,7 +458,7 @@ export async function getUnreviewedAbuseFlags() {
       TableName: TableNames.appData,
       FilterExpression: 'begins_with(pk, :prefix) AND reviewed = :rev',
       ExpressionAttributeValues: { ':prefix': 'ABUSE#', ':rev': false },
-    })
+    }),
   )
   return (result.Items || []).slice(0, 100).map((i) => ({ ...i, id: i['flagId'] ?? i['pk'] }))
 }
@@ -368,7 +471,7 @@ export async function reviewAbuseFlag(flagId: string) {
       KeyConditionExpression: 'pk = :pk',
       ExpressionAttributeValues: { ':pk': `ABUSE#${flagId}` },
       Limit: 1,
-    })
+    }),
   )
   if (!result.Items?.[0]) return null
   const item = result.Items[0]
@@ -378,11 +481,10 @@ export async function reviewAbuseFlag(flagId: string) {
       Key: { pk: item['pk'] as string, sk: item['sk'] as string },
       UpdateExpression: 'SET reviewed = :rev',
       ExpressionAttributeValues: { ':rev': true },
-    })
+    }),
   )
   return { ...item, reviewed: true }
 }
-
 
 // ─── Dashboard Metrics ──────────────────────────────────────────────────────
 
@@ -395,21 +497,15 @@ export async function getDashboardMetrics() {
   }
 
   // Count consumers
-  const usersResult = await documentClient.send(
-    new ScanCommand({ TableName: TableNames.users, Select: 'COUNT' })
-  )
+  const usersResult = await documentClient.send(new ScanCommand({ TableName: TableNames.users, Select: 'COUNT' }))
   const totalConsumers = usersResult.Count ?? 0
 
   // Count businesses
-  const bizResult = await documentClient.send(
-    new ScanCommand({ TableName: TableNames.businesses, Select: 'COUNT' })
-  )
+  const bizResult = await documentClient.send(new ScanCommand({ TableName: TableNames.businesses, Select: 'COUNT' }))
   const totalBusinesses = bizResult.Count ?? 0
 
   // Count all check-ins
-  const checkInsResult = await documentClient.send(
-    new ScanCommand({ TableName: TableNames.checkins, Select: 'COUNT' })
-  )
+  const checkInsResult = await documentClient.send(new ScanCommand({ TableName: TableNames.checkins, Select: 'COUNT' }))
   const totalCheckInsAllTime = checkInsResult.Count ?? 0
 
   // Count today's check-ins
@@ -420,7 +516,7 @@ export async function getDashboardMetrics() {
       FilterExpression: 'begins_with(checkedInAt, :today)',
       ExpressionAttributeValues: { ':today': today },
       Select: 'COUNT',
-    })
+    }),
   )
   const totalCheckInsToday = todayResult.Count ?? 0
 
@@ -431,7 +527,7 @@ export async function getDashboardMetrics() {
       FilterExpression: 'isActive = :active',
       ExpressionAttributeValues: { ':active': true },
       Select: 'COUNT',
-    })
+    }),
   )
   const activeRewards = rewardsResult.Count ?? 0
 
@@ -443,7 +539,7 @@ export async function getDashboardMetrics() {
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':prefix': 'REPORT#', ':pending': 'pending' },
       Select: 'COUNT',
-    })
+    }),
   )
   const pendingReports = reportsResult.Count ?? 0
 
@@ -455,7 +551,7 @@ export async function getDashboardMetrics() {
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':prefix': 'ERASURE#', ':pending': 'pending' },
       Select: 'COUNT',
-    })
+    }),
   )
   const pendingErasures = erasureResult.Count ?? 0
 
@@ -466,7 +562,7 @@ export async function getDashboardMetrics() {
       FilterExpression: 'begins_with(pk, :prefix) AND reviewed = :rev',
       ExpressionAttributeValues: { ':prefix': 'ABUSE#', ':rev': false },
       Select: 'COUNT',
-    })
+    }),
   )
   const unreviewedAbuseFlags = flagsResult.Count ?? 0
 
@@ -483,6 +579,127 @@ export async function getDashboardMetrics() {
 
   metricsCache = { data, expiresAt: Date.now() + 60_000 }
   return data
+}
+
+// ─── Archetype Management ────────────────────────────────────────────────────
+
+export async function getArchetypes() {
+  const result = await documentClient.send(
+    new QueryCommand({
+      TableName: TableNames.appData,
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'gsi1pk = :pk',
+      ExpressionAttributeValues: { ':pk': 'ARCHETYPES' },
+      ScanIndexForward: false,
+    }),
+  )
+  return (result.Items || []).map((item) => ({
+    id: item['archetypeId'] as string,
+    name: item['name'] as string,
+    iconId: item['iconId'] as string,
+    description: item['description'] as string,
+    dimensionThresholds: item['dimensionThresholds'] as Record<string, number>,
+    priority: item['priority'] as number,
+    isActive: item['isActive'] as boolean,
+  }))
+}
+
+export async function createArchetype(data: {
+  id: string
+  name: string
+  iconId: string
+  description: string
+  dimensionThresholds: Record<string, number>
+  priority: number
+  isActive: boolean
+}) {
+  const item = {
+    pk: `ARCHETYPE#${data.id}`,
+    sk: `ARCHETYPE#${data.id}`,
+    gsi1pk: 'ARCHETYPES',
+    gsi1sk: String(data.priority).padStart(5, '0'),
+    archetypeId: data.id,
+    name: data.name,
+    iconId: data.iconId,
+    description: data.description,
+    dimensionThresholds: data.dimensionThresholds,
+    priority: data.priority,
+    isActive: data.isActive,
+    createdAt: new Date().toISOString(),
+  }
+  await documentClient.send(new PutCommand({ TableName: TableNames.appData, Item: item }))
+  return data
+}
+
+export async function updateArchetypeRecord(archetypeId: string, data: Record<string, unknown>) {
+  const key = { pk: `ARCHETYPE#${archetypeId}`, sk: `ARCHETYPE#${archetypeId}` }
+
+  const updateParts: string[] = []
+  const exprNames: Record<string, string> = {}
+  const exprValues: Record<string, unknown> = {}
+  let idx = 0
+  for (const [k, v] of Object.entries(data)) {
+    if (k === 'id') continue
+    const nameKey = `#f${idx}`
+    const valKey = `:v${idx}`
+    exprNames[nameKey] = k
+    exprValues[valKey] = v
+    updateParts.push(`${nameKey} = ${valKey}`)
+    idx++
+  }
+  if (data['priority'] !== undefined) {
+    exprNames['#gsi1sk'] = 'gsi1sk'
+    exprValues[':gsi1sk'] = String(data['priority']).padStart(5, '0')
+    updateParts.push('#gsi1sk = :gsi1sk')
+  }
+
+  if (updateParts.length === 0) return null
+
+  const result = await documentClient.send(
+    new UpdateCommand({
+      TableName: TableNames.appData,
+      Key: key,
+      UpdateExpression: `SET ${updateParts.join(', ')}`,
+      ExpressionAttributeNames: exprNames,
+      ExpressionAttributeValues: exprValues,
+      ReturnValues: 'ALL_NEW',
+    }),
+  )
+  const item = result.Attributes
+  if (!item) return null
+  return {
+    id: item['archetypeId'] as string,
+    name: item['name'] as string,
+    iconId: item['iconId'] as string,
+    description: item['description'] as string,
+    dimensionThresholds: item['dimensionThresholds'] as Record<string, number>,
+    priority: item['priority'] as number,
+    isActive: item['isActive'] as boolean,
+  }
+}
+
+// ─── Genre Weight Management ────────────────────────────────────────────────
+
+export async function getGenreWeights() {
+  const result = await documentClient.send(
+    new GetCommand({
+      TableName: TableNames.appData,
+      Key: { pk: 'GENRE_WEIGHTS', sk: 'MATRIX' },
+    }),
+  )
+  if (!result.Item) return null
+  return result.Item['matrix'] as Array<{ genre: string; weights: Record<string, number> }>
+}
+
+export async function updateGenreWeightsRecord(matrix: Array<{ genre: string; weights: Record<string, number> }>) {
+  const item = {
+    pk: 'GENRE_WEIGHTS',
+    sk: 'MATRIX',
+    matrix,
+    updatedAt: new Date().toISOString(),
+  }
+  await documentClient.send(new PutCommand({ TableName: TableNames.appData, Item: item }))
+  return matrix
 }
 
 // ─── Audit Logs ─────────────────────────────────────────────────────────────
@@ -506,34 +723,34 @@ export async function getAuditLogs(filters: {
 
   // Add date range to key condition if provided
   if (filters.startDate && filters.endDate) {
-    (params as any).KeyConditionExpression += ' AND gsi1sk BETWEEN :start AND :end';
-    (params as any).ExpressionAttributeValues[':start'] = filters.startDate;
-    (params as any).ExpressionAttributeValues[':end'] = filters.endDate + 'T23:59:59.999Z'
+    ;(params as any).KeyConditionExpression += ' AND gsi1sk BETWEEN :start AND :end'
+    ;(params as any).ExpressionAttributeValues[':start'] = filters.startDate
+    ;(params as any).ExpressionAttributeValues[':end'] = filters.endDate + 'T23:59:59.999Z'
   } else if (filters.startDate) {
-    (params as any).KeyConditionExpression += ' AND gsi1sk >= :start';
-    (params as any).ExpressionAttributeValues[':start'] = filters.startDate
+    ;(params as any).KeyConditionExpression += ' AND gsi1sk >= :start'
+    ;(params as any).ExpressionAttributeValues[':start'] = filters.startDate
   } else if (filters.endDate) {
-    (params as any).KeyConditionExpression += ' AND gsi1sk <= :end';
-    (params as any).ExpressionAttributeValues[':end'] = filters.endDate + 'T23:59:59.999Z'
+    ;(params as any).KeyConditionExpression += ' AND gsi1sk <= :end'
+    ;(params as any).ExpressionAttributeValues[':end'] = filters.endDate + 'T23:59:59.999Z'
   }
 
   // Build filter expressions for adminId and action
   const filterParts: string[] = []
   if (filters.adminId) {
-    filterParts.push('adminId = :adminId');
-    (params as any).ExpressionAttributeValues[':adminId'] = filters.adminId
+    filterParts.push('adminId = :adminId')
+    ;(params as any).ExpressionAttributeValues[':adminId'] = filters.adminId
   }
   if (filters.action) {
-    filterParts.push('#action = :actionFilter');
-    (params as any).ExpressionAttributeNames = { ...(params as any).ExpressionAttributeNames, '#action': 'action' };
-    (params as any).ExpressionAttributeValues[':actionFilter'] = filters.action
+    filterParts.push('#action = :actionFilter')
+    ;(params as any).ExpressionAttributeNames = { ...(params as any).ExpressionAttributeNames, '#action': 'action' }
+    ;(params as any).ExpressionAttributeValues[':actionFilter'] = filters.action
   }
   if (filterParts.length > 0) {
-    (params as any).FilterExpression = filterParts.join(' AND ')
+    ;(params as any).FilterExpression = filterParts.join(' AND ')
   }
 
   if (filters.cursor) {
-    (params as any).ExclusiveStartKey = JSON.parse(Buffer.from(filters.cursor, 'base64url').toString())
+    ;(params as any).ExclusiveStartKey = JSON.parse(Buffer.from(filters.cursor, 'base64url').toString())
   }
 
   const result = await documentClient.send(new QueryCommand(params as any))

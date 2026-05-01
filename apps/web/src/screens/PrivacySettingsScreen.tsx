@@ -42,7 +42,7 @@ export function PrivacySettingsScreen({ onNavigate }: PrivacySettingsScreenProps
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4">
+    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4" data-scroll-container>
       {/* Header with back button */}
       <div className="flex flex-row items-center gap-3 mb-6">
         <button

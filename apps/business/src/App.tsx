@@ -6,6 +6,7 @@ import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { api } from '@area-code/shared/lib/api'
 import { getSocket } from '@area-code/shared/lib/socket'
 import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
+import { GlobalErrorToast } from '@area-code/shared/components/GlobalErrorToast'
 import { BusinessLogin } from './screens/BusinessLogin'
 import { BusinessSignup } from './screens/BusinessSignup'
 import { BusinessDashboard } from './screens/BusinessDashboard'
@@ -17,6 +18,7 @@ export function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AppContent />
+        <GlobalErrorToast />
       </QueryClientProvider>
     </ErrorBoundary>
   )
@@ -29,9 +31,15 @@ function AppContent() {
   const [screen, setScreen] = useState<'login' | 'signup'>('login')
   useTheme()
 
-  // Wire API token provider
+  // Wire API token provider and refresh handler
   useEffect(() => {
     api.setTokenProvider(() => useBusinessAuthStore.getState().accessToken)
+    api.setRefreshPath('/v1/auth/business/refresh')
+    api.setRefreshHandler({
+      getRefreshToken: () => useBusinessAuthStore.getState().refreshToken,
+      onTokenRefreshed: (token) => useBusinessAuthStore.getState().setAccessToken(token),
+      onAuthExpired: () => useBusinessAuthStore.getState().logout(),
+    })
   }, [])
 
   // Initialize socket with businessId for room authorization

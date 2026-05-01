@@ -37,24 +37,20 @@ export function FriendsScreen() {
   const [search, setSearch] = useState('')
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4">
-      <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-4">
-        {t('friends.title')}
-      </h1>
+    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4" data-scroll-container>
+      <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-4">{t('friends.title')}</h1>
 
       {/* Tab bar */}
       <div className="flex flex-row gap-1 mb-4 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-1">
-        {(['friends', 'following', 'followers', 'search'] as Tab[]).map((t) => (
+        {(['friends', 'following', 'followers', 'search'] as Tab[]).map((tabKey) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
+            key={tabKey}
+            onClick={() => setTab(tabKey)}
             className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all duration-150 ${
-              tab === t
-                ? 'gradient-accent text-white'
-                : 'text-[var(--text-secondary)]'
+              tab === tabKey ? 'gradient-accent text-white' : 'text-[var(--text-secondary)]'
             }`}
           >
-            {t === 'search' ? 'Search' : t.charAt(0).toUpperCase() + t.slice(1)}
+            {tabKey === 'search' ? 'Search' : tabKey.charAt(0).toUpperCase() + tabKey.slice(1)}
           </button>
         ))}
       </div>
@@ -83,9 +79,7 @@ function FriendsTab() {
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-[var(--text-muted)] text-xs mb-1">
-        {t('friends.mutualCount', { count: data.count })}
-      </p>
+      <p className="text-[var(--text-muted)] text-xs mb-1">{t('friends.mutualCount', { count: data.count })}</p>
       {data.friends.map((f) => (
         <UserRow key={f.userId} user={f} badge={t('friends.mutual')} badgeColor="var(--success)" />
       ))}
@@ -120,7 +114,10 @@ function FollowingTab() {
   return (
     <div className="flex flex-col gap-2">
       {data.users.map((u) => (
-        <div key={u.userId} className="flex flex-row items-center gap-3 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3">
+        <div
+          key={u.userId}
+          className="flex flex-row items-center gap-3 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3"
+        >
           <Avatar url={u.avatarUrl} displayName={u.displayName} size="sm" tier={u.tier} />
           <div className="flex-1">
             <p className="text-[var(--text-primary)] text-sm font-medium">{u.displayName}</p>
@@ -172,7 +169,10 @@ function FollowersTab() {
   return (
     <div className="flex flex-col gap-2">
       {data.users.map((u) => (
-        <div key={u.userId} className="flex flex-row items-center gap-3 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3">
+        <div
+          key={u.userId}
+          className="flex flex-row items-center gap-3 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3"
+        >
           <Avatar url={u.avatarUrl} displayName={u.displayName} size="sm" tier={u.tier} />
           <div className="flex-1">
             <p className="text-[var(--text-primary)] text-sm font-medium">{u.displayName}</p>
@@ -242,7 +242,10 @@ function SearchTab({ search, setSearch }: { search: string; setSearch: (s: strin
       {data?.users && data.users.length > 0 && (
         <div className="flex flex-col gap-2">
           {data.users.map((u) => (
-            <div key={u.userId} className="flex flex-row items-center gap-3 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3">
+            <div
+              key={u.userId}
+              className="flex flex-row items-center gap-3 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3"
+            >
               <Avatar url={u.avatarUrl} displayName={u.displayName} size="sm" tier={u.tier} />
               <div className="flex-1">
                 <p className="text-[var(--text-primary)] text-sm font-medium">{u.displayName}</p>
@@ -275,14 +278,10 @@ function SearchTab({ search, setSearch }: { search: string; setSearch: (s: strin
         </div>
       )}
 
-      {search.length >= 2 && !isLoading && data?.users?.length === 0 && (
-        <EmptyState message={t('friends.noResults')} />
-      )}
+      {search.length >= 2 && !isLoading && data?.users?.length === 0 && <EmptyState message={t('friends.noResults')} />}
 
       {search.length < 2 && (
-        <p className="text-[var(--text-muted)] text-xs text-center py-4">
-          {t('friends.searchHint')}
-        </p>
+        <p className="text-[var(--text-muted)] text-xs text-center py-4">{t('friends.searchHint')}</p>
       )}
     </div>
   )
@@ -320,7 +319,5 @@ function LoadingSkeleton({ count = 5 }: { count?: number }) {
 }
 
 function EmptyState({ message }: { message: string }) {
-  return (
-    <p className="text-[var(--text-muted)] text-sm text-center py-8">{message}</p>
-  )
+  return <p className="text-[var(--text-muted)] text-sm text-center py-8">{message}</p>
 }

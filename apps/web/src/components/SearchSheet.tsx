@@ -29,7 +29,13 @@ export function SearchSheet({ isOpen, onClose, onSelectNode }: SearchSheetProps)
   const pos = useLocationStore((s) => s.lastKnownPosition)
 
   useEffect(() => {
-    if (isOpen) inputRef.current?.focus()
+    if (isOpen) {
+      inputRef.current?.focus()
+    } else {
+      // Clear stale results when sheet closes (Issue #17)
+      setQuery('')
+      setResults([])
+    }
   }, [isOpen])
 
   useEffect(() => {

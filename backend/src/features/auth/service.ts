@@ -8,8 +8,11 @@ import { reportOtpFeedback } from '../../shared/sms/feedback.js'
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
 export async function consumerSignup(data: {
-  phone: string; username: string; displayName: string; citySlug: string;
-  consentAnalytics?: boolean;
+  phone: string
+  username: string
+  displayName: string
+  citySlug: string
+  consentAnalytics?: boolean
 }) {
   if (DEV_MODE) {
     const userId = `dev-user-${Date.now()}`
@@ -125,7 +128,10 @@ export async function consumerVerifyOtp(phone: string, code: string, userAgent?:
 }
 
 export async function businessSignup(data: {
-  email: string; phone: string; businessName: string; registrationNumber?: string;
+  email: string
+  phone: string
+  businessName: string
+  registrationNumber?: string
 }) {
   if (DEV_MODE) {
     return { businessId: `dev-biz-${Date.now()}`, message: 'OTP sent (dev mode)' }
@@ -222,7 +228,10 @@ export async function staffLogin(phone: string) {
   if (DEV_MODE) return
 
   const staff = await repo.findStaffByPhone(phone)
-  if (!staff) throw AppError.notFound('No staff account found for this number. Ask your manager to send you an invite link first.')
+  if (!staff)
+    throw AppError.notFound(
+      'No staff account found for this number. Ask your manager to send you an invite link first.',
+    )
   if ((staff as unknown as Record<string, unknown>).isActive === false) {
     throw AppError.forbidden('This staff account has been deactivated. Contact your manager.')
   }
@@ -277,6 +286,7 @@ export async function adminLogin(email: string, password: string) {
   if (DEV_MODE) {
     return {
       accessToken: `dev-admin-access-${Date.now()}`,
+      refreshToken: `dev-admin-refresh-${Date.now()}`,
       adminId: 'dev-admin-1',
       role: 'super_admin' as const,
     }
@@ -292,6 +302,7 @@ export async function adminLogin(email: string, password: string) {
 
     return {
       accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
       adminId,
       role,
     }
@@ -305,7 +316,7 @@ export async function refreshToken(refreshTokenValue: string, pool: string) {
     return { accessToken: `refreshed-access-${Date.now()}` }
   }
 
-  const role = pool as 'consumer' | 'business' | 'staff'
+  const role = pool as 'consumer' | 'business' | 'staff' | 'admin'
   const poolConfig = {
     consumer: {
       userPoolId: process.env['AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID'] ?? '',
@@ -319,21 +330,28 @@ export async function refreshToken(refreshTokenValue: string, pool: string) {
       userPoolId: process.env['AREA_CODE_COGNITO_STAFF_USER_POOL_ID'] ?? '',
       clientId: process.env['AREA_CODE_COGNITO_STAFF_CLIENT_ID'] ?? '',
     },
+    admin: {
+      userPoolId: process.env['AREA_CODE_COGNITO_ADMIN_USER_POOL_ID'] ?? '',
+      clientId: process.env['AREA_CODE_COGNITO_ADMIN_CLIENT_ID'] ?? '',
+    },
   }[role]
 
   if (!poolConfig?.userPoolId) {
     throw AppError.badRequest('Invalid pool for refresh')
   }
 
-  const { CognitoIdentityProviderClient, AdminInitiateAuthCommand } = await import('@aws-sdk/client-cognito-identity-provider')
+  const { CognitoIdentityProviderClient, AdminInitiateAuthCommand } =
+    await import('@aws-sdk/client-cognito-identity-provider')
   const client = new CognitoIdentityProviderClient({ region: process.env['AWS_REGION'] ?? 'us-east-1' })
 
-  const result = await client.send(new AdminInitiateAuthCommand({
-    UserPoolId: poolConfig.userPoolId,
-    ClientId: poolConfig.clientId,
-    AuthFlow: 'REFRESH_TOKEN_AUTH',
-    AuthParameters: { REFRESH_TOKEN: refreshTokenValue },
-  }))
+  const result = await client.send(
+    new AdminInitiateAuthCommand({
+      UserPoolId: poolConfig.userPoolId,
+      ClientId: poolConfig.clientId,
+      AuthFlow: 'REFRESH_TOKEN_AUTH',
+      AuthParameters: { REFRESH_TOKEN: refreshTokenValue },
+    }),
+  )
 
   if (!result.AuthenticationResult?.AccessToken) {
     throw AppError.unauthorized('Token refresh failed')
@@ -394,6 +412,9 @@ export async function checkOtpRateLimit(phone: string) {
 export { acceptStaffInvite, revokeUserTokens } from './auth-utils-service.js'
 // Session management in session-service.ts
 export {
-  createLoginSession, getUserSessions, revokeSession,
-  revokeAllOtherSessions, deleteLoginSession,
+  createLoginSession,
+  getUserSessions,
+  revokeSession,
+  revokeAllOtherSessions,
+  deleteLoginSession,
 } from './session-service.js'

@@ -9,6 +9,7 @@ export function NodeEditorPanel() {
   const [selected, setSelected] = useState<Node | null>(nodes[0] ?? null)
   const [name, setName] = useState(selected?.name ?? '')
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     async function fetch() {
@@ -32,8 +33,9 @@ export function NodeEditorPanel() {
     setSaving(true)
     try {
       await api.put(`/v1/nodes/${selected.id}`, { name })
+      setSaveError(null)
     } catch {
-      // Fail silently
+      setSaveError('Failed to save changes. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -67,6 +69,7 @@ export function NodeEditorPanel() {
           >
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
+          {saveError && <p className="text-[var(--danger)] text-xs">{saveError}</p>}
         </div>
       ) : (
         <p className="text-[var(--text-muted)]">No nodes yet</p>

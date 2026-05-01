@@ -5,13 +5,26 @@ import type { GenreWeightEntry, MusicGenre, PersonalityDimension } from '@area-c
 import { PERSONALITY_DIMENSIONS, MUSIC_GENRES } from '@area-code/shared/constants/genre-weights'
 
 const GENRE_LABELS: Record<MusicGenre, string> = {
-  amapiano: 'Amapiano', deep_house: 'Deep House', afrobeats: 'Afrobeats',
-  hip_hop: 'Hip Hop', rnb: 'R&B', kwaito: 'Kwaito', gqom: 'Gqom',
-  jazz: 'Jazz', rock: 'Rock', pop: 'Pop', gospel: 'Gospel', maskandi: 'Maskandi',
+  amapiano: 'Amapiano',
+  deep_house: 'Deep House',
+  afrobeats: 'Afrobeats',
+  hip_hop: 'Hip Hop',
+  rnb: 'R&B',
+  kwaito: 'Kwaito',
+  gqom: 'Gqom',
+  jazz: 'Jazz',
+  rock: 'Rock',
+  pop: 'Pop',
+  gospel: 'Gospel',
+  maskandi: 'Maskandi',
 }
 
 const DIM_SHORT: Record<PersonalityDimension, string> = {
-  energy: 'ENR', cultural_rootedness: 'CUL', sophistication: 'SOP', edge: 'EDG', spirituality: 'SPI',
+  energy: 'ENR',
+  cultural_rootedness: 'CUL',
+  sophistication: 'SOP',
+  edge: 'EDG',
+  spirituality: 'SPI',
 }
 
 export function GenreWeightEditor() {
@@ -21,19 +34,18 @@ export function GenreWeightEditor() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    api.get<GenreWeightEntry[]>('/v1/admin/genre-weights')
-      .then(setMatrix)
+    api
+      .get<{ matrix: GenreWeightEntry[] }>('/v1/admin/genre-weights')
+      .then((res) => setMatrix(res.matrix ?? []))
       .catch(() => {})
   }, [])
 
   function updateWeight(genre: MusicGenre, dim: PersonalityDimension, val: string) {
     const num = parseFloat(val)
     if (isNaN(num)) return
-    setMatrix((prev) => prev.map((entry) =>
-      entry.genre === genre
-        ? { ...entry, weights: { ...entry.weights, [dim]: num } }
-        : entry,
-    ))
+    setMatrix((prev) =>
+      prev.map((entry) => (entry.genre === genre ? { ...entry, weights: { ...entry.weights, [dim]: num } } : entry)),
+    )
   }
 
   function validate(): boolean {
@@ -71,7 +83,9 @@ export function GenreWeightEditor() {
         <div className="flex flex-row gap-1 mb-2">
           <div className="w-24 shrink-0" />
           {PERSONALITY_DIMENSIONS.map((d) => (
-            <div key={d} className="w-16 text-center text-[var(--text-muted)] text-xs font-medium">{DIM_SHORT[d]}</div>
+            <div key={d} className="w-16 text-center text-[var(--text-muted)] text-xs font-medium">
+              {DIM_SHORT[d]}
+            </div>
           ))}
         </div>
 
@@ -82,7 +96,10 @@ export function GenreWeightEditor() {
             {PERSONALITY_DIMENSIONS.map((d) => (
               <input
                 key={d}
-                type="number" step="0.1" min="0" max="1"
+                type="number"
+                step="0.1"
+                min="0"
+                max="1"
                 value={entry.weights[d]}
                 onChange={(e) => updateWeight(entry.genre, d, e.target.value)}
                 className="w-16 bg-[var(--bg-raised)] border border-[var(--border)] rounded-lg px-1 py-1 text-center text-xs text-[var(--text-primary)]"

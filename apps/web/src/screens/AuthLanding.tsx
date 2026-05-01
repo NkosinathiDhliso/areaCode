@@ -1,17 +1,66 @@
+import { useTranslation } from 'react-i18next'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@area-code/shared/lib/api'
 import type { AppRoute } from '../types'
 
 interface AuthLandingProps {
   onNavigate: (route: AppRoute) => void
 }
 
-const trending = [
-  { name: 'Maboneng Precinct', area: 'Johannesburg', vibe: 'Building', checkins: 34 },
-  { name: 'Umhlanga Promenade', area: 'Durban', vibe: 'Trending', checkins: 21 },
+interface TrendingSpot {
+  name: string
+  area: string
+  state: string
+  checkIns: number
+  nodeId?: string
+  slug?: string
+  category?: string
+}
+
+const FALLBACK_TRENDING: TrendingSpot[] = [
+  { name: 'Maboneng Precinct', area: 'Johannesburg', state: 'Building', checkIns: 34 },
+  { name: 'Umhlanga Promenade', area: 'Durban', state: 'Trending', checkIns: 21 },
 ]
 
+/** Map node state to a user-friendly label */
+function stateLabel(state: string): string {
+  switch (state) {
+    case 'popping': return '🔥 Popping'
+    case 'buzzing': return '⚡ Buzzing'
+    case 'active': return '✨ Active'
+    case 'quiet': return '🌙 Quiet'
+    default: return state.charAt(0).toUpperCase() + state.slice(1)
+  }
+}
+
+/** Category emoji for visual flair */
+function categoryEmoji(category?: string): string {
+  switch (category) {
+    case 'food': return '🍽️'
+    case 'coffee': return '☕'
+    case 'nightlife': return '🌙'
+    case 'retail': return '🛍️'
+    case 'fitness': return '💪'
+    case 'arts': return '🎨'
+    default: return '📍'
+  }
+}
+
 export function AuthLanding({ onNavigate }: AuthLandingProps) {
+  const { t } = useTranslation()
+
+  const { data: trendingData } = useQuery({
+    queryKey: ['trending'],
+    queryFn: () => api.get<{ items: TrendingSpot[] }>('/v1/nodes/trending').catch(() => ({ items: FALLBACK_TRENDING })),
+    staleTime: 60_000,
+    retry: 1,
+  })
+
+  const trending = trendingData?.items ?? FALLBACK_TRENDING
+  const hasLiveData = trendingData?.items !== undefined && trendingData.items !== FALLBACK_TRENDING
+
   const go = (route: AppRoute, path: string) => {
-    window.history.pushState({}, '', path)
+    window.history.pushState({ route }, '', path)
     onNavigate(route)
   }
 
@@ -31,15 +80,15 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
           <span className="font-[Syne] text-xl font-extrabold tracking-tight">Area Code</span>
         </div>
 
-        {/* Hero, short and direct */}
+        {/* Hero */}
         <h1 className="font-[Syne] text-3xl font-extrabold leading-tight tracking-[-0.02em]">
-          See what's alive
+          {t('landing.heroLine1', 'See what\'s alive')}
           <span className="block bg-[linear-gradient(90deg,var(--accent-bright),var(--accent))] bg-clip-text text-transparent">
-            in your city.
+            {t('landing.heroLine2', 'in your city.')}
           </span>
         </h1>
         <p className="mt-3 text-sm text-[var(--text-secondary)] leading-relaxed max-w-xs">
-          Live map. Real check-ins. Rewards from local spots.
+          {t('landing.subtitle', 'Live map. Real check-ins. Rewards from local spots.')}
         </p>
 
         {/* CTAs */}
@@ -48,41 +97,52 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
             onClick={() => go('signup', '/signup')}
             className="flex-1 rounded-xl bg-[var(--accent)] py-3.5 text-sm font-semibold text-[var(--on-accent)] transition-all active:scale-95 hover:bg-[var(--accent-bright)]"
           >
-            Sign Up
+            {t('landing.signUp', 'Sign Up')}
           </button>
           <button
             onClick={() => go('map', '/map')}
             className="flex-1 rounded-xl border border-[var(--border-strong)] bg-[var(--bg-surface)] py-3.5 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--accent)]"
           >
-            Explore Map
+            {t('landing.exploreMap', 'Explore Map')}
           </button>
         </div>
 
-        {/* Trending now, live mini dashboard */}
-        <div className="mt-8 rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] p-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-medium tracking-widest text-[var(--text-muted)] uppercase">Trending Now</span>
-            <span className="rounded-full bg-[var(--success)]/20 px-2 py-0.5 text-[10px] font-semibold text-[var(--success)] animate-pulse">
-              Live
-            </span>
+        {/* Trending now */}
+        {trending.length > 0 && (
+          <div className="mt-8 rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[11px] font-medium tracking-widest text-[var(--text-muted)] uppercase">
+                {t('landing.trendingNow', 'Trending Now')}
+              </span>
+              {hasLiveData && (
+                <span className="rounded-full bg-[var(--success)]/20 px-2 py-0.5 text-[10px] font-semibold text-[var(--success)] animate-pulse">
+                  {t('landing.live', 'Live')}
+                </span>
+              )}
+            </div>
+            {trending.slice(0, 5).map((spot) => (
+              <button
+                key={spot.nodeId ?? spot.name}
+                onClick={() => go('map', '/map')}
+                className="w-full flex items-center justify-between rounded-xl bg-[var(--bg-raised)] px-3 py-2.5 mb-2 last:mb-0 text-left transition-all hover:border-[var(--accent)] border border-transparent group cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="text-base" aria-hidden="true">{categoryEmoji(spot.category)}</span>
+                  <div>
+                    <p className="text-sm font-semibold group-hover:text-[var(--accent)]">{spot.name}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{spot.area}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-medium">{stateLabel(spot.state)}</p>
+                  <p className="text-[11px] text-[var(--text-muted)]">
+                    {t('landing.checkIns', { count: spot.checkIns, defaultValue: `${spot.checkIns} check-ins` })}
+                  </p>
+                </div>
+              </button>
+            ))}
           </div>
-          {trending.map((spot) => (
-            <button
-              key={spot.name}
-              onClick={() => go('map', '/map')}
-              className="w-full flex items-center justify-between rounded-xl bg-[var(--bg-raised)] px-3 py-2.5 mb-2 last:mb-0 text-left transition-all hover:border-[var(--accent)] border border-transparent group cursor-pointer"
-            >
-              <div>
-                <p className="text-sm font-semibold group-hover:text-[var(--accent)]">{spot.name}</p>
-                <p className="text-xs text-[var(--text-muted)]">{spot.area}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs font-medium">{spot.vibe}</p>
-                <p className="text-[11px] text-[var(--text-muted)]">{spot.checkins} check-ins</p>
-              </div>
-            </button>
-          ))}
-        </div>
+        )}
 
         {/* Bottom links */}
         <div className="mt-auto pt-8 flex flex-col items-center gap-2">
@@ -90,7 +150,7 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
             onClick={() => go('login', '/login')}
             className="text-sm text-[var(--accent)]"
           >
-            Already have an account? Sign in
+            {t('landing.hasAccount', 'Already have an account? Sign in')}
           </button>
           <p className="text-[11px] text-[var(--text-muted)]">Cape Town · Johannesburg · Durban</p>
         </div>

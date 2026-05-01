@@ -67,7 +67,7 @@ export function StaffRedemptionPanel() {
       <select
         value={selectedStaffId}
         onChange={(e) => setSelectedStaffId(e.target.value)}
-        className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none"
+        className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none appearance-none"
         aria-label="Filter by staff member"
       >
         <option value="">All staff members</option>

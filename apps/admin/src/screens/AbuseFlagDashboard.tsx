@@ -33,6 +33,8 @@ export function AbuseFlagDashboard() {
 
   useEffect(() => {
     fetchFlags()
+    const interval = setInterval(fetchFlags, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   async function handleReview(flagId: string) {
@@ -61,21 +63,23 @@ export function AbuseFlagDashboard() {
 
   function getTypeBadgeColor(type: string): string {
     switch (type) {
-      case 'device_velocity': return 'var(--warning)'
-      case 'ip_subnet': return 'var(--warning)'
-      case 'pulse_anomaly': return 'var(--accent)'
-      case 'reward_drain': return 'var(--danger)'
-      case 'new_account_velocity': return 'var(--danger)'
-      default: return 'var(--text-muted)'
+      case 'device_velocity':
+        return 'var(--warning)'
+      case 'ip_subnet':
+        return 'var(--warning)'
+      case 'pulse_anomaly':
+        return 'var(--accent)'
+      case 'reward_drain':
+        return 'var(--danger)'
+      case 'new_account_velocity':
+        return 'var(--danger)'
+      default:
+        return 'var(--text-muted)'
     }
   }
 
   if (loading) {
-    return (
-      <div className="p-5 text-[var(--text-muted)] text-sm text-center py-12">
-        Loading abuse flags...
-      </div>
-    )
+    return <div className="p-5 text-[var(--text-muted)] text-sm text-center py-12">Loading abuse flags...</div>
   }
 
   return (
@@ -92,17 +96,12 @@ export function AbuseFlagDashboard() {
       </div>
 
       {flags.length === 0 && (
-        <div className="text-[var(--text-muted)] text-sm text-center py-12">
-          No unreviewed abuse flags
-        </div>
+        <div className="text-[var(--text-muted)] text-sm text-center py-12">No unreviewed abuse flags</div>
       )}
 
       <div className="flex flex-col gap-3">
         {flags.map((flag) => (
-          <div
-            key={flag.id}
-            className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4"
-          >
+          <div key={flag.id} className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
             <div
               className="flex flex-row items-center justify-between cursor-pointer"
               onClick={() => setExpandedId(expandedId === flag.id ? null : flag.id)}
@@ -121,9 +120,7 @@ export function AbuseFlagDashboard() {
                   {flag.entityType}: {flag.entityId.slice(0, 8)}...
                 </span>
               </div>
-              <span className="text-[var(--text-muted)] text-xs">
-                {new Date(flag.createdAt).toLocaleDateString()}
-              </span>
+              <span className="text-[var(--text-muted)] text-xs">{new Date(flag.createdAt).toLocaleDateString()}</span>
             </div>
 
             {expandedId === flag.id && (

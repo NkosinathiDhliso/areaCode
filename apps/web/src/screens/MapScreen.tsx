@@ -86,12 +86,15 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   }, [])
 
   // Node tap handler, dismiss onboarding hint on first tap
-  const handleNodeTap = useCallback((node: Node) => {
-    setSelectedNode(node)
-    setSheetOpen(true)
-    resetQrFallback()
-    if (!onboarding.hintSeen) markHintSeen('hintSeen')
-  }, [onboarding.hintSeen, markHintSeen, resetQrFallback])
+  const handleNodeTap = useCallback(
+    (node: Node) => {
+      setSelectedNode(node)
+      setSheetOpen(true)
+      resetQrFallback()
+      if (!onboarding.hintSeen) markHintSeen('hintSeen')
+    },
+    [onboarding.hintSeen, markHintSeen, resetQrFallback],
+  )
 
   // Marker management (extracted hook)
   useMapMarkers(mapRef, categoryFilter, handleNodeTap, mapReady)
@@ -99,7 +102,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   // Fetch rewards for the selected node
   const { data: nodeRewards } = useQuery({
     queryKey: ['node-rewards', selectedNode?.id],
-    queryFn: () => api.get<Reward[]>(`/v1/nodes/${selectedNode!.id}/rewards`),
+    queryFn: () => api.get<{ items: Reward[] }>(`/v1/nodes/${selectedNode!.id}/rewards`).then((r) => r.items),
     enabled: !!selectedNode,
     staleTime: 30_000,
   })
@@ -121,6 +124,8 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     const result = await checkIn(payload)
 
     if (result) {
+      // Haptic feedback on successful check-in (Issue #31)
+      if (navigator.vibrate) navigator.vibrate(50)
       setSheetOpen(false)
       void queryClient.invalidateQueries({ queryKey: ['nodes'] })
       if (!onboarding.firstCheckIn) {
@@ -165,9 +170,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
         <div className="absolute top-16 left-4 right-4 z-20">
           <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl px-4 py-3 flex items-center justify-between">
             <div className="flex-1 mr-3">
-              <p className="text-[var(--text-primary)] text-xs font-medium">
-                {t('location.permissionTitle')}
-              </p>
+              <p className="text-[var(--text-primary)] text-xs font-medium">{t('location.permissionTitle')}</p>
             </div>
             <button
               onClick={handleEnableLocation}
@@ -175,11 +178,20 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
             >
               {t('location.enable')}
             </button>
-            <button
-              onClick={() => setLocationBannerDismissed(true)}
-              className="text-[var(--text-muted)]"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            <button onClick={() => setLocationBannerDismissed(true)} className="text-[var(--text-muted)]">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
             </button>
           </div>
         </div>
@@ -188,15 +200,25 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       {!onboarding.hintSeen && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
           <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-2xl px-4 py-3 flex items-center gap-2">
-            <span className="text-[var(--text-secondary)] text-sm">
-              {t('map.tapHint')}
-            </span>
+            <span className="text-[var(--text-secondary)] text-sm">{t('map.tapHint')}</span>
             <button
               onClick={() => markHintSeen('hintSeen')}
               className="text-[var(--text-muted)] text-xs"
               aria-label={t('map.tapHint')}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
             </button>
           </div>
         </div>
@@ -212,15 +234,14 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
         isOpen={sheetOpen}
         onClose={() => setSheetOpen(false)}
         onCheckIn={handleCheckIn}
-        onSignup={() => { setSheetOpen(false); setSignupOpen(true) }}
+        onSignup={() => {
+          setSheetOpen(false)
+          setSignupOpen(true)
+        }}
         qrFallback={qrFallback}
       />
 
-      <SignupSheet
-        isOpen={signupOpen}
-        onClose={() => setSignupOpen(false)}
-        onNavigate={onNavigate}
-      />
+      <SignupSheet isOpen={signupOpen} onClose={() => setSignupOpen(false)} onNavigate={onNavigate} />
 
       <SearchSheet
         isOpen={searchOpen}
@@ -228,13 +249,23 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
         onSelectNode={(result: SearchResult) => {
           setSearchOpen(false)
           const node: Node = {
-            id: result.id, name: result.name, slug: result.slug,
+            id: result.id,
+            name: result.name,
+            slug: result.slug,
             category: result.category as Node['category'],
-            lat: result.lat, lng: result.lng,
-            cityId: '', businessId: null, submittedBy: null,
-            claimStatus: 'unclaimed', claimCipcStatus: null,
-            nodeColour: 'default', nodeIcon: null,
-            qrCheckinEnabled: false, isVerified: false, isActive: true, createdAt: '',
+            lat: result.lat,
+            lng: result.lng,
+            cityId: '',
+            businessId: null,
+            submittedBy: null,
+            claimStatus: 'unclaimed',
+            claimCipcStatus: null,
+            nodeColour: 'default',
+            nodeIcon: null,
+            qrCheckinEnabled: false,
+            isVerified: false,
+            isActive: true,
+            createdAt: '',
           }
           setSelectedNode(node)
           setSheetOpen(true)
