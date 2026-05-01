@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet } from 'react-native'
+import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet, Linking, Platform } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import type { Node } from '@area-code/shared/types'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
@@ -18,6 +18,22 @@ function getNodeState(score: number): string {
   if (score >= 30) return 'active'
   if (score >= 10) return 'quiet'
   return 'dormant'
+}
+
+/**
+ * Opens the device's native navigation app picker with directions.
+ * On iOS, opens Apple Maps which offers to switch to installed apps.
+ * On Android, uses geo: URI which triggers the system app picker
+ * (Google Maps, Waze, etc.).
+ */
+function openDirections(lat: number, lng: number, name: string): void {
+  const encodedName = encodeURIComponent(name)
+
+  if (Platform.OS === 'ios') {
+    void Linking.openURL(`maps://maps.apple.com/?daddr=${lat},${lng}&q=${encodedName}`)
+  } else {
+    void Linking.openURL(`geo:${lat},${lng}?q=${lat},${lng}(${encodedName})`)
+  }
 }
 
 export function NodeDetailSheet({ node, pulseScore, isOpen, onClose, onCheckIn }: NodeDetailSheetProps) {
@@ -49,6 +65,14 @@ export function NodeDetailSheet({ node, pulseScore, isOpen, onClose, onCheckIn }
             ) : (
               <Text style={styles.gatedText}>{t('auth.signupSheet.title')}</Text>
             )}
+
+            {/* Get Directions — always available */}
+            <TouchableOpacity
+              style={styles.directionsButton}
+              onPress={() => openDirections(node.lat, node.lng, node.name)}
+            >
+              <Text style={styles.directionsText}>{t('node.directions', 'Get directions')}</Text>
+            </TouchableOpacity>
           </ScrollView>
         </View>
       </View>
@@ -99,5 +123,15 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   checkInText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  directionsButton: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bgRaised,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  directionsText: { color: colors.textPrimary, fontWeight: '500', fontSize: 14 },
   gatedText: { color: colors.textSecondary, fontSize: 14, textAlign: 'center', paddingVertical: 16 },
 })

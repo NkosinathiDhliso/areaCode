@@ -1,4 +1,4 @@
-import { useState, memo } from 'react'
+import { useState, memo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BottomSheet } from '@area-code/shared/components/BottomSheet'
 import { api } from '@area-code/shared/lib/api'
@@ -7,6 +7,37 @@ import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import type { GeoStatus } from '@area-code/shared/stores/locationStore'
 import { CrowdVibeSection } from './CrowdVibeSection'
+
+// ─── Directions Helper ──────────────────────────────────────────────────────
+
+/**
+ * Opens the device's default navigation app with directions to the given
+ * coordinates. Uses a geo: URI on Android (opens app picker) and Apple Maps
+ * URL on iOS. Falls back to Google Maps web on desktop.
+ *
+ * This approach lets the OS handle app selection — no need to maintain
+ * integrations with Waze, Google Maps, Apple Maps, etc.
+ */
+function openDirections(lat: number, lng: number, name: string): void {
+  const encodedName = encodeURIComponent(name)
+  const ua = navigator.userAgent.toLowerCase()
+  const isIOS = /iphone|ipad|ipod/.test(ua)
+  const isAndroid = /android/.test(ua)
+
+  if (isIOS) {
+    // Apple Maps — iOS will offer to open in Google Maps/Waze if installed
+    window.open(`maps://maps.apple.com/?daddr=${lat},${lng}&q=${encodedName}`, '_blank')
+  } else if (isAndroid) {
+    // geo: URI triggers Android's app picker (Google Maps, Waze, etc.)
+    window.open(`geo:${lat},${lng}?q=${lat},${lng}(${encodedName})`, '_blank')
+  } else {
+    // Desktop fallback — Google Maps directions
+    window.open(
+      `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&destination_place_id=${encodedName}`,
+      '_blank',
+    )
+  }
+}
 
 interface NodeDetailSheetProps {
   node: Node | null
@@ -59,6 +90,13 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
     setMenuOpen(false)
   }
 
+  function handleDirections() {
+    if (node) {
+      openDirections(node.lat, node.lng, node.name)
+    }
+    setMenuOpen(false)
+  }
+
   const ctaInfo = getCtaInfo(geoStatus, qrFallback, t)
 
   return (
@@ -86,6 +124,12 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
                 className="w-full text-left px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)]"
               >
                 {t('node.share')}
+              </button>
+              <button
+                onClick={handleDirections}
+                className="w-full text-left px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)]"
+              >
+                {t('node.directions', 'Get directions')}
               </button>
               {isAuthenticated && (
                 <button
@@ -153,6 +197,17 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
           <CrowdVibeSection nodeId={node.id} />
         </>
       )}
+
+      {/* Get Directions — always visible */}
+      <button
+        onClick={handleDirections}
+        className="w-full flex items-center justify-center gap-2 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] font-medium rounded-xl py-3 text-sm mb-3 transition-all duration-150 active:scale-95"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="3 11 22 2 13 21 11 13 3 11" />
+        </svg>
+        {t('node.directions', 'Get directions')}
+      </button>
 
       {/* CTA */}
       <button

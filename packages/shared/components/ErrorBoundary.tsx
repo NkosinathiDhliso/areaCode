@@ -8,20 +8,41 @@ interface ErrorBoundaryProps {
 interface ErrorBoundaryState {
   hasError: boolean
   error: Error | null
+  retryCount: number
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props)
-    this.state = { hasError: false, error: null }
+    this.state = { hasError: false, error: null, retryCount: 0 }
   }
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return { hasError: true, error }
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error('[ErrorBoundary] Unhandled error:', error, errorInfo)
+    // Log to console in dev, silently report in prod
+    if (import.meta.env?.DEV) {
+      console.error('[ErrorBoundary] Unhandled error:', error, errorInfo)
+    }
+    // Try to report to Sentry if available
+    try {
+      const w = window as unknown as Record<string, unknown>
+      if (typeof w['__SENTRY__'] !== 'undefined') {
+        (w as Record<string, { captureException?: (e: Error) => void }>)['Sentry']?.captureException?.(error)
+      }
+    } catch {
+      // Sentry not available, that's fine
+    }
+  }
+
+  handleRetry = (): void => {
+    this.setState((prev) => ({
+      hasError: false,
+      error: null,
+      retryCount: prev.retryCount + 1,
+    }))
   }
 
   handleReload = (): void => {
@@ -30,6 +51,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   render(): ReactNode {
     if (this.state.hasError) {
+      // After 2 retries, suggest a full reload instead
+      const showReloadOnly = this.state.retryCount >= 2
+
       return (
         <div
           style={{
@@ -38,20 +62,23 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             alignItems: 'center',
             justifyContent: 'center',
             height: '100dvh',
-            padding: '20px',
+            padding: '24px',
             backgroundColor: 'var(--bg-base, #0a0a0a)',
             color: 'var(--text-primary, #e5e5e5)',
             fontFamily: 'system-ui, -apple-system, sans-serif',
           }}
         >
+          {/* Friendly icon */}
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>📍</div>
           <h1
             style={{
-              fontSize: '24px',
+              fontSize: '20px',
               fontWeight: '700',
-              marginBottom: '12px',
+              marginBottom: '8px',
+              textAlign: 'center',
             }}
           >
-            Something went wrong
+            {showReloadOnly ? 'Still having trouble' : 'Something went wrong'}
           </h1>
           <p
             style={{
@@ -59,40 +86,50 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               color: 'var(--text-secondary, #a3a3a3)',
               marginBottom: '24px',
               textAlign: 'center',
-              maxWidth: '320px',
+              maxWidth: '300px',
+              lineHeight: '1.5',
             }}
           >
-            An unexpected error occurred. Please reload the page to try again.
+            {showReloadOnly
+              ? "Let's start fresh. This won't affect your account or data."
+              : "No worries — this happens sometimes. Let's get you back on the map."}
           </p>
-          {this.state.error && (
-            <p
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '280px' }}>
+            {!showReloadOnly && (
+              <button
+                onClick={this.handleRetry}
+                style={{
+                  backgroundColor: 'var(--accent, #778CA9)',
+                  color: '#fff',
+                  fontWeight: '600',
+                  borderRadius: '12px',
+                  padding: '14px 32px',
+                  fontSize: '15px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  width: '100%',
+                }}
+              >
+                Try again
+              </button>
+            )}
+            <button
+              onClick={this.handleReload}
               style={{
-                fontSize: '12px',
-                color: 'var(--text-muted, #737373)',
-                marginBottom: '24px',
-                textAlign: 'center',
-                maxWidth: '400px',
-                wordBreak: 'break-word',
+                backgroundColor: showReloadOnly ? 'var(--accent, #778CA9)' : 'transparent',
+                color: showReloadOnly ? '#fff' : 'var(--text-secondary, #a3a3a3)',
+                fontWeight: '600',
+                borderRadius: '12px',
+                padding: '14px 32px',
+                fontSize: '15px',
+                border: showReloadOnly ? 'none' : '1px solid var(--border, #333)',
+                cursor: 'pointer',
+                width: '100%',
               }}
             >
-              {this.state.error.message}
-            </p>
-          )}
-          <button
-            onClick={this.handleReload}
-            style={{
-              backgroundColor: 'var(--accent, #778CA9)',
-              color: '#fff',
-              fontWeight: '600',
-              borderRadius: '12px',
-              padding: '12px 32px',
-              fontSize: '14px',
-              border: 'none',
-              cursor: 'pointer',
-            }}
-          >
-            Reload
-          </button>
+              {showReloadOnly ? 'Reload app' : 'Reload page'}
+            </button>
+          </div>
         </div>
       )
     }

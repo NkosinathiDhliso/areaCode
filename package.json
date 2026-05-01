@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "vitest run backend/src/__tests__/e2e.test.ts",
     "test:data-integrity": "vitest run backend/src/__tests__/data-integrity.test.ts",
     "prepare": "husky"
   },

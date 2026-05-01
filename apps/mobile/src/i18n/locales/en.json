@@ -28,6 +28,7 @@
   "node.oneMore": "One more visit unlocks your {{title}}.",
   "node.share": "Share node",
   "node.report": "Report this venue",
+  "node.directions": "Get directions",
   "node.whoIsHere": "Who's here",
   "node.isHere": "{{name}} is here",
   "node.andOthers": "{{name}} and {{count}} others you follow are here",
