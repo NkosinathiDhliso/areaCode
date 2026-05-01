@@ -6,44 +6,44 @@ This plan implements automated weekly and monthly intelligence reports for busin
 
 ## Tasks
 
-- [ ] 1. Define report types, Zod schemas, and anonymization utilities
-  - [ ] 1.1 Create report types and Zod schemas
+- [x] 1. Define report types, Zod schemas, and anonymization utilities
+  - [x] 1.1 Create report types and Zod schemas
     - Create `backend/src/features/reports/types.ts`
     - Define TypeScript interfaces: `Report`, `TeaserReport`, `ReportSummary`, `AnonymizedCheckIn`, `PeakHoursResult`, `CrowdCompositionResult`, `MusicProfileResult`, `RepeatVisitorResult`, `TrendResult`, `TrendDelta`, `BenchmarkResult`, `BenchmarkComparison`, `JourneyResult`, `RecommendationResult`, `GenerateReportMessage`, `DispatchEvent`, `ReportMetrics`
     - Define Zod schemas for `Report` (v1) and `TeaserReport` with `schemaVersion` field
     - Define Zod schemas for API query params (`cursor`, `period` filter)
     - _Requirements: 14.1, 14.2, 14.3_
 
-  - [ ] 1.2 Create anonymization utility
+  - [x] 1.2 Create anonymization utility
     - Create `backend/src/features/reports/anonymize.ts`
     - Implement `anonymizeCheckIns(rawCheckIns, periodStart, salt)` that strips PII (userId, displayName, phone, email, avatarUrl) and produces `AnonymizedCheckIn[]` with SHA-256 hashed `visitorToken`
     - Convert timestamps to SAST (UTC+2) for `hourOfDay` and `dayOfWeek` fields
     - _Requirements: 13.1, 3.3, 5.3_
 
-  - [ ] 1.3 Create PII scanner
+  - [x] 1.3 Create PII scanner
     - Create `backend/src/features/reports/pii-scanner.ts`
     - Implement `scanForPii(reportJson: string): PiiScanResult` that scans serialized JSON for known PII patterns (UUID userId, cognitoSub, displayName, phone regex, email regex, avatarUrl)
     - Return `{ clean: boolean, violations: string[] }` with field paths of any PII found
     - _Requirements: 13.2, 13.3_
 
-  - [ ]* 1.4 Write property test for report serialization round-trip
+  - [x]* 1.4 Write property test for report serialization round-trip
     - **Property 13: Report Serialization Round-Trip**
     - Create `backend/src/features/reports/__tests__/report-serialization.property.test.ts`
     - Use fast-check to generate arbitrary valid `Report` objects conforming to v1 schema
     - Assert: `JSON.parse(JSON.stringify(report))` deeply equals original
     - **Validates: Requirements 14.1, 14.4**
 
-  - [ ]* 1.5 Write property test for PII scanner correctness
+  - [x]* 1.5 Write property test for PII scanner correctness
     - **Property 5: PII Scanner Correctness**
     - Create `backend/src/features/reports/__tests__/pii-scanner.property.test.ts`
     - Generate JSON documents with/without injected PII patterns (UUID, email, phone, displayName, avatarUrl)
     - Assert: documents with PII → `clean: false`; documents with only aggregated data → `clean: true`
     - **Validates: Requirements 3.3, 5.3, 13.1, 13.2**
 
-- [ ] 2. Checkpoint — Ensure all tests pass
+- [x] 2. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 3. Implement peak hours and crowd composition analyzers
+- [-] 3. Implement peak hours and crowd composition analyzers
   - [ ] 3.1 Implement peak hours analyzer
     - Create `backend/src/features/reports/analyzers/peak-hours.ts`
     - Implement `analyzePeakHours(checkIns: AnonymizedCheckIn[]): PeakHoursResult`

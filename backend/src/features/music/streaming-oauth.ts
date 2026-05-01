@@ -25,7 +25,7 @@
 
 const SPOTIFY_CLIENT_ID = process.env['SPOTIFY_CLIENT_ID'] ?? ''
 const SPOTIFY_CLIENT_SECRET = process.env['SPOTIFY_CLIENT_SECRET'] ?? ''
-const SPOTIFY_REDIRECT_URI = process.env['SPOTIFY_REDIRECT_URI'] ?? 'https://areacode.co.za/api/v1/streaming/spotify/callback'
+const SPOTIFY_REDIRECT_URI = process.env['SPOTIFY_REDIRECT_URI'] ?? 'https://iyj02gvt12.execute-api.us-east-1.amazonaws.com/v1/streaming/spotify/callback'
 const SPOTIFY_SCOPES = 'user-top-read'
 
 // Known Spotify genre strings → our 12 genre taxonomy
