@@ -9,7 +9,8 @@
 param(
     [string]$Region = "us-east-1",
     [string]$ApiUrl = "https://iyj02gvt12.execute-api.us-east-1.amazonaws.com",
-    [string]$WebSocketUrl = "wss://iyj02gvt12.execute-api.us-east-1.amazonaws.com/prod"
+    [string]$WebSocketUrl = "wss://iyj02gvt12.execute-api.us-east-1.amazonaws.com/prod",
+    [string]$MapboxToken = $env:VITE_MAPBOX_TOKEN
 )
 
 $ErrorActionPreference = "Stop"
@@ -34,6 +35,11 @@ Write-Host "  Updating All Area Code Amplify Apps" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Info "API Endpoint: $ApiUrl"
+if ($MapboxToken) {
+    Write-Info "Mapbox Token: $($MapboxToken.Substring(0, [Math]::Min(10, $MapboxToken.Length)))..."
+} else {
+    Write-Warn "Mapbox Token: NOT SET (pass -MapboxToken or set VITE_MAPBOX_TOKEN env var)"
+}
 Write-Info "Region: $Region"
 Write-Host ""
 
@@ -50,10 +56,16 @@ foreach ($app in $AmplifyApps) {
     # Update environment variables
     Write-Host "  Setting environment variables..." -ForegroundColor Gray
     
+    # Build environment variables — web app needs Mapbox token too
+    $envVars = "VITE_API_URL=$ApiUrl,VITE_SOCKET_URL=$ApiUrl,VITE_WEBSOCKET_URL=$WebSocketUrl"
+    if ($app.Name -eq "Web (Main)" -and $MapboxToken) {
+        $envVars += ",VITE_MAPBOX_TOKEN=$MapboxToken"
+    }
+
     aws amplify update-branch `
         --app-id $app.AppId `
         --branch-name $app.Branch `
-        --environment-variables "VITE_API_URL=$ApiUrl,VITE_SOCKET_URL=$ApiUrl,VITE_WEBSOCKET_URL=$WebSocketUrl" `
+        --environment-variables $envVars `
         --region $Region 2>&1 | Out-Null
     
     if ($LASTEXITCODE -eq 0) {
