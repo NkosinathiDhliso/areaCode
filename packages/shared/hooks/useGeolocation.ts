@@ -7,10 +7,13 @@ const GPS_TIMEOUT = 8000
 const ACCURACY_THRESHOLD = 200
 
 export function useGeolocation() {
-  const {
-    setPosition, setPermissionState, setGeoStatus,
-    lastKnownPosition, accuracy, permissionState, geoStatus,
-  } = useLocationStore()
+  const setPosition = useLocationStore((s) => s.setPosition)
+  const setPermissionState = useLocationStore((s) => s.setPermissionState)
+  const setGeoStatus = useLocationStore((s) => s.setGeoStatus)
+  const lastKnownPosition = useLocationStore((s) => s.lastKnownPosition)
+  const accuracy = useLocationStore((s) => s.accuracy)
+  const permissionState = useLocationStore((s) => s.permissionState)
+  const geoStatus = useLocationStore((s) => s.geoStatus)
 
   const requestLocation = useCallback((): Promise<{ lat: number; lng: number; accuracy: number } | null> => {
     if (!hasGeolocation()) {

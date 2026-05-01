@@ -4,7 +4,8 @@ import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore
 
 export function ConnectivityBanner() {
   const { t } = useTranslation()
-  const { state, lastUpdated } = useConnectivityStore()
+  const state = useConnectivityStore((s) => s.state)
+  const lastUpdated = useConnectivityStore((s) => s.lastUpdated)
   const [, setTick] = useState(0)
 
   // Re-render every 30s to keep relative time fresh (Issue #16)

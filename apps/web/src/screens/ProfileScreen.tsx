@@ -23,8 +23,14 @@ interface ProfileScreenProps {
 
 export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   const { t } = useTranslation()
-  const { isAuthenticated, logout, sessionId } = useConsumerAuthStore()
-  const { user, tier, totalCheckIns, streakCount, setUser } = useUserStore()
+  const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
+  const logout = useConsumerAuthStore((s) => s.logout)
+  const sessionId = useConsumerAuthStore((s) => s.sessionId)
+  const user = useUserStore((s) => s.user)
+  const tier = useUserStore((s) => s.tier)
+  const totalCheckIns = useUserStore((s) => s.totalCheckIns)
+  const streakCount = useUserStore((s) => s.streakCount)
+  const setUser = useUserStore((s) => s.setUser)
   const { preference, setPreference } = useTheme()
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 

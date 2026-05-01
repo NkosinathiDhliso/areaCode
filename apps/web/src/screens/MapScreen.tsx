@@ -35,12 +35,14 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
-  const { containerRef, mapRef, mapReady } = useMapInit()
-  const { setNodes, pulseScores } = useMapStore()
+  const { containerRef, mapRef, mapReady, mapError, retryMap } = useMapInit()
+  const setNodes = useMapStore((s) => s.setNodes)
+  const pulseScores = useMapStore((s) => s.pulseScores)
   const accessToken = useConsumerAuthStore((s) => s.accessToken)
   const permissionState = useLocationStore((s) => s.permissionState)
   const lastKnownPosition = useLocationStore((s) => s.lastKnownPosition)
-  const { onboarding, markHintSeen } = useUserStore()
+  const onboarding = useUserStore((s) => s.onboarding)
+  const markHintSeen = useUserStore((s) => s.markHintSeen)
   const { requestLocation, geoStatus } = useGeolocation()
   const { checkIn, qrFallback, resetQrFallback } = useCheckIn()
 
@@ -160,6 +162,21 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   return (
     <div className="h-full w-full relative">
       <div ref={containerRef} className="absolute inset-0 w-full h-full" />
+
+      {/* Map error fallback */}
+      {mapError && (
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[var(--bg-base)] px-6">
+          <div className="text-4xl mb-4">🗺️</div>
+          <h2 className="text-[var(--text-primary)] font-bold text-lg mb-2 text-center">Map unavailable</h2>
+          <p className="text-[var(--text-secondary)] text-sm mb-6 text-center max-w-[280px]">{mapError}</p>
+          <button
+            onClick={retryMap}
+            className="bg-[var(--accent)] text-white font-semibold rounded-xl px-6 py-3 text-sm"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       <div className="absolute top-4 left-0 right-0 z-10">
         <CategoryFilterBar onFilter={setCategoryFilter} />

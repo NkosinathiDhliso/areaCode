@@ -66,7 +66,9 @@ function AppContent() {
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
   const accessToken = useConsumerAuthStore((s) => s.accessToken)
   const resetNavigation = useNavigationStore((s) => s.resetNavigation)
-  const { setOnline, setApiOnly, setOffline } = useConnectivityStore()
+  const setOnline = useConnectivityStore((s) => s.setOnline)
+  const setApiOnly = useConnectivityStore((s) => s.setApiOnly)
+  const setOffline = useConnectivityStore((s) => s.setOffline)
 
   // Activate SAST time-based theme (06:00–18:00 light, 18:00–06:00 dark)
   useTheme()
@@ -162,6 +164,9 @@ function AppContent() {
     void checkOnboarding()
   }, [isAuthenticated, onboardingChecked, setRoute])
 
+  // Must be called before any conditional returns to satisfy Rules of Hooks
+  const activeDefaultTab = useNavigationStore((s) => s.activeDefaultTab)
+
   // Auth screens render without bottom nav
   if (!isAuthenticated) {
     if (route === 'landing') return <AuthLanding onNavigate={setRoute} />
@@ -170,7 +175,6 @@ function AppContent() {
   }
 
   // Redirect authenticated users from landing/map to their time-based default tab
-  const activeDefaultTab = useNavigationStore((s) => s.activeDefaultTab)
   if (isAuthenticated && (route === 'landing' || route === 'map')) {
     const defaultRoute = activeDefaultTab as AppRoute
     if (route !== defaultRoute && (defaultRoute === 'gets' || defaultRoute === 'ranks')) {
