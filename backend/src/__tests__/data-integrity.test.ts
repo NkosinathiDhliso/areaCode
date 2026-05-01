@@ -230,12 +230,14 @@ describe('Schema validation: valid data is always accepted', () => {
   })
 
   it('valid consumer signup bodies always pass', () => {
+    const usernameArb = fc.stringMatching(/^[a-z0-9_]{3,30}$/)
+    const citySlugArb = fc.stringMatching(/^[a-z0-9-]{1,20}$/)
     fc.assert(
       fc.property(
         e164PhoneArb,
-        fc.string({ minLength: 3, maxLength: 30 }),
+        usernameArb,
         fc.string({ minLength: 1, maxLength: 50 }),
-        fc.string({ minLength: 1, maxLength: 20 }),
+        citySlugArb,
         (phone, username, displayName, citySlug) => {
           const result = consumerSignupBodySchema.safeParse({
             phone, username, displayName, citySlug,

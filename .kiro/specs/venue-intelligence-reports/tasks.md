@@ -43,8 +43,8 @@ This plan implements automated weekly and monthly intelligence reports for busin
 - [x] 2. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [-] 3. Implement peak hours and crowd composition analyzers
-  - [ ] 3.1 Implement peak hours analyzer
+- [x] 3. Implement peak hours and crowd composition analyzers
+  - [x] 3.1 Implement peak hours analyzer
     - Create `backend/src/features/reports/analyzers/peak-hours.ts`
     - Implement `analyzePeakHours(checkIns: AnonymizedCheckIn[]): PeakHoursResult`
     - Compute hourly distribution (0–23 SAST), daily distribution (Monday–Sunday)
@@ -53,19 +53,19 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Support per-node and aggregate computation when multiple nodes exist
     - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
-  - [ ]* 3.2 Write property test for peak hours distribution invariant
+  - [x]* 3.2 Write property test for peak hours distribution invariant
     - **Property 2: Peak Hours Distribution and Aggregation Invariant**
     - Create `backend/src/features/reports/__tests__/analyzers/peak-hours.property.test.ts`
     - Assert: sum of hourly distribution = total check-ins, sum of daily distribution = total check-ins, peak day = day with max count, aggregate hourly = sum of per-node hourly
     - **Validates: Requirements 2.1, 2.3, 2.4**
 
-  - [ ]* 3.3 Write property test for peak hours top windows correctness
+  - [x]* 3.3 Write property test for peak hours top windows correctness
     - **Property 3: Peak Hours Top Windows Correctness**
     - In same test file as 3.2
     - Assert: each top-3 window has combined count ≥ any other contiguous window of same length not in top 3
     - **Validates: Requirements 2.2**
 
-  - [ ] 3.4 Implement crowd composition analyzer
+  - [x] 3.4 Implement crowd composition analyzer
     - Create `backend/src/features/reports/analyzers/crowd-composition.ts`
     - Implement `analyzeCrowdComposition(checkIns: AnonymizedCheckIn[]): CrowdCompositionResult`
     - Compute tier percentages (local, regular, fixture, institution, legend)
@@ -73,14 +73,14 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Use only anonymized data (visitorToken, not userId)
     - _Requirements: 3.1, 3.2, 3.3_
 
-  - [ ]* 3.5 Write property test for crowd composition invariant
+  - [x]* 3.5 Write property test for crowd composition invariant
     - **Property 4: Crowd Composition Invariant**
     - Create `backend/src/features/reports/__tests__/analyzers/crowd-composition.property.test.ts`
     - Assert: tier percentages sum to 100 (±1% rounding), each percentage = (tier count / total) × 100, sum of unique per-tier = total unique
     - **Validates: Requirements 3.1, 3.2**
 
-- [ ] 4. Implement music profile, repeat visitors, and trends analyzers
-  - [ ] 4.1 Implement music profile analyzer
+- [x] 4. Implement music profile, repeat visitors, and trends analyzers
+  - [x] 4.1 Implement music profile analyzer
     - Create `backend/src/features/reports/analyzers/music-profile.ts`
     - Implement `analyzeMusicProfile(visitorIds, musicPrefsMap): MusicProfileResult`
     - Aggregate genre weights across 5 archetype dimensions (energy, cultural_rootedness, sophistication, edge, spirituality)
@@ -88,26 +88,26 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Return `hasInsufficientData: true` when fewer than 5 visitors have music preferences
     - _Requirements: 4.1, 4.2, 4.3_
 
-  - [ ]* 4.2 Write property test for music profile aggregation
+  - [x]* 4.2 Write property test for music profile aggregation
     - **Property 6: Music Profile Aggregation Correctness**
     - Create `backend/src/features/reports/__tests__/analyzers/music-profile.property.test.ts`
     - Assert: each dimension = average across visitors, top genres sorted descending by count with length ≤ 5, insufficient data when < 5 visitors
     - **Validates: Requirements 4.1, 4.2, 4.3**
 
-  - [ ] 4.3 Implement repeat visitors analyzer
+  - [x] 4.3 Implement repeat visitors analyzer
     - Create `backend/src/features/reports/analyzers/repeat-visitors.ts`
     - Implement `analyzeRepeatVisitors(currentPeriodVisitors, previousPeriodVisitors): RepeatVisitorResult`
     - Compute repeat rate as |intersection| / |current| × 100
     - Compute first-time visitor count as |current| − |intersection|
     - _Requirements: 5.1, 5.2, 5.3_
 
-  - [ ]* 4.4 Write property test for repeat visitor rate
+  - [x]* 4.4 Write property test for repeat visitor rate
     - **Property 7: Repeat Visitor Rate Computation**
     - Create `backend/src/features/reports/__tests__/analyzers/repeat-visitors.property.test.ts`
     - Assert: repeatRate = |intersection(current, previous)| / |current| × 100, firstTimeCount = |current| − |intersection|
     - **Validates: Requirements 5.1, 5.2**
 
-  - [ ] 4.5 Implement trends analyzer
+  - [x] 4.5 Implement trends analyzer
     - Create `backend/src/features/reports/analyzers/trends.ts`
     - Implement `analyzeTrends(currentMetrics, previousMetrics): TrendResult`
     - Compute percentage change for total check-ins, unique visitors, repeat visitor rate, pulse score
@@ -115,17 +115,17 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Return `hasPriorData: false` when previousMetrics is null
     - _Requirements: 6.1, 6.2, 6.3_
 
-  - [ ]* 4.6 Write property test for trend computation
+  - [x]* 4.6 Write property test for trend computation
     - **Property 8: Trend Computation Correctness**
     - Create `backend/src/features/reports/__tests__/analyzers/trends.property.test.ts`
     - Assert: percentChange = (current − previous) / previous × 100, direction labels correct per ±1% threshold, hasPriorData false when previous is null
     - **Validates: Requirements 6.1, 6.2, 6.3**
 
-- [ ] 5. Checkpoint — Ensure all tests pass
+- [x] 5. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 6. Implement benchmarks, journey, and recommendations analyzers
-  - [ ] 6.1 Implement benchmarks analyzer
+- [x] 6. Implement benchmarks, journey, and recommendations analyzers
+  - [x] 6.1 Implement benchmarks analyzer
     - Create `backend/src/features/reports/analyzers/benchmarks.ts`
     - Implement `analyzeBenchmarks(venueMetrics, categoryVenueMetrics): BenchmarkResult`
     - Compute city+category averages for check-ins, unique visitors, repeat rate, pulse score
@@ -133,13 +133,13 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Return `hasInsufficientData: true` when fewer than 3 venues in same city+category
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-  - [ ]* 6.2 Write property test for benchmark computation
+  - [x]* 6.2 Write property test for benchmark computation
     - **Property 9: Benchmark Computation Correctness**
     - Create `backend/src/features/reports/__tests__/analyzers/benchmarks.property.test.ts`
     - Assert: average = sum / count, percentAboveBelow = (venue − avg) / avg × 100, insufficient data when < 3 venues
     - **Validates: Requirements 7.1, 7.2, 7.4**
 
-  - [ ] 6.3 Implement journey analyzer
+  - [x] 6.3 Implement journey analyzer
     - Create `backend/src/features/reports/analyzers/journey.ts`
     - Implement `analyzeJourney(venueVisitorTokens, allVenueVisitorMap): JourneyResult`
     - Compute top 5 overlapping venues by shared unique visitor count
@@ -149,13 +149,13 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Reference other venues by name only — no individual visitor paths
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
 
-  - [ ]* 6.4 Write property test for journey analysis
+  - [x]* 6.4 Write property test for journey analysis
     - **Property 11: Journey Analysis Correctness**
     - Create `backend/src/features/reports/__tests__/analyzers/journey.property.test.ts`
     - Assert: top venues sorted descending by overlap count, length ≤ 5, overlap % = overlapCount / venueUnique × 100, partnerships ≤ 2, insufficient data when < 10 visitors
     - **Validates: Requirements 9.1, 9.2, 9.4, 9.5**
 
-  - [ ] 6.5 Implement recommendations engine
+  - [x] 6.5 Implement recommendations engine
     - Create `backend/src/features/reports/analyzers/recommendations.ts`
     - Implement `generateRecommendations(report: ReportSections): RecommendationResult`
     - Generate 1–5 recommendations based on computed metrics
@@ -165,17 +165,17 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Each recommendation is a single sentence with specific numbers
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
-  - [ ]* 6.6 Write property test for recommendation bounds and conditions
+  - [x]* 6.6 Write property test for recommendation bounds and conditions
     - **Property 10: Recommendation Generation Bounds and Conditions**
     - Create `backend/src/features/reports/__tests__/analyzers/recommendations.property.test.ts`
     - Assert: 1–5 recommendations, each is single sentence with ≥1 number, peak-hours rec present when top window > 2× avg, retention alert when drop > 10pp
     - **Validates: Requirements 8.1, 8.2, 8.4, 8.5**
 
-- [ ] 7. Checkpoint — Ensure all tests pass
+- [x] 7. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 8. Implement report generation pipeline (dispatcher + worker)
-  - [ ] 8.1 Implement report dispatcher Lambda
+- [x] 8. Implement report generation pipeline (dispatcher + worker)
+  - [x] 8.1 Implement report dispatcher Lambda
     - Create `backend/src/features/reports/dispatcher.ts`
     - Handle EventBridge trigger with `periodType` (weekly/monthly)
     - Compute `periodStart` and `periodEnd` based on SAST calendar boundaries (Monday 00:00 SAST for weekly, 1st of month for monthly)
@@ -190,7 +190,7 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Assert: messages produced for exactly the businesses with ≥1 check-in, no messages for zero-activity businesses
     - **Validates: Requirements 1.1, 1.2, 1.4**
 
-  - [ ] 8.3 Implement report generator worker Lambda
+  - [x] 8.3 Implement report generator worker Lambda
     - Create `backend/src/features/reports/generator.ts`
     - Handle SQS event containing `GenerateReportMessage`
     - Load check-ins for all business nodes in the period via NodeIndex GSI
@@ -205,7 +205,7 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Send WebSocket notification and queue email notification via SQS push-sender
     - _Requirements: 1.1, 1.2, 1.3, 1.5, 12.1, 12.2, 12.3, 13.1, 13.2, 13.3, 14.1, 14.2_
 
-  - [ ] 8.4 Create DynamoDB repository for reports
+  - [x] 8.4 Create DynamoDB repository for reports
     - Create `backend/src/features/reports/repository.ts`
     - Implement `storeReport(report)` — PutItem to app-data table with correct pk/sk/GSI1 keys and TTL
     - Implement `getReport(businessId, reportId)` — GetItem from app-data table
@@ -213,15 +213,15 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Implement `getPreviousReport(businessId, periodType, periodStart)` — GetItem with computed previous period sk
     - _Requirements: 1.5, 11.1, 11.2, 11.3_
 
-- [ ] 9. Implement report API routes with tier gating
-  - [ ] 9.1 Create report API handler
+- [x] 9. Implement report API routes with tier gating
+  - [x] 9.1 Create report API handler
     - Create `backend/src/features/reports/handler.ts`
     - Implement `GET /v1/business/me/reports` — paginated list of report summaries, sorted by date descending, requires business Cognito auth
     - Implement `GET /v1/business/me/reports/:reportId` — full report content, verify report belongs to authenticated business
     - Register routes in `backend/src/app.ts` (import and `app.register(reportRoutes)`)
     - _Requirements: 11.1, 11.2, 11.4_
 
-  - [ ] 9.2 Implement tier gating logic
+  - [x] 9.2 Implement tier gating logic
     - Create `backend/src/features/reports/tier-gating.ts`
     - Implement `filterByTier(report: Report, tier: string): Report | TeaserReport`
     - For growth/pro tiers: return full report with all sections
@@ -229,22 +229,22 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - When business upgrades, previously generated full reports become immediately accessible (no re-generation needed — full reports are always stored)
     - _Requirements: 10.1, 10.2, 10.3, 10.4_
 
-  - [ ]* 9.3 Write property test for tier gating correctness
+  - [x]* 9.3 Write property test for tier gating correctness
     - **Property 12: Tier Gating Correctness**
     - Create `backend/src/features/reports/__tests__/tier-gating.property.test.ts`
     - Assert: growth/pro → all sections present, starter/payg → only summary + upgradeMessage
     - **Validates: Requirements 10.1, 10.2, 10.3**
 
-  - [ ]* 9.4 Write integration tests for report API routes
+  - [x]* 9.4 Write integration tests for report API routes
     - Create `backend/src/features/reports/__tests__/handler.integration.test.ts`
     - Test auth requirement, pagination, tier gating response shape, 404 for missing reports, 403 for wrong business
     - _Requirements: 11.1, 11.2, 11.4, 10.1, 10.2_
 
-- [ ] 10. Checkpoint — Ensure all tests pass
+- [x] 10. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 11. Add Terraform infrastructure for report generation
-  - [ ] 11.1 Add report-dispatcher Lambda to Terraform
+- [x] 11. Add Terraform infrastructure for report generation
+  - [x] 11.1 Add report-dispatcher Lambda to Terraform
     - Add `module "lambda_report_dispatcher"` in `infra/environments/dev/main.tf`
     - Use existing `../../modules/lambda` module with arm64, timeout=30, memory=256
     - Add VPC config, environment variables for table names and SQS queue URL
@@ -252,7 +252,7 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Add SQS send access IAM policy for report-generation queue
     - _Requirements: 1.1, 1.2_
 
-  - [ ] 11.2 Add report-generator Lambda to Terraform
+  - [x] 11.2 Add report-generator Lambda to Terraform
     - Add `module "lambda_report_generator"` in `infra/environments/dev/main.tf`
     - Use existing `../../modules/lambda` module with arm64, timeout=120, memory=512
     - Add VPC config, environment variables for all table names, SQS queue URLs, anonymization salt
@@ -261,20 +261,20 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Add WebSocket API management access for notifications
     - _Requirements: 1.1, 1.2, 1.3, 1.5_
 
-  - [ ] 11.3 Add SQS report-generation queue to Terraform
+  - [x] 11.3 Add SQS report-generation queue to Terraform
     - Add `module "sqs_report_generation"` using existing `../../modules/sqs` module
     - Set visibility_timeout=150 (> Lambda 120s timeout), max_receive_count=2
     - Wire Lambda event source mapping to report-generator Lambda
     - _Requirements: 1.3_
 
-  - [ ] 11.4 Add EventBridge schedules for report generation
+  - [x] 11.4 Add EventBridge schedules for report generation
     - Add two entries to the `eventbridge_schedules` module:
       - `report-weekly`: `cron(0 4 ? * MON *)` — Monday 04:00 UTC (06:00 SAST)
       - `report-monthly`: `cron(0 4 1 * ? *)` — 1st of month 04:00 UTC (06:00 SAST)
     - Both trigger the report-dispatcher Lambda
     - _Requirements: 1.1, 1.2_
 
-  - [ ] 11.5 Add IAM policies for report Lambdas
+  - [x] 11.5 Add IAM policies for report Lambdas
     - Add DynamoDB access policy for report-dispatcher (read businesses, nodes, checkins)
     - Add DynamoDB access policy for report-generator (read/write all tables including app-data)
     - Add SQS send policy for report-dispatcher → report-generation queue
@@ -282,15 +282,15 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Add SQS send policy for report-generator → push-sender queue
     - _Requirements: 1.1, 1.5, 12.1, 12.2_
 
-- [ ] 12. Implement dashboard ReportsPanel UI
-  - [ ] 12.1 Add "reports" panel to business dashboard navigation
+- [x] 12. Implement dashboard ReportsPanel UI
+  - [x] 12.1 Add "reports" panel to business dashboard navigation
     - Add `'reports'` to the `DashboardPanel` type in `packages/shared/stores/businessStore.ts`
     - Add `reports` entry to `PANELS` array and `PANEL_LABELS` in `BusinessDashboard.tsx`
     - Add lazy import for `ReportsPanel` and case in `renderPanel()` switch
     - Add i18n translation key `biz.panel.reports` to business locale files
     - _Requirements: 15.1_
 
-  - [ ] 12.2 Create ReportsPanel component
+  - [x] 12.2 Create ReportsPanel component
     - Create `apps/business/src/screens/panels/ReportsPanel.tsx`
     - Fetch reports list via `GET /v1/business/me/reports` using `@tanstack/react-query`
     - Implement report selector: weekly/monthly toggle and date navigation
@@ -301,7 +301,7 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - For starter/payg tiers: render teaser with blurred placeholders for locked sections and upgrade prompt
     - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5, 15.6_
 
-  - [ ] 12.3 Add chart components for report visualization
+  - [x] 12.3 Add chart components for report visualization
     - Install `recharts` in `apps/business/package.json` (if not already present)
     - Create peak hours bar chart component using recharts `BarChart`
     - Create crowd composition donut chart using recharts `PieChart`
@@ -309,7 +309,7 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Integrate charts into ReportsPanel, conditionally rendered based on data availability
     - _Requirements: 15.2_
 
-- [ ] 13. Final checkpoint — Ensure all tests pass
+- [x] 13. Final checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

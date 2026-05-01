@@ -106,7 +106,7 @@ describe('Feature: venue-intelligence-reports, Property 4: Crowd Composition Inv
           if (!tierVisitors[ci.tier]) {
             tierVisitors[ci.tier] = new Set()
           }
-          tierVisitors[ci.tier].add(ci.visitorToken)
+          tierVisitors[ci.tier]!.add(ci.visitorToken)
         }
 
         for (const [tier, visitors] of Object.entries(tierVisitors)) {

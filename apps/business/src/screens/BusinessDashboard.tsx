@@ -16,8 +16,9 @@ const SettingsPanel = lazy(() => import('./panels/SettingsPanel').then((m) => ({
 const CheckInDetailPanel = lazy(() => import('./panels/CheckInDetailPanel').then((m) => ({ default: m.CheckInDetailPanel })))
 const RewardMetricsPanel = lazy(() => import('./panels/RewardMetricsPanel').then((m) => ({ default: m.RewardMetricsPanel })))
 const StaffRedemptionPanel = lazy(() => import('./panels/StaffRedemptionPanel').then((m) => ({ default: m.StaffRedemptionPanel })))
+const ReportsPanel = lazy(() => import('./panels/ReportsPanel').then((m) => ({ default: m.ReportsPanel })))
 
-const PANELS: DashboardPanel[] = ['live', 'check-ins', 'rewards', 'reward-metrics', 'audience', 'node', 'boost', 'staff-redemptions', 'plans', 'settings']
+const PANELS: DashboardPanel[] = ['live', 'check-ins', 'rewards', 'reward-metrics', 'audience', 'node', 'boost', 'staff-redemptions', 'reports', 'plans', 'settings']
 
 const PANEL_LABELS: Record<DashboardPanel, string> = {
   live: 'biz.panel.live',
@@ -28,6 +29,7 @@ const PANEL_LABELS: Record<DashboardPanel, string> = {
   node: 'biz.panel.node',
   boost: 'biz.panel.boost',
   'staff-redemptions': 'biz.panel.staffRedemptions',
+  reports: 'biz.panel.reports',
   plans: 'biz.panel.plans',
   settings: 'biz.panel.settings',
 }
@@ -76,6 +78,7 @@ export function BusinessDashboard() {
       case 'node': return <NodeEditorPanel />
       case 'boost': return <BoostPanel />
       case 'staff-redemptions': return <StaffRedemptionPanel />
+      case 'reports': return <ReportsPanel />
       case 'plans': return <PlansPanel />
       case 'settings': return <SettingsPanel />
       default: return <LivePanel />

@@ -93,7 +93,7 @@ describe('Feature: venue-intelligence-reports, Property 2: Peak Hours Distributi
       fc.array(
         anonymizedCheckInArb.map((ci) => ({
           ...ci,
-          nodeId: fc.sample(fc.constantFrom(nodeA, nodeB), 1)[0],
+          nodeId: fc.sample(fc.constantFrom(nodeA, nodeB), 1)[0] ?? nodeA,
         })),
         { minLength: 2, maxLength: 200 },
       )
@@ -244,7 +244,7 @@ describe('Feature: venue-intelligence-reports, Property 3: Peak Hours Top Window
       fc.property(checkInsArrayArb, (checkIns) => {
         const result = analyzePeakHours(checkIns)
         for (let i = 1; i < result.topWindows.length; i++) {
-          expect(result.topWindows[i - 1].count).toBeGreaterThanOrEqual(result.topWindows[i].count)
+          expect(result.topWindows[i - 1]!.count).toBeGreaterThanOrEqual(result.topWindows[i]!.count)
         }
       }),
       { numRuns: 100 },

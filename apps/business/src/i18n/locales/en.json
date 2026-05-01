@@ -52,5 +52,9 @@
   "biz.audience.musicTaste": "Music Taste",
   "biz.audience.personalityTypes": "Personality Types",
   "biz.audience.peakPersonality": "Peak Personality by Time",
-  "biz.audience.minMusicData": "Not enough music data yet. At least 20 visitors with music preferences are needed."
+  "biz.audience.minMusicData": "Not enough music data yet. At least 20 visitors with music preferences are needed.",
+  "biz.panel.checkIns": "Check-ins",
+  "biz.panel.rewardMetrics": "Get Metrics",
+  "biz.panel.staffRedemptions": "Staff",
+  "biz.panel.reports": "Reports"
 }

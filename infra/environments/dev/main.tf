@@ -490,6 +490,49 @@ module "lambda_yoco_webhook" {
   }
 }
 
+# Report dispatcher Lambda — triggered by EventBridge, fans out SQS messages per business
+module "lambda_report_dispatcher" {
+  source                 = "../../modules/lambda"
+  env                    = local.env
+  function_name          = "report-dispatcher"
+  timeout                = 30
+  memory_size            = 256
+  lambda_in_vpc          = true
+  vpc_subnet_ids         = module.vpc.private_subnet_ids
+  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  environment_variables = {
+    AREA_CODE_ENV    = local.env
+    BUSINESSES_TABLE = aws_dynamodb_table.businesses.name
+    NODES_TABLE      = aws_dynamodb_table.nodes.name
+    CHECKINS_TABLE   = aws_dynamodb_table.checkins.name
+    AREA_CODE_REPORT_QUEUE_URL = module.sqs_report_generation.queue_url
+  }
+}
+
+# Report generator Lambda — SQS-triggered worker, generates one report per business
+module "lambda_report_generator" {
+  source                 = "../../modules/lambda"
+  env                    = local.env
+  function_name          = "report-generator"
+  timeout                = 120
+  memory_size            = 512
+  lambda_in_vpc          = true
+  vpc_subnet_ids         = module.vpc.private_subnet_ids
+  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  environment_variables = {
+    AREA_CODE_ENV          = local.env
+    USERS_TABLE            = aws_dynamodb_table.users.name
+    NODES_TABLE            = aws_dynamodb_table.nodes.name
+    CHECKINS_TABLE         = aws_dynamodb_table.checkins.name
+    REWARDS_TABLE          = aws_dynamodb_table.rewards.name
+    BUSINESSES_TABLE       = aws_dynamodb_table.businesses.name
+    APP_DATA_TABLE         = aws_dynamodb_table.app_data.name
+    AREA_CODE_REPORT_QUEUE_URL    = module.sqs_report_generation.queue_url
+    AREA_CODE_SQS_PUSH_QUEUE_URL  = module.sqs_push_sender.queue_url
+    AREA_CODE_ANONYMIZATION_SALT  = "report-anonymization-salt-dev"
+  }
+}
+
 # WebSocket Lambda
 module "lambda_websocket" {
   source        = "../../modules/lambda"
@@ -549,6 +592,135 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
         "${aws_dynamodb_table.app_data.arn}/index/*"
       ]
     }]
+  })
+}
+
+# Lambda IAM: report-dispatcher -> DynamoDB read (businesses, nodes, checkins)
+resource "aws_iam_role_policy" "report_dispatcher_dynamodb" {
+  name = "dynamodb-read-access"
+  role = module.lambda_report_dispatcher.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "dynamodb:GetItem",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+      ]
+      Resource = [
+        aws_dynamodb_table.businesses.arn,
+        "${aws_dynamodb_table.businesses.arn}/index/*",
+        aws_dynamodb_table.nodes.arn,
+        "${aws_dynamodb_table.nodes.arn}/index/*",
+        aws_dynamodb_table.checkins.arn,
+        "${aws_dynamodb_table.checkins.arn}/index/*"
+      ]
+    }]
+  })
+}
+
+# Lambda IAM: report-dispatcher -> SQS send (report-generation queue)
+resource "aws_iam_role_policy" "report_dispatcher_sqs_send" {
+  name = "sqs-send"
+  role = module.lambda_report_dispatcher.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["sqs:SendMessage"]
+      Resource = [module.sqs_report_generation.queue_arn]
+    }]
+  })
+}
+
+# Lambda IAM: report-generator -> DynamoDB read/write (all tables)
+resource "aws_iam_role_policy" "report_generator_dynamodb" {
+  name = "dynamodb-access"
+  role = module.lambda_report_generator.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+      ]
+      Resource = [
+        aws_dynamodb_table.users.arn,
+        "${aws_dynamodb_table.users.arn}/index/*",
+        aws_dynamodb_table.nodes.arn,
+        "${aws_dynamodb_table.nodes.arn}/index/*",
+        aws_dynamodb_table.checkins.arn,
+        "${aws_dynamodb_table.checkins.arn}/index/*",
+        aws_dynamodb_table.rewards.arn,
+        "${aws_dynamodb_table.rewards.arn}/index/*",
+        aws_dynamodb_table.businesses.arn,
+        "${aws_dynamodb_table.businesses.arn}/index/*",
+        aws_dynamodb_table.app_data.arn,
+        "${aws_dynamodb_table.app_data.arn}/index/*"
+      ]
+    }]
+  })
+}
+
+# Lambda IAM: report-generator -> SQS receive/delete (report-generation queue) + send (push-sender queue)
+resource "aws_iam_role_policy" "report_generator_sqs" {
+  name = "sqs-access"
+  role = module.lambda_report_generator.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+        Resource = [module.sqs_report_generation.queue_arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"]
+        Resource = [module.sqs_push_sender.queue_arn]
+      }
+    ]
+  })
+}
+
+# Lambda IAM: report-generator -> WebSocket API management (send notifications)
+resource "aws_iam_role_policy" "report_generator_websocket" {
+  name = "websocket-manage"
+  role = module.lambda_report_generator.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "execute-api:ManageConnections",
+          "execute-api:Invoke"
+        ]
+        Resource = "arn:aws:execute-api:us-east-1:*:${module.websocket.websocket_api_id}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:Query"
+        ]
+        Resource = [
+          module.websocket.connections_table_arn,
+          "${module.websocket.connections_table_arn}/index/*"
+        ]
+      }
+    ]
   })
 }
 
@@ -656,6 +828,15 @@ module "sqs_push_sender" {
   visibility_timeout = 30
 }
 
+module "sqs_report_generation" {
+  source              = "../../modules/sqs"
+  env                 = local.env
+  queue_name          = "report-generation"
+  visibility_timeout  = 150
+  max_receive_count   = 2
+  lambda_function_arn = module.lambda_report_generator.function_arn
+}
+
 # =============================================================================
 # EventBridge Schedules
 # =============================================================================
@@ -688,6 +869,18 @@ module "eventbridge_schedules" {
       schedule_expression  = "cron(0 2 * * ? *)"
       lambda_arn           = module.lambda_cleanup.function_arn
       lambda_function_name = module.lambda_cleanup.function_name
+    }
+    report-weekly = {
+      description          = "Weekly intelligence report generation Monday 06:00 SAST (04:00 UTC)"
+      schedule_expression  = "cron(0 4 ? * MON *)"
+      lambda_arn           = module.lambda_report_dispatcher.function_arn
+      lambda_function_name = module.lambda_report_dispatcher.function_name
+    }
+    report-monthly = {
+      description          = "Monthly intelligence report generation 1st of month 06:00 SAST (04:00 UTC)"
+      schedule_expression  = "cron(0 4 1 * ? *)"
+      lambda_arn           = module.lambda_report_dispatcher.function_arn
+      lambda_function_name = module.lambda_report_dispatcher.function_name
     }
   }
 }
@@ -821,4 +1014,8 @@ output "sqs_reward_eval_url" {
 
 output "sqs_push_sender_url" {
   value = module.sqs_push_sender.queue_url
+}
+
+output "sqs_report_generation_url" {
+  value = module.sqs_report_generation.queue_url
 }

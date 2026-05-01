@@ -137,7 +137,7 @@ function findTopWindows(
  * Defaults to 'Monday' when all counts are zero.
  */
 function findPeakDay(dailyDistribution: Record<string, number>): string {
-  let peakDay = DAYS_OF_WEEK[0]
+  let peakDay: string = DAYS_OF_WEEK[0]
   let maxCount = -1
 
   for (const day of DAYS_OF_WEEK) {

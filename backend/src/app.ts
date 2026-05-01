@@ -19,6 +19,7 @@ import { notificationRoutes } from './features/notifications/handler.js'
 import { musicRoutes } from './features/music/handler.js'
 import { staffRoutes } from './features/staff/handler.js'
 import { privacyRoutes } from './features/privacy/handler.js'
+import { reportRoutes } from './features/reports/handler.js'
 
 export async function buildApp() {
   // Initialize error monitoring before anything else
@@ -156,6 +157,7 @@ export async function buildApp() {
   await app.register(musicRoutes)
   await app.register(staffRoutes)
   await app.register(privacyRoutes)
+  await app.register(reportRoutes)
 
   return app
 }
