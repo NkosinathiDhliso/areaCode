@@ -13,7 +13,10 @@
  *
  * To set up:
  *   Spotify: https://developer.spotify.com/dashboard → Create App
- *     - Set redirect URI to: https://areacode.co.za/api/v1/streaming/spotify/callback
+ *     - Set redirect URIs (must match SPOTIFY_REDIRECT_URI env var EXACTLY):
+ *         Prod:  https://areacode.co.za/api/v1/streaming/spotify/callback
+ *                (requires Amplify /api/* proxy rule — see scripts/apply-amplify-spa-rewrites.ps1)
+ *         Local: http://localhost:4000/v1/streaming/spotify/callback
  *     - Scopes needed: user-top-read
  *
  *   Apple Music: https://developer.apple.com → Certificates, Identifiers & Profiles → Keys → MusicKit
@@ -25,7 +28,7 @@
 
 const SPOTIFY_CLIENT_ID = process.env['SPOTIFY_CLIENT_ID'] ?? ''
 const SPOTIFY_CLIENT_SECRET = process.env['SPOTIFY_CLIENT_SECRET'] ?? ''
-const SPOTIFY_REDIRECT_URI = process.env['SPOTIFY_REDIRECT_URI'] ?? 'https://iyj02gvt12.execute-api.us-east-1.amazonaws.com/v1/streaming/spotify/callback'
+const SPOTIFY_REDIRECT_URI = process.env['SPOTIFY_REDIRECT_URI'] ?? ''
 const SPOTIFY_SCOPES = 'user-top-read'
 
 // Known Spotify genre strings → our 12 genre taxonomy
@@ -256,7 +259,7 @@ export async function fetchAppleMusicTopGenres(
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 export function isSpotifyConfigured(): boolean {
-  return !!SPOTIFY_CLIENT_ID && !!SPOTIFY_CLIENT_SECRET
+  return !!SPOTIFY_CLIENT_ID && !!SPOTIFY_CLIENT_SECRET && !!SPOTIFY_REDIRECT_URI
 }
 
 export function isAppleMusicConfigured(): boolean {

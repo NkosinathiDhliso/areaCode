@@ -42,6 +42,26 @@ variable "git_sha" {
   default     = "unknown"
 }
 
+variable "spotify_client_id" {
+  description = "Spotify OAuth client ID (from developer.spotify.com/dashboard)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "spotify_client_secret" {
+  description = "Spotify OAuth client secret"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "spotify_redirect_uri" {
+  description = "Spotify OAuth callback URL — must exactly match what is configured in the Spotify dashboard"
+  type        = string
+  default     = "https://areacode.co.za/api/v1/streaming/spotify/callback"
+}
+
 # --- Data sources for secrets (some optional) ---
 data "aws_secretsmanager_secret" "db_url" {
   name = "area-code/${local.env}/db-url"
@@ -53,6 +73,10 @@ data "aws_secretsmanager_secret" "redis_url" {
 
 data "aws_secretsmanager_secret" "qr_hmac" {
   name = "area-code/${local.env}/qr-hmac-secret"
+}
+
+data "aws_secretsmanager_secret_version" "qr_hmac" {
+  secret_id = data.aws_secretsmanager_secret.qr_hmac.id
 }
 
 # --- VPC / Networking ---
@@ -416,6 +440,12 @@ module "lambda_api" {
     AREA_CODE_S3_MEDIA_BUCKET               = module.s3_media.bucket_name
     AREA_CODE_SQS_PUSH_QUEUE_URL            = module.sqs_push_sender.queue_url
     AREA_CODE_CONSENT_VERSION               = "v1.0"
+    # HMAC secret used for QR codes AND Spotify OAuth state signing
+    AREA_CODE_QR_HMAC_SECRET                = data.aws_secretsmanager_secret_version.qr_hmac.secret_string
+    # Spotify OAuth — supplied via TF variables (terraform.tfvars or TF_VAR_*)
+    SPOTIFY_CLIENT_ID                       = var.spotify_client_id
+    SPOTIFY_CLIENT_SECRET                   = var.spotify_client_secret
+    SPOTIFY_REDIRECT_URI                    = var.spotify_redirect_uri
   }
 }
 
