@@ -83,7 +83,9 @@ export function BusinessManagement() {
         reason: tierReason.trim(),
       }
       if (trialEndsAt.trim()) {
-        body.trialEndsAt = trialEndsAt.trim()
+        // Convert datetime-local to ISO datetime with timezone
+        const date = new Date(trialEndsAt.trim())
+        body.trialEndsAt = date.toISOString()
       }
       await api.post(`/v1/admin/businesses/${setTierId}/set-tier`, body)
       setSetTierId(null)
