@@ -6,10 +6,12 @@ export const updateProfileBodySchema = z.object({
   citySlug: z.string().min(1).optional(),
 })
 
-export const consentBodySchema = z.object({
-  consentVersion: z.string().min(1),
-  analyticsOptIn: z.boolean(),
-}).strict()
+export const consentBodySchema = z
+  .object({
+    consentVersion: z.string().min(1),
+    analyticsOptIn: z.boolean(),
+  })
+  .strict()
 
 export const checkInHistoryQuerySchema = z.object({
   cursor: z.string().optional(),
@@ -18,7 +20,11 @@ export const checkInHistoryQuerySchema = z.object({
 
 export const consumerSignupBodySchema = z.object({
   phone: z.string().regex(/^\+\d{10,15}$/, 'E.164 format required'),
-  username: z.string().min(3).max(30).regex(/^[a-z0-9_]+$/, 'Only lowercase letters, numbers, and underscores'),
+  username: z
+    .string()
+    .min(3)
+    .max(30)
+    .regex(/^[a-z0-9_]+$/, 'Only lowercase letters, numbers, and underscores'),
   displayName: z.string().min(1).max(50).trim(),
   citySlug: z.string().min(1),
   consentAnalytics: z.boolean().optional().default(false),
@@ -44,10 +50,29 @@ export const businessSignupBodySchema = z.object({
   registrationNumber: z.string().optional(),
 })
 
+export const businessEmailSignupBodySchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8).max(256),
+  businessName: z.string().min(1).max(100),
+  registrationNumber: z.string().optional(),
+})
+
+export const emailLoginBodySchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1).max(256),
+})
+
 export const staffInviteAcceptBodySchema = z.object({
   token: z.string().min(1),
   name: z.string().min(1).max(100),
   phone: z.string().regex(/^\+\d{10,15}$/),
+})
+
+export const staffInviteEmailAcceptBodySchema = z.object({
+  token: z.string().min(1),
+  name: z.string().min(1).max(100),
+  email: z.string().email(),
+  password: z.string().min(8).max(256),
 })
 
 export const staffInviteMetaQuerySchema = z.object({

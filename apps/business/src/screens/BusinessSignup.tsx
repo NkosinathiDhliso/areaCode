@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
-
+import { Spinner } from '@area-code/shared/components/Spinner'
 import { api } from '@area-code/shared/lib/api'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
-import { Spinner } from '@area-code/shared/components/Spinner'
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
-import { startBusinessGoogleOAuthWeb } from '../lib/startBusinessGoogleOAuth'
+import { startBusinessGoogleOAuthWeb } from '../lib/businessHostedUiOAuth'
 
 interface BusinessSignupProps {
   onSwitchToLogin: () => void
@@ -14,128 +13,63 @@ interface BusinessSignupProps {
 export function BusinessSignup({ onSwitchToLogin }: BusinessSignupProps) {
   const { t } = useTranslation()
   const setAuth = useBusinessAuthStore((s) => s.setAuth)
-  const [step, setStep] = useState<'details' | 'otp'>('details')
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
   const [businessName, setBusinessName] = useState('')
   const [registrationNumber, setRegistrationNumber] = useState('')
-  const [otp, setOtp] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [resendCooldown, setResendCooldown] = useState(0)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [showEnvHint, setShowEnvHint] = useState(false)
 
-  // Auto-submit OTP when 6 digits entered
-  useEffect(() => {
-    if (otp.length === 6 && step === 'otp' && !loading) {
-      handleVerifyOtp()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [otp])
-
-  function normalizePhone(raw: string): string {
-    const digits = raw.replace(/\s+/g, '')
-    if (digits.startsWith('+')) return digits
-    if (digits.startsWith('0')) return `+27${digits.slice(1)}`
-    return `+${digits}`
-  }
-
-  function startResendTimer() {
-    setResendCooldown(60)
-    const interval = setInterval(() => {
-      setResendCooldown((prev) => {
-        if (prev <= 1) { clearInterval(interval); return 0 }
-        return prev - 1
-      })
-    }, 1000)
-  }
-
-  async function handleResendOtp() {
+  async function handleEmailSignup() {
     setLoading(true)
     setError(null)
-    try {
-      await api.post('/v1/auth/business/login', { phone: normalizePhone(phone) })
-      startResendTimer()
-    } catch (err: unknown) {
-      const apiErr = err as { statusCode?: number } | undefined
-      if (apiErr?.statusCode === 429) {
-        setError('Too many attempts. Please wait and try again.')
-        return
-      }
-      setError('Failed to resend OTP.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleSignup() {
-    setLoading(true)
-    setError(null)
-    try {
-      await api.post('/v1/auth/business/signup', {
-        email,
-        phone: normalizePhone(phone),
-        businessName,
-        ...(registrationNumber ? { registrationNumber } : {}),
-      })
-      setStep('otp')
-      startResendTimer()
-    } catch (err: unknown) {
-      const apiErr = err as { statusCode?: number } | undefined
-      if (apiErr?.statusCode === 429 || apiErr?.statusCode === 403) {
-        setError(t('biz.signup.rateLimited', 'Too many attempts. Please wait a few minutes and try again.'))
-      } else {
-        setError(t('biz.signup.error'))
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleVerifyOtp() {
-    setLoading(true)
-    setError(null)
+    setShowEnvHint(false)
     try {
       const res = await api.post<{
         accessToken: string
         refreshToken: string
         businessId: string
-      }>('/v1/auth/business/verify-otp', { phone: normalizePhone(phone), code: otp })
+      }>('/v1/auth/business/email-signup', {
+        email,
+        password,
+        businessName,
+        ...(registrationNumber ? { registrationNumber } : {}),
+      })
       setAuth(res.accessToken, res.refreshToken, res.businessId)
     } catch {
-      setError(t('biz.signup.otpError'))
+      setError(t('biz.signup.emailFailed', 'Could not create your account. Check your details.'))
     } finally {
       setLoading(false)
     }
   }
 
-  const isDetailsValid = email.includes('@') && phone.length >= 9 && businessName.length >= 2
-
   async function handleGoogleSignup() {
     setGoogleLoading(true)
     setError(null)
+    setShowEnvHint(false)
     try {
       await startBusinessGoogleOAuthWeb()
     } catch {
       setGoogleLoading(false)
-      setError(t('auth.oauth.misconfigured', 'Sign-in is not configured. Try again later.'))
+      setError(t('auth.oauth.misconfigured', 'Google sign-in is not configured for this deployment.'))
+      setShowEnvHint(true)
     }
   }
 
+  const canSubmit = businessName.trim().length >= 2 && email.includes('@') && password.length >= 8
+
   return (
     <div className="flex flex-col items-center justify-center h-dvh bg-[var(--bg-base)] px-5">
-      <h1 className="text-[var(--text-primary)] font-bold text-2xl mb-2 font-[Syne]">
-        {t('biz.signup.title')}
-      </h1>
-      <p className="text-[var(--text-secondary)] text-sm mb-8 text-center max-w-xs">
-        {t('biz.signup.subtitle')}
-      </p>
+      <h1 className="text-[var(--text-primary)] font-bold text-2xl mb-2 font-[Syne]">{t('biz.signup.title')}</h1>
+      <p className="text-[var(--text-secondary)] text-sm mb-8 text-center max-w-xs">{t('biz.signup.subtitle')}</p>
 
-      <div className="flex flex-col gap-4 w-full max-w-xs mb-6">
+      <div className="flex flex-col gap-4 w-full max-w-xs">
         <button
           type="button"
           onClick={() => void handleGoogleSignup()}
-          disabled={googleLoading}
+          disabled={googleLoading || loading}
           className="flex items-center justify-center gap-3 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
         >
           {googleLoading ? (
@@ -144,96 +78,66 @@ export function BusinessSignup({ onSwitchToLogin }: BusinessSignupProps) {
             t('auth.login.continueGoogle', 'Continue with Google')
           )}
         </button>
+
+        <p className="text-center text-[var(--text-muted)] text-xs">or create an email account</p>
+
+        <input
+          type="text"
+          value={businessName}
+          onChange={(e) => setBusinessName(e.target.value)}
+          placeholder={t('biz.signup.businessName')}
+          className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+        />
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder={t('biz.signup.email')}
+          className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+        />
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder={t('biz.signup.password', 'Password')}
+          className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+        />
+        <input
+          type="text"
+          value={registrationNumber}
+          onChange={(e) => setRegistrationNumber(e.target.value)}
+          placeholder={`${t('biz.signup.regNumber')} (${t('common.optional', 'optional')})`}
+          className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={() => void handleEmailSignup()}
+          disabled={loading || googleLoading || !canSubmit}
+          className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {loading ? (
+            <Spinner size="sm" className="border-white border-t-transparent" />
+          ) : (
+            t('biz.signup.submitEmail', 'Create account')
+          )}
+        </button>
       </div>
 
-      <details className="w-full max-w-xs mb-2">
-        <summary className="text-[var(--text-secondary)] text-sm cursor-pointer select-none mb-4">
-          {t('biz.signup.phoneFallback', 'Sign up with phone (SMS)')}
-        </summary>
-
-      {step === 'details' ? (
-        <div className="flex flex-col gap-3 w-full max-w-xs">
-          <input
-            type="text"
-            value={businessName}
-            onChange={(e) => setBusinessName(e.target.value)}
-            placeholder={t('biz.signup.businessName')}
-            className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-          />
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder={t('biz.signup.email')}
-            className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-          />
-          <input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder={t('biz.signup.phone')}
-            className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-          />
-          <input
-            type="text"
-            value={registrationNumber}
-            onChange={(e) => setRegistrationNumber(e.target.value)}
-            placeholder={`${t('biz.signup.regNumber')} (${t('common.optional', 'optional')})`}
-            className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-          />
-          <button
-            onClick={handleSignup}
-            disabled={loading || !isDetailsValid}
-            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50 mt-1 flex items-center justify-center gap-2"
-          >
-            {loading ? <Spinner size="sm" className="border-white border-t-transparent" /> : t('biz.signup.submit')}
-          </button>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4 w-full max-w-xs">
-          <input
-            type="text"
-            inputMode="numeric"
-            maxLength={6}
-            value={otp}
-            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-            placeholder={t('auth.login.otpPlaceholder')}
-            className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-center text-2xl tracking-[0.3em] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-            autoFocus
-          />
-          <button
-            onClick={handleVerifyOtp}
-            disabled={loading || otp.length !== 6}
-            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {loading ? <Spinner size="sm" className="border-white border-t-transparent" /> : t('biz.login.verifyOtp')}
-          </button>
-          <button
-            onClick={handleResendOtp}
-            disabled={loading || resendCooldown > 0}
-            className="text-[var(--accent)] text-sm mt-1 disabled:text-[var(--text-muted)]"
-          >
-            {resendCooldown > 0
-              ? t('auth.login.resendOtpCooldown', { seconds: resendCooldown, defaultValue: `Resend OTP (${resendCooldown}s)` })
-              : t('auth.login.resendOtp', 'Resend OTP')}
-          </button>
-          <button
-            onClick={() => { setStep('details'); setOtp(''); setError(null) }}
-            className="text-[var(--text-secondary)] text-sm mt-1 flex items-center gap-1 justify-center"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            {t('biz.login.changeNumber', 'Change number')}
-          </button>
+      {error && (
+        <div className="mt-4 max-w-xs text-center">
+          <p className="text-xs text-[var(--danger)]">{error}</p>
+          {showEnvHint && (
+            <p className="text-[var(--text-muted)] text-[11px] mt-2 leading-snug">
+              {t(
+                'biz.oauth.envHint',
+                'Set VITE_COGNITO_HOSTED_UI_DOMAIN_BUSINESS and VITE_COGNITO_CLIENT_ID_BUSINESS for Google auth.',
+              )}
+            </p>
+          )}
         </div>
       )}
-      </details>
 
-      {error && <p className="text-xs text-[var(--danger)] mt-3">{error}</p>}
-
-      <button
-        onClick={onSwitchToLogin}
-        className="text-[var(--text-secondary)] text-sm mt-6"
-      >
+      <button type="button" onClick={onSwitchToLogin} className="text-[var(--text-secondary)] text-sm mt-8">
         {t('biz.signup.hasAccount')}
       </button>
     </div>

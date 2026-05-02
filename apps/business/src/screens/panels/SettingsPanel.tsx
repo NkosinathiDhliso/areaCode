@@ -1,14 +1,14 @@
+import { api } from '@area-code/shared/lib/api'
+import { useBusinessStore } from '@area-code/shared/stores/businessStore'
+import type { BusinessAccount, StaffAccount } from '@area-code/shared/types'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-
-import { api } from '@area-code/shared/lib/api'
-import type { BusinessAccount, StaffAccount } from '@area-code/shared/types'
-import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 
 interface StaffInvite {
   id: string
   inviteToken: string
   invitedPhone: string | null
+  invitedEmail: string | null
   accepted: boolean
   expiresAt: string
   createdAt: string
@@ -28,7 +28,7 @@ export function SettingsPanel() {
   const [qrUrl, setQrUrl] = useState<string | null>(null)
 
   // Invite form state
-  const [invitePhone, setInvitePhone] = useState('')
+  const [inviteEmail, setInviteEmail] = useState('')
   const [inviteLoading, setInviteLoading] = useState(false)
   const [inviteResult, setInviteResult] = useState<{ token: string } | null>(null)
   const [inviteError, setInviteError] = useState<string | null>(null)
@@ -53,25 +53,18 @@ export function SettingsPanel() {
     fetch()
   }, [])
 
-  function normalizePhone(raw: string): string {
-    const digits = raw.replace(/\s+/g, '')
-    if (digits.startsWith('+')) return digits
-    if (digits.startsWith('0')) return `+27${digits.slice(1)}`
-    return `+${digits}`
-  }
-
   async function handleInviteStaff() {
-    if (!invitePhone.trim()) return
+    if (!inviteEmail.trim()) return
     setInviteLoading(true)
     setInviteError(null)
     setInviteResult(null)
     setCopied(false)
     try {
       const res = await api.post<StaffInvite>('/v1/business/staff/invite', {
-        phone: normalizePhone(invitePhone),
+        email: inviteEmail.trim().toLowerCase(),
       })
       setInviteResult({ token: res.inviteToken })
-      setInvitePhone('')
+      setInviteEmail('')
       // Refresh invites list
       const inviteRes = await api.get<{ items: StaffInvite[] }>('/v1/business/staff/invites')
       setInvites(inviteRes.items ?? [])
@@ -100,7 +93,9 @@ export function SettingsPanel() {
     if (navigator.share) {
       try {
         await navigator.share({ title: 'Staff Invite', text: 'Join our team on Area Code', url })
-      } catch { /* user cancelled */ }
+      } catch {
+        /* user cancelled */
+      }
     } else {
       handleCopyLink(token)
     }
@@ -110,7 +105,9 @@ export function SettingsPanel() {
     try {
       const res = await api.get<{ url: string }>('/v1/business/nodes/current/qr')
       setQrUrl(res.url)
-    } catch { /* Fail silently */ }
+    } catch {
+      /* Fail silently */
+    }
   }
 
   async function handleRemoveStaff(staffId: string) {
@@ -125,18 +122,17 @@ export function SettingsPanel() {
       try {
         await api.delete(`/v1/business/staff/${staffId}`)
         setStaff((prev) => prev.filter((s) => s.id !== staffId))
-      } catch { /* Fail silently */ }
+      } catch {
+        /* Fail silently */
+      }
     })()
   }
 
   const pendingInvites = invites.filter((i) => !i.accepted && new Date(i.expiresAt) > new Date())
-  const expiredInvites = invites.filter((i) => !i.accepted && new Date(i.expiresAt) <= new Date())
 
   return (
     <div className="p-5 flex flex-col gap-6">
-      <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">
-        {t('biz.settings.title')}
-      </h2>
+      <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('biz.settings.title')}</h2>
 
       {/* Subscription */}
       {biz && (
@@ -158,31 +154,27 @@ export function SettingsPanel() {
 
       {/* Staff Management */}
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
-        <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">
-          Staff Members
-        </h3>
+        <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">Staff Members</h3>
 
         {/* Invite form */}
         <div className="flex flex-row gap-2 mb-4">
           <input
-            type="tel"
-            value={invitePhone}
-            onChange={(e) => setInvitePhone(e.target.value)}
-            placeholder="Phone number (e.g. 061 450 9800)"
+            type="email"
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+            placeholder="Staff email address"
             className="flex-1 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-3 py-2.5 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
           />
           <button
             onClick={handleInviteStaff}
-            disabled={inviteLoading || !invitePhone.trim()}
+            disabled={inviteLoading || !inviteEmail.trim()}
             className="bg-[var(--accent)] text-white font-medium rounded-xl px-4 py-2.5 text-sm transition-all active:scale-95 disabled:opacity-50 whitespace-nowrap"
           >
             {inviteLoading ? '...' : 'Invite'}
           </button>
         </div>
 
-        {inviteError && (
-          <p className="text-[var(--danger)] text-xs mb-3">{inviteError}</p>
-        )}
+        {inviteError && <p className="text-[var(--danger)] text-xs mb-3">{inviteError}</p>}
 
         {/* Just-created invite link */}
         {inviteResult && (
@@ -190,9 +182,7 @@ export function SettingsPanel() {
             <p className="text-[var(--text-primary)] text-xs font-medium mb-2">
               Invite created. Share this link with your staff member:
             </p>
-            <p className="text-[var(--accent)] text-xs break-all mb-2">
-              {getInviteUrl(inviteResult.token)}
-            </p>
+            <p className="text-[var(--accent)] text-xs break-all mb-2">{getInviteUrl(inviteResult.token)}</p>
             <div className="flex flex-row gap-2">
               <button
                 onClick={() => handleCopyLink(inviteResult.token)}
@@ -216,17 +206,17 @@ export function SettingsPanel() {
             <p className="text-[var(--text-muted)] text-xs mb-2">Pending invites</p>
             <div className="flex flex-col gap-2">
               {pendingInvites.map((inv) => (
-                <div key={inv.id} className="flex flex-row items-center justify-between bg-[var(--bg-raised)] rounded-xl px-3 py-2">
+                <div
+                  key={inv.id}
+                  className="flex flex-row items-center justify-between bg-[var(--bg-raised)] rounded-xl px-3 py-2"
+                >
                   <div className="flex flex-col">
-                    <span className="text-[var(--text-primary)] text-sm">{inv.invitedPhone ?? 'No phone'}</span>
+                    <span className="text-[var(--text-primary)] text-sm">{inv.invitedEmail ?? 'No email'}</span>
                     <span className="text-[var(--text-muted)] text-xs">
                       Expires {new Date(inv.expiresAt).toLocaleDateString()}
                     </span>
                   </div>
-                  <button
-                    onClick={() => handleCopyLink(inv.inviteToken)}
-                    className="text-[var(--accent)] text-xs"
-                  >
+                  <button onClick={() => handleCopyLink(inv.inviteToken)} className="text-[var(--accent)] text-xs">
                     Copy Link
                   </button>
                 </div>
@@ -241,15 +231,15 @@ export function SettingsPanel() {
         ) : (
           <div className="flex flex-col gap-2">
             {staff.map((s) => (
-              <div key={s.id} className="flex flex-row items-center justify-between bg-[var(--bg-raised)] rounded-xl px-3 py-2">
+              <div
+                key={s.id}
+                className="flex flex-row items-center justify-between bg-[var(--bg-raised)] rounded-xl px-3 py-2"
+              >
                 <div className="flex flex-col">
                   <span className="text-[var(--text-primary)] text-sm">{s.name}</span>
-                  <span className="text-[var(--text-muted)] text-xs">{(s as any).phone ?? ''}</span>
+                  <span className="text-[var(--text-muted)] text-xs">{s.email ?? ''}</span>
                 </div>
-                <button
-                  onClick={() => handleRemoveStaff(s.id)}
-                  className="text-[var(--danger)] text-xs"
-                >
+                <button onClick={() => handleRemoveStaff(s.id)} className="text-[var(--danger)] text-xs">
                   Remove
                 </button>
               </div>
@@ -260,9 +250,7 @@ export function SettingsPanel() {
 
       {/* QR Code */}
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
-        <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">
-          {t('biz.settings.qr')}
-        </h3>
+        <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">{t('biz.settings.qr')}</h3>
         <button
           onClick={handleGenerateQr}
           className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-4 py-2 text-sm"
@@ -271,11 +259,7 @@ export function SettingsPanel() {
         </button>
         {qrUrl && (
           <div className="mt-3 flex flex-col items-center gap-2">
-            <img
-              src={qrUrl}
-              alt="QR Code for check-in"
-              className="w-48 h-48 rounded-xl bg-white p-2"
-            />
+            <img src={qrUrl} alt="QR Code for check-in" className="w-48 h-48 rounded-xl bg-white p-2" />
             <p className="text-[var(--text-muted)] text-xs text-center">
               Print or screenshot this QR code for your venue
             </p>
@@ -287,9 +271,7 @@ export function SettingsPanel() {
       {confirmRemoveStaffId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-5">
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
-            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
-              Remove staff member?
-            </h3>
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">Remove staff member?</h3>
             <p className="text-[var(--text-secondary)] text-sm mb-4">
               They will no longer be able to validate redemptions. You can re-invite them later.
             </p>

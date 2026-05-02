@@ -1,7 +1,10 @@
 import type { FastifyInstance } from 'fastify'
+import { z } from 'zod'
+
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
-import { validate } from '../../shared/middleware/validation.js'
 import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
+import { validate } from '../../shared/middleware/validation.js'
+
 import * as service from './service.js'
 import {
   accountTypeQuerySchema,
@@ -10,13 +13,15 @@ import {
   consumerSignupBodySchema,
   verifyOtpBodySchema,
   loginBodySchema,
+  emailLoginBodySchema,
   refreshBodySchema,
   businessSignupBodySchema,
+  businessEmailSignupBodySchema,
   businessOAuthCompleteProfileBodySchema,
   staffOAuthAcceptInviteBodySchema,
+  staffInviteEmailAcceptBodySchema,
   adminLoginBodySchema,
 } from './types.js'
-import { z } from 'zod'
 
 export async function authRoutes(app: FastifyInstance) {
   // ─── Consumer Auth ──────────────────────────────────────────────────────
@@ -99,6 +104,22 @@ export async function authRoutes(app: FastifyInstance) {
 
   // POST /v1/auth/business/signup
   app.post(
+    '/v1/auth/business/email-signup',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'business-email-signup', max: 5, windowSeconds: 300 }),
+        validate({ body: businessEmailSignupBodySchema }),
+      ],
+    },
+    async (request, reply) => {
+      const body = request.body as z.infer<typeof businessEmailSignupBodySchema>
+      const userAgent = request.headers['user-agent'] ?? ''
+      const result = await service.businessEmailSignup({ ...body, userAgent })
+      return reply.status(201).send(result)
+    },
+  )
+
+  app.post(
     '/v1/auth/business/signup',
     {
       preHandler: [
@@ -114,6 +135,21 @@ export async function authRoutes(app: FastifyInstance) {
   )
 
   // POST /v1/auth/business/login
+  app.post(
+    '/v1/auth/business/email-login',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'business-email-login', max: 5, windowSeconds: 60 }),
+        validate({ body: emailLoginBodySchema }),
+      ],
+    },
+    async (request) => {
+      const body = request.body as z.infer<typeof emailLoginBodySchema>
+      const userAgent = request.headers['user-agent'] ?? ''
+      return service.businessEmailLogin(body.email, body.password, userAgent)
+    },
+  )
+
   app.post(
     '/v1/auth/business/login',
     {
@@ -195,6 +231,21 @@ export async function authRoutes(app: FastifyInstance) {
 
   // POST /v1/auth/staff/login
   app.post(
+    '/v1/auth/staff/email-login',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'staff-email-login', max: 5, windowSeconds: 60 }),
+        validate({ body: emailLoginBodySchema }),
+      ],
+    },
+    async (request) => {
+      const body = request.body as z.infer<typeof emailLoginBodySchema>
+      const userAgent = request.headers['user-agent'] ?? ''
+      return service.staffEmailLogin(body.email, body.password, userAgent)
+    },
+  )
+
+  app.post(
     '/v1/auth/staff/login',
     {
       preHandler: [
@@ -229,10 +280,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.post(
     '/v1/auth/staff/oauth-sync',
     {
-      preHandler: [
-        rateLimitMiddleware({ key: 'staff-oauth-sync', max: 10, windowSeconds: 60 }),
-        requireAuth('staff'),
-      ],
+      preHandler: [rateLimitMiddleware({ key: 'staff-oauth-sync', max: 10, windowSeconds: 60 }), requireAuth('staff')],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -292,10 +340,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.post(
     '/v1/auth/admin/oauth-sync',
     {
-      preHandler: [
-        rateLimitMiddleware({ key: 'admin-oauth-sync', max: 10, windowSeconds: 60 }),
-        requireAuth('admin'),
-      ],
+      preHandler: [rateLimitMiddleware({ key: 'admin-oauth-sync', max: 10, windowSeconds: 60 }), requireAuth('admin')],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -374,6 +419,22 @@ export async function authRoutes(app: FastifyInstance) {
   )
 
   // POST /v1/staff-invite/accept
+  app.post(
+    '/v1/staff-invite/email-accept',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'staff-invite-email-accept', max: 5, windowSeconds: 300 }),
+        validate({ body: staffInviteEmailAcceptBodySchema }),
+      ],
+    },
+    async (request, reply) => {
+      const body = request.body as z.infer<typeof staffInviteEmailAcceptBodySchema>
+      const userAgent = request.headers['user-agent'] ?? ''
+      const staff = await service.acceptStaffInviteEmail({ ...body, userAgent })
+      return reply.status(201).send(staff)
+    },
+  )
+
   app.post(
     '/v1/staff-invite/accept',
     {

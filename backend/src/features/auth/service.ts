@@ -1,10 +1,11 @@
+import * as cognito from '../../shared/cognito/client.js'
 import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet, kvSet, kvDel, kvIncr } from '../../shared/kv/dynamodb-kv.js'
-import * as repo from './repository.js'
-import { createLoginSession } from './session-service.js'
-import * as cognito from '../../shared/cognito/client.js'
 import { reportOtpFeedback } from '../../shared/sms/feedback.js'
 import { findBusinessByCognitoSub } from '../business/repository.js'
+
+import * as repo from './repository.js'
+import { createLoginSession } from './session-service.js'
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
@@ -88,17 +89,16 @@ export async function consumerLogin(phone: string) {
 
 function suggestedUsernameFromEmail(email: string): string {
   const local = email.split('@')[0] ?? 'explorer'
-  let slug = local.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 24)
+  let slug = local
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '')
+    .slice(0, 24)
   if (slug.length < 3) slug = `go_${slug.padEnd(2, '0')}`.slice(0, 24)
   return slug
 }
 
 /** Called once after Hosted UI Google OAuth returns Cognito tokens. Ensures Dynamo user + Cognito custom:userId. */
-export async function consumerOAuthSync(opts: {
-  cognitoSub: string
-  email?: string | undefined
-  userAgent: string
-}) {
+export async function consumerOAuthSync(opts: { cognitoSub: string; email?: string | undefined; userAgent: string }) {
   const { cognitoSub, email: rawEmail, userAgent } = opts
 
   if (DEV_MODE) {
@@ -119,16 +119,12 @@ export async function consumerOAuthSync(opts: {
     let email = rawEmail?.toLowerCase().trim()
     if (!email) email = await cognito.getConsumerVerifiedEmailBySub(cognitoSub)
     if (!email) {
-      throw AppError.unprocessable(
-        'Your Google account has no email. Use another Google account or contact support.',
-      )
+      throw AppError.unprocessable('Your Google account has no email. Use another Google account or contact support.')
     }
 
     const dupEmail = await repo.getUserByEmail(email)
     if (dupEmail && dupEmail.cognitoSub && dupEmail.cognitoSub !== cognitoSub) {
-      throw AppError.conflict(
-        'This email is already registered. Sign in with the method you used before.',
-      )
+      throw AppError.conflict('This email is already registered. Sign in with the method you used before.')
     }
 
     const city = await repo.getCityBySlug('johannesburg')
@@ -142,8 +138,7 @@ export async function consumerOAuthSync(opts: {
     }
 
     const emailLocal = email.split('@')[0] ?? 'Friend'
-    const displayName =
-      emailLocal.length > 0 ? emailLocal.charAt(0).toUpperCase() + emailLocal.slice(1) : 'Explorer'
+    const displayName = emailLocal.length > 0 ? emailLocal.charAt(0).toUpperCase() + emailLocal.slice(1) : 'Explorer'
 
     user = await repo.createUser({
       email,
@@ -312,6 +307,80 @@ export async function businessVerifyOtp(phone: string, code: string, userAgent?:
   }
 }
 
+export async function businessEmailSignup(data: {
+  email: string
+  password: string
+  businessName: string
+  registrationNumber?: string
+  userAgent?: string
+}) {
+  if (DEV_MODE) {
+    const businessId = `dev-biz-${Date.now()}`
+    const session = await createLoginSession(businessId, data.userAgent ?? '')
+    return {
+      accessToken: `dev-business-access-${Date.now()}`,
+      refreshToken: `dev-business-refresh-${Date.now()}`,
+      sessionId: session.sessionId,
+      businessId,
+    }
+  }
+
+  const email = data.email.toLowerCase().trim()
+  const existing = await repo.findBusinessByEmail(email)
+  if (existing) throw AppError.conflict('Email already registered')
+
+  const cognitoUser = await cognito.createEmailPasswordUser('business', email, data.password)
+
+  const business = await repo.createBusinessAccount({
+    email,
+    businessName: data.businessName.trim(),
+    ...(data.registrationNumber ? { registrationNumber: data.registrationNumber.trim() } : {}),
+    cognitoSub: cognitoUser.sub,
+  })
+
+  await cognito.updateUserAttributes('business', email, {
+    businessId: business.businessId,
+  })
+
+  const tokens = await cognito.passwordAuth('business', email, data.password)
+  const loginSession = await createLoginSession(business.businessId, data.userAgent ?? '')
+
+  return {
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    sessionId: loginSession.sessionId,
+    businessId: business.businessId,
+  }
+}
+
+export async function businessEmailLogin(emailRaw: string, password: string, userAgent?: string) {
+  if (DEV_MODE) {
+    const businessId = `dev-biz-${Date.now()}`
+    const session = await createLoginSession(businessId, userAgent ?? '')
+    return {
+      accessToken: `dev-business-access-${Date.now()}`,
+      refreshToken: `dev-business-refresh-${Date.now()}`,
+      sessionId: session.sessionId,
+      businessId,
+    }
+  }
+
+  const email = emailRaw.toLowerCase().trim()
+  const tokens = await cognito.passwordAuth('business', email, password)
+  const cognitoUser = await cognito.getCognitoUser('business', email)
+  const businessId = cognitoUser?.attributes['custom:businessId']
+  if (!businessId) throw AppError.unauthorized('Business account is not linked.')
+
+  const loginSession = await createLoginSession(businessId, userAgent ?? '')
+
+  return {
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    sessionId: loginSession.sessionId,
+    businessId,
+  }
+}
+
 export async function businessOAuthSync(opts: { cognitoSub: string; userAgent: string }) {
   if (DEV_MODE) {
     const bizId = `dev-biz-google-${Date.now()}`
@@ -359,9 +428,7 @@ export async function businessOAuthCompleteProfile(opts: {
   let email = opts.email?.toLowerCase().trim()
   if (!email) email = await cognito.getVerifiedEmailBySub('business', opts.cognitoSub)
   if (!email) {
-    throw AppError.unprocessable(
-      'Your Google account has no verified email. Use another account or contact support.',
-    )
+    throw AppError.unprocessable('Your Google account has no verified email. Use another account or contact support.')
   }
 
   const dup = await repo.findBusinessByEmail(email)
@@ -397,9 +464,7 @@ export async function staffOAuthSync(opts: { cognitoSub: string; userAgent: stri
 
   const staff = await repo.findStaffByCognitoSub(opts.cognitoSub)
   if (!staff) {
-    throw AppError.notFound(
-      'No staff profile for this Google account. Use your invite link or sign in with phone.',
-    )
+    throw AppError.notFound('No staff profile for this Google account. Use your invite link or sign in with phone.')
   }
   if ((staff as unknown as Record<string, unknown>).isActive === false) {
     throw AppError.forbidden('This staff account has been deactivated. Contact your manager.')
@@ -415,6 +480,117 @@ export async function staffOAuthSync(opts: { cognitoSub: string; userAgent: stri
   return {
     staff: { id: staff.staffId, name: staff.name, businessId: staff.businessId },
     sessionId: loginSession.sessionId,
+  }
+}
+
+export async function staffEmailLogin(emailRaw: string, password: string, userAgent?: string) {
+  if (DEV_MODE) {
+    const staffId = `dev-staff-${Date.now()}`
+    const session = await createLoginSession(staffId, userAgent ?? '')
+    return {
+      accessToken: `dev-staff-access-${Date.now()}`,
+      refreshToken: `dev-staff-refresh-${Date.now()}`,
+      sessionId: session.sessionId,
+      staff: { id: staffId, name: 'Dev Staff', businessId: 'dev-biz-1' },
+    }
+  }
+
+  const email = emailRaw.toLowerCase().trim()
+  const tokens = await cognito.passwordAuth('staff', email, password)
+  const cognitoUser = await cognito.getCognitoUser('staff', email)
+  const staffId = cognitoUser?.attributes['custom:staffId']
+  if (!staffId) throw AppError.unauthorized('Staff account is not linked.')
+
+  const staff = await repo.getStaffById(staffId)
+  if (!staff) throw AppError.unauthorized('Staff profile not found.')
+  if ((staff as unknown as Record<string, unknown>).isActive === false) {
+    throw AppError.forbidden('This staff account has been deactivated. Contact your manager.')
+  }
+
+  const loginSession = await createLoginSession(staff.staffId, userAgent ?? '')
+
+  return {
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    sessionId: loginSession.sessionId,
+    staff: { id: staff.staffId, name: staff.name, businessId: staff.businessId },
+  }
+}
+
+export async function acceptStaffInviteEmail(opts: {
+  token: string
+  name: string
+  email: string
+  password: string
+  userAgent?: string
+}) {
+  if (DEV_MODE) {
+    const staffId = `dev-staff-${Date.now()}`
+    const session = await createLoginSession(staffId, opts.userAgent ?? '')
+    return {
+      accessToken: `dev-staff-access-${Date.now()}`,
+      refreshToken: `dev-staff-refresh-${Date.now()}`,
+      sessionId: session.sessionId,
+      staff: { id: staffId, name: opts.name, businessId: 'dev-biz-1' },
+    }
+  }
+
+  const email = opts.email.toLowerCase().trim()
+  const invite = await repo.findStaffInviteByToken(opts.token)
+  if (!invite) throw AppError.notFound('Invite not found or expired')
+  if (invite.accepted) throw AppError.gone('Invite already accepted')
+  if (invite.expiresAt && new Date(invite.expiresAt as string) < new Date()) {
+    throw AppError.gone('Invite expired')
+  }
+
+  const invitedEmail = (invite.invitedEmail as string | null)?.toLowerCase().trim()
+  if (invitedEmail && invitedEmail !== email) {
+    throw AppError.forbidden('Use the email address this invite was sent to.')
+  }
+
+  const businessId = invite.businessId as string
+  const { countStaffForBusiness, findBusinessById } = await import('../business/repository.js')
+  const biz = await findBusinessById(businessId)
+  if (biz) {
+    const STAFF_LIMITS: Record<string, number | null> = {
+      free: 2,
+      starter: 2,
+      growth: 5,
+      pro: null,
+      payg: 2,
+    }
+    const limit = STAFF_LIMITS[biz.tier ?? 'free']
+    if (limit !== null && limit !== undefined) {
+      const count = await countStaffForBusiness(businessId)
+      if (count >= limit) {
+        throw AppError.forbidden(`Staff limit reached for ${biz.tier} tier (max ${limit})`)
+      }
+    }
+  }
+
+  const cognitoUser = await cognito.createEmailPasswordUser('staff', email, opts.password)
+  await repo.acceptStaffInvite(opts.token)
+
+  const staff = await repo.createStaffAccount({
+    businessId,
+    name: opts.name.trim(),
+    email,
+    cognitoSub: cognitoUser.sub,
+  })
+
+  await cognito.updateUserAttributes('staff', email, {
+    staffId: staff.staffId,
+    businessId,
+  })
+
+  const tokens = await cognito.passwordAuth('staff', email, opts.password)
+  const loginSession = await createLoginSession(staff.staffId, opts.userAgent ?? '')
+
+  return {
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    sessionId: loginSession.sessionId,
+    staff: { id: staff.staffId, name: staff.name, businessId: staff.businessId },
   }
 }
 
@@ -437,9 +613,7 @@ export async function staffOAuthAcceptInvite(opts: {
   let email = opts.email?.toLowerCase().trim()
   if (!email) email = await cognito.getVerifiedEmailBySub('staff', opts.cognitoSub)
   if (!email) {
-    throw AppError.unprocessable(
-      'Your Google account has no verified email. Accept the invite with phone instead.',
-    )
+    throw AppError.unprocessable('Your Google account has no verified email. Accept the invite with phone instead.')
   }
 
   const invite = await repo.findStaffInviteByToken(opts.inviteToken)
@@ -451,9 +625,7 @@ export async function staffOAuthAcceptInvite(opts: {
 
   const invitedEmail = (invite.invitedEmail as string | null)?.toLowerCase().trim()
   if (!invitedEmail) {
-    throw AppError.badRequest(
-      'This invite does not include an email. Accept it with the phone flow instead.',
-    )
+    throw AppError.badRequest('This invite does not include an email. Accept it with the phone flow instead.')
   }
   if (invitedEmail !== email) {
     throw AppError.forbidden('Sign in with the Google account that matches the invited email.')
@@ -529,9 +701,7 @@ export async function getStaffInviteMeta(token: string) {
   const invite = await repo.findStaffInviteByToken(token)
   if (!invite) throw AppError.notFound('Invite not found')
 
-  const expired = Boolean(
-    invite.expiresAt && new Date(invite.expiresAt as string) < new Date(),
-  )
+  const expired = Boolean(invite.expiresAt && new Date(invite.expiresAt as string) < new Date())
 
   return {
     expired,

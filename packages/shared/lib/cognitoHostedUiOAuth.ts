@@ -1,4 +1,4 @@
-/** PKCE + Cognito Hosted UI helpers for Google IdP (consumer pool). */
+/** PKCE + Cognito Hosted UI helpers (optional IdP; omit for Cognito default sign-in/sign-up UI). */
 
 const PKCE_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~'
 
@@ -27,7 +27,8 @@ export function buildHostedUiAuthorizeUrl(opts: {
   domain: string
   clientId: string
   redirectUri: string
-  identityProvider: string
+  /** When set (e.g. `Google`), skips Cognito login page and sends user to that IdP. */
+  identityProvider?: string
   codeChallenge: string
   state: string
 }): string {
@@ -36,12 +37,14 @@ export function buildHostedUiAuthorizeUrl(opts: {
     response_type: 'code',
     client_id: opts.clientId,
     redirect_uri: opts.redirectUri,
-    identity_provider: opts.identityProvider,
     scope: 'openid email profile',
     code_challenge_method: 'S256',
     code_challenge: opts.codeChallenge,
     state: opts.state,
   })
+  if (opts.identityProvider) {
+    p.set('identity_provider', opts.identityProvider)
+  }
   return `${base}?${p.toString()}`
 }
 

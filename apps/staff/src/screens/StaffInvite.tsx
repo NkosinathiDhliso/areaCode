@@ -1,9 +1,10 @@
+import { Spinner } from '@area-code/shared/components/Spinner'
+import { api } from '@area-code/shared/lib/api'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { api } from '@area-code/shared/lib/api'
-import { Spinner } from '@area-code/shared/components/Spinner'
 
 import { startStaffGoogleOAuthWeb } from '../lib/startStaffGoogleOAuth'
+import { useStaffAuthStore } from '../stores/staffAuthStore'
 
 interface StaffInviteProps {
   token: string
@@ -11,8 +12,10 @@ interface StaffInviteProps {
 
 export function StaffInvite({ token }: StaffInviteProps) {
   const { t } = useTranslation()
+  const setAuth = useStaffAuthStore((s) => s.setAuth)
   const [name, setName] = useState('')
-  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [metaLoading, setMetaLoading] = useState(true)
   const [meta, setMeta] = useState<{
     expired: boolean
@@ -46,13 +49,6 @@ export function StaffInvite({ token }: StaffInviteProps) {
     }
   }, [token])
 
-  function normalizePhone(raw: string): string {
-    const digits = raw.replace(/\s+/g, '')
-    if (digits.startsWith('+')) return digits
-    if (digits.startsWith('0')) return `+27${digits.slice(1)}`
-    return `+${digits}`
-  }
-
   async function handleGoogleAccept() {
     if (!name.trim()) {
       setError('Please enter your name.')
@@ -73,19 +69,26 @@ export function StaffInvite({ token }: StaffInviteProps) {
     }
   }
 
-  async function handlePhoneAccept() {
-    if (!name.trim() || !phone.trim()) {
-      setError('Please enter your name and phone number.')
+  async function handleEmailAccept() {
+    if (!name.trim() || !email.trim() || password.length < 8) {
+      setError('Please enter your name, email, and a password with at least 8 characters.')
       return
     }
     setStatus('loading')
     setError(null)
     try {
-      await api.post('/v1/staff-invite/accept', {
+      const res = await api.post<{
+        accessToken: string
+        refreshToken: string
+        sessionId?: string
+        staff: { id: string; name: string; businessId: string }
+      }>('/v1/staff-invite/email-accept', {
         token,
         name: name.trim(),
-        phone: normalizePhone(phone),
+        email: email.trim(),
+        password,
       })
+      setAuth(res.accessToken, res.refreshToken, res.staff.id, res.staff.businessId, res.staff.name, res.sessionId)
       setStatus('success')
     } catch (err: unknown) {
       setStatus('error')
@@ -128,9 +131,7 @@ export function StaffInvite({ token }: StaffInviteProps) {
 
   return (
     <div className="flex flex-col items-center justify-center h-dvh bg-[var(--bg-base)] px-5">
-      <h1 className="text-[var(--text-primary)] font-bold text-2xl mb-6 font-[Syne]">
-        Join as Staff
-      </h1>
+      <h1 className="text-[var(--text-primary)] font-bold text-2xl mb-6 font-[Syne]">Join as Staff</h1>
 
       {status === 'idle' && (
         <div className="flex flex-col gap-3 w-full max-w-xs">
@@ -155,19 +156,24 @@ export function StaffInvite({ token }: StaffInviteProps) {
               )}
             </button>
           )}
-          {meta.hasGoogleOption && (
-            <p className="text-[var(--text-muted)] text-xs text-center">or verify with phone</p>
-          )}
+          {meta.hasGoogleOption && <p className="text-[var(--text-muted)] text-xs text-center">or use email</p>}
           <input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Phone number"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email address"
+            className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
             className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
           />
           <button
-            onClick={() => void handlePhoneAccept()}
-            disabled={!name.trim() || !phone.trim()}
+            onClick={() => void handleEmailAccept()}
+            disabled={!name.trim() || !email.trim() || password.length < 8}
             className="bg-[var(--accent)] text-white font-semibold rounded-xl py-4 text-base transition-all active:scale-95 disabled:opacity-50"
           >
             Accept Invite
@@ -187,7 +193,7 @@ export function StaffInvite({ token }: StaffInviteProps) {
         <div className="flex flex-col items-center gap-4 max-w-xs text-center">
           <p className="text-[var(--success)] font-medium text-lg">Account created</p>
           <p className="text-[var(--text-secondary)] text-sm">
-            Your staff account is ready. Sign in with Google or your phone number to validate redemptions.
+            Your staff account is ready. You can validate redemptions now.
           </p>
           <a
             href="/"

@@ -1,12 +1,10 @@
-import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
-
+import { Spinner } from '@area-code/shared/components/Spinner'
 import { api } from '@area-code/shared/lib/api'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
-import { toE164 } from '@area-code/shared/lib/formatters'
-import { Spinner } from '@area-code/shared/components/Spinner'
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
-import { startBusinessGoogleOAuthWeb } from '../lib/startBusinessGoogleOAuth'
+import { startBusinessGoogleOAuthWeb } from '../lib/businessHostedUiOAuth'
 
 interface BusinessLoginProps {
   onSwitchToSignup: () => void
@@ -15,72 +13,26 @@ interface BusinessLoginProps {
 export function BusinessLogin({ onSwitchToSignup }: BusinessLoginProps) {
   const { t } = useTranslation()
   const setAuth = useBusinessAuthStore((s) => s.setAuth)
-  const [phone, setPhone] = useState('')
-  const [otp, setOtp] = useState('')
-  const [step, setStep] = useState<'phone' | 'otp'>('phone')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [resendCooldown, setResendCooldown] = useState(0)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [showEnvHint, setShowEnvHint] = useState(false)
 
-  // Auto-submit OTP when 6 digits entered
-  useEffect(() => {
-    if (otp.length === 6 && step === 'otp' && !loading) {
-      handleVerifyOtp()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [otp])
-
-  function startResendTimer() {
-    setResendCooldown(60)
-    const interval = setInterval(() => {
-      setResendCooldown((prev) => {
-        if (prev <= 1) { clearInterval(interval); return 0 }
-        return prev - 1
-      })
-    }, 1000)
-  }
-
-  async function handleSendOtp() {
+  async function handleEmailLogin() {
     setLoading(true)
     setError(null)
-    try {
-      await api.post('/v1/auth/business/login', { phone: toE164(phone) })
-      setStep('otp')
-      startResendTimer()
-    } catch (err: unknown) {
-      const apiErr = err as { statusCode?: number; error?: string } | undefined
-      if (apiErr?.statusCode === 404 || apiErr?.error === 'not_found') {
-        setError(t('biz.login.notFound', 'No business account found for this number. Please sign up first.'))
-        return
-      }
-      if (apiErr?.statusCode === 429) {
-        setError(t('auth.login.rateLimited', 'Too many attempts. Please wait and try again.'))
-        return
-      }
-      setError(t('biz.login.sendFailed', 'Failed to send OTP.'))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleVerifyOtp() {
-    setLoading(true)
-    setError(null)
+    setShowEnvHint(false)
     try {
       const res = await api.post<{
         accessToken: string
         refreshToken: string
         businessId: string
-      }>('/v1/auth/business/verify-otp', { phone: toE164(phone), code: otp })
+      }>('/v1/auth/business/email-login', { email, password })
       setAuth(res.accessToken, res.refreshToken, res.businessId)
-    } catch (err: unknown) {
-      const apiErr = err as { statusCode?: number } | undefined
-      if (apiErr?.statusCode === 429) {
-        setError(t('auth.login.rateLimited', 'Too many attempts. Please wait and try again.'))
-        return
-      }
-      setError(t('biz.login.otpFailed', 'Invalid or expired OTP.'))
+    } catch {
+      setError(t('biz.login.emailFailed', 'Invalid email or password.'))
     } finally {
       setLoading(false)
     }
@@ -89,25 +41,25 @@ export function BusinessLogin({ onSwitchToSignup }: BusinessLoginProps) {
   async function handleGoogle() {
     setGoogleLoading(true)
     setError(null)
+    setShowEnvHint(false)
     try {
       await startBusinessGoogleOAuthWeb()
     } catch {
       setGoogleLoading(false)
-      setError(t('auth.oauth.misconfigured', 'Sign-in is not configured. Try again later.'))
+      setError(t('auth.oauth.misconfigured', 'Google sign-in is not configured for this deployment.'))
+      setShowEnvHint(true)
     }
   }
 
   return (
     <div className="flex flex-col items-center justify-center h-dvh bg-[var(--bg-base)] px-5">
-      <h1 className="text-[var(--text-primary)] font-bold text-2xl mb-8 font-[Syne]">
-        {t('biz.login.title')}
-      </h1>
+      <h1 className="text-[var(--text-primary)] font-bold text-2xl mb-8 font-[Syne]">{t('biz.login.title')}</h1>
 
-      <div className="flex flex-col gap-4 w-full max-w-xs mb-6">
+      <div className="flex flex-col gap-4 w-full max-w-xs">
         <button
           type="button"
           onClick={() => void handleGoogle()}
-          disabled={googleLoading}
+          disabled={googleLoading || loading}
           className="flex items-center justify-center gap-3 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
         >
           {googleLoading ? (
@@ -116,76 +68,52 @@ export function BusinessLogin({ onSwitchToSignup }: BusinessLoginProps) {
             t('auth.login.continueGoogle', 'Continue with Google')
           )}
         </button>
+
+        <p className="text-center text-[var(--text-muted)] text-xs">or use email and password</p>
+
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder={t('biz.login.email', 'Email')}
+          className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+        />
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder={t('biz.login.password', 'Password')}
+          className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={() => void handleEmailLogin()}
+          disabled={loading || googleLoading || !email || !password}
+          className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {loading ? (
+            <Spinner size="sm" className="border-white border-t-transparent" />
+          ) : (
+            t('biz.login.submitEmail', 'Sign in')
+          )}
+        </button>
       </div>
 
-      <details className="w-full max-w-xs mb-2">
-        <summary className="text-[var(--text-secondary)] text-sm cursor-pointer select-none mb-4">
-          {t('biz.login.phoneFallback', 'Sign in with phone (SMS)')}
-        </summary>
-
-      {step === 'phone' ? (
-        <div className="flex flex-col gap-4 w-full max-w-xs">
-          <input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && phone && handleSendOtp()}
-            placeholder={t('biz.login.phone')}
-            className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-          />
-          <button
-            onClick={handleSendOtp}
-            disabled={loading || !phone}
-            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {loading ? <Spinner size="sm" className="border-white border-t-transparent" /> : t('biz.login.sendOtp')}
-          </button>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4 w-full max-w-xs">
-          <input
-            type="text"
-            inputMode="numeric"
-            maxLength={6}
-            value={otp}
-            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-            placeholder={t('auth.login.otpPlaceholder')}
-            className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-center text-2xl tracking-[0.3em] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-            autoFocus
-          />
-          <button
-            onClick={handleVerifyOtp}
-            disabled={loading || otp.length !== 6}
-            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {loading ? <Spinner size="sm" className="border-white border-t-transparent" /> : t('biz.login.verifyOtp')}
-          </button>
-          <button
-            onClick={handleSendOtp}
-            disabled={loading || resendCooldown > 0}
-            className="text-[var(--accent)] text-sm mt-1 disabled:text-[var(--text-muted)]"
-          >
-            {resendCooldown > 0
-              ? t('auth.login.resendOtpCooldown', { seconds: resendCooldown, defaultValue: `Resend OTP (${resendCooldown}s)` })
-              : t('auth.login.resendOtp', 'Resend OTP')}
-          </button>
-          <button
-            onClick={() => { setStep('phone'); setOtp(''); setError(null) }}
-            className="text-[var(--text-secondary)] text-sm mt-1 flex items-center gap-1 justify-center"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            {t('biz.login.changeNumber', 'Change number')}
-          </button>
+      {error && (
+        <div className="mt-4 max-w-xs text-center">
+          <p className="text-xs text-[var(--danger)]">{error}</p>
+          {showEnvHint && (
+            <p className="text-[var(--text-muted)] text-[11px] mt-2 leading-snug">
+              {t(
+                'biz.oauth.envHint',
+                'Set VITE_COGNITO_HOSTED_UI_DOMAIN_BUSINESS and VITE_COGNITO_CLIENT_ID_BUSINESS for Google auth.',
+              )}
+            </p>
+          )}
         </div>
       )}
-      </details>
 
-      {error && <p className="text-xs text-[var(--danger)] mt-3">{error}</p>}
-
-      <button
-        onClick={onSwitchToSignup}
-        className="text-[var(--text-secondary)] text-sm mt-6"
-      >
+      <button type="button" onClick={onSwitchToSignup} className="text-[var(--text-secondary)] text-sm mt-8">
         {t('biz.login.noAccount')}
       </button>
     </div>

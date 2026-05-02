@@ -11,6 +11,7 @@ import {
   ListUsersCommand,
   type AuthFlowType,
 } from '@aws-sdk/client-cognito-identity-provider'
+
 import type { AuthRole } from '../middleware/auth.js'
 
 const region = process.env['AWS_REGION'] ?? 'us-east-1'
@@ -50,11 +51,7 @@ function getPool(role: AuthRole): PoolConfig {
 
 // ─── Sign Up ────────────────────────────────────────────────────────────────
 
-export async function signUpUser(
-  role: AuthRole,
-  phone: string,
-  customAttributes?: Record<string, string>,
-) {
+export async function signUpUser(role: AuthRole, phone: string, customAttributes?: Record<string, string>) {
   const pool = getPool(role)
   const userAttributes = [
     { Name: 'phone_number', Value: phone },
@@ -95,6 +92,52 @@ export async function signUpUser(
   )
 }
 
+export async function createEmailPasswordUser(
+  role: AuthRole,
+  email: string,
+  password: string,
+  customAttributes?: Record<string, string>,
+) {
+  const pool = getPool(role)
+  const normalizedEmail = email.toLowerCase().trim()
+  const userAttributes = [
+    { Name: 'email', Value: normalizedEmail },
+    { Name: 'email_verified', Value: 'true' },
+    ...(customAttributes
+      ? Object.entries(customAttributes).map(([k, v]) => ({
+          Name: k.startsWith('custom:') ? k : `custom:${k}`,
+          Value: v,
+        }))
+      : []),
+  ]
+
+  try {
+    await cognitoClient.send(
+      new AdminCreateUserCommand({
+        UserPoolId: pool.userPoolId,
+        Username: normalizedEmail,
+        UserAttributes: userAttributes,
+        MessageAction: 'SUPPRESS',
+      }),
+    )
+  } catch (err: unknown) {
+    if ((err as { name?: string }).name !== 'UsernameExistsException') throw err
+  }
+
+  await cognitoClient.send(
+    new AdminSetUserPasswordCommand({
+      UserPoolId: pool.userPoolId,
+      Username: normalizedEmail,
+      Password: password,
+      Permanent: true,
+    }),
+  )
+
+  const user = await getCognitoUser(role, normalizedEmail)
+  if (!user?.sub) throw new Error('Failed to create Cognito email user')
+  return user
+}
+
 // ─── Initiate Auth (send OTP) ───────────────────────────────────────────────
 
 export async function initiateAuth(role: AuthRole, phone: string) {
@@ -123,12 +166,7 @@ export async function initiateAuth(role: AuthRole, phone: string) {
 
 // ─── Respond to Auth Challenge (verify OTP) ─────────────────────────────────
 
-export async function respondToAuthChallenge(
-  role: AuthRole,
-  phone: string,
-  code: string,
-  session: string,
-) {
+export async function respondToAuthChallenge(role: AuthRole, phone: string, code: string, session: string) {
   const pool = getPool(role)
 
   const result = await cognitoClient.send(
@@ -156,6 +194,32 @@ export async function respondToAuthChallenge(
   }
 }
 
+export async function passwordAuth(role: AuthRole, email: string, password: string) {
+  const pool = getPool(role)
+
+  const result = await cognitoClient.send(
+    new AdminInitiateAuthCommand({
+      UserPoolId: pool.userPoolId,
+      ClientId: pool.clientId,
+      AuthFlow: 'ADMIN_USER_PASSWORD_AUTH' as AuthFlowType,
+      AuthParameters: {
+        USERNAME: email.toLowerCase().trim(),
+        PASSWORD: password,
+      },
+    }),
+  )
+
+  if (!result.AuthenticationResult) {
+    throw new Error('Authentication failed')
+  }
+
+  return {
+    accessToken: result.AuthenticationResult.AccessToken ?? '',
+    refreshToken: result.AuthenticationResult.RefreshToken ?? '',
+    idToken: result.AuthenticationResult.IdToken ?? '',
+  }
+}
+
 // ─── Get User ───────────────────────────────────────────────────────────────
 
 export async function getCognitoUser(role: AuthRole, phone: string) {
@@ -180,11 +244,7 @@ export async function getCognitoUser(role: AuthRole, phone: string) {
 
 // ─── Update Custom Attributes ───────────────────────────────────────────────
 
-export async function updateUserAttributes(
-  role: AuthRole,
-  phone: string,
-  attributes: Record<string, string>,
-) {
+export async function updateUserAttributes(role: AuthRole, phone: string, attributes: Record<string, string>) {
   const pool = getPool(role)
   await cognitoClient.send(
     new AdminUpdateUserAttributesCommand({
@@ -230,10 +290,7 @@ export async function getCognitoUserAttrsBySub(
 }
 
 /** Hosted UI access tokens sometimes omit `email`; read verified attribute from Cognito. */
-export async function getVerifiedEmailBySub(
-  role: AuthRole,
-  cognitoSub: string,
-): Promise<string | undefined> {
+export async function getVerifiedEmailBySub(role: AuthRole, cognitoSub: string): Promise<string | undefined> {
   const attrs = await getCognitoUserAttrsBySub(role, cognitoSub)
   const email = attrs?.['email']
   return typeof email === 'string' ? email.toLowerCase().trim() : undefined

@@ -1,2 +1,10 @@
-npx --no prettier --check .
-npx --no eslint .
+prettier_files="$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx|json|css|md|yml|yaml)$' | tr '\n' ' ')"
+eslint_files="$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx)$' | tr '\n' ' ')"
+
+if [ -n "$prettier_files" ]; then
+  pnpm exec prettier --check $prettier_files
+fi
+
+if [ -n "$eslint_files" ]; then
+  pnpm exec eslint $eslint_files
+fi
