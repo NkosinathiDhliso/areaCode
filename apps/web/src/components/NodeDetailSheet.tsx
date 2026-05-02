@@ -7,6 +7,7 @@ import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import type { GeoStatus } from '@area-code/shared/stores/locationStore'
 import { CrowdVibeSection } from './CrowdVibeSection'
+import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 
 // ─── Directions Helper ──────────────────────────────────────────────────────
 
@@ -64,8 +65,14 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
 }: NodeDetailSheetProps) {
   const { t } = useTranslation()
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
+  const isBusinessAuthenticated = useBusinessAuthStore((s) => s.isAuthenticated)
   const geoStatus = useLocationStore((s) => s.geoStatus)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [claimModalOpen, setClaimModalOpen] = useState(false)
+  const [registrationNumber, setRegistrationNumber] = useState('')
+  const [claiming, setClaiming] = useState(false)
+  const [claimError, setClaimError] = useState('')
+  const [claimSuccess, setClaimSuccess] = useState(false)
 
   if (!node) return null
 
@@ -95,6 +102,25 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
       openDirections(node.lat, node.lng, node.name)
     }
     setMenuOpen(false)
+  }
+
+  async function handleClaim() {
+    if (!node) return
+    setClaiming(true)
+    setClaimError('')
+    try {
+      await api.post(`/v1/nodes/${node.id}/claim`, { registrationNumber: registrationNumber.trim() })
+      setClaimSuccess(true)
+      setTimeout(() => {
+        setClaimModalOpen(false)
+        setClaimSuccess(false)
+        setRegistrationNumber('')
+      }, 2000)
+    } catch (err: any) {
+      setClaimError(err?.message || t('node.claimError'))
+    } finally {
+      setClaiming(false)
+    }
   }
 
   const ctaInfo = getCtaInfo(geoStatus, qrFallback, t)
@@ -209,6 +235,16 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
         {t('node.directions', 'Get directions')}
       </button>
 
+      {/* Claim this venue — for unclaimed nodes when business authenticated */}
+      {isBusinessAuthenticated && node.claimStatus === 'unclaimed' && (
+        <button
+          onClick={() => setClaimModalOpen(true)}
+          className="w-full flex items-center justify-center gap-2 bg-[var(--accent)] text-white font-medium rounded-xl py-3 text-sm mb-3 transition-all duration-150 active:scale-95"
+        >
+          {t('node.claimVenue')}
+        </button>
+      )}
+
       {/* CTA */}
       <button
         onClick={handleCheckIn}
@@ -221,6 +257,58 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
       >
         {ctaInfo.label}
       </button>
+
+      {/* Claim Modal */}
+      {claimModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
+              {t('node.claimVenue')}
+            </h3>
+            <p className="text-[var(--text-secondary)] text-sm mb-4">
+              {t('node.claimDescription')}
+            </p>
+            {claimSuccess && (
+              <p className="text-[var(--success)] text-sm mb-4">{t('node.claimSuccess')}</p>
+            )}
+            {claimError && (
+              <p className="text-[var(--danger)] text-sm mb-4">{claimError}</p>
+            )}
+            {!claimSuccess && (
+              <>
+                <div className="flex flex-col gap-3 mb-4">
+                  <label className="text-[var(--text-primary)] text-xs font-medium">
+                    {t('node.cipcNumber')}
+                  </label>
+                  <input
+                    type="text"
+                    value={registrationNumber}
+                    onChange={(e) => setRegistrationNumber(e.target.value)}
+                    placeholder="YYYY/NNNNNN/NN"
+                    className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+                  />
+                  <p className="text-[var(--text-muted)] text-xs">{t('node.cipcFormat')}</p>
+                </div>
+                <div className="flex flex-row gap-3">
+                  <button
+                    onClick={() => setClaimModalOpen(false)}
+                    className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    onClick={() => void handleClaim()}
+                    disabled={claiming || !registrationNumber.trim()}
+                    className="flex-1 bg-[var(--accent)] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
+                  >
+                    {claiming ? t('node.claiming') : t('node.submitClaim')}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </BottomSheet>
   )
 })
