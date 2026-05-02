@@ -21,6 +21,7 @@ import { generateId } from '../../shared/db/entities.js'
 
 // Re-export DynamoDB functions with same names as Prisma
 export { getUserByCognitoSub, getUserById }
+export { getUserByEmail } from './dynamodb-repository.js'
 
 // ─── User Profile ───────────────────────────────────────────────────────────
 
@@ -153,8 +154,12 @@ export async function findBusinessByPhone(phone: string) {
 export { getStaffByPhone as findStaffByPhone }
 
 export async function createUser(data: {
-  phone: string; username: string; displayName: string;
-  cityId: string; cognitoSub: string;
+  phone?: string
+  email?: string
+  username: string
+  displayName: string
+  cityId: string
+  cognitoSub: string
 }) {
   return createUserDb({
     ...data,

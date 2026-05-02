@@ -8,6 +8,7 @@ import {
   AdminSetUserPasswordCommand,
   AdminDisableUserCommand,
   AdminUserGlobalSignOutCommand,
+  ListUsersCommand,
   type AuthFlowType,
 } from '@aws-sdk/client-cognito-identity-provider'
 import type { AuthRole } from '../middleware/auth.js'
@@ -189,6 +190,57 @@ export async function updateUserAttributes(
     new AdminUpdateUserAttributesCommand({
       UserPoolId: pool.userPoolId,
       Username: phone,
+      UserAttributes: Object.entries(attributes).map(([k, v]) => ({
+        Name: k.startsWith('custom:') ? k : `custom:${k}`,
+        Value: v,
+      })),
+    }),
+  )
+}
+
+/** Federated users use pool Username different from phone lookup; resolve via `sub` attribute filter. */
+async function listUserAttrsBySub(
+  poolUserPoolId: string,
+  cognitoSub: string,
+): Promise<{ Username?: string; attrs: Record<string, string> } | null> {
+  const listRes = await cognitoClient.send(
+    new ListUsersCommand({
+      UserPoolId: poolUserPoolId,
+      Filter: `sub = "${cognitoSub}"`,
+      Limit: 1,
+    }),
+  )
+  const u = listRes.Users?.[0]
+  if (!u?.Username) return null
+  const attrs: Record<string, string> = {}
+  for (const a of u.Attributes ?? []) {
+    if (a.Name && a.Value) attrs[a.Name] = a.Value
+  }
+  return { Username: u.Username, attrs }
+}
+
+/** Hosted UI access tokens sometimes omit `email`; read verified attribute from Cognito. */
+export async function getConsumerVerifiedEmailBySub(cognitoSub: string): Promise<string | undefined> {
+  const pool = getPool('consumer')
+  const row = await listUserAttrsBySub(pool.userPoolId, cognitoSub)
+  const email = row?.attrs['email']
+  return typeof email === 'string' ? email.toLowerCase().trim() : undefined
+}
+
+export async function updateUserAttributesByCognitoSub(
+  role: AuthRole,
+  cognitoSub: string,
+  attributes: Record<string, string>,
+) {
+  const pool = getPool(role)
+  const row = await listUserAttrsBySub(pool.userPoolId, cognitoSub)
+  const username = row?.Username
+  if (!username) throw new Error('Cognito user not found for sub')
+
+  await cognitoClient.send(
+    new AdminUpdateUserAttributesCommand({
+      UserPoolId: pool.userPoolId,
+      Username: username,
       UserAttributes: Object.entries(attributes).map(([k, v]) => ({
         Name: k.startsWith('custom:') ? k : `custom:${k}`,
         Value: v,

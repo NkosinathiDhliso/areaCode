@@ -1,65 +1,28 @@
 import { useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
-import { api } from '@area-code/shared/lib/api'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { colors } from '../../src/theme'
-
-function toE164(raw: string): string {
-  const digits = raw.replace(/\D/g, '')
-  if (digits.startsWith('0') && digits.length === 10) return `+27${digits.slice(1)}`
-  if (digits.startsWith('27') && digits.length === 11) return `+${digits}`
-  return raw.startsWith('+') ? raw : `+${digits}`
-}
+import { signInWithGoogleConsumerMobile } from '../../src/lib/consumerGoogleOAuth'
 
 export default function ConsumerLogin() {
   const { t } = useTranslation()
   const router = useRouter()
   const setAuth = useConsumerAuthStore((s) => s.setAuth)
 
-  const [phone, setPhone] = useState('')
-  const [otp, setOtp] = useState('')
-  const [step, setStep] = useState<'phone' | 'otp'>('phone')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [resendCooldown, setResendCooldown] = useState(0)
 
-  function startResendTimer() {
-    setResendCooldown(60)
-    const interval = setInterval(() => {
-      setResendCooldown((prev) => {
-        if (prev <= 1) { clearInterval(interval); return 0 }
-        return prev - 1
-      })
-    }, 1000)
-  }
-
-  async function handleSendOtp() {
+  async function handleGoogle() {
     setLoading(true)
     setError(null)
     try {
-      await api.post('/v1/auth/consumer/login', { phone: toE164(phone) })
-      setStep('otp')
-      startResendTimer()
-    } catch {
-      setError(t('auth.login.sendFailed'))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleVerifyOtp() {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await api.post<{
-        accessToken: string; refreshToken: string; user: { id: string }
-      }>('/v1/auth/consumer/verify-otp', { phone: toE164(phone), code: otp })
-      setAuth(res.accessToken, res.refreshToken, res.user.id)
+      const res = await signInWithGoogleConsumerMobile()
+      setAuth(res.accessToken, res.refreshToken, res.userId, res.sessionId)
       router.replace('/')
     } catch {
-      setError(t('auth.login.otpFailed'))
+      setError(t('auth.oauth.failed'))
     } finally {
       setLoading(false)
     }
@@ -69,65 +32,17 @@ export default function ConsumerLogin() {
     <View style={styles.container}>
       <Text style={styles.title}>{t('auth.login.title')}</Text>
 
-      {step === 'phone' ? (
-        <View style={styles.form}>
-          <TextInput
-            style={styles.input}
-            value={phone}
-            onChangeText={setPhone}
-            placeholder={t('auth.login.phone')}
-            placeholderTextColor={colors.textMuted}
-            keyboardType="phone-pad"
-            autoFocus
-          />
-          <TouchableOpacity
-            style={[styles.primaryButton, (!phone || loading) && styles.disabled]}
-            onPress={handleSendOtp}
-            disabled={loading || !phone}
-          >
-            <Text style={styles.primaryButtonText}>
-              {loading ? '...' : t('auth.login.sendOtp')}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.form}>
-          <TextInput
-            style={[styles.input, styles.otpInput]}
-            value={otp}
-            onChangeText={(v) => setOtp(v.replace(/\D/g, ''))}
-            placeholder={t('auth.login.otpPlaceholder')}
-            placeholderTextColor={colors.textMuted}
-            keyboardType="number-pad"
-            maxLength={6}
-            autoFocus
-          />
-          <TouchableOpacity
-            style={[styles.primaryButton, (otp.length !== 6 || loading) && styles.disabled]}
-            onPress={handleVerifyOtp}
-            disabled={loading || otp.length !== 6}
-          >
-            <Text style={styles.primaryButtonText}>
-              {loading ? '...' : t('auth.login.verifyOtp')}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={handleSendOtp}
-            disabled={loading || resendCooldown > 0}
-          >
-            <Text style={[styles.resendText, (loading || resendCooldown > 0) && styles.resendDisabled]}>
-              {resendCooldown > 0 ? `Resend OTP (${resendCooldown}s)` : 'Resend OTP'}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => { setStep('phone'); setOtp(''); setError(null) }}
-          >
-            <Text style={styles.changeNumberText}>
-              ← {t('auth.login.changeNumber', 'Change number')}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      <TouchableOpacity
+        style={[styles.googleButton, loading && styles.disabled]}
+        onPress={() => void handleGoogle()}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator color={colors.textPrimary} />
+        ) : (
+          <Text style={styles.googleButtonText}>{t('auth.login.continueGoogle')}</Text>
+        )}
+      </TouchableOpacity>
 
       {error && <Text style={styles.error}>{error}</Text>}
 
@@ -141,7 +56,6 @@ export default function ConsumerLogin() {
   )
 }
 
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -151,30 +65,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   title: { color: colors.textPrimary, fontWeight: '700', fontSize: 24, marginBottom: 32 },
-  form: { width: '100%', maxWidth: 320, gap: 16 },
-  input: {
+  googleButton: {
+    width: '100%',
+    maxWidth: 320,
     backgroundColor: colors.bgRaised,
     borderColor: colors.border,
     borderWidth: 1,
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: colors.textPrimary,
-    fontSize: 14,
-  },
-  otpInput: { textAlign: 'center', fontSize: 24, letterSpacing: 8 },
-  primaryButton: {
-    backgroundColor: colors.accent,
-    borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
   },
-  primaryButtonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  googleButtonText: { color: colors.textPrimary, fontWeight: '600', fontSize: 16 },
   disabled: { opacity: 0.5 },
-  error: { color: colors.danger, fontSize: 12, marginTop: 12 },
-  resendText: { color: colors.accent, fontSize: 13, textAlign: 'center', marginTop: 8 },
-  resendDisabled: { color: colors.textMuted },
-  changeNumberText: { color: colors.textSecondary, fontSize: 13, textAlign: 'center', marginTop: 8 },
+  error: { color: colors.danger, fontSize: 12, marginTop: 16, textAlign: 'center' },
   link: { color: colors.accent, fontSize: 14, marginTop: 24 },
   mutedLink: { color: colors.textMuted, fontSize: 12, marginTop: 12 },
 })

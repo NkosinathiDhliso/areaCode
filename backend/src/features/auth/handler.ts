@@ -66,6 +66,26 @@ export async function authRoutes(app: FastifyInstance) {
     },
   )
 
+  // POST /v1/auth/consumer/oauth-sync (after Cognito Hosted UI + Google)
+  app.post(
+    '/v1/auth/consumer/oauth-sync',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'consumer-oauth-sync', max: 10, windowSeconds: 60 }),
+        requireAuth('consumer'),
+      ],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      const userAgent = request.headers['user-agent'] ?? ''
+      return service.consumerOAuthSync({
+        cognitoSub: auth.cognitoSub,
+        email: auth.email,
+        userAgent,
+      })
+    },
+  )
+
   // POST /v1/auth/consumer/refresh
   app.post('/v1/auth/consumer/refresh', { preHandler: [validate({ body: refreshBodySchema })] }, async (request) => {
     const body = request.body as z.infer<typeof refreshBodySchema>

@@ -85,6 +85,93 @@ export async function consumerLogin(phone: string) {
   await kvSet(`otp:session:${phone}`, session, 300)
 }
 
+function suggestedUsernameFromEmail(email: string): string {
+  const local = email.split('@')[0] ?? 'explorer'
+  let slug = local.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 24)
+  if (slug.length < 3) slug = `go_${slug.padEnd(2, '0')}`.slice(0, 24)
+  return slug
+}
+
+/** Called once after Hosted UI Google OAuth returns Cognito tokens. Ensures Dynamo user + Cognito custom:userId. */
+export async function consumerOAuthSync(opts: {
+  cognitoSub: string
+  email?: string | undefined
+  userAgent: string
+}) {
+  const { cognitoSub, email: rawEmail, userAgent } = opts
+
+  if (DEV_MODE) {
+    const userId = `dev-user-google-${Date.now()}`
+    const session = await createLoginSession(userId, userAgent)
+    return {
+      userId,
+      sessionId: session.sessionId,
+      username: 'dev_google',
+      displayName: 'Dev Google User',
+    tier: 'explorer',
+  }
+}
+
+  let user = await repo.getUserByCognitoSub(cognitoSub)
+
+  if (!user) {
+    let email = rawEmail?.toLowerCase().trim()
+    if (!email) email = await cognito.getConsumerVerifiedEmailBySub(cognitoSub)
+    if (!email) {
+      throw AppError.unprocessable(
+        'Your Google account has no email. Use another Google account or contact support.',
+      )
+    }
+
+    const dupEmail = await repo.getUserByEmail(email)
+    if (dupEmail && dupEmail.cognitoSub && dupEmail.cognitoSub !== cognitoSub) {
+      throw AppError.conflict(
+        'This email is already registered. Sign in with the method you used before.',
+      )
+    }
+
+    const city = await repo.getCityBySlug('johannesburg')
+    if (!city) throw AppError.internal('Default city missing')
+
+    let username = suggestedUsernameFromEmail(email)
+    let n = 0
+    while (await repo.findUserByUsername(username)) {
+      n += 1
+      username = `${suggestedUsernameFromEmail(email).slice(0, 18)}_${n}`
+    }
+
+    const emailLocal = email.split('@')[0] ?? 'Friend'
+    const displayName =
+      emailLocal.length > 0 ? emailLocal.charAt(0).toUpperCase() + emailLocal.slice(1) : 'Explorer'
+
+    user = await repo.createUser({
+      email,
+      username,
+      displayName,
+      cityId: city.id,
+      cognitoSub,
+    })
+
+    const consentVersion = process.env['AREA_CODE_CONSENT_VERSION'] ?? 'v1.0'
+    await repo.insertConsentRecord(user.userId, consentVersion, false)
+  }
+
+  await cognito.updateUserAttributesByCognitoSub('consumer', cognitoSub, {
+    userId: user.userId,
+    citySlug: 'johannesburg',
+  })
+
+  const session = await createLoginSession(user.userId, userAgent)
+
+  return {
+    userId: user.userId,
+    sessionId: session.sessionId,
+    username: user.username,
+    displayName: user.displayName,
+    tier: user.tier ?? 'explorer',
+  }
+}
+
 export async function consumerVerifyOtp(phone: string, code: string, userAgent?: string) {
   if (DEV_MODE) {
     const userId = `dev-user-${Date.now()}`

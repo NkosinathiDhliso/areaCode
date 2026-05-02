@@ -20,6 +20,7 @@ import { PrivacySettingsScreen } from './screens/PrivacySettingsScreen'
 import { CheckInHistoryScreen } from './screens/CheckInHistoryScreen'
 import { ConsumerLogin } from './screens/ConsumerLogin'
 import { ConsumerSignup } from './screens/ConsumerSignup'
+import { ConsumerOAuthCallback } from './screens/ConsumerOAuthCallback'
 import { AuthLanding } from './screens/AuthLanding'
 import { BottomNav } from './components/BottomNav'
 import { ConnectivityBanner } from './components/ConnectivityBanner'
@@ -168,6 +169,9 @@ function AppContent() {
 
   // Auth screens render without bottom nav
   if (!isAuthenticated) {
+    if (window.location.pathname.startsWith('/auth/callback')) {
+      return <ConsumerOAuthCallback onNavigate={setRoute} />
+    }
     if (route === 'landing') return <AuthLanding onNavigate={setRoute} />
     if (route === 'login') return <ConsumerLogin onNavigate={setRoute} />
     if (route === 'signup') return <ConsumerSignup onNavigate={setRoute} />

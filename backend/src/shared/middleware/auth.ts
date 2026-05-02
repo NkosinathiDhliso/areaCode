@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import jwt from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
 import { AppError } from '../errors/AppError.js';
+import { getUserByCognitoSub } from '../../features/auth/dynamodb-repository.js';
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE'];
 
@@ -12,6 +13,8 @@ export interface AuthPayload {
   role: AuthRole;
   cognitoSub: string;
   citySlug?: string | undefined;
+  /** Present on many federated access tokens (e.g. Google via Hosted UI). */
+  email?: string | undefined;
 }
 
 // Cognito pool config , each pool has its own JWKS endpoint
@@ -97,11 +100,20 @@ async function verifyToken(token: string, role: AuthRole): Promise<AuthPayload> 
     throw AppError.unauthorized('Missing sub claim');
   }
 
-  // userId is stored as a custom claim by our auth service
-  const userId = (payload['custom:userId'] as string | undefined) ?? cognitoSub;
+  // userId is stored as a custom claim by our auth service (phone OTP path).
+  // Federated users often omit it until sync refreshes tokens; resolve Dynamo userId by sub.
+  let userId = (payload['custom:userId'] as string | undefined) ?? cognitoSub;
+  if (role === 'consumer' && !payload['custom:userId']) {
+    const row = await getUserByCognitoSub(cognitoSub)
+    if (row?.userId) userId = row.userId
+  }
+
   const citySlug = payload['custom:citySlug'] as string | undefined;
 
-  return { userId, role, cognitoSub, citySlug };
+  const email =
+    typeof payload['email'] === 'string' ? payload.email : undefined;
+
+  return { userId, role, cognitoSub, citySlug, email };
 }
 
 /**
@@ -121,6 +133,7 @@ export function requireAuth(...roles: AuthRole[]) {
         role,
         cognitoSub: `dev-sub-${userId}`,
         citySlug: 'johannesburg',
+        email: undefined,
       };
       return;
     }
@@ -170,6 +183,7 @@ export function optionalAuth(...roles: AuthRole[]) {
         role,
         cognitoSub: `dev-sub-${token}`,
         citySlug: 'johannesburg',
+        email: undefined,
       };
       return;
     }

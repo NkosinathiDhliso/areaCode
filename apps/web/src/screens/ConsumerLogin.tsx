@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { api } from '@area-code/shared/lib/api'
-import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
-import { toE164 } from '@area-code/shared/lib/formatters'
+
 import { Spinner } from '@area-code/shared/components/Spinner'
+
+import { startConsumerGoogleOAuthWeb } from '../lib/startConsumerGoogleOAuth'
 import type { AppRoute } from '../types'
 
 interface ConsumerLoginProps {
@@ -12,76 +12,17 @@ interface ConsumerLoginProps {
 
 export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
   const { t } = useTranslation()
-  const setAuth = useConsumerAuthStore((s) => s.setAuth)
-  const [phone, setPhone] = useState('')
-  const [otp, setOtp] = useState('')
-  const [step, setStep] = useState<'phone' | 'otp'>('phone')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [wrongDoor, setWrongDoor] = useState(false)
-  const [resendCooldown, setResendCooldown] = useState(0)
 
-  // Auto-submit OTP when 6 digits entered (Issue #11)
-  useEffect(() => {
-    if (otp.length === 6 && step === 'otp' && !loading) {
-      handleVerifyOtp()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [otp])
-
-  async function handleSendOtp() {
-    setLoading(true)
-    setError(null)
-    setWrongDoor(false)
-    const e164 = toE164(phone)
-    try {
-      await api.post('/v1/auth/consumer/login', { phone: e164 })
-      setStep('otp')
-      setResendCooldown(60)
-      const interval = setInterval(() => {
-        setResendCooldown((prev) => {
-          if (prev <= 1) { clearInterval(interval); return 0 }
-          return prev - 1
-        })
-      }, 1000)
-    } catch (err: unknown) {
-      const apiErr = err as { statusCode?: number; error?: string } | undefined
-      if (apiErr?.statusCode === 404 || apiErr?.error === 'not_found') {
-        setError(t('auth.login.accountNotFound', 'No account found for this number. Please sign up first.'))
-        return
-      }
-      if (apiErr?.statusCode === 429) {
-        setError(t('auth.login.rateLimited', 'Too many attempts. Please wait a moment and try again.'))
-        return
-      }
-      try {
-        const typeRes = await api.get<{ accountType: string }>(
-          `/v1/auth/account-type?phone=${encodeURIComponent(e164)}`,
-        )
-        if (typeRes.accountType === 'business') {
-          setWrongDoor(true)
-          return
-        }
-      } catch { /* non-critical fallback */ }
-      setError(t('auth.login.sendFailed'))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleVerifyOtp() {
+  async function handleGoogle() {
     setLoading(true)
     setError(null)
     try {
-      const res = await api.post<{
-        accessToken: string; refreshToken: string; sessionId?: string; user: { id: string }
-      }>('/v1/auth/consumer/verify-otp', { phone: toE164(phone), code: otp })
-      setAuth(res.accessToken, res.refreshToken, res.user.id, res.sessionId)
-      onNavigate('map')
+      await startConsumerGoogleOAuthWeb()
     } catch {
-      setError(t('auth.login.otpFailed'))
-    } finally {
       setLoading(false)
+      setError(t('auth.oauth.misconfigured', 'Sign-in is not configured. Try again later.'))
     }
   }
 
@@ -91,77 +32,27 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
         {t('auth.login.title')}
       </h1>
 
-      {step === 'phone' ? (
-        <div className="flex flex-col gap-4 w-full max-w-xs">
-          <input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && phone && handleSendOtp()}
-            placeholder={t('auth.login.phone')}
-            className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-          />
-          <button
-            onClick={handleSendOtp}
-            disabled={loading || !phone}
-            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {loading ? <Spinner size="sm" className="border-white border-t-transparent" /> : t('auth.login.sendOtp')}
-          </button>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4 w-full max-w-xs">
-          <input
-            type="text"
-            inputMode="numeric"
-            maxLength={6}
-            value={otp}
-            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-            placeholder={t('auth.login.otpPlaceholder')}
-            className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-center text-2xl tracking-[0.3em] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-            autoFocus
-          />
-          <button
-            onClick={handleVerifyOtp}
-            disabled={loading || otp.length !== 6}
-            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {loading ? <Spinner size="sm" className="border-white border-t-transparent" /> : t('auth.login.verifyOtp')}
-          </button>
-          <button
-            onClick={handleSendOtp}
-            disabled={loading || resendCooldown > 0}
-            className="text-[var(--accent)] text-sm mt-1 disabled:text-[var(--text-muted)]"
-          >
-            {resendCooldown > 0
-              ? t('auth.login.resendOtpCooldown', { seconds: resendCooldown, defaultValue: `Resend OTP (${resendCooldown}s)` })
-              : t('auth.login.resendOtp')}
-          </button>
-          <button
-            onClick={() => { setStep('phone'); setOtp(''); setError(null) }}
-            className="text-[var(--text-secondary)] text-sm mt-1 flex items-center gap-1 justify-center"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            {t('auth.login.changeNumber', 'Change number')}
-          </button>
-        </div>
-      )}
+      <div className="flex flex-col gap-4 w-full max-w-xs">
+        <button
+          type="button"
+          onClick={() => void handleGoogle()}
+          disabled={loading}
+          className="flex items-center justify-center gap-3 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
+        >
+          {loading ? (
+            <Spinner size="sm" className="border-[var(--accent)] border-t-transparent" />
+          ) : (
+            t('auth.login.continueGoogle', 'Continue with Google')
+          )}
+        </button>
+      </div>
 
-      {wrongDoor && (
-        <div className="mt-4 text-center">
-          <p className="text-[var(--text-secondary)] text-sm">{t('auth.login.wrongDoor')}</p>
-          <a href="/business/login" className="text-[var(--accent)] text-sm underline mt-1 inline-block">
-            {t('auth.login.businessLogin')}
-          </a>
-        </div>
-      )}
+      {error && <p className="text-xs text-[var(--danger)] mt-4 text-center">{error}</p>}
 
-      {error && <p className="text-xs text-[var(--danger)] mt-3">{error}</p>}
-
-      <button onClick={() => onNavigate('signup')} className="mt-6 text-[var(--accent)] text-sm">
+      <button type="button" onClick={() => onNavigate('signup')} className="mt-8 text-[var(--accent)] text-sm">
         {t('auth.login.noAccount')}
       </button>
-      <button onClick={() => onNavigate('map')} className="mt-3 text-[var(--text-muted)] text-xs">
+      <button type="button" onClick={() => onNavigate('map')} className="mt-3 text-[var(--text-muted)] text-xs">
         {t('auth.login.browseOnly')}
       </button>
     </div>

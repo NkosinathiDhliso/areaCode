@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
+import * as WebBrowser from 'expo-web-browser'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
+WebBrowser.maybeCompleteAuthSession()
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
 import { api } from '@area-code/shared/lib/api'

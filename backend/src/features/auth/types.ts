@@ -67,6 +67,7 @@ export interface User {
   id?: string
   userId: string
   phone?: string
+  email?: string
   username: string
   displayName: string
   avatarUrl?: string | null
