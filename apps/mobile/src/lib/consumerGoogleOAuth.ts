@@ -9,8 +9,7 @@ import {
 } from '@area-code/shared/lib/cognitoHostedUiOAuth'
 
 function apiUrl(): string {
-  const v =
-    typeof process !== 'undefined' ? process.env['EXPO_PUBLIC_API_URL']?.trim() : undefined
+  const v = typeof process !== 'undefined' ? process.env['EXPO_PUBLIC_API_URL']?.trim() : undefined
   return v || 'http://localhost:4000'
 }
 
@@ -65,7 +64,6 @@ export async function signInWithGoogleConsumerMobile(): Promise<{
     method: 'POST',
     headers: {
       Authorization: `Bearer ${tokens.access_token}`,
-      'Content-Type': 'application/json',
     },
   })
 
