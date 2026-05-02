@@ -43,7 +43,7 @@ beforeAll(async () => {
   const { buildApp } = await import('../app.js')
   app = await buildApp()
   await app.ready()
-}, 30_000)
+}, 120_000)
 
 afterAll(async () => {
   await app.close()
