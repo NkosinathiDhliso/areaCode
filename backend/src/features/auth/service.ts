@@ -3,6 +3,7 @@ import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet, kvSet, kvDel, kvIncr } from '../../shared/kv/dynamodb-kv.js'
 import { reportOtpFeedback } from '../../shared/sms/feedback.js'
 import { findBusinessByCognitoSub } from '../business/repository.js'
+import { updateBusiness } from './dynamodb-repository.js'
 
 import * as repo from './repository.js'
 import { createLoginSession } from './session-service.js'
@@ -488,7 +489,21 @@ export async function businessOAuthSync(opts: { cognitoSub: string; userAgent: s
   }
 
   const row = await findBusinessByCognitoSub(opts.cognitoSub)
-  const businessId = row?.businessId as string | undefined
+  let businessId = row?.businessId as string | undefined
+
+  // If not found by cognitoSub, try by email (handles email signup → Google OAuth)
+  if (!businessId) {
+    const email = await cognito.getVerifiedEmailBySub('business', opts.cognitoSub)
+    if (email) {
+      const byEmail = await repo.findBusinessByEmail(email)
+      if (byEmail) {
+        businessId = byEmail.id
+        // Link the Cognito sub to the existing business
+        await updateBusiness(businessId!, { cognitoSub: opts.cognitoSub } as any)
+      }
+    }
+  }
+
   if (!businessId) {
     return { needsBusinessProfile: true as const }
   }
