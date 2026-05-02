@@ -207,14 +207,21 @@ export function StreamingSection() {
       )}
 
       {connected ? (
-        <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl p-3">
+        <div className="bg-[var(--bg-raised)] border border-[var(--accent)] rounded-xl p-3">
           <div className="flex flex-row items-center justify-between gap-3">
             <div className="flex-1">
-              <span className="text-[var(--text-primary)] text-sm font-medium">
-                {t('profile.streaming.connected', {
-                  provider: connected === 'spotify' ? 'Spotify' : 'Apple Music',
-                })}
-              </span>
+              <div className="flex flex-row items-center gap-2">
+                {connected === 'spotify' && (
+                  <svg className="text-[var(--accent)]" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                  </svg>
+                )}
+                <span className="text-[var(--text-primary)] text-sm font-medium">
+                  {t('profile.streaming.connected', {
+                    provider: connected === 'spotify' ? 'Spotify' : 'Apple Music',
+                  })}
+                </span>
+              </div>
               <p className="text-[var(--text-muted)] text-xs mt-1">
                 {genres.length > 0
                   ? `${genres.length} genres synced${archetype ? `, ${archetype.name}` : ''}`
@@ -232,30 +239,59 @@ export function StreamingSection() {
         </div>
       ) : (
         <>
-          <div className="flex flex-row gap-2 mb-3">
-            <button
-              onClick={() => setShowConsent('spotify')}
-              disabled={loading}
-              className="flex-1 bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl py-2 text-[var(--text-primary)] text-sm disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <span className="w-4 h-4 border-2 border-[var(--text-muted)] border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <>
+          <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl p-3 mb-3">
+            <div className="flex flex-row items-start justify-between gap-3 mb-3">
+              <div className="flex flex-row items-center gap-2">
+                <span className="w-8 h-8 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] flex items-center justify-center text-[var(--accent)]">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
                   </svg>
-                  {t('profile.streaming.connectSpotify')}
-                </>
+                </span>
+                <div>
+                  <p className="text-[var(--text-primary)] text-sm font-medium">Spotify music sync</p>
+                  <p className="text-[var(--text-muted)] text-xs">Ready to discover your music personality</p>
+                </div>
+              </div>
+              <span className="rounded-xl border border-[var(--accent)] px-2 py-1 text-[var(--accent)] text-[10px] font-medium uppercase tracking-wider">
+                Live
+              </span>
+            </div>
+
+            <p className="text-[var(--text-secondary)] text-xs mb-3">
+              Connect Spotify to read your top artists, map them into Area Code genres, and update your archetype
+              automatically.
+            </p>
+
+            <div className="flex flex-row flex-wrap gap-2 mb-3">
+              <span className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl px-2 py-1 text-[var(--text-secondary)] text-[11px]">
+                OAuth connected
+              </span>
+              <span className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl px-2 py-1 text-[var(--text-secondary)] text-[11px]">
+                Top artists
+              </span>
+              <span className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl px-2 py-1 text-[var(--text-secondary)] text-[11px]">
+                Archetype sync
+              </span>
+            </div>
+
+            <button
+              onClick={() => setShowConsent('spotify')}
+              disabled={loading}
+              className="w-full bg-[var(--accent)] text-white rounded-xl py-3 text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-95"
+            >
+              {loading ? (
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                t('profile.streaming.connectSpotify')
               )}
             </button>
-            <button
-              disabled
-              title="Apple Music coming soon (Beta)"
-              className="flex-1 bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl py-2 text-[var(--text-muted)] text-sm opacity-50 cursor-not-allowed"
-            >
-              {t('profile.streaming.connectApple')} (Coming soon)
-            </button>
+          </div>
+
+          <div className="flex flex-row items-center justify-between gap-3 mb-3">
+            <p className="text-[var(--text-muted)] text-xs">Prefer manual setup? Pick up to 5 genres below.</p>
+            <span className="text-[var(--text-muted)] text-xs whitespace-nowrap">
+              {t('profile.streaming.connectApple')} soon
+            </span>
           </div>
           <ManualGenreSelector />
         </>
