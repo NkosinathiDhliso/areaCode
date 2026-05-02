@@ -5,6 +5,7 @@ import { generateId } from '../../shared/db/entities.js'
 import { randomBytes } from 'node:crypto'
 import {
   getBusinessById as getBusinessDynamo,
+  getBusinessByCognitoSub,
   updateBusiness,
   getStaffByBusinessId,
 } from '../auth/dynamodb-repository.js'
@@ -15,22 +16,14 @@ export async function findBusinessById(id: string) {
 }
 
 export async function findBusinessByCognitoSub(sub: string) {
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.businesses,
-      IndexName: 'CognitoIndex',
-      KeyConditionExpression: 'cognitoSub = :sub',
-      ExpressionAttributeValues: { ':sub': sub },
-    })
-  )
-  return result.Items?.[0] ?? null
+  // The `businesses` table only has the `OwnerIndex` GSI (see infra TF).
+  // Delegate to the Scan-based lookup in the auth repository to avoid
+  // querying a non-existent `CognitoIndex` GSI (which throws and surfaces
+  // as 401 Unauthorized through requireAuth → verifyToken).
+  return getBusinessByCognitoSub(sub)
 }
 
-export async function updateBusinessTier(
-  id: string,
-  tier: string,
-  trialEndsAt?: string | null,
-) {
+export async function updateBusinessTier(id: string, tier: string, trialEndsAt?: string | null) {
   const data: Record<string, unknown> = { tier }
   if (trialEndsAt !== undefined) data['trialEndsAt'] = trialEndsAt
   return updateBusiness(id, data as any)
@@ -54,11 +47,7 @@ export async function countStaffForBusiness(businessId: string) {
   return staff.filter((s: any) => s.isActive !== false).length
 }
 
-export async function createStaffInvite(
-  businessId: string,
-  phone?: string,
-  email?: string,
-) {
+export async function createStaffInvite(businessId: string, phone?: string, email?: string) {
   const inviteToken = randomBytes(32).toString('hex')
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
   const inviteId = generateId()
@@ -68,10 +57,14 @@ export async function createStaffInvite(
     sk: `STAFF_INVITE#${inviteToken}`,
     gsi1pk: `BIZ_INVITES#${businessId}`,
     gsi1sk: now,
-    id: inviteId, businessId, inviteToken,
-    invitedPhone: phone ?? null, invitedEmail: email ?? null,
+    id: inviteId,
+    businessId,
+    inviteToken,
+    invitedPhone: phone ?? null,
+    invitedEmail: email ?? null,
     accepted: false,
-    expiresAt, createdAt: now,
+    expiresAt,
+    createdAt: now,
   }
   await documentClient.send(new PutCommand({ TableName: TableNames.appData, Item: item }))
   return item
@@ -85,7 +78,7 @@ export async function listStaffInvites(businessId: string) {
       KeyConditionExpression: 'gsi1pk = :pk',
       ExpressionAttributeValues: { ':pk': `BIZ_INVITES#${businessId}` },
       ScanIndexForward: false,
-    })
+    }),
   )
   return result.Items ?? []
 }
@@ -103,7 +96,7 @@ export async function removeStaffAccount(id: string, businessId: string) {
       Key: { pk: `STAFF#${id}`, sk: `BIZ#${businessId}` },
       UpdateExpression: 'SET isActive = :inactive',
       ExpressionAttributeValues: { ':inactive': false },
-    })
+    }),
   )
   return { count: 1 }
 }
@@ -114,7 +107,7 @@ export async function findWebhookEvent(eventId: string) {
     new GetCommand({
       TableName: TableNames.appData,
       Key: { pk: `WEBHOOK#${eventId}`, sk: `WEBHOOK#${eventId}` },
-    })
+    }),
   )
   return result.Item ?? null
 }
@@ -123,7 +116,8 @@ export async function createWebhookEvent(eventId: string, eventType: string) {
   const item = {
     pk: `WEBHOOK#${eventId}`,
     sk: `WEBHOOK#${eventId}`,
-    eventId, eventType,
+    eventId,
+    eventType,
     createdAt: new Date().toISOString(),
     ttl: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60, // 30 days
   }
@@ -133,9 +127,7 @@ export async function createWebhookEvent(eventId: string, eventType: string) {
 
 // QR token helpers
 export async function getNodeForBusiness(nodeId: string, businessId: string) {
-  const result = await documentClient.send(
-    new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } })
-  )
+  const result = await documentClient.send(new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } }))
   const node = result.Item
   if (!node || node['businessId'] !== businessId) return null
   return { ...node, id: node['nodeId'] ?? nodeId }
@@ -149,7 +141,7 @@ export async function deactivateBusinessRewards(businessId: string) {
       IndexName: 'BusinessIndex',
       KeyConditionExpression: 'businessId = :bid',
       ExpressionAttributeValues: { ':bid': businessId },
-    })
+    }),
   )
   const nodeIds = (nodesResult.Items || []).map((n) => (n['nodeId'] ?? n['id']) as string)
   let count = 0
@@ -159,7 +151,7 @@ export async function deactivateBusinessRewards(businessId: string) {
         TableName: TableNames.rewards,
         FilterExpression: 'nodeId = :nid AND isActive = :active',
         ExpressionAttributeValues: { ':nid': nid, ':active': true },
-      })
+      }),
     )
     for (const r of rewards.Items || []) {
       await documentClient.send(
@@ -168,7 +160,7 @@ export async function deactivateBusinessRewards(businessId: string) {
           Key: { rewardId: r['rewardId'] },
           UpdateExpression: 'SET isActive = :inactive',
           ExpressionAttributeValues: { ':inactive': false },
-        })
+        }),
       )
       count++
     }
@@ -185,7 +177,7 @@ export async function getLiveStats(businessId: string) {
       IndexName: 'BusinessIndex',
       KeyConditionExpression: 'businessId = :bid',
       ExpressionAttributeValues: { ':bid': businessId },
-    })
+    }),
   )
   const nodeIds = (nodesResult.Items || []).map((n) => (n['nodeId'] ?? n['id']) as string)
 
@@ -210,7 +202,7 @@ export async function getNodesForBusiness(businessId: string) {
       IndexName: 'BusinessIndex',
       KeyConditionExpression: 'businessId = :bid',
       ExpressionAttributeValues: { ':bid': businessId },
-    })
+    }),
   )
   return (result.Items || []).map((n) => ({ ...n, id: n['nodeId'] ?? n['id'] }))
 }
@@ -224,7 +216,7 @@ export async function getAudienceAnalytics(businessId: string) {
       IndexName: 'BusinessIndex',
       KeyConditionExpression: 'businessId = :bid',
       ExpressionAttributeValues: { ':bid': businessId },
-    })
+    }),
   )
   const nodeIds = (nodesResult.Items || []).map((n) => (n['nodeId'] ?? n['id']) as string)
 
@@ -262,7 +254,7 @@ export async function getRecentRedemptions(businessId: string) {
       TableName: TableNames.appData,
       FilterExpression: 'begins_with(pk, :prefix) AND attribute_exists(redeemedAt)',
       ExpressionAttributeValues: { ':prefix': 'REDEMPTION#' },
-    })
+    }),
   )
   return (result.Items || []).slice(0, 20)
 }
@@ -280,14 +272,14 @@ export async function getCheckInDetails(businessId: string, date?: string, curso
     Limit: 50,
   }
   if (cursor) {
-    (params as any).ExclusiveStartKey = JSON.parse(Buffer.from(cursor, 'base64url').toString())
+    ;(params as any).ExclusiveStartKey = JSON.parse(Buffer.from(cursor, 'base64url').toString())
   }
   const result = await documentClient.send(new QueryCommand(params as any))
   const items = (result.Items || []).map((i) => ({
     displayName: i['displayName'] as string,
     tier: i['tier'] as string,
     visitCount: (i['visitCount'] as number) ?? 1,
-    timestamp: i['timestamp'] as string ?? i['sk'] as string,
+    timestamp: (i['timestamp'] as string) ?? (i['sk'] as string),
   }))
   const nextCursor = result.LastEvaluatedKey
     ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64url')
@@ -299,9 +291,7 @@ export async function getCheckInDetails(businessId: string, date?: string, curso
 
 export async function getRewardMetrics(rewardId: string, businessId: string) {
   // Get the reward from rewards table
-  const rewardResult = await documentClient.send(
-    new GetCommand({ TableName: TableNames.rewards, Key: { rewardId } })
-  )
+  const rewardResult = await documentClient.send(new GetCommand({ TableName: TableNames.rewards, Key: { rewardId } }))
   const reward = rewardResult.Item
   if (!reward) return { claimRate: 0, timeToClaimMinutes: 0, redemptionRate: 0 }
 
@@ -313,9 +303,10 @@ export async function getRewardMetrics(rewardId: string, businessId: string) {
 
   const claimRate = totalSlots > 0 ? claimedCount / totalSlots : 0
   const redemptionRate = claimedCount > 0 ? redeemedCount / claimedCount : 0
-  const timeToClaimMinutes = firstClaimedAt && createdAt
-    ? Math.round((new Date(firstClaimedAt).getTime() - new Date(createdAt).getTime()) / 60000)
-    : 0
+  const timeToClaimMinutes =
+    firstClaimedAt && createdAt
+      ? Math.round((new Date(firstClaimedAt).getTime() - new Date(createdAt).getTime()) / 60000)
+      : 0
 
   return { claimRate, timeToClaimMinutes, redemptionRate }
 }
@@ -337,11 +328,12 @@ export async function getRewardsSummary(businessId: string) {
 
       const claimRate = totalSlots > 0 ? claimedCount / totalSlots : 0
       const redemptionRate = claimedCount > 0 ? redeemedCount / claimedCount : 0
-      const timeToClaimMinutes = firstClaimedAt && createdAt
-        ? Math.round((new Date(firstClaimedAt).getTime() - new Date(createdAt).getTime()) / 60000)
-        : 0
+      const timeToClaimMinutes =
+        firstClaimedAt && createdAt
+          ? Math.round((new Date(firstClaimedAt).getTime() - new Date(createdAt).getTime()) / 60000)
+          : 0
 
-      const isOlderThan7Days = createdAt && (now - new Date(createdAt).getTime()) > sevenDaysMs
+      const isOlderThan7Days = createdAt && now - new Date(createdAt).getTime() > sevenDaysMs
       const isLowPerformance = isOlderThan7Days && claimedCount === 0
 
       return {
@@ -367,7 +359,7 @@ export async function getRewardsForBusiness(businessId: string) {
       IndexName: 'BusinessIndex',
       KeyConditionExpression: 'businessId = :bid',
       ExpressionAttributeValues: { ':bid': businessId },
-    })
+    }),
   )
   const nodeIds = (nodesResult.Items || []).map((n) => (n['nodeId'] ?? n['id']) as string)
   const allRewards = []
@@ -377,7 +369,7 @@ export async function getRewardsForBusiness(businessId: string) {
         TableName: TableNames.rewards,
         FilterExpression: 'nodeId = :nid',
         ExpressionAttributeValues: { ':nid': nid },
-      })
+      }),
     )
     allRewards.push(...(result.Items || []).map((r) => ({ ...r, id: r['rewardId'] ?? r['id'] })))
   }
