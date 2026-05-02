@@ -57,6 +57,8 @@
   "biz.panel.rewardMetrics": "Get Metrics",
   "biz.panel.staffRedemptions": "Staff",
   "biz.panel.reports": "Reports",
+  "biz.plans.current": "Current",
+  "biz.plans.currentPlan": "Your current plan",
   "biz.oauth.completeProfile": "Complete your business profile",
   "biz.oauth.continue": "Continue",
   "biz.oauth.profileFailed": "Could not complete registration. Try again.",

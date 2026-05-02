@@ -27,12 +27,17 @@ export function PlansPanel() {
   const { t } = useTranslation()
   const [plans, setPlans] = useState<PlansResponse | null>(null)
   const [loading, setLoading] = useState<string | null>(null)
+  const [currentTier, setCurrentTier] = useState<'starter' | 'growth' | 'pro' | 'payg'>('starter')
 
   useEffect(() => {
     async function fetch() {
       try {
-        const res = await api.get<PlansResponse>('/v1/business/plans')
-        setPlans(res)
+        const [plansRes, profileRes] = await Promise.all([
+          api.get<PlansResponse>('/v1/business/plans'),
+          api.get<{ tier?: string }>('/v1/business/me'),
+        ])
+        setPlans(plansRes)
+        setCurrentTier((profileRes.tier ?? 'starter') as 'starter' | 'growth' | 'pro' | 'payg')
       } catch {
         // Fail silently
       }
@@ -65,6 +70,7 @@ export function PlansPanel() {
   ) {
     const isStarter = !actionPlan
     const isPAYG = actionPlan === 'payg'
+    const isCurrent = key === currentTier
     const priceDisplay = isPAYG
       ? `${formatZAR((plan.dailyPriceCents ?? 0) / 100)}/day`
       : plan.monthlyPriceCents === 0
@@ -75,14 +81,19 @@ export function PlansPanel() {
       <div
         key={key}
         className={`bg-[var(--bg-surface)] border rounded-2xl p-5 flex flex-col gap-3 ${
-          key === 'growth' ? 'border-[var(--accent)]' : 'border-[var(--border)]'
+          isCurrent ? 'border-[var(--accent)] ring-1 ring-[var(--accent)]' : key === 'growth' ? 'border-[var(--accent)]' : 'border-[var(--border)]'
         }`}
       >
         <div className="flex flex-row items-center justify-between">
           <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">
             {plan.name}
           </span>
-          {plan.trialDays && (
+          {isCurrent && (
+            <span className="text-[var(--accent)] text-xs font-medium">
+              {t('biz.plans.current')}
+            </span>
+          )}
+          {plan.trialDays && !isCurrent && (
             <span className="text-[var(--success)] text-xs font-medium">
               {plan.trialDays}-day free trial
             </span>
@@ -109,7 +120,7 @@ export function PlansPanel() {
           <FeatureRow label={t('biz.plans.staff')} value={formatLimit(plan.maxStaff)} />
         </div>
 
-        {actionPlan && (
+        {actionPlan && !isCurrent && (
           <button
             onClick={() => handleSelectPlan(actionPlan, isPAYG ? 'daily' : 'monthly')}
             disabled={loading !== null}
@@ -122,9 +133,9 @@ export function PlansPanel() {
             {loading === actionPlan ? '...' : plan.trialDays ? t('biz.plans.startTrial') : t('biz.plans.subscribe')}
           </button>
         )}
-        {isStarter && (
-          <span className="text-[var(--text-muted)] text-xs text-center">
-            {t('biz.plans.currentFree')}
+        {isCurrent && (
+          <span className="text-[var(--accent)] text-xs text-center font-medium">
+            {t('biz.plans.currentPlan')}
           </span>
         )}
       </div>
