@@ -27,6 +27,10 @@ export function BusinessManagement() {
   const [trialEndsAt, setTrialEndsAt] = useState('')
   const [setTierError, setSetTierError] = useState('')
   const [setTierSuccess, setSetTierSuccess] = useState(false)
+  const [staffBizId, setStaffBizId] = useState<string | null>(null)
+  const [staffList, setStaffList] = useState<{ id: string; phone?: string; email?: string; isActive?: boolean }[]>([])
+  const [staffLoading, setStaffLoading] = useState(false)
+  const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null)
 
   async function handleSearch() {
     if (!query.trim()) return
@@ -71,6 +75,31 @@ export function BusinessManagement() {
       await api.post(`/v1/admin/businesses/${businessId}/disable`)
       setConfirmDisable(null)
       handleSearch()
+    } catch {
+      // Fail silently
+    }
+  }
+
+  async function handleViewStaff(businessId: string) {
+    setStaffBizId(businessId)
+    setStaffLoading(true)
+    try {
+      const res = await api.get<{ items: { id: string; phone?: string; email?: string }[] }>(
+        `/v1/admin/businesses/${businessId}/staff`
+      )
+      setStaffList(res.items)
+    } catch {
+      setStaffList([])
+    } finally {
+      setStaffLoading(false)
+    }
+  }
+
+  async function handleRevokeStaff(businessId: string, staffId: string) {
+    try {
+      await api.post(`/v1/admin/businesses/${businessId}/staff/${staffId}/revoke`)
+      setStaffList((prev) => prev.filter((s) => s.id !== staffId))
+      setConfirmRevokeId(null)
     } catch {
       // Fail silently
     }
@@ -142,7 +171,7 @@ export function BusinessManagement() {
               <span className="text-[var(--text-muted)] text-xs capitalize">{biz.tier}</span>
             </div>
             <div className="text-[var(--text-secondary)] text-xs mt-1">
-              {biz.email} · {biz.nodeCount} nodes · {biz.staffCount} staff · {biz.activeRewardCount} gets
+              {biz.email} · {biz.nodeCount} nodes · {biz.staffCount} staff · {biz.activeRewardCount} rewards
             </div>
 
             {selected?.id === biz.id && (
@@ -170,6 +199,12 @@ export function BusinessManagement() {
                   className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs"
                 >
                   {t('admin.businesses.overrideCipc')}
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); void handleViewStaff(biz.id) }}
+                  className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs"
+                >
+                  {t('admin.businesses.staff')}
                 </button>
                 {role === 'super_admin' && (
                   <button
@@ -245,12 +280,76 @@ export function BusinessManagement() {
         </div>
       )}
 
+      {/* Staff Members dialog */}
+      {staffBizId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full max-h-[80vh] flex flex-col">
+            <div className="flex flex-row items-center justify-between mb-4">
+              <h3 className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">
+                {t('admin.businesses.staff')}
+              </h3>
+              <button onClick={() => { setStaffBizId(null); setStaffList([]) }} className="text-[var(--text-muted)] text-sm">Close</button>
+            </div>
+            {staffLoading ? (
+              <p className="text-[var(--text-muted)] text-sm">Loading...</p>
+            ) : staffList.length === 0 ? (
+              <p className="text-[var(--text-muted)] text-sm">No staff members found.</p>
+            ) : (
+              <div className="flex flex-col gap-2 overflow-y-auto">
+                {staffList.map((s) => (
+                  <div key={s.id} className="flex flex-row items-center justify-between bg-[var(--bg-raised)] rounded-xl px-3 py-2.5">
+                    <div className="flex flex-col min-w-0 mr-3">
+                      <span className="text-[var(--text-primary)] text-sm truncate">{s.phone ?? s.email ?? s.id}</span>
+                      {!s.isActive && <span className="text-[var(--danger)] text-xs">Revoked</span>}
+                    </div>
+                    {s.isActive !== false && (
+                      <button
+                        onClick={() => setConfirmRevokeId(s.id)}
+                        className="border border-[var(--danger)] text-[var(--danger)] rounded-lg px-2.5 py-1 text-xs flex-shrink-0"
+                      >
+                        {t('admin.businesses.revokeStaff')}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Revoke staff confirmation */}
+      {confirmRevokeId && staffBizId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-5">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">Revoke Staff Access?</h3>
+            <p className="text-[var(--text-secondary)] text-sm mb-4">
+              This staff member will immediately lose access to this business. This action creates an audit log entry.
+            </p>
+            <div className="flex flex-row gap-3">
+              <button
+                onClick={() => setConfirmRevokeId(null)}
+                className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleRevokeStaff(staffBizId, confirmRevokeId)}
+                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium"
+              >
+                Revoke
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Set Tier dialog */}
       {setTierId && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
             <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
-              {t('admin.businesses.setTier', 'Set Tier')}
+              {t('admin.businesses.setTier')}
             </h3>
             <p className="text-[var(--text-secondary)] text-sm mb-4">
               Assign a subscription plan to this business.

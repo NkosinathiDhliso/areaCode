@@ -203,6 +203,29 @@ export async function adminRoutes(app: FastifyInstance) {
     },
   )
 
+  // GET /v1/admin/businesses/:businessId/staff
+  app.get(
+    '/v1/admin/businesses/:businessId/staff',
+    { preHandler: [adminAuth, validate({ params: businessIdParamsSchema })] },
+    async (request) => {
+      const role = await getAdminRole(request)
+      const params = request.params as z.infer<typeof businessIdParamsSchema>
+      return service.getBusinessStaff(role, params.businessId)
+    },
+  )
+
+  // POST /v1/admin/businesses/:businessId/staff/:staffId/revoke
+  app.post(
+    '/v1/admin/businesses/:businessId/staff/:staffId/revoke',
+    { preHandler: [adminAuth, validate({ params: businessIdParamsSchema })] },
+    async (request) => {
+      const auth = getAuth(request)
+      const role = await getAdminRole(request)
+      const params = request.params as z.infer<typeof businessIdParamsSchema> & { staffId: string }
+      return service.revokeStaffAccess(auth.userId, role, params.businessId, params.staffId)
+    },
+  )
+
   // GET /v1/admin/reports
   app.get(
     '/v1/admin/reports',

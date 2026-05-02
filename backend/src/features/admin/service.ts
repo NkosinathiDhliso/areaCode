@@ -537,6 +537,30 @@ export async function consumerAction(
   }
 }
 
+// ─── Business Staff ──────────────────────────────────────────────────────────
+
+export async function getBusinessStaff(adminRole: AdminRole, businessId: string) {
+  checkPermission(adminRole, 'view_business')
+  const { listStaffAccounts } = await import('../business/repository.js')
+  const items = await listStaffAccounts(businessId)
+  return { items }
+}
+
+export async function revokeStaffAccess(adminId: string, adminRole: AdminRole, businessId: string, staffId: string) {
+  checkPermission(adminRole, 'revoke_staff')
+  const { removeStaffAccount } = await import('../business/repository.js')
+  await removeStaffAccount(staffId, businessId)
+  await repo.createAuditLog({
+    adminId,
+    adminRole,
+    action: 'revoke_staff',
+    entityType: 'staff',
+    entityId: staffId,
+    afterState: { businessId, revokedBy: adminId },
+  })
+  return { success: true }
+}
+
 // ─── Business Search ────────────────────────────────────────────────────────
 
 export async function searchBusinesses(adminRole: AdminRole, query: string) {

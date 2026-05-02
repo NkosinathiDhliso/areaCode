@@ -54,7 +54,7 @@ export function AdminDashboard() {
           Area Code Admin
         </span>
         <div className="flex flex-row items-center gap-4">
-          <span className="text-[var(--text-muted)] text-xs uppercase">{role}</span>
+          <span className="text-[var(--text-muted)] text-xs capitalize">{role?.replace(/_/g, ' ')}</span>
           <button onClick={logout} className="text-[var(--text-muted)] text-sm">
             {t('admin.logout')}
           </button>
