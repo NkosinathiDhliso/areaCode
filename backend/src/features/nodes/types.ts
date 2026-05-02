@@ -26,6 +26,12 @@ export const createNodeBodySchema = z.object({
   citySlug: z.string().min(1),
 })
 
+export const businessCreateNodeBodySchema = z.object({
+  name: z.string().min(1).max(100),
+  category: z.enum(['food', 'coffee', 'nightlife', 'retail', 'fitness', 'arts']),
+  address: z.string().min(5).max(200),
+})
+
 export const updateNodeBodySchema = z.object({
   name: z.string().min(1).max(100).optional(),
   category: z.enum(['food', 'coffee', 'nightlife', 'retail', 'fitness', 'arts']).optional(),

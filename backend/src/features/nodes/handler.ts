@@ -9,6 +9,7 @@ import {
   nodeSlugParamsSchema,
   searchQuerySchema,
   createNodeBodySchema,
+  businessCreateNodeBodySchema,
   updateNodeBodySchema,
   claimNodeBodySchema,
   reportNodeBodySchema,
@@ -93,6 +94,20 @@ export async function nodeRoutes(app: FastifyInstance) {
       const auth = getAuth(request)
       const body = request.body as z.infer<typeof createNodeBodySchema>
       const node = await service.createNode(auth.userId, body)
+      return reply.status(201).send(node)
+    },
+  )
+
+  // POST /v1/nodes/business-create - simpler flow: enter address, no CIPC required
+  app.post(
+    '/v1/nodes/business-create',
+    {
+      preHandler: [requireAuth('business'), validate({ body: businessCreateNodeBodySchema })],
+    },
+    async (request, reply) => {
+      const auth = getAuth(request)
+      const body = request.body as z.infer<typeof businessCreateNodeBodySchema>
+      const node = await service.businessCreateNode(auth.userId, body)
       return reply.status(201).send(node)
     },
   )

@@ -335,6 +335,58 @@ function slugify(name: string): string {
   )
 }
 
+export async function businessCreateNode(businessId: string, data: { name: string; category: string; address: string }) {
+  if (DEV_MODE) {
+    const id = `dev-${Date.now()}`
+    return {
+      id,
+      name: data.name,
+      slug: slugify(data.name),
+      category: data.category,
+      lat: -26.2041,
+      lng: 28.0473,
+      citySlug: 'johannesburg',
+    }
+  }
+  // Geocode address to get lat/lng
+  const geocoded = await geocodeAddress(data.address)
+  if (!geocoded) throw AppError.badRequest('Could not find address. Please check and try again.')
+
+  // Get default city (Johannesburg for SA)
+  const city = await repo.getCityBySlug('johannesburg')
+  if (!city) throw AppError.badRequest('City not found')
+
+  const node = await repo.createNode({
+    name: data.name,
+    slug: slugify(data.name),
+    category: data.category,
+    lat: geocoded.lat,
+    lng: geocoded.lng,
+    cityId: city.id,
+    submittedBy: businessId,
+  } as any)
+  return node
+}
+
+async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+  try {
+    // Use OpenStreetMap Nominatim API (free, no API key required)
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycode=za`,
+      {
+        headers: { 'User-Agent': 'AreaCode' },
+      },
+    )
+    const results = await response.json() as Array<{ lat: string; lon: string }>
+    if (results && results[0]) {
+      return { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
 export async function createNode(
   businessId: string,
   data: { name: string; category: string; lat: number; lng: number; citySlug: string },
