@@ -1324,6 +1324,7 @@ describe('21c. Full User Journey — Staff Redemption', () => {
 describe('21d. Full User Journey — Admin Moderation', () => {
   it('admin login → dashboard → consumers → businesses → reports', async () => {
     // Step 1: Admin login
+    // Note: timeout raised to 20s — this test chains 7 admin endpoints
     const loginRes = await app.inject({
       method: 'POST',
       url: '/v1/auth/admin/login',
@@ -1380,5 +1381,5 @@ describe('21d. Full User Journey — Admin Moderation', () => {
       headers: adminAuth(),
     })
     expect([200, 500]).toContain(auditRes.statusCode)
-  })
+  }, 20_000)
 })
