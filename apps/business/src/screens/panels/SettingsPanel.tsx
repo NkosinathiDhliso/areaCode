@@ -25,7 +25,8 @@ export function SettingsPanel() {
   const [biz, setBiz] = useState<BusinessAccount | null>(null)
   const [staff, setStaff] = useState<StaffAccount[]>([])
   const [invites, setInvites] = useState<StaffInvite[]>([])
-  const [qrUrl, setQrUrl] = useState<string | null>(null)
+  const [qrCheckinUrl, setQrCheckinUrl] = useState<string | null>(null)
+  const [qrError, setQrError] = useState<string | null>(null)
 
   // Invite form state
   const [inviteEmail, setInviteEmail] = useState('')
@@ -102,11 +103,17 @@ export function SettingsPanel() {
   }
 
   async function handleGenerateQr() {
+    setQrError(null)
     try {
       const res = await api.get<{ url: string }>('/v1/business/nodes/current/qr')
-      setQrUrl(res.url)
-    } catch {
-      /* Fail silently */
+      setQrCheckinUrl(res.url)
+    } catch (err: unknown) {
+      const e = err as { message?: string; status?: number }
+      if (e.status === 404 || (e.message ?? '').toLowerCase().includes('no nodes')) {
+        setQrError('No node found. Create a node in the Node tab first.')
+      } else {
+        setQrError('Failed to generate QR. Please try again.')
+      }
     }
   }
 
@@ -237,7 +244,7 @@ export function SettingsPanel() {
               >
                 <div className="flex flex-col">
                   <span className="text-[var(--text-primary)] text-sm">{s.name}</span>
-                  <span className="text-[var(--text-muted)] text-xs">{s.email ?? ''}</span>
+                  <span className="text-[var(--text-muted)] text-xs">{s.phone ?? ''}</span>
                 </div>
                 <button onClick={() => handleRemoveStaff(s.id)} className="text-[var(--danger)] text-xs">
                   Remove
@@ -252,17 +259,30 @@ export function SettingsPanel() {
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
         <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">{t('biz.settings.qr')}</h3>
         <button
-          onClick={handleGenerateQr}
+          onClick={() => void handleGenerateQr()}
           className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-4 py-2 text-sm"
         >
           Generate QR Code
         </button>
-        {qrUrl && (
+        {qrError && (
+          <p className="text-[var(--warning)] text-xs mt-2">{qrError}</p>
+        )}
+        {qrCheckinUrl && (
           <div className="mt-3 flex flex-col items-center gap-2">
-            <img src={qrUrl} alt="QR Code for check-in" className="w-48 h-48 rounded-xl bg-white p-2" />
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qrCheckinUrl)}`}
+              alt="QR Code for check-in"
+              className="w-48 h-48 rounded-xl bg-white p-2"
+            />
             <p className="text-[var(--text-muted)] text-xs text-center">
               Print or screenshot this QR code for your venue
             </p>
+            <button
+              onClick={async () => { await navigator.clipboard.writeText(qrCheckinUrl) }}
+              className="text-[var(--accent)] text-xs"
+            >
+              Copy check-in URL
+            </button>
           </div>
         )}
       </div>

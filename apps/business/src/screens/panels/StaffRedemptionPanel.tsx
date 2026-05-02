@@ -26,8 +26,8 @@ export function StaffRedemptionPanel() {
   useEffect(() => {
     async function fetchStaff() {
       try {
-        const res = await api.get<StaffMember[]>('/v1/business/staff')
-        setStaff(Array.isArray(res) ? res : [])
+        const res = await api.get<{ items: StaffMember[] }>('/v1/business/staff')
+        setStaff(res.items ?? [])
       } catch {
         // Fail silently
       }

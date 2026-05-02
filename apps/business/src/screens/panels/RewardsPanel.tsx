@@ -2,26 +2,40 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@area-code/shared/lib/api'
-import type { Reward } from '@area-code/shared/types'
+import type { Node, Reward } from '@area-code/shared/types'
 import { formatRelativeTime } from '@area-code/shared/lib/formatters'
 
 export function RewardsPanel() {
   const { t } = useTranslation()
   const [rewards, setRewards] = useState<Reward[]>([])
+  const [nodes, setNodes] = useState<Node[]>([])
   const [showForm, setShowForm] = useState(false)
   const [fetchError, setFetchError] = useState(false)
 
   useEffect(() => {
-    async function fetch() {
+    async function load() {
       try {
-        const res = await api.get<{ items: Reward[] }>('/v1/business/rewards')
-        setRewards(res.items ?? [])
+        const [rewardsRes, nodesRes] = await Promise.all([
+          api.get<{ items: Reward[] }>('/v1/business/rewards'),
+          api.get<{ items: Node[] }>('/v1/business/me/nodes'),
+        ])
+        setRewards(rewardsRes.items ?? [])
+        setNodes(nodesRes.items ?? [])
       } catch {
         setFetchError(true)
       }
     }
-    fetch()
+    void load()
   }, [])
+
+  async function reload() {
+    try {
+      const res = await api.get<{ items: Reward[] }>('/v1/business/rewards')
+      setRewards(res.items ?? [])
+    } catch {
+      // Fail silently on reload
+    }
+  }
 
   return (
     <div className="p-5 flex flex-col gap-4">
@@ -40,14 +54,31 @@ export function RewardsPanel() {
 
       {showForm && (
         <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-5">
-          <p className="text-[var(--warning)] text-xs mb-3">{t('biz.rewards.slotWarning')}</p>
-          <RewardForm onCreated={() => { setShowForm(false) }} />
+          {nodes.length === 0 ? (
+            <p className="text-[var(--warning)] text-sm">
+              No nodes found. Create a node in the Node tab before adding rewards.
+            </p>
+          ) : (
+            <>
+              <p className="text-[var(--warning)] text-xs mb-3">{t('biz.rewards.slotWarning')}</p>
+              <RewardForm
+                nodes={nodes}
+                onCreated={() => { setShowForm(false); void reload() }}
+              />
+            </>
+          )}
         </div>
       )}
 
       {fetchError && (
         <p className="text-[var(--danger)] text-sm text-center py-4">
           {t('errors.loadFailed', 'Failed to load rewards.')}
+        </p>
+      )}
+
+      {!fetchError && rewards.length === 0 && !showForm && (
+        <p className="text-[var(--text-muted)] text-sm text-center py-8">
+          No rewards yet. Tap + to create your first Get.
         </p>
       )}
 
@@ -71,25 +102,29 @@ export function RewardsPanel() {
   )
 }
 
-function RewardForm({ onCreated }: { onCreated: () => void }) {
+function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void }) {
+  const [nodeId, setNodeId] = useState(nodes[0]?.id ?? '')
   const [title, setTitle] = useState('')
   const [type, setType] = useState('nth_checkin')
+  const [triggerValue, setTriggerValue] = useState('')
   const [slots, setSlots] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function handleSubmit() {
+    if (!nodeId) { setError('Select a node first.'); return }
+    if (!title.trim()) { setError('Enter a reward title.'); return }
     setLoading(true)
     setError(null)
     try {
-      await api.post('/v1/business/rewards', {
-        title,
-        type,
-        totalSlots: slots ? parseInt(slots, 10) : null,
-      })
+      const body: Record<string, unknown> = { nodeId, title: title.trim(), type }
+      if (triggerValue) body['triggerValue'] = parseInt(triggerValue, 10)
+      if (slots) body['totalSlots'] = parseInt(slots, 10)
+      await api.post('/v1/business/rewards', body)
       onCreated()
-    } catch {
-      setError('Failed to create reward. Please try again.')
+    } catch (err: unknown) {
+      const e = err as { message?: string }
+      setError(e.message ?? 'Failed to create reward. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -97,11 +132,22 @@ function RewardForm({ onCreated }: { onCreated: () => void }) {
 
   return (
     <div className="flex flex-col gap-3">
+      {nodes.length > 1 && (
+        <select
+          value={nodeId}
+          onChange={(e) => setNodeId(e.target.value)}
+          className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none appearance-none"
+        >
+          {nodes.map((n) => (
+            <option key={n.id} value={n.id}>{n.name}</option>
+          ))}
+        </select>
+      )}
       <input
         type="text"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder="Get title"
+        placeholder="Reward title"
         className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
       />
       <select
@@ -114,6 +160,15 @@ function RewardForm({ onCreated }: { onCreated: () => void }) {
         <option value="streak">Streak</option>
         <option value="milestone">Milestone</option>
       </select>
+      {(type === 'nth_checkin' || type === 'streak' || type === 'milestone') && (
+        <input
+          type="number"
+          value={triggerValue}
+          onChange={(e) => setTriggerValue(e.target.value)}
+          placeholder={type === 'nth_checkin' ? 'Every N check-ins (e.g. 5)' : 'Trigger count'}
+          className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+        />
+      )}
       <input
         type="number"
         value={slots}
@@ -122,11 +177,11 @@ function RewardForm({ onCreated }: { onCreated: () => void }) {
         className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
       />
       <button
-        onClick={handleSubmit}
-        disabled={loading || !title}
+        onClick={() => void handleSubmit()}
+        disabled={loading || !title.trim() || !nodeId}
         className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3 text-sm disabled:opacity-50"
       >
-        {loading ? '...' : 'Create Get'}
+        {loading ? '...' : 'Create Reward'}
       </button>
       {error && <p className="text-[var(--danger)] text-xs mt-1">{error}</p>}
     </div>

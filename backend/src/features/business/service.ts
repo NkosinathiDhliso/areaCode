@@ -279,14 +279,14 @@ export function validateQrToken(nodeId: string, token: string): boolean {
 export async function getQrData(nodeId: string, businessId: string) {
   if (DEV_MODE) {
     const token = generateQrToken(nodeId)
-    return { url: `areacode.co.za/qr/${nodeId}/${token}`, token, nodeId }
+    return { url: `https://areacode.co.za/qr/${nodeId}/${token}`, token, nodeId }
   }
   const node = await repo.getNodeForBusiness(nodeId, businessId)
   if (!node) throw AppError.forbidden('You do not own this node')
 
   const token = generateQrToken(nodeId)
   return {
-    url: `areacode.co.za/qr/${nodeId}/${token}`,
+    url: `https://areacode.co.za/qr/${nodeId}/${token}`,
     token,
     nodeId,
   }
@@ -410,11 +410,11 @@ export async function getCurrentNodeQr(businessId: string) {
   if (DEV_MODE) {
     const nodeId = 'dev-node-1'
     const token = generateQrToken(nodeId)
-    return { url: `areacode.co.za/qr/${nodeId}/${token}`, token, nodeId }
+    return { url: `https://areacode.co.za/qr/${nodeId}/${token}`, token, nodeId }
   }
   const nodes = await repo.getNodesForBusiness(businessId)
   if (!nodes.length) throw AppError.notFound('No nodes found')
   const nodeId = nodes[0]!.id
   const token = generateQrToken(nodeId)
-  return { url: `areacode.co.za/qr/${nodeId}/${token}`, token, nodeId }
+  return { url: `https://areacode.co.za/qr/${nodeId}/${token}`, token, nodeId }
 }
