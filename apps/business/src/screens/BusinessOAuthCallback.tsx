@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-
+import { Spinner } from '@area-code/shared/components/Spinner'
 import { exchangeCodeForTokens } from '@area-code/shared/lib/cognitoHostedUiOAuth'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
-import { Spinner } from '@area-code/shared/components/Spinner'
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 function hostedUiDomain(): string | undefined {
   const v = import.meta.env['VITE_COGNITO_HOSTED_UI_DOMAIN_BUSINESS'] as string | undefined
@@ -82,7 +81,6 @@ export function BusinessOAuthCallback() {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${tok.access_token}`,
-            'Content-Type': 'application/json',
           },
         })
 

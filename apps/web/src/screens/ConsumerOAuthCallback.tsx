@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-
+import { Spinner } from '@area-code/shared/components/Spinner'
 import { exchangeCodeForTokens } from '@area-code/shared/lib/cognitoHostedUiOAuth'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
-import { Spinner } from '@area-code/shared/components/Spinner'
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import type { AppRoute } from '../types'
 
@@ -79,7 +78,6 @@ export function ConsumerOAuthCallback({ onNavigate }: ConsumerOAuthCallbackProps
           method: 'POST',
           headers: {
             Authorization: `Bearer ${tokens.access_token}`,
-            'Content-Type': 'application/json',
           },
         })
 

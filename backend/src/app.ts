@@ -1,25 +1,26 @@
-import Fastify from 'fastify'
 import cors from '@fastify/cors'
-import { AppError } from './shared/errors/AppError.js'
-import { initSentry, captureError } from './shared/monitoring/sentry.js'
-import { initPrivacyGuard } from './shared/privacy/privacy-guard.js'
+import Fastify from 'fastify'
+
+import { adminRoutes } from './features/admin/handler.js'
 import { getUserById } from './features/auth/dynamodb-repository.js'
-import { isBlocked } from './features/social/block-repository.js'
-import { isFollowing } from './features/social/repository.js'
-import { businessRoutes } from './features/business/handler.js'
-import { socialRoutes } from './features/social/handler.js'
-import { nodeRoutes } from './features/nodes/handler.js'
-import { rewardRoutes } from './features/rewards/handler.js'
 import { checkInRoutes } from './features/check-in/handler.js'
 import { authRoutes } from './features/auth/handler.js'
 import { sessionRoutes } from './features/auth/session-handler.js'
 import { profileRoutes } from './features/auth/profile-handler.js'
-import { adminRoutes } from './features/admin/handler.js'
+import { businessRoutes } from './features/business/handler.js'
 import { notificationRoutes } from './features/notifications/handler.js'
 import { musicRoutes } from './features/music/handler.js'
-import { staffRoutes } from './features/staff/handler.js'
+import { nodeRoutes } from './features/nodes/handler.js'
 import { privacyRoutes } from './features/privacy/handler.js'
 import { reportRoutes } from './features/reports/handler.js'
+import { rewardRoutes } from './features/rewards/handler.js'
+import { isBlocked } from './features/social/block-repository.js'
+import { socialRoutes } from './features/social/handler.js'
+import { isFollowing } from './features/social/repository.js'
+import { staffRoutes } from './features/staff/handler.js'
+import { AppError } from './shared/errors/AppError.js'
+import { initSentry, captureError } from './shared/monitoring/sentry.js'
+import { initPrivacyGuard } from './shared/privacy/privacy-guard.js'
 
 export async function buildApp() {
   // Initialize error monitoring before anything else
@@ -30,10 +31,7 @@ export async function buildApp() {
     getUserById,
     isBlocked,
     areMutualFollows: async (userA: string, userB: string) => {
-      const [forward, reverse] = await Promise.all([
-        isFollowing(userA, userB),
-        isFollowing(userB, userA),
-      ])
+      const [forward, reverse] = await Promise.all([isFollowing(userA, userB), isFollowing(userB, userA)])
       return forward && reverse
     },
   })
@@ -63,10 +61,10 @@ export async function buildApp() {
   // CORS
   const isProd = process.env['AREA_CODE_ENV'] === 'prod'
   const amplifyOrigins = [
-    'https://master.d3pm78r41ma6w6.amplifyapp.com',  // web
-    'https://master.dbp54yxhyjvk0.amplifyapp.com',   // business
-    'https://master.d166bb81tg4k61.amplifyapp.com',   // staff
-    'https://master.d1ay6jict0ql9w.amplifyapp.com',   // admin
+    'https://master.d3pm78r41ma6w6.amplifyapp.com', // web
+    'https://master.dbp54yxhyjvk0.amplifyapp.com', // business
+    'https://master.d166bb81tg4k61.amplifyapp.com', // staff
+    'https://master.d1ay6jict0ql9w.amplifyapp.com', // admin
   ]
   void app.register(cors, {
     origin: isProd
@@ -98,15 +96,27 @@ export async function buildApp() {
         statusCode: error.statusCode,
       }
       if ('cooldownUntil' in error) {
-        body['cooldownUntil'] = (
-          error as AppError & { cooldownUntil: string }
-        ).cooldownUntil
+        body['cooldownUntil'] = (error as AppError & { cooldownUntil: string }).cooldownUntil
       }
       return reply.status(error.statusCode).send(body)
     }
 
     // Narrow to Error-like object for safe property access
-    const err = error as Error & { name?: string; validation?: unknown; message?: string }
+    const err = error as Error & {
+      code?: string
+      name?: string
+      statusCode?: number
+      validation?: unknown
+      message?: string
+    }
+
+    if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
+      return reply.status(err.statusCode).send({
+        error: 'bad_request',
+        message: err.message ?? 'Invalid request',
+        statusCode: err.statusCode,
+      })
+    }
 
     if (err.name === 'ZodError') {
       return reply.status(400).send({

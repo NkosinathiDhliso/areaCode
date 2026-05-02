@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
-
+import { Spinner } from '@area-code/shared/components/Spinner'
 import { exchangeCodeForTokens } from '@area-code/shared/lib/cognitoHostedUiOAuth'
 import type { AdminRole } from '@area-code/shared/types'
-import { Spinner } from '@area-code/shared/components/Spinner'
+import { useEffect, useState } from 'react'
+
 import { useAdminAuthStore } from '../stores/adminAuthStore'
 
 function hostedUiDomain(): string | undefined {
@@ -72,7 +72,6 @@ export function AdminOAuthCallback() {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${tokens.access_token}`,
-            'Content-Type': 'application/json',
           },
         })
 
@@ -100,9 +99,7 @@ export function AdminOAuthCallback() {
 
   return (
     <div className="flex flex-col items-center justify-center h-dvh bg-[var(--bg-base)] px-5">
-      <h1 className="text-[var(--text-primary)] font-bold text-xl mb-6 font-[Syne]">
-        Finishing sign-in…
-      </h1>
+      <h1 className="text-[var(--text-primary)] font-bold text-xl mb-6 font-[Syne]">Finishing sign-in…</h1>
       {!error ? (
         <Spinner size="lg" />
       ) : (
