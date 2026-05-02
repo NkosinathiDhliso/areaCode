@@ -25,6 +25,18 @@ import { BottomNav } from './components/BottomNav'
 import { ConnectivityBanner } from './components/ConnectivityBanner'
 import type { AppRoute } from './types'
 
+// Initialise API auth before any React render so queries fired during mount
+// (e.g. after the Spotify OAuth redirect) always have the Authorization header.
+api.setTokenProvider(() => useConsumerAuthStore.getState().accessToken)
+api.setRefreshHandler({
+  getRefreshToken: () => useConsumerAuthStore.getState().refreshToken,
+  onTokenRefreshed: (token) => useConsumerAuthStore.getState().setAccessToken(token),
+  onAuthExpired: () => {
+    useConsumerAuthStore.getState().logout()
+    window.location.href = '/login'
+  },
+})
+
 const ROUTE_PATHS: Record<AppRoute, string> = {
   landing: '/',
   login: '/login',
@@ -104,19 +116,6 @@ function AppContent() {
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
   }, [])
-
-  // Wire API token provider and refresh handler
-  useEffect(() => {
-    api.setTokenProvider(() => useConsumerAuthStore.getState().accessToken)
-    api.setRefreshHandler({
-      getRefreshToken: () => useConsumerAuthStore.getState().refreshToken,
-      onTokenRefreshed: (token) => useConsumerAuthStore.getState().setAccessToken(token),
-      onAuthExpired: () => {
-        useConsumerAuthStore.getState().logout()
-        setRoute('login')
-      },
-    })
-  }, [setRoute])
 
   // Reset time-based nav default on fresh app open
   useEffect(() => {
