@@ -11,8 +11,9 @@ import { AbuseFlagDashboard } from './AbuseFlagDashboard'
 import { AuditTrailViewer } from './AuditTrailViewer'
 import { ArchetypeManagement } from '../components/ArchetypeManagement'
 import { GenreWeightEditor } from '../components/GenreWeightEditor'
+import { AdminIAM } from './AdminIAM'
 
-type Tab = 'dashboard' | 'consumers' | 'businesses' | 'reports' | 'abuse-flags' | 'audit-trail' | 'consent' | 'archetypes' | 'genre-weights'
+type Tab = 'dashboard' | 'consumers' | 'businesses' | 'reports' | 'abuse-flags' | 'audit-trail' | 'consent' | 'archetypes' | 'genre-weights' | 'iam'
 
 const TAB_LABELS: Record<Tab, string> = {
   dashboard: 'admin.nav.dashboard',
@@ -24,12 +25,13 @@ const TAB_LABELS: Record<Tab, string> = {
   consent: 'admin.nav.consent',
   archetypes: 'admin.nav.archetypes',
   'genre-weights': 'admin.nav.genreWeights',
+  iam: 'admin.nav.iam',
 }
 
 function getVisibleTabs(role: string | null): Tab[] {
   switch (role) {
     case 'super_admin':
-      return ['dashboard', 'consumers', 'businesses', 'reports', 'abuse-flags', 'audit-trail', 'consent', 'archetypes', 'genre-weights']
+      return ['dashboard', 'consumers', 'businesses', 'reports', 'abuse-flags', 'audit-trail', 'consent', 'archetypes', 'genre-weights', 'iam']
     case 'support_agent':
       return ['consumers', 'businesses']
     case 'content_moderator':
@@ -85,6 +87,7 @@ export function AdminDashboard() {
         {activeTab === 'consent' && <ConsentAudit />}
         {activeTab === 'archetypes' && <ArchetypeManagement />}
         {activeTab === 'genre-weights' && <GenreWeightEditor />}
+        {activeTab === 'iam' && <AdminIAM />}
       </main>
     </div>
   )

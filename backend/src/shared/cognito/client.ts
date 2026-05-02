@@ -351,6 +351,57 @@ export async function adminPasswordAuth(email: string, password: string) {
   }
 }
 
+// ─── Admin IAM ────────────────────────────────────────────────────────────────
+
+export async function listAdminUsers(): Promise<Array<{ sub: string; email: string; role: string; enabled: boolean }>> {
+  const pool = getPool('admin')
+  const result = await cognitoClient.send(
+    new ListUsersCommand({ UserPoolId: pool.userPoolId, Limit: 60 }),
+  )
+  return (result.Users ?? []).map((u) => {
+    const attrs: Record<string, string> = {}
+    for (const a of u.Attributes ?? []) {
+      if (a.Name && a.Value !== undefined) attrs[a.Name] = a.Value
+    }
+    return {
+      sub: attrs['sub'] ?? u.Username ?? '',
+      email: attrs['email'] ?? '',
+      role: attrs['custom:admin_role'] ?? 'support_agent',
+      enabled: u.Enabled ?? false,
+    }
+  })
+}
+
+export async function createAdminUser(email: string, tempPassword: string, role: string): Promise<{ sub: string }> {
+  const pool = getPool('admin')
+  const result = await cognitoClient.send(
+    new AdminCreateUserCommand({
+      UserPoolId: pool.userPoolId,
+      Username: email,
+      TemporaryPassword: tempPassword,
+      UserAttributes: [
+        { Name: 'email', Value: email },
+        { Name: 'email_verified', Value: 'true' },
+        { Name: 'custom:admin_role', Value: role },
+      ],
+      MessageAction: 'SUPPRESS',
+    }),
+  )
+  const sub = result.User?.Attributes?.find((a) => a.Name === 'sub')?.Value ?? ''
+  return { sub }
+}
+
+export async function setAdminUserRole(cognitoSub: string, role: string): Promise<void> {
+  const pool = getPool('admin')
+  await cognitoClient.send(
+    new AdminUpdateUserAttributesCommand({
+      UserPoolId: pool.userPoolId,
+      Username: cognitoSub,
+      UserAttributes: [{ Name: 'custom:admin_role', Value: role }],
+    }),
+  )
+}
+
 // ─── Disable User ───────────────────────────────────────────────────────────
 
 export async function disableCognitoUser(role: AuthRole, cognitoSub: string) {

@@ -19,6 +19,8 @@ export function BusinessManagement() {
   const [selected, setSelected] = useState<BusinessDetail | null>(null)
   const [loading, setLoading] = useState(false)
   const [confirmDisable, setConfirmDisable] = useState<string | null>(null)
+  const [extendTrialId, setExtendTrialId] = useState<string | null>(null)
+  const [extendDays, setExtendDays] = useState('7')
 
   async function handleSearch() {
     if (!query.trim()) return
@@ -38,7 +40,21 @@ export function BusinessManagement() {
   async function handleAction(action: string, businessId: string) {
     try {
       await api.post(`/v1/admin/businesses/${businessId}/${action}`)
-      handleSearch()
+      void handleSearch()
+    } catch {
+      // Fail silently
+    }
+  }
+
+  async function handleExtendTrial() {
+    if (!extendTrialId) return
+    const days = parseInt(extendDays, 10)
+    if (!days || days < 1 || days > 30) return
+    try {
+      await api.post(`/v1/admin/businesses/${extendTrialId}/extend-trial`, { days })
+      setExtendTrialId(null)
+      setExtendDays('7')
+      void handleSearch()
     } catch {
       // Fail silently
     }
@@ -96,7 +112,7 @@ export function BusinessManagement() {
             {selected?.id === biz.id && (
               <div className="mt-4 pt-4 border-t border-[var(--border)] flex flex-row flex-wrap gap-2">
                 <button
-                  onClick={(e) => { e.stopPropagation(); handleAction('extend-trial', biz.id) }}
+                  onClick={(e) => { e.stopPropagation(); setExtendTrialId(biz.id); setExtendDays('7') }}
                   className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs"
                 >
                   {t('admin.businesses.extendTrial')}
@@ -126,6 +142,38 @@ export function BusinessManagement() {
           </div>
         ))}
       </div>
+
+      {/* Extend trial dialog */}
+      {extendTrialId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">Extend Trial</h3>
+            <p className="text-[var(--text-secondary)] text-sm mb-4">How many days to extend the trial? (1–30)</p>
+            <input
+              type="number"
+              min={1}
+              max={30}
+              value={extendDays}
+              onChange={(e) => setExtendDays(e.target.value)}
+              className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm mb-4 focus:border-[var(--accent)] focus:outline-none"
+            />
+            <div className="flex flex-row gap-3">
+              <button
+                onClick={() => setExtendTrialId(null)}
+                className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleExtendTrial()}
+                className="flex-1 bg-[var(--accent)] text-white rounded-xl py-2.5 text-sm font-medium"
+              >
+                Extend
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Disable confirmation dialog */}
       {confirmDisable && (

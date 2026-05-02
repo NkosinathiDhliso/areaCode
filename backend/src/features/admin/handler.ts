@@ -404,4 +404,68 @@ export async function adminRoutes(app: FastifyInstance) {
       return service.updateGenreWeights(auth.userId, role, request.body as Record<string, unknown>)
     },
   )
+
+  // ─── Admin IAM (super_admin only) ────────────────────────────────────────
+
+  // GET /v1/admin/iam/admins
+  app.get(
+    '/v1/admin/iam/admins',
+    { preHandler: [adminAuth] },
+    async (request) => {
+      const role = await getAdminRole(request)
+      if (role !== 'super_admin') throw { statusCode: 403, message: 'Forbidden' }
+      const admins = await cognito.listAdminUsers()
+      return { admins }
+    },
+  )
+
+  // POST /v1/admin/iam/admins
+  app.post(
+    '/v1/admin/iam/admins',
+    { preHandler: [adminAuth] },
+    async (request, reply) => {
+      const callerRole = await getAdminRole(request)
+      if (callerRole !== 'super_admin') throw { statusCode: 403, message: 'Forbidden' }
+      const body = request.body as { email: string; tempPassword: string; role: string }
+      const validRoles = ['super_admin', 'support_agent', 'content_moderator']
+      if (!body.email || !body.tempPassword || !validRoles.includes(body.role)) {
+        return reply.status(400).send({ message: 'email, tempPassword and role are required' })
+      }
+      const result = await cognito.createAdminUser(body.email, body.tempPassword, body.role)
+      return reply.status(201).send({ sub: result.sub, email: body.email, role: body.role })
+    },
+  )
+
+  // PATCH /v1/admin/iam/admins/:adminId/role
+  app.patch(
+    '/v1/admin/iam/admins/:adminId/role',
+    { preHandler: [adminAuth] },
+    async (request, reply) => {
+      const callerRole = await getAdminRole(request)
+      if (callerRole !== 'super_admin') throw { statusCode: 403, message: 'Forbidden' }
+      const { adminId } = request.params as { adminId: string }
+      const body = request.body as { role: string }
+      const validRoles = ['super_admin', 'support_agent', 'content_moderator']
+      if (!validRoles.includes(body.role)) {
+        return reply.status(400).send({ message: 'Invalid role' })
+      }
+      await cognito.setAdminUserRole(adminId, body.role)
+      return { success: true }
+    },
+  )
+
+  // POST /v1/admin/iam/admins/:adminId/deactivate
+  app.post(
+    '/v1/admin/iam/admins/:adminId/deactivate',
+    { preHandler: [adminAuth] },
+    async (request) => {
+      const callerRole = await getAdminRole(request)
+      if (callerRole !== 'super_admin') throw { statusCode: 403, message: 'Forbidden' }
+      const auth = getAuth(request)
+      const { adminId } = request.params as { adminId: string }
+      if (adminId === auth.cognitoSub) throw { statusCode: 400, message: 'Cannot deactivate your own account' }
+      await cognito.disableCognitoUser('admin', adminId)
+      return { success: true }
+    },
+  )
 }

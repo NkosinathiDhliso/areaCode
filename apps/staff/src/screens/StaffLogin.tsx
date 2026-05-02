@@ -3,7 +3,6 @@ import { api } from '@area-code/shared/lib/api'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { startStaffGoogleOAuthWeb } from '../lib/startStaffGoogleOAuth'
 import { useStaffAuthStore } from '../stores/staffAuthStore'
 
 export function StaffLogin() {
@@ -13,7 +12,6 @@ export function StaffLogin() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [googleLoading, setGoogleLoading] = useState(false)
 
   async function handleEmailLogin() {
     setLoading(true)
@@ -38,38 +36,11 @@ export function StaffLogin() {
     }
   }
 
-  async function handleGoogle() {
-    setGoogleLoading(true)
-    setError(null)
-    try {
-      await startStaffGoogleOAuthWeb()
-    } catch {
-      setGoogleLoading(false)
-      setError(t('auth.oauth.misconfigured', 'Sign-in is not configured. Try again later.'))
-    }
-  }
-
   return (
     <div className="flex flex-col items-center justify-center h-dvh bg-[var(--bg-base)] px-5">
       <h1 className="text-[var(--text-primary)] font-bold text-2xl mb-8 font-[Syne]">{t('staff.login.title')}</h1>
 
-      <div className="flex flex-col gap-4 w-full max-w-xs mb-6">
-        <button
-          type="button"
-          onClick={() => void handleGoogle()}
-          disabled={googleLoading}
-          className="flex items-center justify-center gap-3 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
-        >
-          {googleLoading ? (
-            <Spinner size="sm" className="border-[var(--accent)] border-t-transparent" />
-          ) : (
-            t('auth.login.continueGoogle', 'Continue with Google')
-          )}
-        </button>
-      </div>
-
       <div className="flex flex-col gap-4 w-full max-w-xs">
-        <p className="text-center text-[var(--text-muted)] text-xs">or use email and password</p>
         <input
           type="email"
           value={email}
@@ -87,7 +58,7 @@ export function StaffLogin() {
         <button
           type="button"
           onClick={() => void handleEmailLogin()}
-          disabled={loading || googleLoading || !email || !password}
+          disabled={loading || !email || !password}
           className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {loading ? (
