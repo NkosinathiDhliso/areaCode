@@ -41,18 +41,20 @@ await build({
   outfile: 'dist/websocket/index.mjs',
 })
 
-// Build individual worker Lambdas
+// Build individual worker Lambdas in parallel
 const workerDir = resolve('src/workers')
 const workers = readdirSync(workerDir)
   .filter((f) => f.endsWith('.ts') && !f.includes('.test.') && !f.endsWith('-repository.ts'))
   .map((f) => f.replace('.ts', ''))
 
-for (const worker of workers) {
-  await build({
-    ...sharedBuildOptions,
-    entryPoints: [`src/workers/${worker}.ts`],
-    outfile: `dist/workers/${worker}/index.mjs`,
-  })
-}
+await Promise.all(
+  workers.map((worker) =>
+    build({
+      ...sharedBuildOptions,
+      entryPoints: [`src/workers/${worker}.ts`],
+      outfile: `dist/workers/${worker}/index.mjs`,
+    })
+  )
+)
 
 console.log(`✓ Built monolith Lambda + WebSocket Lambda + ${workers.length} worker Lambdas`)
