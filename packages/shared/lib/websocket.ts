@@ -12,16 +12,14 @@ type AnyEventKey = keyof ServerToClientEvents | LifecycleEvent
 class WebSocketManager {
   private ws: WebSocket | null = null
   private url: string
-  private token?: string
   private reconnectAttempts = 0
   private maxReconnectAttempts = 5
   private reconnectDelay = 1000
   private listeners: Map<AnyEventKey, Set<EventCallback>> = new Map()
   private isConnecting = false
 
-  constructor(url: string, token?: string) {
+  constructor(url: string) {
     this.url = url
-    this.token = token
   }
 
   connect(): void {
@@ -37,12 +35,7 @@ class WebSocketManager {
     this.isConnecting = true
 
     try {
-      // Add token as query parameter if present
-      const wsUrl = this.token
-        ? `${this.url}?token=${encodeURIComponent(this.token)}`
-        : this.url
-
-      this.ws = new WebSocket(wsUrl)
+      this.ws = new WebSocket(this.url)
 
       this.ws.onopen = () => {
         console.log('WebSocket connected')
@@ -222,7 +215,7 @@ export function getWebSocket(token?: string, opts?: { userId?: string; citySlug?
       ? `${WEBSOCKET_URL}?${params.toString()}`
       : WEBSOCKET_URL
 
-    wsManager = new WebSocketManager(url, token)
+    wsManager = new WebSocketManager(url)
     wsManager.connect()
   }
 
