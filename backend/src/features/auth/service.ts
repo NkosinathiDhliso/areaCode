@@ -210,6 +210,105 @@ export async function consumerVerifyOtp(phone: string, code: string, userAgent?:
   }
 }
 
+export async function consumerEmailSignup(data: {
+  email: string
+  password: string
+  consentAnalytics?: boolean
+  userAgent?: string
+}) {
+  if (DEV_MODE) {
+    const userId = `dev-user-${Date.now()}`
+    const session = await createLoginSession(userId, data.userAgent ?? '')
+    return {
+      accessToken: `dev-access-${userId}`,
+      refreshToken: `dev-refresh-${userId}`,
+      sessionId: session.sessionId,
+      user: { id: userId, username: 'dev_user', displayName: 'Dev User', tier: 'explorer' },
+    }
+  }
+
+  const email = data.email.toLowerCase().trim()
+  const existing = await repo.getUserByEmail(email)
+  if (existing) throw AppError.conflict('Email already registered')
+
+  const city = await repo.getCityBySlug('johannesburg')
+  if (!city) throw AppError.internal('Default city missing')
+
+  let username = suggestedUsernameFromEmail(email)
+  let n = 0
+  while (await repo.findUserByUsername(username)) {
+    n += 1
+    username = `${suggestedUsernameFromEmail(email).slice(0, 18)}_${n}`
+  }
+
+  const emailLocal = email.split('@')[0] ?? 'Friend'
+  const displayName = emailLocal.length > 0 ? emailLocal.charAt(0).toUpperCase() + emailLocal.slice(1) : 'Explorer'
+
+  const cognitoUser = await cognito.createEmailPasswordUser('consumer', email, data.password)
+
+  const user = await repo.createUser({
+    email,
+    username,
+    displayName,
+    cityId: city.id,
+    cognitoSub: cognitoUser.sub,
+  })
+
+  await cognito.updateUserAttributes('consumer', email, {
+    userId: user.userId,
+    citySlug: 'johannesburg',
+  })
+
+  const consentVersion = process.env['AREA_CODE_CONSENT_VERSION'] ?? 'v1.0'
+  await repo.insertConsentRecord(user.userId, consentVersion, data.consentAnalytics ?? false)
+
+  const tokens = await cognito.passwordAuth('consumer', email, data.password)
+  const loginSession = await createLoginSession(user.userId, data.userAgent ?? '')
+
+  return {
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    sessionId: loginSession.sessionId,
+    user: { id: user.userId, username: user.username, displayName: user.displayName, tier: user.tier },
+  }
+}
+
+export async function consumerEmailLogin(emailRaw: string, password: string, userAgent?: string) {
+  if (DEV_MODE) {
+    const userId = `dev-user-${Date.now()}`
+    const session = await createLoginSession(userId, userAgent ?? '')
+    return {
+      accessToken: `dev-access-${userId}`,
+      refreshToken: `dev-refresh-${userId}`,
+      sessionId: session.sessionId,
+      user: { id: userId, username: 'dev_user', displayName: 'Dev User', tier: 'explorer' },
+    }
+  }
+
+  const email = emailRaw.toLowerCase().trim()
+  const tokens = await cognito.passwordAuth('consumer', email, password)
+  const cognitoUser = await cognito.getCognitoUser('consumer', email)
+  let userId = cognitoUser?.attributes['custom:userId']
+
+  const user = userId ? await repo.getUserById(userId) : await repo.getUserByEmail(email)
+  if (!user) throw AppError.unauthorized('User account is not linked.')
+
+  userId = user.userId
+  await cognito.updateUserAttributes('consumer', email, {
+    userId,
+    citySlug: 'johannesburg',
+  })
+
+  const loginSession = await createLoginSession(user.userId, userAgent ?? '')
+
+  return {
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    sessionId: loginSession.sessionId,
+    user: { id: user.userId, username: user.username, displayName: user.displayName, tier: user.tier },
+  }
+}
+
 export async function businessSignup(data: {
   email: string
   phone: string

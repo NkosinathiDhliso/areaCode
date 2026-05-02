@@ -10,6 +10,7 @@ import {
   accountTypeQuerySchema,
   staffInviteAcceptBodySchema,
   staffInviteMetaQuerySchema,
+  consumerEmailSignupBodySchema,
   consumerSignupBodySchema,
   verifyOtpBodySchema,
   loginBodySchema,
@@ -28,6 +29,22 @@ export async function authRoutes(app: FastifyInstance) {
 
   // POST /v1/auth/consumer/signup
   app.post(
+    '/v1/auth/consumer/email-signup',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'consumer-email-signup', max: 5, windowSeconds: 300 }),
+        validate({ body: consumerEmailSignupBodySchema }),
+      ],
+    },
+    async (request, reply) => {
+      const body = request.body as z.infer<typeof consumerEmailSignupBodySchema>
+      const userAgent = request.headers['user-agent'] ?? ''
+      const result = await service.consumerEmailSignup({ ...body, userAgent })
+      return reply.status(201).send(result)
+    },
+  )
+
+  app.post(
     '/v1/auth/consumer/signup',
     {
       preHandler: [
@@ -43,6 +60,21 @@ export async function authRoutes(app: FastifyInstance) {
   )
 
   // POST /v1/auth/consumer/login
+  app.post(
+    '/v1/auth/consumer/email-login',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'consumer-email-login', max: 5, windowSeconds: 60 }),
+        validate({ body: emailLoginBodySchema }),
+      ],
+    },
+    async (request) => {
+      const body = request.body as z.infer<typeof emailLoginBodySchema>
+      const userAgent = request.headers['user-agent'] ?? ''
+      return service.consumerEmailLogin(body.email, body.password, userAgent)
+    },
+  )
+
   app.post(
     '/v1/auth/consumer/login',
     {

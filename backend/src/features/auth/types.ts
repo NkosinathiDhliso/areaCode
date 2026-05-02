@@ -30,6 +30,12 @@ export const consumerSignupBodySchema = z.object({
   consentAnalytics: z.boolean().optional().default(false),
 })
 
+export const consumerEmailSignupBodySchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8).max(256),
+  consentAnalytics: z.boolean().optional().default(false),
+})
+
 export const verifyOtpBodySchema = z.object({
   phone: z.string().regex(/^\+\d{10,15}$/),
   code: z.string().length(6),

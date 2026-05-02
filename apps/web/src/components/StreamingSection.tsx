@@ -1,15 +1,26 @@
-import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
+import { ARCHETYPE_CATALOG } from '@area-code/shared/constants/archetype-catalog'
 import { api } from '@area-code/shared/lib/api'
 import { useUserStore } from '@area-code/shared/stores/userStore'
-import { ARCHETYPE_CATALOG } from '@area-code/shared/constants/archetype-catalog'
-import type { MusicGenre, StreamingProvider } from '@area-code/shared/types'
+import type { MusicGenre, StreamingProvider, User } from '@area-code/shared/types'
+import { useQueryClient } from '@tanstack/react-query'
+import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { ManualGenreSelector } from './ManualGenreSelector'
 
 const GENRE_LABELS: Record<MusicGenre, string> = {
-  amapiano: 'Amapiano', deep_house: 'Deep House', afrobeats: 'Afrobeats',
-  hip_hop: 'Hip Hop', rnb: 'R&B', kwaito: 'Kwaito', gqom: 'Gqom',
-  jazz: 'Jazz', rock: 'Rock', pop: 'Pop', gospel: 'Gospel', maskandi: 'Maskandi',
+  amapiano: 'Amapiano',
+  deep_house: 'Deep House',
+  afrobeats: 'Afrobeats',
+  hip_hop: 'Hip Hop',
+  rnb: 'R&B',
+  kwaito: 'Kwaito',
+  gqom: 'Gqom',
+  jazz: 'Jazz',
+  rock: 'Rock',
+  pop: 'Pop',
+  gospel: 'Gospel',
+  maskandi: 'Maskandi',
 }
 
 interface ConnectResponse {
@@ -21,12 +32,14 @@ interface ConnectResponse {
 
 export function StreamingSection() {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const user = useUserStore((s) => s.user)
   const setUser = useUserStore((s) => s.setUser)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showConsent, setShowConsent] = useState<StreamingProvider | null>(null)
   const [spotifySuccess, setSpotifySuccess] = useState(false)
+  const [syncingSpotify, setSyncingSpotify] = useState(false)
 
   const connected = user?.streamingProvider ?? null
   const archetype = user?.archetypeId
@@ -34,7 +47,7 @@ export function StreamingSection() {
     : ARCHETYPE_CATALOG.find((a) => a.name === 'The Uncharted')
   const genres = user?.musicGenres ?? []
 
-  // Handle Spotify OAuth callback — read query params after redirect back
+  // Handle Spotify OAuth callback, read query params after redirect back.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const streaming = params.get('streaming')
@@ -50,15 +63,30 @@ export function StreamingSection() {
 
     if (streaming === 'success' && provider === 'spotify') {
       setSpotifySuccess(true)
-      // Parse genres from callback and update user store
-      const callbackGenres = genresParam ? genresParam.split(',').filter(Boolean) as MusicGenre[] : []
-      if (user && callbackGenres.length > 0) {
-        setUser({ ...user, streamingProvider: 'spotify', musicGenres: callbackGenres })
+      setError(null)
+      setLoading(false)
+      setSyncingSpotify(true)
+
+      const callbackGenres = genresParam ? (genresParam.split(',').filter(Boolean) as MusicGenre[]) : []
+
+      if (user) {
+        setUser({
+          ...user,
+          streamingProvider: 'spotify',
+          musicGenres: callbackGenres.length > 0 ? callbackGenres : user.musicGenres,
+        })
       }
-      // Also refresh the full profile to get the computed archetype
-      void api.get<import('@area-code/shared/types').User>('/v1/users/me').then((freshUser) => {
-        setUser(freshUser)
-      }).catch(() => { /* profile refresh failed, genres are still updated */ })
+
+      void api
+        .get<User>('/v1/users/me')
+        .then((freshUser) => {
+          setUser(freshUser)
+          return queryClient.invalidateQueries({ queryKey: ['user', 'me'] })
+        })
+        .catch(() => {
+          // The callback already marked Spotify connected. Keep that optimistic state.
+        })
+        .finally(() => setSyncingSpotify(false))
 
       // Clear success banner after 5s
       setTimeout(() => setSpotifySuccess(false), 5000)
@@ -70,7 +98,7 @@ export function StreamingSection() {
       }
       setError(messages[reason ?? ''] ?? 'Spotify connection failed. Please try again.')
     }
-  }, [user, setUser])
+  }, [queryClient, setUser, user])
 
   async function handleConnect(provider: StreamingProvider) {
     setShowConsent(null)
@@ -86,7 +114,7 @@ export function StreamingSection() {
       if (res.redirectUrl) {
         // Redirect the user to Spotify's authorization page
         window.location.href = res.redirectUrl
-        return // Don't setLoading(false) — we're navigating away
+        return // Do not setLoading(false), we are navigating away.
       }
 
       // No redirect URL means direct connect (e.g. Apple Music with token, or fallback)
@@ -126,10 +154,28 @@ export function StreamingSection() {
       {/* Success banner after Spotify OAuth callback */}
       {spotifySuccess && (
         <div className="bg-[var(--success)]/10 border border-[var(--success)]/30 rounded-xl px-3 py-2 mb-3 flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="var(--success)"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
           <span className="text-[var(--success)] text-xs font-medium">
-            Spotify connected — your music personality has been updated
+            Spotify connected, your music personality has been updated
           </span>
+        </div>
+      )}
+
+      {syncingSpotify && (
+        <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl px-3 py-2 mb-3 flex items-center gap-2">
+          <span className="w-4 h-4 border-2 border-[var(--text-muted)] border-t-transparent rounded-full animate-spin" />
+          <span className="text-[var(--text-secondary)] text-xs">Syncing your Spotify genres and archetype</span>
         </div>
       )}
 
@@ -144,9 +190,7 @@ export function StreamingSection() {
       )}
 
       {archetype?.name === 'The Uncharted' && (
-        <p className="text-[var(--text-muted)] text-xs mb-3">
-          {t('profile.archetype.uncharted')}
-        </p>
+        <p className="text-[var(--text-muted)] text-xs mb-3">{t('profile.archetype.uncharted')}</p>
       )}
 
       {genres.length > 0 && (
@@ -163,19 +207,28 @@ export function StreamingSection() {
       )}
 
       {connected ? (
-        <div className="flex flex-row items-center justify-between">
-          <span className="text-[var(--text-primary)] text-sm">
-            {t('profile.streaming.connected', {
-              provider: connected === 'spotify' ? 'Spotify' : 'Apple Music',
-            })}
-          </span>
-          <button
-            onClick={handleDisconnect}
-            disabled={loading}
-            className="text-[var(--danger)] text-sm disabled:opacity-50"
-          >
-            {t('profile.streaming.disconnect')}
-          </button>
+        <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl p-3">
+          <div className="flex flex-row items-center justify-between gap-3">
+            <div className="flex-1">
+              <span className="text-[var(--text-primary)] text-sm font-medium">
+                {t('profile.streaming.connected', {
+                  provider: connected === 'spotify' ? 'Spotify' : 'Apple Music',
+                })}
+              </span>
+              <p className="text-[var(--text-muted)] text-xs mt-1">
+                {genres.length > 0
+                  ? `${genres.length} genres synced${archetype ? `, ${archetype.name}` : ''}`
+                  : 'Connected. Add listening history or pick genres manually to shape your archetype.'}
+              </p>
+            </div>
+            <button
+              onClick={handleDisconnect}
+              disabled={loading}
+              className="text-[var(--danger)] text-sm disabled:opacity-50"
+            >
+              {t('profile.streaming.disconnect')}
+            </button>
+          </div>
         </div>
       ) : (
         <>
@@ -189,7 +242,9 @@ export function StreamingSection() {
                 <span className="w-4 h-4 border-2 border-[var(--text-muted)] border-t-transparent rounded-full animate-spin" />
               ) : (
                 <>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                  </svg>
                   {t('profile.streaming.connectSpotify')}
                 </>
               )}
@@ -212,14 +267,18 @@ export function StreamingSection() {
         <div
           className="fixed inset-0 flex items-center justify-center"
           style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 50 }}
-          onClick={(e) => { if (e.target === e.currentTarget) setShowConsent(null) }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowConsent(null)
+          }}
         >
-          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-5 mx-4" style={{ maxWidth: 360 }}>
-            <p className="text-[var(--text-primary)] text-sm font-medium mb-2">
-              {t('profile.streaming.consentTitle')}
-            </p>
+          <div
+            className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-5 mx-4"
+            style={{ maxWidth: 360 }}
+          >
+            <p className="text-[var(--text-primary)] text-sm font-medium mb-2">{t('profile.streaming.consentTitle')}</p>
             <p className="text-[var(--text-secondary)] text-xs mb-4">
-              We'll read your top artists from Spotify to discover your music personality. We only access your listening history — nothing else. You can disconnect anytime.
+              We'll read your top artists from Spotify to discover your music personality. We only access your listening
+              history. You can disconnect anytime.
             </p>
             <div className="flex flex-row gap-2">
               <button
