@@ -9,6 +9,7 @@ import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
 import { GlobalErrorToast } from '@area-code/shared/components/GlobalErrorToast'
 import { BusinessLogin } from './screens/BusinessLogin'
 import { BusinessSignup } from './screens/BusinessSignup'
+import { BusinessOAuthCallback } from './screens/BusinessOAuthCallback'
 import { BusinessDashboard } from './screens/BusinessDashboard'
 
 const queryClient = new QueryClient()
@@ -50,6 +51,10 @@ function AppContent() {
   }, [accessToken, businessId])
 
   if (isAuthenticated) return <BusinessDashboard />
+
+  if (window.location.pathname.startsWith('/auth/callback')) {
+    return <BusinessOAuthCallback />
+  }
 
   if (screen === 'signup') {
     return <BusinessSignup onSwitchToLogin={() => setScreen('login')} />

@@ -18,14 +18,9 @@ async function getAdminRole(request: FastifyRequest): Promise<AdminRole> {
   if (DEV_MODE) {
     return (request.headers['x-admin-role'] as AdminRole) ?? 'super_admin'
   }
-  // Read from verified Cognito JWT claims, NOT from client header
   const auth = getAuth(request)
-  try {
-    const cognitoUser = await cognito.getCognitoUser('admin', auth.cognitoSub)
-    return (cognitoUser?.attributes['custom:admin_role'] as AdminRole) ?? 'support_agent'
-  } catch {
-    return 'support_agent'
-  }
+  const attrs = await cognito.getCognitoUserAttrsBySub('admin', auth.cognitoSub)
+  return (attrs?.['custom:admin_role'] as AdminRole) ?? 'support_agent'
 }
 
 export async function adminRoutes(app: FastifyInstance) {

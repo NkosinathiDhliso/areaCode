@@ -298,6 +298,10 @@ export async function getStaffByPhone(phone: string): Promise<StaffAccount | nul
 export async function createStaff(
   data: Omit<StaffAccount, 'staffId' | 'createdAt'>
 ): Promise<StaffAccount> {
+  if (!data.cognitoSub && !data.phone) {
+    throw new Error('createStaff requires cognitoSub or phone')
+  }
+
   const staffId = generateId()
   const now = new Date().toISOString()
 
@@ -309,13 +313,17 @@ export async function createStaff(
     isActive: data.isActive ?? true,
   }
 
+  const gsi1pk = data.cognitoSub
+    ? `COGNITO#${data.cognitoSub}`
+    : `STAFF_PHONE#${data.phone as string}`
+
   await documentClient.send(
     new PutCommand({
       TableName: TableNames.appData,
       Item: {
         pk: `STAFF#${staffId}`,
         sk: `PROFILE#${staffId}`,
-        gsi1pk: data.cognitoSub ? `COGNITO#${data.cognitoSub}` : `STAFF_PHONE#${data.phone}`,
+        gsi1pk,
         gsi1sk: `BUSINESS#${data.businessId}`,
         ...staff,
       },

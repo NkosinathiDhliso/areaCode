@@ -50,6 +50,20 @@ export const staffInviteAcceptBodySchema = z.object({
   phone: z.string().regex(/^\+\d{10,15}$/),
 })
 
+export const staffInviteMetaQuerySchema = z.object({
+  token: z.string().min(1),
+})
+
+export const businessOAuthCompleteProfileBodySchema = z.object({
+  businessName: z.string().min(1).max(100),
+  registrationNumber: z.string().optional(),
+})
+
+export const staffOAuthAcceptInviteBodySchema = z.object({
+  inviteToken: z.string().min(1),
+  name: z.string().min(1).max(100),
+})
+
 export const accountTypeQuerySchema = z.object({
   phone: z.string().regex(/^\+\d{10,15}$/),
 })
@@ -113,7 +127,9 @@ export interface StaffAccount {
   staffId: string
   businessId: string
   name: string
-  phone: string
+  /** Present for phone-OTP staff; optional when created via Google invite. */
+  phone?: string
+  email?: string
   cognitoSub?: string
   isActive: boolean
   createdAt: string

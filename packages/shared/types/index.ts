@@ -202,7 +202,8 @@ export interface StaffAccount {
   id: string
   businessId: string
   name: string
-  phone: string
+  phone?: string
+  email?: string
   cognitoSub: string | null
   isActive: boolean
   createdAt: string

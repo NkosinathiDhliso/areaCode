@@ -2,7 +2,8 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import jwt from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
 import { AppError } from '../errors/AppError.js';
-import { getUserByCognitoSub } from '../../features/auth/dynamodb-repository.js';
+import { getUserByCognitoSub, getStaffByCognitoSub } from '../../features/auth/dynamodb-repository.js';
+import { findBusinessByCognitoSub } from '../../features/business/repository.js';
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE'];
 
@@ -101,11 +102,30 @@ async function verifyToken(token: string, role: AuthRole): Promise<AuthPayload> 
   }
 
   // userId is stored as a custom claim by our auth service (phone OTP path).
-  // Federated users often omit it until sync refreshes tokens; resolve Dynamo userId by sub.
+  // Federated users often omit it until sync refreshes tokens; resolve Dynamo ids by sub.
   let userId = (payload['custom:userId'] as string | undefined) ?? cognitoSub;
   if (role === 'consumer' && !payload['custom:userId']) {
     const row = await getUserByCognitoSub(cognitoSub)
     if (row?.userId) userId = row.userId
+  }
+
+  if (role === 'business') {
+    const bid = payload['custom:businessId'] as string | undefined;
+    if (bid) userId = bid;
+    else {
+      const biz = await findBusinessByCognitoSub(cognitoSub);
+      const id = biz?.businessId as string | undefined;
+      if (id) userId = id;
+    }
+  }
+
+  if (role === 'staff') {
+    const sid = payload['custom:staffId'] as string | undefined;
+    if (sid) userId = sid;
+    else {
+      const st = await getStaffByCognitoSub(cognitoSub);
+      if (st?.staffId) userId = st.staffId;
+    }
   }
 
   const citySlug = payload['custom:citySlug'] as string | undefined;

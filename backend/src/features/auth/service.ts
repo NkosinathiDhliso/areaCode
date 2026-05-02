@@ -4,6 +4,7 @@ import * as repo from './repository.js'
 import { createLoginSession } from './session-service.js'
 import * as cognito from '../../shared/cognito/client.js'
 import { reportOtpFeedback } from '../../shared/sms/feedback.js'
+import { findBusinessByCognitoSub } from '../business/repository.js'
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
@@ -108,9 +109,9 @@ export async function consumerOAuthSync(opts: {
       sessionId: session.sessionId,
       username: 'dev_google',
       displayName: 'Dev Google User',
-    tier: 'explorer',
+      tier: 'explorer',
+    }
   }
-}
 
   let user = await repo.getUserByCognitoSub(cognitoSub)
 
@@ -308,6 +309,234 @@ export async function businessVerifyOtp(phone: string, code: string, userAgent?:
     if (err instanceof AppError) throw err
     await reportOtpFeedback(phone, 'business', 'FAILED')
     throw AppError.unauthorized('Invalid or expired OTP')
+  }
+}
+
+export async function businessOAuthSync(opts: { cognitoSub: string; userAgent: string }) {
+  if (DEV_MODE) {
+    const bizId = `dev-biz-google-${Date.now()}`
+    const session = await createLoginSession(bizId, opts.userAgent)
+    return { needsBusinessProfile: false, businessId: bizId, sessionId: session.sessionId }
+  }
+
+  const row = await findBusinessByCognitoSub(opts.cognitoSub)
+  const businessId = row?.businessId as string | undefined
+  if (!businessId) {
+    return { needsBusinessProfile: true as const }
+  }
+
+  await cognito.updateUserAttributesByCognitoSub('business', opts.cognitoSub, {
+    businessId,
+  })
+
+  const loginSession = await createLoginSession(businessId, opts.userAgent)
+
+  return {
+    needsBusinessProfile: false as const,
+    businessId,
+    sessionId: loginSession.sessionId,
+  }
+}
+
+export async function businessOAuthCompleteProfile(opts: {
+  cognitoSub: string
+  email?: string | undefined
+  userAgent: string
+  businessName: string
+  registrationNumber?: string
+}) {
+  if (DEV_MODE) {
+    const bizId = `dev-biz-${Date.now()}`
+    const session = await createLoginSession(bizId, opts.userAgent)
+    return { businessId: bizId, sessionId: session.sessionId }
+  }
+
+  const existingRow = await findBusinessByCognitoSub(opts.cognitoSub)
+  if (existingRow?.businessId) {
+    throw AppError.conflict('Business already linked to this Google account. Sign in again.')
+  }
+
+  let email = opts.email?.toLowerCase().trim()
+  if (!email) email = await cognito.getVerifiedEmailBySub('business', opts.cognitoSub)
+  if (!email) {
+    throw AppError.unprocessable(
+      'Your Google account has no verified email. Use another account or contact support.',
+    )
+  }
+
+  const dup = await repo.findBusinessByEmail(email)
+  if (dup) {
+    throw AppError.conflict('An account with this email already exists. Sign in instead.')
+  }
+
+  const business = await repo.createBusinessAccount({
+    email,
+    businessName: opts.businessName.trim(),
+    ...(opts.registrationNumber ? { registrationNumber: opts.registrationNumber.trim() } : {}),
+    cognitoSub: opts.cognitoSub,
+  })
+
+  await cognito.updateUserAttributesByCognitoSub('business', opts.cognitoSub, {
+    businessId: business.businessId,
+  })
+
+  const loginSession = await createLoginSession(business.businessId, opts.userAgent)
+
+  return { businessId: business.businessId, sessionId: loginSession.sessionId }
+}
+
+export async function staffOAuthSync(opts: { cognitoSub: string; userAgent: string }) {
+  if (DEV_MODE) {
+    const staffId = `dev-staff-google-${Date.now()}`
+    const session = await createLoginSession(staffId, opts.userAgent)
+    return {
+      staff: { id: staffId, name: 'Dev Staff', businessId: 'dev-biz-1' },
+      sessionId: session.sessionId,
+    }
+  }
+
+  const staff = await repo.findStaffByCognitoSub(opts.cognitoSub)
+  if (!staff) {
+    throw AppError.notFound(
+      'No staff profile for this Google account. Use your invite link or sign in with phone.',
+    )
+  }
+  if ((staff as unknown as Record<string, unknown>).isActive === false) {
+    throw AppError.forbidden('This staff account has been deactivated. Contact your manager.')
+  }
+
+  await cognito.updateUserAttributesByCognitoSub('staff', opts.cognitoSub, {
+    staffId: staff.staffId,
+    businessId: staff.businessId,
+  })
+
+  const loginSession = await createLoginSession(staff.staffId, opts.userAgent)
+
+  return {
+    staff: { id: staff.staffId, name: staff.name, businessId: staff.businessId },
+    sessionId: loginSession.sessionId,
+  }
+}
+
+export async function staffOAuthAcceptInvite(opts: {
+  cognitoSub: string
+  email?: string | undefined
+  inviteToken: string
+  name: string
+  userAgent: string
+}) {
+  if (DEV_MODE) {
+    const staffId = `dev-staff-${Date.now()}`
+    const session = await createLoginSession(staffId, opts.userAgent)
+    return {
+      staff: { id: staffId, name: opts.name, businessId: 'dev-biz-1' },
+      sessionId: session.sessionId,
+    }
+  }
+
+  let email = opts.email?.toLowerCase().trim()
+  if (!email) email = await cognito.getVerifiedEmailBySub('staff', opts.cognitoSub)
+  if (!email) {
+    throw AppError.unprocessable(
+      'Your Google account has no verified email. Accept the invite with phone instead.',
+    )
+  }
+
+  const invite = await repo.findStaffInviteByToken(opts.inviteToken)
+  if (!invite) throw AppError.notFound('Invite not found or expired')
+  if (invite.accepted) throw AppError.gone('Invite already accepted')
+  if (invite.expiresAt && new Date(invite.expiresAt as string) < new Date()) {
+    throw AppError.gone('Invite expired')
+  }
+
+  const invitedEmail = (invite.invitedEmail as string | null)?.toLowerCase().trim()
+  if (!invitedEmail) {
+    throw AppError.badRequest(
+      'This invite does not include an email. Accept it with the phone flow instead.',
+    )
+  }
+  if (invitedEmail !== email) {
+    throw AppError.forbidden('Sign in with the Google account that matches the invited email.')
+  }
+
+  const linked = await repo.findStaffByCognitoSub(opts.cognitoSub)
+  if (linked) {
+    throw AppError.conflict('This Google account is already linked to a staff profile.')
+  }
+
+  const businessId = invite.businessId as string
+  const { countStaffForBusiness, findBusinessById } = await import('../business/repository.js')
+  const biz = await findBusinessById(businessId)
+  if (biz) {
+    const STAFF_LIMITS: Record<string, number | null> = {
+      free: 2,
+      starter: 2,
+      growth: 5,
+      pro: null,
+      payg: 2,
+    }
+    const limit = STAFF_LIMITS[biz.tier ?? 'free']
+    if (limit !== null && limit !== undefined) {
+      const count = await countStaffForBusiness(businessId)
+      if (count >= limit) {
+        throw AppError.forbidden(`Staff limit reached for ${biz.tier} tier (max ${limit})`)
+      }
+    }
+  }
+
+  await repo.acceptStaffInvite(opts.inviteToken)
+
+  const staff = await repo.createStaffAccount({
+    businessId,
+    name: opts.name.trim(),
+    cognitoSub: opts.cognitoSub,
+    email,
+  })
+
+  await cognito.updateUserAttributesByCognitoSub('staff', opts.cognitoSub, {
+    staffId: staff.staffId,
+    businessId,
+  })
+
+  const loginSession = await createLoginSession(staff.staffId, opts.userAgent)
+
+  return {
+    staff: { id: staff.staffId, name: staff.name, businessId: staff.businessId },
+    sessionId: loginSession.sessionId,
+  }
+}
+
+export async function adminOAuthSync(opts: { cognitoSub: string }) {
+  if (DEV_MODE) {
+    return { adminId: opts.cognitoSub, role: 'super_admin' as const }
+  }
+
+  const attrs = await cognito.getCognitoUserAttrsBySub('admin', opts.cognitoSub)
+  if (!attrs) {
+    throw AppError.unauthorized('Admin user not found in pool.')
+  }
+
+  const role = attrs['custom:admin_role'] ?? 'support_agent'
+
+  return { adminId: opts.cognitoSub, role }
+}
+
+export async function getStaffInviteMeta(token: string) {
+  if (DEV_MODE) {
+    return { expired: false, accepted: false, hasGoogleOption: true }
+  }
+
+  const invite = await repo.findStaffInviteByToken(token)
+  if (!invite) throw AppError.notFound('Invite not found')
+
+  const expired = Boolean(
+    invite.expiresAt && new Date(invite.expiresAt as string) < new Date(),
+  )
+
+  return {
+    expired,
+    accepted: Boolean(invite.accepted),
+    hasGoogleOption: Boolean(invite.invitedEmail),
   }
 }
 

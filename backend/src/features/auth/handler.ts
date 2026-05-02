@@ -6,11 +6,14 @@ import * as service from './service.js'
 import {
   accountTypeQuerySchema,
   staffInviteAcceptBodySchema,
+  staffInviteMetaQuerySchema,
   consumerSignupBodySchema,
   verifyOtpBodySchema,
   loginBodySchema,
   refreshBodySchema,
   businessSignupBodySchema,
+  businessOAuthCompleteProfileBodySchema,
+  staffOAuthAcceptInviteBodySchema,
   adminLoginBodySchema,
 } from './types.js'
 import { z } from 'zod'
@@ -142,6 +145,46 @@ export async function authRoutes(app: FastifyInstance) {
     },
   )
 
+  // POST /v1/auth/business/oauth-sync (after Hosted UI + Google)
+  app.post(
+    '/v1/auth/business/oauth-sync',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'business-oauth-sync', max: 10, windowSeconds: 60 }),
+        requireAuth('business'),
+      ],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      const userAgent = request.headers['user-agent'] ?? ''
+      return service.businessOAuthSync({ cognitoSub: auth.cognitoSub, userAgent })
+    },
+  )
+
+  // POST /v1/auth/business/oauth-complete-profile (new Google business after oauth-sync)
+  app.post(
+    '/v1/auth/business/oauth-complete-profile',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'business-oauth-profile', max: 5, windowSeconds: 300 }),
+        validate({ body: businessOAuthCompleteProfileBodySchema }),
+        requireAuth('business'),
+      ],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      const body = request.body as z.infer<typeof businessOAuthCompleteProfileBodySchema>
+      const userAgent = request.headers['user-agent'] ?? ''
+      return service.businessOAuthCompleteProfile({
+        cognitoSub: auth.cognitoSub,
+        email: auth.email,
+        userAgent,
+        businessName: body.businessName,
+        registrationNumber: body.registrationNumber,
+      })
+    },
+  )
+
   // POST /v1/auth/business/refresh
   app.post('/v1/auth/business/refresh', { preHandler: [validate({ body: refreshBodySchema })] }, async (request) => {
     const body = request.body as z.infer<typeof refreshBodySchema>
@@ -182,6 +225,46 @@ export async function authRoutes(app: FastifyInstance) {
     },
   )
 
+  // POST /v1/auth/staff/oauth-sync
+  app.post(
+    '/v1/auth/staff/oauth-sync',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'staff-oauth-sync', max: 10, windowSeconds: 60 }),
+        requireAuth('staff'),
+      ],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      const userAgent = request.headers['user-agent'] ?? ''
+      return service.staffOAuthSync({ cognitoSub: auth.cognitoSub, userAgent })
+    },
+  )
+
+  // POST /v1/auth/staff/oauth-accept-invite
+  app.post(
+    '/v1/auth/staff/oauth-accept-invite',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'staff-oauth-invite', max: 10, windowSeconds: 60 }),
+        validate({ body: staffOAuthAcceptInviteBodySchema }),
+        requireAuth('staff'),
+      ],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      const body = request.body as z.infer<typeof staffOAuthAcceptInviteBodySchema>
+      const userAgent = request.headers['user-agent'] ?? ''
+      return service.staffOAuthAcceptInvite({
+        cognitoSub: auth.cognitoSub,
+        email: auth.email,
+        inviteToken: body.inviteToken,
+        name: body.name,
+        userAgent,
+      })
+    },
+  )
+
   // POST /v1/auth/staff/refresh
   app.post('/v1/auth/staff/refresh', { preHandler: [validate({ body: refreshBodySchema })] }, async (request) => {
     const body = request.body as z.infer<typeof refreshBodySchema>
@@ -202,6 +285,21 @@ export async function authRoutes(app: FastifyInstance) {
     async (request) => {
       const body = request.body as z.infer<typeof adminLoginBodySchema>
       return service.adminLogin(body.email, body.password)
+    },
+  )
+
+  // POST /v1/auth/admin/oauth-sync (after Hosted UI + Google)
+  app.post(
+    '/v1/auth/admin/oauth-sync',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'admin-oauth-sync', max: 10, windowSeconds: 60 }),
+        requireAuth('admin'),
+      ],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      return service.adminOAuthSync({ cognitoSub: auth.cognitoSub })
     },
   )
 
@@ -259,6 +357,21 @@ export async function authRoutes(app: FastifyInstance) {
   // Session routes are in session-handler.ts
 
   // Staff invite and remaining routes
+
+  // GET /v1/auth/staff-invite/meta
+  app.get(
+    '/v1/auth/staff-invite/meta',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'staff-invite-meta', max: 30, windowSeconds: 60 }),
+        validate({ query: staffInviteMetaQuerySchema }),
+      ],
+    },
+    async (request) => {
+      const q = request.query as z.infer<typeof staffInviteMetaQuerySchema>
+      return service.getStaffInviteMeta(q.token)
+    },
+  )
 
   // POST /v1/staff-invite/accept
   app.post(

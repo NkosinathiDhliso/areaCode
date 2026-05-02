@@ -6,6 +6,8 @@ import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore
 import { toE164 } from '@area-code/shared/lib/formatters'
 import { Spinner } from '@area-code/shared/components/Spinner'
 
+import { startBusinessGoogleOAuthWeb } from '../lib/startBusinessGoogleOAuth'
+
 interface BusinessLoginProps {
   onSwitchToSignup: () => void
 }
@@ -19,6 +21,7 @@ export function BusinessLogin({ onSwitchToSignup }: BusinessLoginProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [resendCooldown, setResendCooldown] = useState(0)
+  const [googleLoading, setGoogleLoading] = useState(false)
 
   // Auto-submit OTP when 6 digits entered
   useEffect(() => {
@@ -83,11 +86,42 @@ export function BusinessLogin({ onSwitchToSignup }: BusinessLoginProps) {
     }
   }
 
+  async function handleGoogle() {
+    setGoogleLoading(true)
+    setError(null)
+    try {
+      await startBusinessGoogleOAuthWeb()
+    } catch {
+      setGoogleLoading(false)
+      setError(t('auth.oauth.misconfigured', 'Sign-in is not configured. Try again later.'))
+    }
+  }
+
   return (
     <div className="flex flex-col items-center justify-center h-dvh bg-[var(--bg-base)] px-5">
       <h1 className="text-[var(--text-primary)] font-bold text-2xl mb-8 font-[Syne]">
         {t('biz.login.title')}
       </h1>
+
+      <div className="flex flex-col gap-4 w-full max-w-xs mb-6">
+        <button
+          type="button"
+          onClick={() => void handleGoogle()}
+          disabled={googleLoading}
+          className="flex items-center justify-center gap-3 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
+        >
+          {googleLoading ? (
+            <Spinner size="sm" className="border-[var(--accent)] border-t-transparent" />
+          ) : (
+            t('auth.login.continueGoogle', 'Continue with Google')
+          )}
+        </button>
+      </div>
+
+      <details className="w-full max-w-xs mb-2">
+        <summary className="text-[var(--text-secondary)] text-sm cursor-pointer select-none mb-4">
+          {t('biz.login.phoneFallback', 'Sign in with phone (SMS)')}
+        </summary>
 
       {step === 'phone' ? (
         <div className="flex flex-col gap-4 w-full max-w-xs">
@@ -144,6 +178,7 @@ export function BusinessLogin({ onSwitchToSignup }: BusinessLoginProps) {
           </button>
         </div>
       )}
+      </details>
 
       {error && <p className="text-xs text-[var(--danger)] mt-3">{error}</p>}
 

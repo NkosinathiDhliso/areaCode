@@ -5,6 +5,8 @@ import { api } from '@area-code/shared/lib/api'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import { Spinner } from '@area-code/shared/components/Spinner'
 
+import { startBusinessGoogleOAuthWeb } from '../lib/startBusinessGoogleOAuth'
+
 interface BusinessSignupProps {
   onSwitchToLogin: () => void
 }
@@ -21,6 +23,7 @@ export function BusinessSignup({ onSwitchToLogin }: BusinessSignupProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [resendCooldown, setResendCooldown] = useState(0)
+  const [googleLoading, setGoogleLoading] = useState(false)
 
   // Auto-submit OTP when 6 digits entered
   useEffect(() => {
@@ -108,6 +111,17 @@ export function BusinessSignup({ onSwitchToLogin }: BusinessSignupProps) {
 
   const isDetailsValid = email.includes('@') && phone.length >= 9 && businessName.length >= 2
 
+  async function handleGoogleSignup() {
+    setGoogleLoading(true)
+    setError(null)
+    try {
+      await startBusinessGoogleOAuthWeb()
+    } catch {
+      setGoogleLoading(false)
+      setError(t('auth.oauth.misconfigured', 'Sign-in is not configured. Try again later.'))
+    }
+  }
+
   return (
     <div className="flex flex-col items-center justify-center h-dvh bg-[var(--bg-base)] px-5">
       <h1 className="text-[var(--text-primary)] font-bold text-2xl mb-2 font-[Syne]">
@@ -116,6 +130,26 @@ export function BusinessSignup({ onSwitchToLogin }: BusinessSignupProps) {
       <p className="text-[var(--text-secondary)] text-sm mb-8 text-center max-w-xs">
         {t('biz.signup.subtitle')}
       </p>
+
+      <div className="flex flex-col gap-4 w-full max-w-xs mb-6">
+        <button
+          type="button"
+          onClick={() => void handleGoogleSignup()}
+          disabled={googleLoading}
+          className="flex items-center justify-center gap-3 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
+        >
+          {googleLoading ? (
+            <Spinner size="sm" className="border-[var(--accent)] border-t-transparent" />
+          ) : (
+            t('auth.login.continueGoogle', 'Continue with Google')
+          )}
+        </button>
+      </div>
+
+      <details className="w-full max-w-xs mb-2">
+        <summary className="text-[var(--text-secondary)] text-sm cursor-pointer select-none mb-4">
+          {t('biz.signup.phoneFallback', 'Sign up with phone (SMS)')}
+        </summary>
 
       {step === 'details' ? (
         <div className="flex flex-col gap-3 w-full max-w-xs">
@@ -192,6 +226,7 @@ export function BusinessSignup({ onSwitchToLogin }: BusinessSignupProps) {
           </button>
         </div>
       )}
+      </details>
 
       {error && <p className="text-xs text-[var(--danger)] mt-3">{error}</p>}
 

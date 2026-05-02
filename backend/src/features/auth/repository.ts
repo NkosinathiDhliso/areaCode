@@ -125,6 +125,10 @@ export async function getLatestConsent(userId: string) {
 export { getUserByPhone as findUserByPhone }
 export { getBusinessByEmail as findBusinessByEmail }
 
+export async function findStaffByCognitoSub(cognitoSub: string) {
+  return getStaffByCognitoSub(cognitoSub)
+}
+
 export async function findUserByUsername(username: string): Promise<unknown | null> {
   if (!username) return null
   const result = await documentClient.send(
@@ -202,7 +206,11 @@ export async function acceptStaffInvite(inviteToken: string) {
 }
 
 export async function createStaffAccount(data: {
-  businessId: string; name: string; phone: string; cognitoSub: string;
+  businessId: string
+  name: string
+  phone?: string
+  email?: string
+  cognitoSub: string
 }) {
   return createStaffDb({ ...data, isActive: true })
 }

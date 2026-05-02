@@ -219,12 +219,29 @@ async function listUserAttrsBySub(
   return { Username: u.Username, attrs }
 }
 
-/** Hosted UI access tokens sometimes omit `email`; read verified attribute from Cognito. */
-export async function getConsumerVerifiedEmailBySub(cognitoSub: string): Promise<string | undefined> {
-  const pool = getPool('consumer')
+/** Attributes for a federated or native user looked up by `sub`. */
+export async function getCognitoUserAttrsBySub(
+  role: AuthRole,
+  cognitoSub: string,
+): Promise<Record<string, string> | null> {
+  const pool = getPool(role)
   const row = await listUserAttrsBySub(pool.userPoolId, cognitoSub)
-  const email = row?.attrs['email']
+  return row?.attrs ?? null
+}
+
+/** Hosted UI access tokens sometimes omit `email`; read verified attribute from Cognito. */
+export async function getVerifiedEmailBySub(
+  role: AuthRole,
+  cognitoSub: string,
+): Promise<string | undefined> {
+  const attrs = await getCognitoUserAttrsBySub(role, cognitoSub)
+  const email = attrs?.['email']
   return typeof email === 'string' ? email.toLowerCase().trim() : undefined
+}
+
+/** @deprecated use getVerifiedEmailBySub('consumer', sub) */
+export async function getConsumerVerifiedEmailBySub(cognitoSub: string): Promise<string | undefined> {
+  return getVerifiedEmailBySub('consumer', cognitoSub)
 }
 
 export async function updateUserAttributesByCognitoSub(

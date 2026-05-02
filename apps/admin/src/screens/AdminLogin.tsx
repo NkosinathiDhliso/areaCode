@@ -6,13 +6,27 @@ import type { AdminRole } from '@area-code/shared/types'
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { useAdminAuthStore } from '../stores/adminAuthStore'
 
+import { startAdminGoogleOAuthWeb } from '../lib/startAdminGoogleOAuth'
+
 export function AdminLogin() {
   const { t } = useTranslation()
   const setAuth = useAdminAuthStore((s) => s.setAuth)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  async function handleGoogle() {
+    setGoogleLoading(true)
+    setError(null)
+    try {
+      await startAdminGoogleOAuthWeb()
+    } catch {
+      setGoogleLoading(false)
+      setError('Sign-in is not configured. Try again later.')
+    }
+  }
 
   async function handleLogin() {
     setLoading(true)
@@ -37,6 +51,19 @@ export function AdminLogin() {
       <h1 className="text-[var(--text-primary)] font-bold text-2xl mb-8 font-[Syne]">{t('admin.login.title')}</h1>
 
       <div className="flex flex-col gap-4 w-full max-w-xs">
+        <button
+          type="button"
+          onClick={() => void handleGoogle()}
+          disabled={googleLoading}
+          className="flex items-center justify-center gap-3 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
+        >
+          {googleLoading ? (
+            <Spinner size="sm" className="border-[var(--accent)] border-t-transparent" />
+          ) : (
+            'Continue with Google'
+          )}
+        </button>
+        <p className="text-center text-[var(--text-muted)] text-xs">or use email and password</p>
         <input
           type="email"
           value={email}

@@ -7,6 +7,7 @@ import { GlobalErrorToast } from '@area-code/shared/components/GlobalErrorToast'
 import { api } from '@area-code/shared/lib/api'
 import { StaffInvite } from './screens/StaffInvite'
 import { StaffLogin } from './screens/StaffLogin'
+import { StaffOAuthCallback } from './screens/StaffOAuthCallback'
 import { StaffHome } from './screens/StaffHome'
 
 export function App() {
@@ -37,6 +38,10 @@ function AppContent() {
       onAuthExpired: () => useStaffAuthStore.getState().logout(),
     })
   }, [])
+
+  if (window.location.pathname.startsWith('/auth/callback')) {
+    return <StaffOAuthCallback />
+  }
 
   if (route === 'invite') {
     const token = window.location.pathname.split('/staff-invite/')[1] ?? ''

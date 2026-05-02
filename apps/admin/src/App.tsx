@@ -5,6 +5,7 @@ import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
 import { GlobalErrorToast } from '@area-code/shared/components/GlobalErrorToast'
 import { api } from '@area-code/shared/lib/api'
 import { AdminLogin } from './screens/AdminLogin'
+import { AdminOAuthCallback } from './screens/AdminOAuthCallback'
 import { AdminDashboard } from './screens/AdminDashboard'
 
 export function App() {
@@ -30,6 +31,10 @@ function AppContent() {
       onAuthExpired: () => useAdminAuthStore.getState().logout(),
     })
   }, [])
+
+  if (window.location.pathname.startsWith('/auth/callback')) {
+    return <AdminOAuthCallback />
+  }
 
   if (!isAuthenticated) return <AdminLogin />
   return <AdminDashboard />
