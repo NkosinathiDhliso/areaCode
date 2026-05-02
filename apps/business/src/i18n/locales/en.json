@@ -56,5 +56,10 @@
   "biz.panel.checkIns": "Check-ins",
   "biz.panel.rewardMetrics": "Get Metrics",
   "biz.panel.staffRedemptions": "Staff",
-  "biz.panel.reports": "Reports"
+  "biz.panel.reports": "Reports",
+  "biz.oauth.completeProfile": "Complete your business profile",
+  "biz.oauth.continue": "Continue",
+  "biz.oauth.profileFailed": "Could not complete registration. Try again.",
+  "biz.oauth.accountExists": "This Google account is already linked to a business. Sign in instead.",
+  "biz.oauth.signIn": "Sign in"
 }

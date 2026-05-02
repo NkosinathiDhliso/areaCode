@@ -134,6 +134,10 @@ export function BusinessOAuthCallback() {
       })
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { message?: string } | null
+        if (res.status === 409) {
+          setError(t('biz.oauth.accountExists', 'This Google account is already linked to a business. Sign in instead.'))
+          return
+        }
         throw new Error(body?.message ?? `profile_failed_${res.status}`)
       }
       const body = (await res.json()) as { businessId: string }
@@ -180,7 +184,23 @@ export function BusinessOAuthCallback() {
             )}
           </button>
         </div>
-        {error && <p className="text-xs text-[var(--danger)] mt-4 text-center">{error}</p>}
+        {error && (
+          <div className="flex flex-col items-center gap-3 mt-4">
+            <p className="text-xs text-[var(--danger)] text-center">{error}</p>
+            {error.includes('already linked') && (
+              <button
+                type="button"
+                onClick={() => {
+                  window.history.replaceState({}, '', '/')
+                  window.location.reload()
+                }}
+                className="text-[var(--accent)] text-xs active:scale-95"
+              >
+                {t('biz.oauth.signIn', 'Sign in')}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     )
   }
