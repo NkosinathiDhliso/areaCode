@@ -104,7 +104,7 @@ export function RewardMetricsPanel() {
                 {formatPercent(item.claimRate)}
               </span>
               <span className="text-[var(--text-secondary)] text-sm text-center">
-                {item.timeToClaimMinutes > 0 ? formatTime(item.timeToClaimMinutes) : '—'}
+                {item.timeToClaimMinutes > 0 ? formatTime(item.timeToClaimMinutes) : '-'}
               </span>
               <span className="text-[var(--text-secondary)] text-sm text-center">
                 {formatPercent(item.redemptionRate)}
@@ -118,7 +118,7 @@ export function RewardMetricsPanel() {
       {selectedReward && metrics && (
         <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-5">
           <h3 className="text-[var(--text-primary)] font-semibold text-sm mb-4">
-            {summary.find((s) => s.rewardId === selectedReward)?.title ?? 'Reward'} — Details
+            {summary.find((s) => s.rewardId === selectedReward)?.title ?? 'Reward'} - Details
           </h3>
           <div className="grid grid-cols-3 gap-4">
             <MetricCard
@@ -128,7 +128,7 @@ export function RewardMetricsPanel() {
             />
             <MetricCard
               label="Time to Claim"
-              value={metrics.timeToClaimMinutes > 0 ? formatTime(metrics.timeToClaimMinutes) : '—'}
+              value={metrics.timeToClaimMinutes > 0 ? formatTime(metrics.timeToClaimMinutes) : '-'}
               color="var(--warning)"
             />
             <MetricCard

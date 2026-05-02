@@ -126,7 +126,7 @@ function isTeaser(report: ReportResponse): report is TeaserReport {
 function directionIcon(dir: 'up' | 'down' | 'flat') {
   if (dir === 'up') return '↑'
   if (dir === 'down') return '↓'
-  return '—'
+  return '-'
 }
 
 function directionColor(dir: 'up' | 'down' | 'flat') {
@@ -544,7 +544,7 @@ function SummaryCards({ summary }: { summary: ReportSummary }) {
       </div>
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-3 flex flex-col items-center gap-1">
         <span className="text-[var(--text-primary)] text-sm font-medium truncate w-full text-center">
-          {summary.topGenre ?? '—'}
+          {summary.topGenre ?? '-'}
         </span>
         <span className="text-[var(--text-muted)] text-xs">Top Genre</span>
       </div>
