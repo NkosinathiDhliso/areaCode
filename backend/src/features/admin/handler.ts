@@ -5,7 +5,7 @@ import * as service from './service.js'
 import {
   userIdParamsSchema, businessIdParamsSchema,
   adminMessageBodySchema, impersonateBodySchema,
-  extendTrialBodySchema, reportActionBodySchema,
+  extendTrialBodySchema, setTierBodySchema, reportActionBodySchema,
   reportIdParamsSchema, abuseFlagIdParamsSchema,
 } from './types.js'
 import type { AdminRole } from './types.js'
@@ -182,6 +182,24 @@ export async function adminRoutes(app: FastifyInstance) {
       const params = request.params as z.infer<typeof businessIdParamsSchema>
       const body = request.body as z.infer<typeof extendTrialBodySchema>
       return service.extendTrial(auth.userId, role, params.businessId, body.days)
+    },
+  )
+
+  // POST /v1/admin/businesses/:businessId/set-tier
+  app.post(
+    '/v1/admin/businesses/:businessId/set-tier',
+    {
+      preHandler: [
+        adminAuth,
+        validate({ params: businessIdParamsSchema, body: setTierBodySchema }),
+      ],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      const role = await getAdminRole(request)
+      const params = request.params as z.infer<typeof businessIdParamsSchema>
+      const body = request.body as z.infer<typeof setTierBodySchema>
+      return service.setBusinessTier(auth.userId, role, params.businessId, body.tier, body.reason, body.trialEndsAt)
     },
   )
 

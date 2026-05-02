@@ -21,6 +21,10 @@ export function BusinessManagement() {
   const [confirmDisable, setConfirmDisable] = useState<string | null>(null)
   const [extendTrialId, setExtendTrialId] = useState<string | null>(null)
   const [extendDays, setExtendDays] = useState('7')
+  const [setTierId, setSetTierId] = useState<string | null>(null)
+  const [selectedTier, setSelectedTier] = useState<'starter' | 'growth' | 'pro'>('starter')
+  const [tierReason, setTierReason] = useState('')
+  const [trialEndsAt, setTrialEndsAt] = useState('')
 
   async function handleSearch() {
     if (!query.trim()) return
@@ -64,6 +68,28 @@ export function BusinessManagement() {
     try {
       await api.post(`/v1/admin/businesses/${businessId}/disable`)
       setConfirmDisable(null)
+      handleSearch()
+    } catch {
+      // Fail silently
+    }
+  }
+
+  async function handleSetTier() {
+    if (!setTierId) return
+    if (!tierReason.trim()) return
+    try {
+      const body: { tier: 'starter' | 'growth' | 'pro'; reason: string; trialEndsAt?: string } = {
+        tier: selectedTier,
+        reason: tierReason.trim(),
+      }
+      if (trialEndsAt.trim()) {
+        body.trialEndsAt = trialEndsAt.trim()
+      }
+      await api.post(`/v1/admin/businesses/${setTierId}/set-tier`, body)
+      setSetTierId(null)
+      setSelectedTier('starter')
+      setTierReason('')
+      setTrialEndsAt('')
       handleSearch()
     } catch {
       // Fail silently
@@ -116,6 +142,12 @@ export function BusinessManagement() {
                   className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs"
                 >
                   {t('admin.businesses.extendTrial')}
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setSetTierId(biz.id); setSelectedTier(biz.tier as 'starter' | 'growth' | 'pro'); setTierReason('') }}
+                  className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs"
+                >
+                  {t('admin.businesses.setTier', 'Set Tier')}
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); handleAction('deactivate-rewards', biz.id) }}
@@ -197,6 +229,62 @@ export function BusinessManagement() {
                 className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium"
               >
                 Disable
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Set Tier dialog */}
+      {setTierId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
+              {t('admin.businesses.setTier', 'Set Tier')}
+            </h3>
+            <p className="text-[var(--text-secondary)] text-sm mb-4">
+              Assign a subscription plan to this business.
+            </p>
+            <div className="flex flex-col gap-3 mb-4">
+              <label className="text-[var(--text-primary)] text-xs font-medium">Plan</label>
+              <select
+                value={selectedTier}
+                onChange={(e) => setSelectedTier(e.target.value as 'starter' | 'growth' | 'pro')}
+                className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none"
+              >
+                <option value="starter">Starter</option>
+                <option value="growth">Growth</option>
+                <option value="pro">Pro</option>
+              </select>
+              <label className="text-[var(--text-primary)] text-xs font-medium">Reason (required)</label>
+              <textarea
+                value={tierReason}
+                onChange={(e) => setTierReason(e.target.value)}
+                placeholder="e.g. Promotion, Payment failure compensation, Enterprise deal"
+                rows={3}
+                className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none resize-none"
+              />
+              <label className="text-[var(--text-primary)] text-xs font-medium">Trial end date (optional)</label>
+              <input
+                type="datetime-local"
+                value={trialEndsAt}
+                onChange={(e) => setTrialEndsAt(e.target.value)}
+                className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none"
+              />
+            </div>
+            <div className="flex flex-row gap-3">
+              <button
+                onClick={() => setSetTierId(null)}
+                className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleSetTier()}
+                disabled={!tierReason.trim()}
+                className="flex-1 bg-[var(--accent)] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
+              >
+                Set Tier
               </button>
             </div>
           </div>

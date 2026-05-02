@@ -98,6 +98,28 @@ export async function extendTrial(adminId: string, adminRole: AdminRole, busines
   return result
 }
 
+export async function setBusinessTier(
+  adminId: string,
+  adminRole: AdminRole,
+  businessId: string,
+  tier: 'starter' | 'growth' | 'pro',
+  reason: string,
+  trialEndsAt?: string,
+) {
+  checkPermission(adminRole, 'manage_business')
+  const { updateBusinessTier } = await import('../business/repository.js')
+  await updateBusinessTier(businessId, tier, trialEndsAt)
+  await repo.createAuditLog({
+    adminId,
+    adminRole,
+    action: 'set_tier',
+    entityType: 'business',
+    entityId: businessId,
+    afterState: { tier, reason, trialEndsAt },
+  })
+  return { success: true, tier, trialEndsAt }
+}
+
 // ─── Reports ────────────────────────────────────────────────────────────────
 
 export async function getReportQueue(adminRole: AdminRole) {

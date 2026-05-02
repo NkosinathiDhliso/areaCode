@@ -23,6 +23,12 @@ export const extendTrialBodySchema = z.object({
   days: z.number().int().min(1).max(30),
 })
 
+export const setTierBodySchema = z.object({
+  tier: z.enum(['starter', 'growth', 'pro']),
+  reason: z.string().min(1).max(500),
+  trialEndsAt: z.string().datetime().optional(),
+})
+
 export const reportActionBodySchema = z.object({
   action: z.enum(['reviewed', 'dismissed', 'actioned']),
 })
