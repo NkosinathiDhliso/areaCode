@@ -45,12 +45,21 @@ export type DevicePlatform = 'web' | 'ios' | 'android'
 
 // Music genres , 12 South African-relevant genres
 export type MusicGenre =
-  | 'amapiano' | 'deep_house' | 'afrobeats' | 'hip_hop' | 'rnb'
-  | 'kwaito' | 'gqom' | 'jazz' | 'rock' | 'pop' | 'gospel' | 'maskandi'
+  | 'amapiano'
+  | 'deep_house'
+  | 'afrobeats'
+  | 'hip_hop'
+  | 'rnb'
+  | 'kwaito'
+  | 'gqom'
+  | 'jazz'
+  | 'rock'
+  | 'pop'
+  | 'gospel'
+  | 'maskandi'
 
 // Personality dimensions , 5 scoring axes
-export type PersonalityDimension =
-  | 'energy' | 'cultural_rootedness' | 'sophistication' | 'edge' | 'spirituality'
+export type PersonalityDimension = 'energy' | 'cultural_rootedness' | 'sophistication' | 'edge' | 'spirituality'
 
 // Dimension score vector , maps each dimension to 0.0–1.0
 export type DimensionScoreVector = Record<PersonalityDimension, number>
@@ -307,8 +316,31 @@ export interface ServerToClientEvents {
   'node:pulse_update': (payload: { nodeId: string; pulseScore: number; checkInCount: number; state: NodeState }) => void
   'node:state_surge': (payload: { nodeId: string; fromState: NodeState; toState: NodeState }) => void
   'node:state_change': (payload: { nodeId: string; state: NodeState }) => void
-  'toast:new': (payload: { type: ToastType; message: string; nodeId?: string; nodeLat?: number; nodeLng?: number; avatarUrl?: string }) => void
-  'reward:claimed': (payload: { rewardId: string; rewardTitle: string; redemptionCode: string; codeExpiresAt: string }) => void
+  'node:created': (payload: {
+    id: string
+    name: string
+    slug: string
+    category: string
+    lat: number
+    lng: number
+    claimStatus?: string
+    nodeColour?: string
+    isVerified?: boolean
+  }) => void
+  'toast:new': (payload: {
+    type: ToastType
+    message: string
+    nodeId?: string
+    nodeLat?: number
+    nodeLng?: number
+    avatarUrl?: string
+  }) => void
+  'reward:claimed': (payload: {
+    rewardId: string
+    rewardTitle: string
+    redemptionCode: string
+    codeExpiresAt: string
+  }) => void
   'reward:slots_update': (payload: { rewardId: string; slotsRemaining: number }) => void
   'leaderboard:update': (payload: { userId: string; rank: number; delta: number }) => void
   'business:checkin': (payload: BusinessCheckinPayload) => void

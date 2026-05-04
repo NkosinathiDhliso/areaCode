@@ -7,6 +7,7 @@ interface MapStore {
   pulseScores: Record<string, number>
   mapInstance: MapInstance | null
   setNodes: (nodes: Node[]) => void
+  addNode: (node: Node) => void
   updateNodePulse: (nodeId: string, score: number) => void
   setMapInstance: (instance: MapInstance | null) => void
 }
@@ -21,6 +22,10 @@ export const useMapStore = create<MapStore>()(
         for (const node of nodes) {
           state.nodes[node.id] = node
         }
+      }),
+    addNode: (node) =>
+      set((state) => {
+        state.nodes[node.id] = node
       }),
     updateNodePulse: (nodeId, score) =>
       set((state) => {

@@ -5,6 +5,7 @@ import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet } from '../../shared/kv/dynamodb-kv.js'
 import { getActiveRewardsByNodeId } from '../rewards/dynamodb-repository.js'
 import * as repo from './repository.js'
+import { emitNodeCreated } from '../../shared/socket/events.js'
 
 const s3 = new S3Client({ region: process.env['AWS_REGION'] ?? 'us-east-1' })
 const BUCKET = process.env['AREA_CODE_S3_MEDIA_BUCKET'] ?? 'area-code-media'
@@ -375,6 +376,25 @@ export async function businessCreateNode(
     submittedBy: businessId,
     claimStatus: 'claimed',
   })
+
+  // Broadcast to everyone viewing the map for this city so the new node appears instantly
+  try {
+    emitNodeCreated(city.slug, {
+      id: node.nodeId,
+      name: node.name,
+      slug: node.slug,
+      category: node.category,
+      lat: node.lat,
+      lng: node.lng,
+      claimStatus: 'claimed',
+      nodeColour: 'default',
+      isVerified: false,
+    })
+  } catch (err) {
+    // Socket emit failure must not fail the node creation itself
+    console.error('[businessCreateNode] emitNodeCreated failed', err)
+  }
+
   return node
 }
 
