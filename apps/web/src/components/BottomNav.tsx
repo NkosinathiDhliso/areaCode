@@ -31,7 +31,7 @@ export function BottomNav({ active, onNavigate }: BottomNavProps) {
 
   return (
     <nav
-      className="flex flex-row items-center justify-around glass border-t border-[var(--glass-border)] px-2"
+      className="flex flex-row items-center justify-around glass border-t border-[var(--glass-border)] px-2 shrink-0 relative z-50"
       style={{ height: 'var(--nav-height)' }}
       role="navigation"
       aria-label="Main navigation"
@@ -43,9 +43,7 @@ export function BottomNav({ active, onNavigate }: BottomNavProps) {
             key={item.route}
             onClick={() => handleTap(item.route)}
             className={`flex flex-col items-center justify-center flex-1 py-2 transition-colors duration-150 ${
-              isActive
-                ? 'text-[var(--accent)]'
-                : 'text-[var(--text-muted)]'
+              isActive ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'
             }`}
             aria-current={isActive ? 'page' : undefined}
             aria-label={t(item.labelKey)}
