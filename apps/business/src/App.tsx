@@ -14,6 +14,15 @@ import { BusinessDashboard } from './screens/BusinessDashboard'
 
 const queryClient = new QueryClient()
 
+// Wire once at module load — before any component renders
+api.setTokenProvider(() => useBusinessAuthStore.getState().accessToken)
+api.setRefreshPath('/v1/auth/business/refresh')
+api.setRefreshHandler({
+  getRefreshToken: () => useBusinessAuthStore.getState().refreshToken,
+  onTokenRefreshed: (token) => useBusinessAuthStore.getState().setAccessToken(token),
+  onAuthExpired: () => useBusinessAuthStore.getState().logout(),
+})
+
 export function App() {
   return (
     <ErrorBoundary>
@@ -31,17 +40,6 @@ function AppContent() {
   const businessId = useBusinessAuthStore((s) => s.businessId)
   const [screen, setScreen] = useState<'login' | 'signup'>('login')
   useTheme()
-
-  // Wire API token provider and refresh handler
-  useEffect(() => {
-    api.setTokenProvider(() => useBusinessAuthStore.getState().accessToken)
-    api.setRefreshPath('/v1/auth/business/refresh')
-    api.setRefreshHandler({
-      getRefreshToken: () => useBusinessAuthStore.getState().refreshToken,
-      onTokenRefreshed: (token) => useBusinessAuthStore.getState().setAccessToken(token),
-      onAuthExpired: () => useBusinessAuthStore.getState().logout(),
-    })
-  }, [])
 
   // Initialize socket with businessId for room authorization
   useEffect(() => {

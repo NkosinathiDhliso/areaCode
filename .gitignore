@@ -24,3 +24,5 @@ tfplan
 .env.*
 !.env.example
 scripts/deploy-secrets.sh
+
+push-env.ps1
