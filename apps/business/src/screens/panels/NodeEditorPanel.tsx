@@ -12,6 +12,7 @@ export function NodeEditorPanel() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [loading, setLoading] = useState(nodes.length === 0)
+  const [loadError, setLoadError] = useState(false)
   const [addVenueOpen, setAddVenueOpen] = useState(false)
   const [addVenueName, setAddVenueName] = useState('')
   const [addVenueAddress, setAddVenueAddress] = useState('')
@@ -83,7 +84,7 @@ export function NodeEditorPanel() {
           setName(items[0].name)
         }
       } catch {
-        // Fail silently
+        setLoadError(true)
       } finally {
         setLoading(false)
       }
@@ -177,8 +178,14 @@ export function NodeEditorPanel() {
         </button>
       </div>
 
-      {nodes.length === 0 ? (
-        <p className="text-[var(--text-muted)] text-sm">No nodes yet. Add your venue by entering your address below.</p>
+      {loadError ? (
+        <p className="text-[var(--danger)] text-sm">
+          Failed to load your venues. Please refresh.
+        </p>
+      ) : nodes.length === 0 ? (
+        <p className="text-[var(--text-muted)] text-sm">
+          No nodes yet. Add your venue by entering your address below.
+        </p>
       ) : (
         <div className="flex flex-col gap-4">
           {nodes.length > 1 && (

@@ -21,6 +21,7 @@ export function StaffRedemptionPanel() {
   const [selectedStaffId, setSelectedStaffId] = useState<string>('')
   const [redemptions, setRedemptions] = useState<StaffRedemption[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   // Fetch staff list
   useEffect(() => {
@@ -29,10 +30,10 @@ export function StaffRedemptionPanel() {
         const res = await api.get<{ items: StaffMember[] }>('/v1/business/staff')
         setStaff(res.items ?? [])
       } catch {
-        // Fail silently
+        setLoadError('Failed to load staff list.')
       }
     }
-    fetchStaff()
+    void fetchStaff()
   }, [])
 
   // Fetch redemptions when staff is selected
@@ -43,6 +44,7 @@ export function StaffRedemptionPanel() {
     }
     async function fetchRedemptions() {
       setLoading(true)
+      setLoadError(null)
       try {
         const res = await api.get<{ items: StaffRedemption[] }>(
           `/v1/business/staff/${selectedStaffId}/redemptions`,
@@ -50,11 +52,12 @@ export function StaffRedemptionPanel() {
         setRedemptions(res.items)
       } catch {
         setRedemptions([])
+        setLoadError('Failed to load redemptions.')
       } finally {
         setLoading(false)
       }
     }
-    fetchRedemptions()
+    void fetchRedemptions()
   }, [selectedStaffId])
 
   return (
@@ -75,6 +78,10 @@ export function StaffRedemptionPanel() {
           <option key={s.id} value={s.id}>{s.name}</option>
         ))}
       </select>
+
+      {loadError && (
+        <div className="text-[var(--danger)] text-sm text-center py-2">{loadError}</div>
+      )}
 
       {loading && (
         <div className="text-[var(--text-muted)] text-sm text-center py-8">Loading...</div>

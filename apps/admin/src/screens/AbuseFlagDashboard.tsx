@@ -19,13 +19,16 @@ export function AbuseFlagDashboard() {
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   async function fetchFlags() {
     try {
       const res = await api.get<{ items: AbuseFlag[] }>('/v1/admin/abuse-flags')
       setFlags(res.items)
+      setLoadError(false)
     } catch {
-      // Fail silently
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
@@ -39,11 +42,12 @@ export function AbuseFlagDashboard() {
 
   async function handleReview(flagId: string) {
     setActionLoading(flagId)
+    setActionError(null)
     try {
       await api.post(`/v1/admin/abuse-flags/${flagId}/review`)
       fetchFlags()
     } catch {
-      // Fail silently
+      setActionError('Failed to mark as reviewed. Please try again.')
     } finally {
       setActionLoading(null)
     }
@@ -51,11 +55,12 @@ export function AbuseFlagDashboard() {
 
   async function handleAction(flagId: string, action: string) {
     setActionLoading(flagId)
+    setActionError(null)
     try {
       await api.post(`/v1/admin/abuse-flags/${flagId}/action`, { action })
       fetchFlags()
     } catch {
-      // Fail silently
+      setActionError('Action failed. Please try again.')
     } finally {
       setActionLoading(null)
     }
@@ -84,6 +89,16 @@ export function AbuseFlagDashboard() {
 
   return (
     <div className="p-5">
+      {loadError && (
+        <div className="bg-[var(--danger)]/10 border border-[var(--danger)] rounded-xl p-3 text-[var(--danger)] text-sm mb-4">
+          Failed to load abuse flags. <button onClick={() => void fetchFlags()} className="underline ml-1">Retry</button>
+        </div>
+      )}
+      {actionError && (
+        <div className="bg-[var(--danger)]/10 border border-[var(--danger)] rounded-xl p-3 text-[var(--danger)] text-sm mb-4">
+          {actionError}
+        </div>
+      )}
       <div className="flex flex-row items-center justify-between mb-4">
         <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">
           {t('admin.abuseFlags.title', 'Abuse Flags')}

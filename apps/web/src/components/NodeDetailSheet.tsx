@@ -73,6 +73,14 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
   const [claiming, setClaiming] = useState(false)
   const [claimError, setClaimError] = useState('')
   const [claimSuccess, setClaimSuccess] = useState(false)
+  const [reportModalOpen, setReportModalOpen] = useState(false)
+  const [reportType, setReportType] = useState<
+    'wrong_location' | 'permanently_closed' | 'fake_rewards' | 'offensive_content' | 'other'
+  >('other')
+  const [reportDetail, setReportDetail] = useState('')
+  const [reporting, setReporting] = useState(false)
+  const [reportError, setReportError] = useState('')
+  const [reportSuccess, setReportSuccess] = useState(false)
 
   if (!node) return null
 
@@ -102,6 +110,30 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
       openDirections(node.lat, node.lng, node.name)
     }
     setMenuOpen(false)
+  }
+
+  async function handleSubmitReport() {
+    if (!node) return
+    setReporting(true)
+    setReportError('')
+    try {
+      await api.post(`/v1/nodes/${node.id}/report`, {
+        type: reportType,
+        detail: reportDetail.trim() || undefined,
+      })
+      setReportSuccess(true)
+      setTimeout(() => {
+        setReportModalOpen(false)
+        setReportSuccess(false)
+        setReportDetail('')
+        setReportType('other')
+      }, 1500)
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message
+      setReportError(msg ?? t('node.reportError', 'Failed to submit report. Please try again.'))
+    } finally {
+      setReporting(false)
+    }
   }
 
   async function handleClaim() {
@@ -161,13 +193,7 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
                 <button
                   onClick={() => {
                     setMenuOpen(false)
-                    // Open a report flow — for now, use the browser prompt as a lightweight approach
-                    const detail = window.prompt(
-                      t('node.reportPrompt', 'What would you like to report about this venue?'),
-                    )
-                    if (detail && node) {
-                      void api.post(`/v1/nodes/${node.id}/report`, { type: 'other', detail }).catch(() => {})
-                    }
+                    setReportModalOpen(true)
                   }}
                   className="w-full text-left px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface)]"
                 >
@@ -257,6 +283,76 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
       >
         {ctaInfo.label}
       </button>
+
+      {/* Report Modal */}
+      {reportModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
+              {t('node.report', 'Report venue')}
+            </h3>
+            {reportSuccess ? (
+              <p className="text-[var(--success)] text-sm">
+                {t('node.reportSuccess', 'Thanks — our team will review this.')}
+              </p>
+            ) : (
+              <>
+                <p className="text-[var(--text-secondary)] text-sm mb-4">
+                  {t('node.reportPrompt', 'What would you like to report about this venue?')}
+                </p>
+                {reportError && <p className="text-[var(--danger)] text-sm mb-3">{reportError}</p>}
+                <div className="flex flex-col gap-3 mb-4">
+                  <label className="text-[var(--text-primary)] text-xs font-medium">
+                    {t('node.reportType', 'Reason')}
+                  </label>
+                  <select
+                    value={reportType}
+                    onChange={(e) =>
+                      setReportType(e.target.value as typeof reportType)
+                    }
+                    className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none"
+                  >
+                    <option value="wrong_location">{t('node.report.wrongLocation', 'Wrong location')}</option>
+                    <option value="permanently_closed">{t('node.report.closed', 'Permanently closed')}</option>
+                    <option value="fake_rewards">{t('node.report.fakeRewards', 'Fake rewards')}</option>
+                    <option value="offensive_content">{t('node.report.offensive', 'Offensive content')}</option>
+                    <option value="other">{t('node.report.other', 'Other')}</option>
+                  </select>
+                  <label className="text-[var(--text-primary)] text-xs font-medium">
+                    {t('node.reportDetail', 'Additional details (optional)')}
+                  </label>
+                  <textarea
+                    value={reportDetail}
+                    onChange={(e) => setReportDetail(e.target.value.slice(0, 200))}
+                    placeholder={t('node.reportDetailPlaceholder', 'Tell us more')}
+                    rows={3}
+                    maxLength={200}
+                    className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none resize-none"
+                  />
+                </div>
+                <div className="flex flex-row gap-3">
+                  <button
+                    onClick={() => {
+                      setReportModalOpen(false)
+                      setReportError('')
+                    }}
+                    className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+                  >
+                    {t('common.cancel', 'Cancel')}
+                  </button>
+                  <button
+                    onClick={() => void handleSubmitReport()}
+                    disabled={reporting}
+                    className="flex-1 bg-[var(--accent)] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
+                  >
+                    {reporting ? t('common.submitting', 'Submitting…') : t('node.submitReport', 'Submit')}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Claim Modal */}
       {claimModalOpen && (

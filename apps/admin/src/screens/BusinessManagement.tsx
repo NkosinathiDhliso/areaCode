@@ -18,6 +18,11 @@ export function BusinessManagement() {
   const [results, setResults] = useState<BusinessDetail[]>([])
   const [selected, setSelected] = useState<BusinessDetail | null>(null)
   const [loading, setLoading] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [extendTrialError, setExtendTrialError] = useState<string | null>(null)
+  const [staffError, setStaffError] = useState<string | null>(null)
+  const [revokeError, setRevokeError] = useState<string | null>(null)
   const [confirmDisable, setConfirmDisable] = useState<string | null>(null)
   const [extendTrialId, setExtendTrialId] = useState<string | null>(null)
   const [extendDays, setExtendDays] = useState('7')
@@ -35,24 +40,26 @@ export function BusinessManagement() {
   async function handleSearch() {
     if (!query.trim()) return
     setLoading(true)
+    setSearchError(null)
     try {
       const res = await api.get<{ items: BusinessDetail[] }>(
         `/v1/admin/businesses?q=${encodeURIComponent(query)}`,
       )
       setResults(res.items)
     } catch {
-      // Fail silently
+      setSearchError('Search failed. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
   async function handleAction(action: string, businessId: string) {
+    setActionError(null)
     try {
       await api.post(`/v1/admin/businesses/${businessId}/${action}`)
       void handleSearch()
     } catch {
-      // Fail silently
+      setActionError('Action failed. Please try again.')
     }
   }
 
@@ -60,29 +67,33 @@ export function BusinessManagement() {
     if (!extendTrialId) return
     const days = parseInt(extendDays, 10)
     if (!days || days < 1 || days > 30) return
+    setExtendTrialError(null)
     try {
       await api.post(`/v1/admin/businesses/${extendTrialId}/extend-trial`, { days })
       setExtendTrialId(null)
       setExtendDays('7')
       void handleSearch()
     } catch {
-      // Fail silently
+      setExtendTrialError('Failed to extend trial. Please try again.')
     }
   }
 
   async function handleDisableBusiness(businessId: string) {
+    setActionError(null)
     try {
       await api.post(`/v1/admin/businesses/${businessId}/disable`)
       setConfirmDisable(null)
-      handleSearch()
+      void handleSearch()
     } catch {
-      // Fail silently
+      setActionError('Failed to disable business. Please try again.')
+      setConfirmDisable(null)
     }
   }
 
   async function handleViewStaff(businessId: string) {
     setStaffBizId(businessId)
     setStaffLoading(true)
+    setStaffError(null)
     try {
       const res = await api.get<{ items: { id: string; phone?: string; email?: string }[] }>(
         `/v1/admin/businesses/${businessId}/staff`
@@ -90,18 +101,21 @@ export function BusinessManagement() {
       setStaffList(res.items)
     } catch {
       setStaffList([])
+      setStaffError('Failed to load staff. Please close and try again.')
     } finally {
       setStaffLoading(false)
     }
   }
 
   async function handleRevokeStaff(businessId: string, staffId: string) {
+    setRevokeError(null)
     try {
       await api.post(`/v1/admin/businesses/${businessId}/staff/${staffId}/revoke`)
       setStaffList((prev) => prev.filter((s) => s.id !== staffId))
       setConfirmRevokeId(null)
     } catch {
-      // Fail silently
+      setRevokeError('Failed to revoke staff access. Please try again.')
+      setConfirmRevokeId(null)
     }
   }
 
@@ -140,6 +154,17 @@ export function BusinessManagement() {
       <h2 className="text-[var(--text-primary)] font-bold text-xl mb-4 font-[Syne]">
         {t('admin.businesses.title')}
       </h2>
+
+      {searchError && (
+        <div className="bg-[var(--danger)]/10 border border-[var(--danger)] rounded-xl p-3 text-[var(--danger)] text-sm mb-4">
+          {searchError}
+        </div>
+      )}
+      {actionError && (
+        <div className="bg-[var(--danger)]/10 border border-[var(--danger)] rounded-xl p-3 text-[var(--danger)] text-sm mb-4">
+          {actionError}
+        </div>
+      )}
 
       <div className="flex flex-row gap-3 mb-6">
         <input
@@ -234,6 +259,9 @@ export function BusinessManagement() {
               onChange={(e) => setExtendDays(e.target.value)}
               className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm mb-4 focus:border-[var(--accent)] focus:outline-none"
             />
+            {extendTrialError && (
+              <p className="text-[var(--danger)] text-xs mb-3">{extendTrialError}</p>
+            )}
             <div className="flex flex-row gap-3">
               <button
                 onClick={() => setExtendTrialId(null)}
@@ -292,6 +320,8 @@ export function BusinessManagement() {
             </div>
             {staffLoading ? (
               <p className="text-[var(--text-muted)] text-sm">Loading...</p>
+            ) : staffError ? (
+              <p className="text-[var(--danger)] text-sm">{staffError}</p>
             ) : staffList.length === 0 ? (
               <p className="text-[var(--text-muted)] text-sm">No staff members found.</p>
             ) : (
@@ -323,6 +353,7 @@ export function BusinessManagement() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-5">
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
             <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">Revoke Staff Access?</h3>
+            {revokeError && <p className="text-[var(--danger)] text-xs mb-3">{revokeError}</p>}
             <p className="text-[var(--text-secondary)] text-sm mb-4">
               This staff member will immediately lose access to this business. This action creates an audit log entry.
             </p>

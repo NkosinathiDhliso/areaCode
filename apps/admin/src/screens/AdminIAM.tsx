@@ -15,6 +15,7 @@ interface AdminUser {
 export function AdminIAM() {
   const [admins, setAdmins] = useState<AdminUser[]>([])
   const [loadingList, setLoadingList] = useState(false)
+  const [listError, setListError] = useState<string | null>(null)
 
   const [createEmail, setCreateEmail] = useState('')
   const [createPassword, setCreatePassword] = useState('')
@@ -25,17 +26,20 @@ export function AdminIAM() {
   const [changingRoleId, setChangingRoleId] = useState<string | null>(null)
   const [newRole, setNewRole] = useState<AdminRole>('support_agent')
   const [roleLoading, setRoleLoading] = useState(false)
+  const [roleError, setRoleError] = useState<string | null>(null)
 
   const [confirmDeactivateId, setConfirmDeactivateId] = useState<string | null>(null)
   const [deactivateLoading, setDeactivateLoading] = useState(false)
+  const [deactivateError, setDeactivateError] = useState<string | null>(null)
 
   async function loadAdmins() {
     setLoadingList(true)
+    setListError(null)
     try {
       const res = await api.get<{ admins: AdminUser[] }>('/v1/admin/iam/admins')
       setAdmins(res.admins)
     } catch {
-      // Fail silently
+      setListError('Failed to load admin accounts.')
     } finally {
       setLoadingList(false)
     }
@@ -70,12 +74,13 @@ export function AdminIAM() {
   async function handleChangeRole() {
     if (!changingRoleId) return
     setRoleLoading(true)
+    setRoleError(null)
     try {
       await api.patch(`/v1/admin/iam/admins/${changingRoleId}/role`, { role: newRole })
       setChangingRoleId(null)
       void loadAdmins()
     } catch {
-      // Fail silently
+      setRoleError('Failed to update role. Please try again.')
     } finally {
       setRoleLoading(false)
     }
@@ -84,12 +89,13 @@ export function AdminIAM() {
   async function handleDeactivate() {
     if (!confirmDeactivateId) return
     setDeactivateLoading(true)
+    setDeactivateError(null)
     try {
       await api.post(`/v1/admin/iam/admins/${confirmDeactivateId}/deactivate`)
       setConfirmDeactivateId(null)
       void loadAdmins()
     } catch {
-      // Fail silently
+      setDeactivateError('Failed to deactivate admin. Please try again.')
     } finally {
       setDeactivateLoading(false)
     }
@@ -142,11 +148,14 @@ export function AdminIAM() {
       {/* Admin list */}
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
         <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">Admin Accounts</h3>
+        {listError && (
+          <p className="text-[var(--danger)] text-sm mb-3">{listError}</p>
+        )}
         {loadingList ? (
           <div className="flex items-center justify-center py-4">
             <Spinner size="md" />
           </div>
-        ) : admins.length === 0 ? (
+        ) : admins.length === 0 && !listError ? (
           <p className="text-[var(--text-muted)] text-sm">No admin accounts found.</p>
         ) : (
           <div className="flex flex-col gap-2">
@@ -189,6 +198,7 @@ export function AdminIAM() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
             <h3 className="text-[var(--text-primary)] font-bold text-lg mb-4 font-[Syne]">Change Role</h3>
+            {roleError && <p className="text-[var(--danger)] text-xs mb-3">{roleError}</p>}
             <select
               value={newRole}
               onChange={(e) => setNewRole(e.target.value as AdminRole)}
@@ -224,6 +234,7 @@ export function AdminIAM() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
             <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">Deactivate Admin?</h3>
+            {deactivateError && <p className="text-[var(--danger)] text-xs mb-3">{deactivateError}</p>}
             <p className="text-[var(--text-secondary)] text-sm mb-4">
               This will immediately revoke all sessions. The account can be re-enabled manually in AWS Cognito.
             </p>

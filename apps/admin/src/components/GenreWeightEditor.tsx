@@ -32,12 +32,13 @@ export function GenreWeightEditor() {
   const [matrix, setMatrix] = useState<GenreWeightEntry[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     api
       .get<{ matrix: GenreWeightEntry[] }>('/v1/admin/genre-weights')
       .then((res) => setMatrix(res.matrix ?? []))
-      .catch(() => {})
+      .catch(() => setLoadError(true))
   }, [])
 
   function updateWeight(genre: MusicGenre, dim: PersonalityDimension, val: string) {
@@ -77,6 +78,12 @@ export function GenreWeightEditor() {
   return (
     <div className="p-5 flex flex-col gap-4">
       <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('admin.genreWeights.title')}</h2>
+
+      {loadError && (
+        <div className="bg-[var(--danger)]/10 border border-[var(--danger)] rounded-xl p-3 text-[var(--danger)] text-sm">
+          Failed to load genre weights. Please refresh.
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         {/* Header row */}

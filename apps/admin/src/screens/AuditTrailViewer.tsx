@@ -27,9 +27,11 @@ export function AuditTrailViewer() {
   const [filterAction, setFilterAction] = useState('')
   const [filterStartDate, setFilterStartDate] = useState('')
   const [filterEndDate, setFilterEndDate] = useState('')
+  const [loadError, setLoadError] = useState(false)
 
   async function fetchLogs(cursor?: string) {
     setLoading(true)
+    setLoadError(false)
     try {
       const params = new URLSearchParams()
       if (cursor) params.set('cursor', cursor)
@@ -48,7 +50,7 @@ export function AuditTrailViewer() {
       }
       setNextCursor(res.nextCursor)
     } catch {
-      // Fail silently
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
@@ -78,6 +80,12 @@ export function AuditTrailViewer() {
       <h2 className="text-[var(--text-primary)] font-bold text-xl mb-4 font-[Syne]">
         {t('admin.auditTrail.title', 'Audit Trail')}
       </h2>
+
+      {loadError && (
+        <div className="bg-[var(--danger)]/10 border border-[var(--danger)] rounded-xl p-3 text-[var(--danger)] text-sm mb-4">
+          Failed to load audit logs. <button onClick={() => void fetchLogs()} className="underline ml-1">Retry</button>
+        </div>
+      )}
 
       {/* Filter controls */}
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 mb-4">
@@ -131,7 +139,7 @@ export function AuditTrailViewer() {
         </div>
       )}
 
-      {!loading && logs.length === 0 && (
+      {!loading && !loadError && logs.length === 0 && (
         <div className="text-[var(--text-muted)] text-sm text-center py-12">
           No audit logs found
         </div>

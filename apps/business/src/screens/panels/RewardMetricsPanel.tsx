@@ -24,6 +24,7 @@ export function RewardMetricsPanel() {
   const [selectedReward, setSelectedReward] = useState<string | null>(null)
   const [metrics, setMetrics] = useState<RewardMetrics | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     async function fetchSummary() {
@@ -32,12 +33,12 @@ export function RewardMetricsPanel() {
         const res = await api.get<{ items: RewardSummaryItem[] }>('/v1/business/rewards/summary')
         setSummary(res.items)
       } catch {
-        // Fail silently
+        setLoadError(true)
       } finally {
         setLoading(false)
       }
     }
-    fetchSummary()
+    void fetchSummary()
   }, [])
 
   async function fetchMetrics(rewardId: string) {
@@ -71,7 +72,13 @@ export function RewardMetricsPanel() {
         <div className="text-[var(--text-muted)] text-sm text-center py-8">Loading...</div>
       )}
 
-      {!loading && summary.length === 0 && (
+      {!loading && loadError && (
+        <div className="text-[var(--danger)] text-sm text-center py-8">
+          {t('errors.loadFailed', 'Failed to load metrics.')}
+        </div>
+      )}
+
+      {!loading && !loadError && summary.length === 0 && (
         <div className="text-[var(--text-muted)] text-sm text-center py-8">
           No active rewards to show metrics for
         </div>

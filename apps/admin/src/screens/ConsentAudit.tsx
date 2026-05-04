@@ -18,10 +18,13 @@ export function ConsentAudit() {
   const [consents, setConsents] = useState<ConsentRecord[]>([])
   const [erasures, setErasures] = useState<ErasureRequest[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [exportMsg, setExportMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
     let cancelled = false
     async function fetch() {
+      setLoadError(false)
       try {
         if (tab === 'consent') {
           const res = await api.get<{ items: ConsentRecord[] }>('/v1/admin/consent')
@@ -31,7 +34,7 @@ export function ConsentAudit() {
           if (!cancelled) setErasures(res.items)
         }
       } catch {
-        // Fail silently
+        if (!cancelled) setLoadError(true)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -44,6 +47,7 @@ export function ConsentAudit() {
   }, [tab])
 
   async function handleExport() {
+    setExportMsg(null)
     try {
       const data = await api.get<Array<{ id: string; username: string; phone: string }>>(
         '/v1/admin/consent/export-reconsent',
@@ -62,8 +66,9 @@ export function ConsentAudit() {
       a.download = 'reconsent-list.csv'
       a.click()
       URL.revokeObjectURL(url)
+      setExportMsg({ type: 'success', text: `Exported ${items.length} records.` })
     } catch {
-      // Fail silently
+      setExportMsg({ type: 'error', text: 'Export failed. Please try again.' })
     }
   }
 
@@ -78,6 +83,21 @@ export function ConsentAudit() {
           {t('admin.consent.export')}
         </button>
       </div>
+
+      {exportMsg && (
+        <div className={`border rounded-xl p-3 text-sm mb-4 ${
+          exportMsg.type === 'success'
+            ? 'bg-[var(--success)]/10 border-[var(--success)] text-[var(--success)]'
+            : 'bg-[var(--danger)]/10 border-[var(--danger)] text-[var(--danger)]'
+        }`}>
+          {exportMsg.text}
+        </div>
+      )}
+      {loadError && (
+        <div className="bg-[var(--danger)]/10 border border-[var(--danger)] rounded-xl p-3 text-[var(--danger)] text-sm mb-4">
+          Failed to load data. Please try switching tabs or refreshing.
+        </div>
+      )}
 
       <div className="flex flex-row gap-2 mb-4">
         <button

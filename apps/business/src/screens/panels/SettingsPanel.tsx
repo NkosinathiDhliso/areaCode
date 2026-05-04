@@ -27,6 +27,7 @@ export function SettingsPanel() {
   const [invites, setInvites] = useState<StaffInvite[]>([])
   const [qrCheckinUrl, setQrCheckinUrl] = useState<string | null>(null)
   const [qrError, setQrError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   // Invite form state
   const [inviteEmail, setInviteEmail] = useState('')
@@ -37,7 +38,7 @@ export function SettingsPanel() {
   const [confirmRemoveStaffId, setConfirmRemoveStaffId] = useState<string | null>(null)
 
   useEffect(() => {
-    async function fetch() {
+    async function load() {
       try {
         const [bizRes, staffRes, inviteRes] = await Promise.all([
           api.get<BusinessAccount>('/v1/business/me'),
@@ -48,10 +49,10 @@ export function SettingsPanel() {
         setStaff(staffRes.items ?? (Array.isArray(staffRes) ? staffRes : []))
         setInvites(inviteRes.items ?? [])
       } catch {
-        // Fail silently
+        setLoadError(true)
       }
     }
-    fetch()
+    void load()
   }, [])
 
   async function handleInviteStaff() {
@@ -84,8 +85,8 @@ export function SettingsPanel() {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      // Fallback: select text
-      window.prompt('Copy this invite link:', url)
+      // Clipboard blocked — select the link in the URL bar so the user can copy manually
+      setInviteError(`Copy failed. Here is the link: ${url}`)
     }
   }
 
@@ -140,6 +141,12 @@ export function SettingsPanel() {
   return (
     <div className="p-5 flex flex-col gap-6">
       <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('biz.settings.title')}</h2>
+
+      {loadError && (
+        <div className="bg-[var(--danger)]/10 border border-[var(--danger)] rounded-xl p-3 text-[var(--danger)] text-sm">
+          Failed to load settings. Please refresh and try again.
+        </div>
+      )}
 
       {/* Subscription */}
       {biz && (

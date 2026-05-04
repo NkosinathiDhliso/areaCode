@@ -18,44 +18,51 @@ export function ConsumerManagement() {
   const [results, setResults] = useState<ConsumerDetail[]>([])
   const [selected, setSelected] = useState<ConsumerDetail | null>(null)
   const [loading, setLoading] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [actionNote, setActionNote] = useState('')
   const [confirmDisable, setConfirmDisable] = useState<string | null>(null)
 
   async function handleSearch() {
     if (!query.trim()) return
     setLoading(true)
+    setSearchError(null)
     try {
       const res = await api.get<{ items: ConsumerDetail[] }>(
         `/v1/admin/consumers?q=${encodeURIComponent(query)}`,
       )
       setResults(res.items)
     } catch {
-      // Fail silently
+      setSearchError('Search failed. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
   async function handleAction(action: string, userId: string) {
+    setActionError(null)
     try {
       await api.post(`/v1/admin/consumers/${userId}/${action}`, {
         note: actionNote || undefined,
       })
       setActionNote('')
       setConfirmDisable(null)
-      handleSearch()
-    } catch {
-      // Fail silently
+      void handleSearch()
+    } catch (err: unknown) {
+      const e = err as { message?: string }
+      setActionError(e.message ?? 'Action failed. Please try again.')
     }
   }
 
   async function handleDisableUser(userId: string) {
+    setActionError(null)
     try {
       await api.post(`/v1/admin/users/${userId}/disable`)
       setConfirmDisable(null)
-      handleSearch()
+      void handleSearch()
     } catch {
-      // Fail silently
+      setActionError('Failed to disable user. Please try again.')
+      setConfirmDisable(null)
     }
   }
 
@@ -66,6 +73,17 @@ export function ConsumerManagement() {
       <h2 className="text-[var(--text-primary)] font-bold text-xl mb-4 font-[Syne]">
         {t('admin.consumers.title')}
       </h2>
+
+      {searchError && (
+        <div className="bg-[var(--danger)]/10 border border-[var(--danger)] rounded-xl p-3 text-[var(--danger)] text-sm mb-4">
+          {searchError}
+        </div>
+      )}
+      {actionError && (
+        <div className="bg-[var(--danger)]/10 border border-[var(--danger)] rounded-xl p-3 text-[var(--danger)] text-sm mb-4">
+          {actionError}
+        </div>
+      )}
 
       <div className="flex flex-row gap-3 mb-6">
         <input

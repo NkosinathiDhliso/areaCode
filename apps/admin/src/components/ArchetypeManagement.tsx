@@ -16,11 +16,13 @@ export function ArchetypeManagement() {
   const [editing, setEditing] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [showAdd, setShowAdd] = useState(false)
+  const [loadError, setLoadError] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     api.get<PersonalityArchetype[]>('/v1/admin/archetypes')
       .then(setArchetypes)
-      .catch(() => {})
+      .catch(() => setLoadError(true))
   }, [])
 
   function startEdit(a: PersonalityArchetype) {
@@ -53,24 +55,34 @@ export function ArchetypeManagement() {
   }
 
   async function handleSave() {
+    setSaveError(null)
     const payload = {
       name: form.name, iconId: form.iconId, description: form.description,
       priority: form.priority, dimensionThresholds: buildThresholds(), isActive: true,
     }
-    if (editing) {
-      await api.patch(`/v1/admin/archetypes/${editing}`, payload)
-    } else {
-      await api.post('/v1/admin/archetypes', payload)
+    try {
+      if (editing) {
+        await api.patch(`/v1/admin/archetypes/${editing}`, payload)
+      } else {
+        await api.post('/v1/admin/archetypes', payload)
+      }
+      const updated = await api.get<PersonalityArchetype[]>('/v1/admin/archetypes')
+      setArchetypes(updated)
+      setEditing(null)
+      setShowAdd(false)
+    } catch (err: unknown) {
+      const e = err as { message?: string }
+      setSaveError(e.message ?? 'Failed to save archetype.')
     }
-    const updated = await api.get<PersonalityArchetype[]>('/v1/admin/archetypes')
-    setArchetypes(updated)
-    setEditing(null)
-    setShowAdd(false)
   }
 
   async function toggleActive(a: PersonalityArchetype) {
-    await api.patch(`/v1/admin/archetypes/${a.id}`, { isActive: !a.isActive })
-    setArchetypes((prev) => prev.map((x) => x.id === a.id ? { ...x, isActive: !x.isActive } : x))
+    try {
+      await api.patch(`/v1/admin/archetypes/${a.id}`, { isActive: !a.isActive })
+      setArchetypes((prev) => prev.map((x) => x.id === a.id ? { ...x, isActive: !x.isActive } : x))
+    } catch {
+      setSaveError('Failed to update archetype status.')
+    }
   }
 
   return (
@@ -79,6 +91,17 @@ export function ArchetypeManagement() {
         <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('admin.archetypes.title')}</h2>
         <button onClick={startAdd} className="bg-[var(--accent)] text-white rounded-xl px-4 py-2 text-sm">{t('admin.archetypes.add')}</button>
       </div>
+
+      {loadError && (
+        <div className="bg-[var(--danger)]/10 border border-[var(--danger)] rounded-xl p-3 text-[var(--danger)] text-sm">
+          Failed to load archetypes. Please refresh.
+        </div>
+      )}
+      {saveError && (
+        <div className="bg-[var(--danger)]/10 border border-[var(--danger)] rounded-xl p-3 text-[var(--danger)] text-sm">
+          {saveError}
+        </div>
+      )}
 
       {/* List */}
       <div className="flex flex-col gap-2">

@@ -19,16 +19,16 @@ export function BoostPanel() {
   const nodes = useBusinessStore((s) => s.nodes)
 
   useEffect(() => {
-    async function fetch() {
+    async function load() {
       try {
         const res = await api.get<{ boost: BoostPricing }>('/v1/business/plans')
         setPricing(res.boost)
       } catch {
-        // Fail silently
+        setError(t('biz.boost.loadError', 'Failed to load boost pricing. Please refresh.'))
       }
     }
-    fetch()
-  }, [])
+    void load()
+  }, [t])
 
   async function handleBoost(duration: '2hr' | '6hr' | '24hr') {
     const nodeId = nodes[0]?.id

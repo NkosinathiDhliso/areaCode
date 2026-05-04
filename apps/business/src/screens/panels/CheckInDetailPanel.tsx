@@ -32,9 +32,11 @@ export function CheckInDetailPanel() {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [loading, setLoading] = useState(false)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   async function fetchCheckIns(selectedDate: string, cursor?: string) {
     setLoading(true)
+    setLoadError(false)
     try {
       const params = new URLSearchParams({ date: selectedDate })
       if (cursor) params.set('cursor', cursor)
@@ -48,7 +50,8 @@ export function CheckInDetailPanel() {
       }
       setNextCursor(res.nextCursor)
     } catch {
-      // Fail silently
+      setLoadError(true)
+      if (!cursor) setEntries([])
     } finally {
       setLoading(false)
     }
@@ -98,7 +101,13 @@ export function CheckInDetailPanel() {
         <div className="text-[var(--text-muted)] text-sm text-center py-8">Loading...</div>
       )}
 
-      {!loading && entries.length === 0 && (
+      {!loading && loadError && (
+        <div className="text-[var(--danger)] text-sm text-center py-8">
+          Failed to load check-ins. Try another date or refresh.
+        </div>
+      )}
+
+      {!loading && !loadError && entries.length === 0 && (
         <div className="text-[var(--text-muted)] text-sm text-center py-8">
           No check-ins for this date
         </div>
