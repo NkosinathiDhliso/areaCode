@@ -12,14 +12,15 @@ export const documentClient = DynamoDBDocumentClient.from(client, {
   },
 })
 
-// Table names from environment
+// Table names from environment. Production Lambda always sets these via Terraform.
+// Fallbacks point to dev tables — never prod — so local runs and tests are safe.
 export const TableNames = {
-  users: process.env['USERS_TABLE'] || 'area-code-prod-users',
-  nodes: process.env['NODES_TABLE'] || 'area-code-prod-nodes',
-  checkins: process.env['CHECKINS_TABLE'] || 'area-code-prod-checkins',
-  rewards: process.env['REWARDS_TABLE'] || 'area-code-prod-rewards',
-  businesses: process.env['BUSINESSES_TABLE'] || 'area-code-prod-businesses',
-  appData: process.env['APP_DATA_TABLE'] || 'area-code-prod-app-data',
+  users: process.env['USERS_TABLE'] || 'area-code-dev-users',
+  nodes: process.env['NODES_TABLE'] || 'area-code-dev-nodes',
+  checkins: process.env['CHECKINS_TABLE'] || 'area-code-dev-checkins',
+  rewards: process.env['REWARDS_TABLE'] || 'area-code-dev-rewards',
+  businesses: process.env['BUSINESSES_TABLE'] || 'area-code-dev-businesses',
+  appData: process.env['APP_DATA_TABLE'] || 'area-code-dev-app-data',
 } as const
 
 export { client }

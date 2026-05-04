@@ -170,6 +170,7 @@ Frontend (Amplify): VITE_API_URL, VITE_WEBSOCKET_URL, VITE_VAPID_PUBLIC_KEY.
 
 ## Common Gotchas
 
+- DynamoDB table name env vars (`USERS_TABLE`, `NODES_TABLE`, etc.) must always be set. Fallbacks point to dev tables. Production Lambda sets them via Terraform. Never rely on defaults in prod.
 - `awsLambdaFastify()` must be called BEFORE `app.ready()`
 - API Gateway WebSocket route keys cannot contain colons
 - PowerShell mangles JSON for AWS CLI. Use file-based JSON
