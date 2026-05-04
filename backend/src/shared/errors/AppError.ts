@@ -5,14 +5,14 @@
  * typed JSON responses.
  */
 export class AppError extends Error {
-  public readonly statusCode: number;
-  public readonly error: string;
+  public readonly statusCode: number
+  public readonly error: string
 
   constructor(statusCode: number, error: string, message: string) {
-    super(message);
-    this.name = 'AppError';
-    this.statusCode = statusCode;
-    this.error = error;
+    super(message)
+    this.name = 'AppError'
+    this.statusCode = statusCode
+    this.error = error
   }
 
   toJSON() {
@@ -20,47 +20,55 @@ export class AppError extends Error {
       error: this.error,
       message: this.message,
       statusCode: this.statusCode,
-    };
+    }
   }
 
   // Common factory methods
   static badRequest(message: string) {
-    return new AppError(400, 'bad_request', message);
+    return new AppError(400, 'bad_request', message)
   }
 
   static unauthorized(message = 'Unauthorized') {
-    return new AppError(401, 'unauthorized', message);
+    return new AppError(401, 'unauthorized', message)
   }
 
   static forbidden(message = 'Forbidden') {
-    return new AppError(403, 'forbidden', message);
+    return new AppError(403, 'forbidden', message)
   }
 
   static notFound(message = 'Not found') {
-    return new AppError(404, 'not_found', message);
+    return new AppError(404, 'not_found', message)
   }
 
   static conflict(message: string) {
-    return new AppError(409, 'conflict', message);
+    return new AppError(409, 'conflict', message)
   }
 
   static gone(message: string) {
-    return new AppError(410, 'gone', message);
+    return new AppError(410, 'gone', message)
   }
 
   static unprocessable(message: string) {
-    return new AppError(422, 'unprocessable_entity', message);
+    return new AppError(422, 'unprocessable_entity', message)
   }
 
   static tooManyRequests(message: string, cooldownUntil?: string) {
-    const err = new AppError(429, 'too_many_requests', message);
+    const err = new AppError(429, 'too_many_requests', message)
     if (cooldownUntil) {
-      (err as AppError & { cooldownUntil: string }).cooldownUntil = cooldownUntil;
+      ;(err as AppError & { cooldownUntil: string }).cooldownUntil = cooldownUntil
     }
-    return err;
+    return err
   }
 
   static internal(message = 'Internal server error') {
-    return new AppError(500, 'internal_error', message);
+    return new AppError(500, 'internal_error', message)
+  }
+
+  static badGateway(message = 'Bad gateway') {
+    return new AppError(502, 'bad_gateway', message)
+  }
+
+  static serviceUnavailable(message = 'Service unavailable') {
+    return new AppError(503, 'service_unavailable', message)
   }
 }

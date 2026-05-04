@@ -281,7 +281,7 @@ export function NodeEditorPanel() {
     try {
       // 1. Get presigned URL
       const presigned = await api.post<{ uploadUrl: string; s3Key: string }>('/v1/upload/presigned', {
-        fileType: 'node-image',
+        fileType: 'node_image',
         contentType: file.type,
       })
       // 2. PUT file directly to S3

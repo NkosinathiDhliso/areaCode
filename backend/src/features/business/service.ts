@@ -1,11 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { AppError } from '../../shared/errors/AppError.js'
 import * as repo from './repository.js'
-import {
-  BUSINESS_PLANS,
-  BOOST_PRICING,
-  type BoostDuration,
-} from './types.js'
+import { BUSINESS_PLANS, BOOST_PRICING, type BoostDuration } from './types.js'
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
@@ -66,14 +62,63 @@ export function getPlans() {
 
 // ─── Checkout (Yoco) ────────────────────────────────────────────────────────
 
-export async function createCheckoutSession(
-  businessId: string,
-  plan: 'growth' | 'pro' | 'payg',
-  interval?: string,
-) {
+const YOCO_API_BASE = 'https://payments.yoco.com/api'
+
+function getBusinessAppUrl(): string {
+  return process.env['BUSINESS_APP_URL'] ?? 'https://dbp54yxhyjvk0.amplifyapp.com'
+}
+
+async function createYocoCheckout(
+  amountCents: number,
+  metadata: Record<string, unknown>,
+  pathAfterReturn: string,
+): Promise<{ id: string; redirectUrl: string }> {
+  const secretKey = process.env['YOCO_PROD_SECRET_KEY'] ?? process.env['YOCO_DEV_SECRET_KEY'] ?? ''
+  if (!secretKey) {
+    throw AppError.serviceUnavailable('Payment provider is not configured. Please contact support.')
+  }
+
+  const appUrl = getBusinessAppUrl()
+  const body = {
+    amount: amountCents,
+    currency: 'ZAR',
+    successUrl: `${appUrl}${pathAfterReturn}?status=success`,
+    cancelUrl: `${appUrl}${pathAfterReturn}?status=cancelled`,
+    failureUrl: `${appUrl}${pathAfterReturn}?status=failed`,
+    metadata,
+  }
+
+  const res = await fetch(`${YOCO_API_BASE}/checkouts`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${secretKey}`,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': `${metadata['businessId'] as string}-${Date.now()}`,
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw AppError.badGateway(`Yoco checkout failed (${res.status}): ${text.slice(0, 200)}`)
+  }
+
+  const data = (await res.json()) as { id: string; redirectUrl: string }
+  if (!data.redirectUrl) {
+    throw AppError.badGateway('Yoco returned no redirectUrl')
+  }
+  return data
+}
+
+export async function createCheckoutSession(businessId: string, plan: 'growth' | 'pro' | 'payg', interval?: string) {
   if (DEV_MODE) {
     const amountCents = plan === 'payg' ? 2900 : 14900
-    return { checkoutUrl: '#dev-checkout', amountCents, currency: 'ZAR', metadata: { businessId, plan, interval } }
+    return {
+      checkoutUrl: '#dev-checkout',
+      amountCents,
+      currency: 'ZAR',
+      metadata: { businessId, plan, interval },
+    }
   }
   const biz = await repo.findBusinessById(businessId)
   if (!biz) throw AppError.notFound('Business not found')
@@ -81,47 +126,49 @@ export async function createCheckoutSession(
   // Determine amount based on plan + interval
   let amountCents: number
   if (plan === 'payg') {
-    amountCents = interval === 'weekly'
-      ? BUSINESS_PLANS.payg.weeklyPrice
-      : BUSINESS_PLANS.payg.dailyPrice
+    amountCents = interval === 'weekly' ? BUSINESS_PLANS.payg.weeklyPrice : BUSINESS_PLANS.payg.dailyPrice
   } else {
     const planConfig = BUSINESS_PLANS[plan]
-    amountCents = interval === 'yearly'
-      ? planConfig.yearlyPrice
-      : planConfig.monthlyPrice
+    amountCents = interval === 'yearly' ? planConfig.yearlyPrice : planConfig.monthlyPrice
   }
 
-  // In production, this calls Yoco API to create a checkout session
-  // For now, return the session data structure
+  const metadata = { businessId, plan, interval: interval ?? '', type: 'subscription' }
+  const { id, redirectUrl } = await createYocoCheckout(amountCents, metadata, '/plans')
+
   return {
-    checkoutUrl: `https://payments.yoco.com/checkout?amount=${amountCents}`,
+    checkoutUrl: redirectUrl,
+    checkoutId: id,
     amountCents,
     currency: 'ZAR',
-    metadata: { businessId, plan, interval },
+    metadata,
   }
 }
 
 // ─── Boost ──────────────────────────────────────────────────────────────────
 
-export async function purchaseBoost(
-  businessId: string,
-  nodeId: string,
-  duration: BoostDuration,
-) {
+export async function purchaseBoost(businessId: string, nodeId: string, duration: BoostDuration) {
   if (DEV_MODE) {
     const amountCents = BOOST_PRICING[duration]
-    return { checkoutUrl: '#dev-boost', amountCents, currency: 'ZAR', metadata: { businessId, nodeId, duration, type: 'boost' } }
+    return {
+      checkoutUrl: '#dev-boost',
+      amountCents,
+      currency: 'ZAR',
+      metadata: { businessId, nodeId, duration, type: 'boost' },
+    }
   }
   const node = await repo.getNodeForBusiness(nodeId, businessId)
   if (!node) throw AppError.forbidden('You do not own this node')
 
   const amountCents = BOOST_PRICING[duration]
+  const metadata = { businessId, nodeId, duration, type: 'boost' }
+  const { id, redirectUrl } = await createYocoCheckout(amountCents, metadata, '/boost')
 
   return {
-    checkoutUrl: `https://payments.yoco.com/checkout?amount=${amountCents}`,
+    checkoutUrl: redirectUrl,
+    checkoutId: id,
     amountCents,
     currency: 'ZAR',
-    metadata: { businessId, nodeId, duration, type: 'boost' },
+    metadata,
   }
 }
 
@@ -139,9 +186,7 @@ export async function processYocoWebhook(
   // Verify signature using raw body bytes for accuracy
   const secret = process.env['YOCO_WEBHOOK_SECRET'] ?? process.env['YOCO_DEV_SECRET_KEY'] ?? ''
   const bodyToSign = rawBody ?? JSON.stringify(payload)
-  const expected = createHmac('sha256', secret)
-    .update(bodyToSign)
-    .digest('hex')
+  const expected = createHmac('sha256', secret).update(bodyToSign).digest('hex')
 
   if (!signature || !expected) {
     throw AppError.unauthorized('Invalid webhook signature')
@@ -194,14 +239,14 @@ async function handlePaymentFailed(payload: Record<string, unknown>) {
 // ─── Staff Management ───────────────────────────────────────────────────────
 
 const STAFF_LIMITS: Record<string, number | null> = {
-  free: 2, starter: 2, growth: 5, pro: null, payg: 2,
+  free: 2,
+  starter: 2,
+  growth: 5,
+  pro: null,
+  payg: 2,
 }
 
-export async function inviteStaff(
-  businessId: string,
-  phone?: string,
-  email?: string,
-) {
+export async function inviteStaff(businessId: string, phone?: string, email?: string) {
   if (DEV_MODE) {
     return { id: `dev-invite-${Date.now()}`, businessId, phone, email, inviteToken: 'dev-token', accepted: false }
   }
@@ -212,9 +257,7 @@ export async function inviteStaff(
   if (limit !== null && limit !== undefined) {
     const count = await repo.countStaffForBusiness(businessId)
     if (count >= limit) {
-      throw AppError.forbidden(
-        `Staff limit reached for ${biz.tier} tier (max ${limit})`,
-      )
+      throw AppError.forbidden(`Staff limit reached for ${biz.tier} tier (max ${limit})`)
     }
   }
 
@@ -256,10 +299,7 @@ export async function removeStaff(staffId: string, businessId: string) {
 export function generateQrToken(nodeId: string): string {
   const secret = process.env['AREA_CODE_QR_HMAC_SECRET'] ?? ''
   const flooredTs = Math.floor(Date.now() / (15 * 60 * 1000))
-  return createHmac('sha256', secret)
-    .update(`${nodeId}${flooredTs}`)
-    .digest('hex')
-    .slice(0, 32)
+  return createHmac('sha256', secret).update(`${nodeId}${flooredTs}`).digest('hex').slice(0, 32)
 }
 
 export function validateQrToken(nodeId: string, token: string): boolean {
@@ -267,10 +307,7 @@ export function validateQrToken(nodeId: string, token: string): boolean {
   // Check current and previous window (handles edge cases)
   for (let offset = 0; offset <= 1; offset++) {
     const ts = Math.floor(Date.now() / (15 * 60 * 1000)) - offset
-    const expected = createHmac('sha256', secret)
-      .update(`${nodeId}${ts}`)
-      .digest('hex')
-      .slice(0, 32)
+    const expected = createHmac('sha256', secret).update(`${nodeId}${ts}`).digest('hex').slice(0, 32)
     if (token === expected) return true
   }
   return false
@@ -372,9 +409,24 @@ export async function getCheckInDetails(businessId: string, date?: string, curso
   if (DEV_MODE) {
     return {
       items: [
-        { displayName: 'Thabo M.', tier: 'regular', visitCount: 12, timestamp: new Date(Date.now() - 600000).toISOString() },
-        { displayName: 'Naledi K.', tier: 'fixture', visitCount: 3, timestamp: new Date(Date.now() - 1800000).toISOString() },
-        { displayName: 'Sipho D.', tier: 'local', visitCount: 1, timestamp: new Date(Date.now() - 3600000).toISOString() },
+        {
+          displayName: 'Thabo M.',
+          tier: 'regular',
+          visitCount: 12,
+          timestamp: new Date(Date.now() - 600000).toISOString(),
+        },
+        {
+          displayName: 'Naledi K.',
+          tier: 'fixture',
+          visitCount: 3,
+          timestamp: new Date(Date.now() - 1800000).toISOString(),
+        },
+        {
+          displayName: 'Sipho D.',
+          tier: 'local',
+          visitCount: 1,
+          timestamp: new Date(Date.now() - 3600000).toISOString(),
+        },
       ],
       nextCursor: null,
     }
@@ -395,9 +447,30 @@ export async function getRewardsSummary(businessId: string) {
   if (DEV_MODE) {
     return {
       items: [
-        { rewardId: 'rew-1', title: 'Free Coffee', claimRate: 0.65, timeToClaimMinutes: 42, redemptionRate: 0.38, isLowPerformance: false },
-        { rewardId: 'rew-2', title: '20% Off Cocktails', claimRate: 0.22, timeToClaimMinutes: 120, redemptionRate: 0.10, isLowPerformance: false },
-        { rewardId: 'rew-3', title: 'Free Starter', claimRate: 0, timeToClaimMinutes: 0, redemptionRate: 0, isLowPerformance: true },
+        {
+          rewardId: 'rew-1',
+          title: 'Free Coffee',
+          claimRate: 0.65,
+          timeToClaimMinutes: 42,
+          redemptionRate: 0.38,
+          isLowPerformance: false,
+        },
+        {
+          rewardId: 'rew-2',
+          title: '20% Off Cocktails',
+          claimRate: 0.22,
+          timeToClaimMinutes: 120,
+          redemptionRate: 0.1,
+          isLowPerformance: false,
+        },
+        {
+          rewardId: 'rew-3',
+          title: 'Free Starter',
+          claimRate: 0,
+          timeToClaimMinutes: 0,
+          redemptionRate: 0,
+          isLowPerformance: true,
+        },
       ],
     }
   }
