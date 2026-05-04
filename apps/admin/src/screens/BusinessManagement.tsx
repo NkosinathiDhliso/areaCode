@@ -211,7 +211,11 @@ export function BusinessManagement() {
                   onClick={(e) => {
                     e.stopPropagation()
                     setSetTierId(biz.id)
-                    setSelectedTier(biz.tier as 'starter' | 'growth' | 'pro')
+                    setSelectedTier(
+                      (['starter', 'growth', 'pro'] as const).includes(biz.tier as 'starter' | 'growth' | 'pro')
+                        ? (biz.tier as 'starter' | 'growth' | 'pro')
+                        : 'starter',
+                    )
                     setTierReason('')
                   }}
                   className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs"

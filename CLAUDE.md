@@ -54,12 +54,12 @@ pnpm --filter @area-code/web build    # vite build (web)
 
 ## Code Limits
 
-| Metric         | Warning | Hard limit |
-|----------------|---------|------------|
-| File size      | 300     | 400 lines  |
-| Function       | 30      | 150 lines  |
-| Component      | 200     | 300 lines  |
-| Line length    | 100     | 120 chars  |
+| Metric      | Warning | Hard limit |
+| ----------- | ------- | ---------- |
+| File size   | 300     | 400 lines  |
+| Function    | 30      | 150 lines  |
+| Component   | 200     | 300 lines  |
+| Line length | 100     | 120 chars  |
 
 ## Styling Rules
 
@@ -80,6 +80,7 @@ pnpm --filter @area-code/web build    # vite build (web)
 - One component per file
 - No `any` in component props
 - No inline business logic in components
+- No mock data in production. All synthetic/hardcoded data returns must be inside a `DEV_MODE` guard. `DEV_MODE` is only true when `AREA_CODE_ENV === 'dev'` and `AREA_CODE_FORCE_LIVE` is not set. Never add mock fallbacks that run in production.
 
 ## Dependency Direction
 
@@ -94,12 +95,12 @@ from `apps/` or feature modules. Features import from shared only.
 Each type has its own Cognito pool, auth store, token namespace.
 No shared `useAuth()` hook. No role switching in a single store.
 
-| Type     | Store              | Namespace    |
-|----------|--------------------|--------------|
-| Consumer | consumerAuthStore  | consumer:    |
-| Business | businessAuthStore  | business:    |
-| Staff    | staffAuthStore     | staff:       |
-| Admin    | adminAuthStore     | (admin app)  |
+| Type     | Store             | Namespace   |
+| -------- | ----------------- | ----------- |
+| Consumer | consumerAuthStore | consumer:   |
+| Business | businessAuthStore | business:   |
+| Staff    | staffAuthStore    | staff:      |
+| Admin    | adminAuthStore    | (admin app) |
 
 ## Backend Patterns
 
@@ -156,16 +157,16 @@ Frontend (Amplify): VITE_API_URL, VITE_WEBSOCKET_URL, VITE_VAPID_PUBLIC_KEY.
 
 ## Naming
 
-| Type              | Convention  | Example                    |
-|-------------------|-------------|----------------------------|
-| Components        | PascalCase  | NodeMarker.tsx             |
-| Hooks             | camelCase   | useCheckIn.ts              |
-| Stores            | camelCase   | mapStore.ts                |
-| Backend routes    | kebab-case  | /check-in                  |
-| DynamoDB tables   | kebab-case  | area-code-prod-users       |
-| Env vars          | UPPER_SNAKE | AREA_CODE_DB_URL           |
-| Lambda names      | kebab-case  | area-code-prod-api         |
-| Secrets           | slash-sep   | area-code/prod/qr-hmac     |
+| Type            | Convention  | Example                |
+| --------------- | ----------- | ---------------------- |
+| Components      | PascalCase  | NodeMarker.tsx         |
+| Hooks           | camelCase   | useCheckIn.ts          |
+| Stores          | camelCase   | mapStore.ts            |
+| Backend routes  | kebab-case  | /check-in              |
+| DynamoDB tables | kebab-case  | area-code-prod-users   |
+| Env vars        | UPPER_SNAKE | AREA_CODE_DB_URL       |
+| Lambda names    | kebab-case  | area-code-prod-api     |
+| Secrets         | slash-sep   | area-code/prod/qr-hmac |
 
 ## Common Gotchas
 

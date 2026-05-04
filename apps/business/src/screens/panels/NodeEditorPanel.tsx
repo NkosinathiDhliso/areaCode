@@ -70,7 +70,10 @@ export function NodeEditorPanel() {
       script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
       script.async = true
       script.onload = attachAutocomplete
-      script.onerror = () => { console.error('[AreaCode] Google Maps failed to load'); setMapsUnavailable(true) }
+      script.onerror = () => {
+        console.error('[AreaCode] Google Maps failed to load')
+        setMapsUnavailable(true)
+      }
       document.head.appendChild(script)
     } else {
       waitForGoogle()
@@ -115,14 +118,16 @@ export function NodeEditorPanel() {
   }
 
   async function handleAddVenue() {
-    if (!addVenueName.trim() || !addVenueAddress.trim()) return
+    const currentAddress = (addressInputRef.current?.value ?? addVenueAddress).trim()
+    if (!addVenueName.trim() || !currentAddress) return
     setAddVenueLoading(true)
     setAddVenueError('')
     try {
-      const res = await api.post<{ id: string; name: string }>('/v1/nodes/business-create', {
+      const address = (addressInputRef.current?.value ?? addVenueAddress).trim()
+      await api.post<{ id: string; name: string }>('/v1/nodes/business-create', {
         name: addVenueName.trim(),
         category: addVenueCategory,
-        address: addVenueAddress.trim(),
+        address,
         ...(addVenueLat !== undefined && addVenueLng !== undefined ? { lat: addVenueLat, lng: addVenueLng } : {}),
       })
       setAddVenueOpen(false)
@@ -139,8 +144,8 @@ export function NodeEditorPanel() {
         setSelected(items[0])
         setName(items[0].name)
       }
-    } catch (err: any) {
-      setAddVenueError(err?.message || 'Failed to add venue')
+    } catch (err: unknown) {
+      setAddVenueError((err as { message?: string })?.message || 'Failed to add venue')
     } finally {
       setAddVenueLoading(false)
     }
@@ -184,13 +189,9 @@ export function NodeEditorPanel() {
       </div>
 
       {loadError ? (
-        <p className="text-[var(--danger)] text-sm">
-          Failed to load your venues. Please refresh.
-        </p>
+        <p className="text-[var(--danger)] text-sm">Failed to load your venues. Please refresh.</p>
       ) : nodes.length === 0 ? (
-        <p className="text-[var(--text-muted)] text-sm">
-          No nodes yet. Add your venue by entering your address below.
-        </p>
+        <p className="text-[var(--text-muted)] text-sm">No nodes yet. Add your venue by entering your address below.</p>
       ) : (
         <div className="flex flex-col gap-4">
           {nodes.length > 1 && (
@@ -270,7 +271,6 @@ export function NodeEditorPanel() {
               <input
                 ref={addressInputRef}
                 type="text"
-                value={addVenueAddress}
                 onChange={(e) => setAddVenueAddress(e.target.value)}
                 placeholder="e.g. 73 Juta Street, Braamfontein, Johannesburg"
                 className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
@@ -278,7 +278,7 @@ export function NodeEditorPanel() {
               <label className="text-[var(--text-primary)] text-xs font-medium">Category</label>
               <select
                 value={addVenueCategory}
-                onChange={(e) => setAddVenueCategory(e.target.value as any)}
+                onChange={(e) => setAddVenueCategory(e.target.value as typeof addVenueCategory)}
                 className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none"
               >
                 <option value="food">Food</option>
@@ -298,7 +298,7 @@ export function NodeEditorPanel() {
               </button>
               <button
                 onClick={() => void handleAddVenue()}
-                disabled={addVenueLoading || !addVenueName.trim() || !addVenueAddress.trim()}
+                disabled={addVenueLoading || !addVenueName.trim()}
                 className="flex-1 bg-[var(--accent)] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
               >
                 {addVenueLoading ? 'Adding...' : 'Add Venue'}
