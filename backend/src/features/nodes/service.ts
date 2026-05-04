@@ -335,7 +335,10 @@ function slugify(name: string): string {
   )
 }
 
-export async function businessCreateNode(businessId: string, data: { name: string; category: string; address: string }) {
+export async function businessCreateNode(
+  businessId: string,
+  data: { name: string; category: string; address: string; lat?: number; lng?: number },
+) {
   if (DEV_MODE) {
     const id = `dev-${Date.now()}`
     return {
@@ -343,13 +346,18 @@ export async function businessCreateNode(businessId: string, data: { name: strin
       name: data.name,
       slug: slugify(data.name),
       category: data.category,
-      lat: -26.2041,
-      lng: 28.0473,
+      lat: data.lat ?? -26.2041,
+      lng: data.lng ?? 28.0473,
       citySlug: 'johannesburg',
     }
   }
-  // Geocode address to get lat/lng
-  const geocoded = await geocodeAddress(data.address)
+  // Use coordinates from Google Places if provided, otherwise geocode the address
+  let geocoded: { lat: number; lng: number } | null = null
+  if (data.lat !== undefined && data.lng !== undefined) {
+    geocoded = { lat: data.lat, lng: data.lng }
+  } else {
+    geocoded = await geocodeAddress(data.address)
+  }
   if (!geocoded) throw AppError.badRequest('Could not find address. Please check and try again.')
 
   // Get default city (Johannesburg for SA)
@@ -369,16 +377,35 @@ export async function businessCreateNode(businessId: string, data: { name: strin
 }
 
 async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+  const googleApiKey = process.env['GOOGLE_MAPS_API_KEY']
+
+  if (googleApiKey) {
+    try {
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${googleApiKey}&region=ZA&components=country:ZA`,
+      )
+      const data = (await response.json()) as {
+        status: string
+        results: Array<{ geometry: { location: { lat: number; lng: number } } }>
+      }
+      if (data.status === 'OK' && data.results[0]) {
+        const { lat, lng } = data.results[0].geometry.location
+        return { lat, lng }
+      }
+      return null
+    } catch {
+      return null
+    }
+  }
+
+  // Fallback: OpenStreetMap Nominatim (no API key, poor SA coverage)
   try {
-    // Use OpenStreetMap Nominatim API (free, no API key required)
     const response = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycode=za`,
-      {
-        headers: { 'User-Agent': 'AreaCode' },
-      },
+      { headers: { 'User-Agent': 'AreaCode/1.0' } },
     )
-    const results = await response.json() as Array<{ lat: string; lon: string }>
-    if (results && results[0]) {
+    const results = (await response.json()) as Array<{ lat: string; lon: string }>
+    if (results?.[0]) {
       return { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) }
     }
     return null

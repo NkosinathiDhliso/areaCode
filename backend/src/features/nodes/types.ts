@@ -30,6 +30,8 @@ export const businessCreateNodeBodySchema = z.object({
   name: z.string().min(1).max(100),
   category: z.enum(['food', 'coffee', 'nightlife', 'retail', 'fitness', 'arts']),
   address: z.string().min(5).max(200),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
 })
 
 export const updateNodeBodySchema = z.object({
@@ -41,10 +43,7 @@ export const updateNodeBodySchema = z.object({
 })
 
 export const claimNodeBodySchema = z.object({
-  registrationNumber: z.string().regex(
-    /^\d{4}\/\d{6}\/\d{2}$/,
-    'CIPC format: YYYY/NNNNNN/NN',
-  ),
+  registrationNumber: z.string().regex(/^\d{4}\/\d{6}\/\d{2}$/, 'CIPC format: YYYY/NNNNNN/NN'),
 })
 
 export const reportNodeBodySchema = z.object({

@@ -11,12 +11,13 @@ type AnyEventKey = keyof ServerToClientEvents | LifecycleEvent
 
 class WebSocketManager {
   private ws: WebSocket | null = null
-  private url: string
+  readonly url: string
   private reconnectAttempts = 0
   private maxReconnectAttempts = 5
   private reconnectDelay = 1000
   private listeners: Map<AnyEventKey, Set<EventCallback>> = new Map()
   private isConnecting = false
+  private pendingQueue: Array<{ action: string; payload: unknown }> = []
 
   constructor(url: string) {
     this.url = url
@@ -42,6 +43,10 @@ class WebSocketManager {
         this.reconnectAttempts = 0
         this.isConnecting = false
         this.emitLifecycle('connect')
+        const queued = this.pendingQueue.splice(0)
+        for (const msg of queued) {
+          this.ws!.send(JSON.stringify(msg))
+        }
       }
 
       this.ws.onmessage = (event) => {
@@ -91,7 +96,11 @@ class WebSocketManager {
     const callbacks = this.listeners.get(event)
     if (callbacks) {
       callbacks.forEach((cb) => {
-        try { cb(payload) } catch (e) { console.error(`Error in ${event} handler:`, e) }
+        try {
+          cb(payload)
+        } catch (e) {
+          console.error(`Error in ${event} handler:`, e)
+        }
       })
     }
   }
@@ -132,19 +141,13 @@ class WebSocketManager {
     }
   }
 
-  // Emit client events
-  emit<K extends keyof ClientToServerEvents>(
-    event: K,
-    payload: Parameters<ClientToServerEvents[K]>[0]
-  ): void {
-    if (this.ws?.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket not connected, message not sent')
-      return
-    }
+  // Emit client events — queued if not yet connected, sent immediately if open
+  emit<K extends keyof ClientToServerEvents>(event: K, payload: Parameters<ClientToServerEvents[K]>[0]): void {
+    const message = { action: event, payload }
 
-    const message = {
-      action: event,
-      payload,
+    if (this.ws?.readyState !== WebSocket.OPEN) {
+      this.pendingQueue.push(message)
+      return
     }
 
     this.ws.send(JSON.stringify(message))
@@ -167,9 +170,8 @@ class WebSocketManager {
 let wsManager: WebSocketManager | null = null
 
 function getWebSocketUrl(): string | null {
-  const env = typeof import.meta !== 'undefined'
-    ? (import.meta as unknown as Record<string, Record<string, string>>).env
-    : {}
+  const env =
+    typeof import.meta !== 'undefined' ? (import.meta as unknown as Record<string, Record<string, string>>).env : {}
 
   // VITE_WEBSOCKET_URL must point to a WebSocket API Gateway (wss://)
   // VITE_SOCKET_URL is the legacy fallback (only works for local dev with Socket.io)
@@ -194,7 +196,10 @@ function getWebSocketUrl(): string | null {
 
 const WEBSOCKET_URL = getWebSocketUrl()
 
-export function getWebSocket(token?: string, opts?: { userId?: string; citySlug?: string; businessId?: string }): WebSocketManager {
+export function getWebSocket(
+  token?: string,
+  opts?: { userId?: string; citySlug?: string; businessId?: string },
+): WebSocketManager {
   if (!WEBSOCKET_URL) {
     // No WebSocket API configured , return a no-op manager
     if (!wsManager) {
@@ -203,21 +208,23 @@ export function getWebSocket(token?: string, opts?: { userId?: string; citySlug?
     return wsManager
   }
 
-  if (!wsManager || !wsManager.connected) {
-    // Build URL with query params
-    const params = new URLSearchParams()
-    if (token) params.set('token', token)
-    if (opts?.userId) params.set('userId', opts.userId)
-    if (opts?.citySlug) params.set('citySlug', opts.citySlug)
-    if (opts?.businessId) params.set('businessId', opts.businessId)
+  // Build URL with query params
+  const params = new URLSearchParams()
+  if (token) params.set('token', token)
+  if (opts?.userId) params.set('userId', opts.userId)
+  if (opts?.citySlug) params.set('citySlug', opts.citySlug)
+  if (opts?.businessId) params.set('businessId', opts.businessId)
 
-    const url = params.toString()
-      ? `${WEBSOCKET_URL}?${params.toString()}`
-      : WEBSOCKET_URL
+  const url = params.toString() ? `${WEBSOCKET_URL}?${params.toString()}` : WEBSOCKET_URL
 
+  // Only recreate if URL actually changed (different auth/user). Otherwise
+  // reuse the existing manager — connect() is idempotent for OPEN/connecting
+  // states, so callers during the handshake won't orphan the in-flight WS.
+  if (!wsManager || wsManager.url !== url) {
+    if (wsManager) wsManager.disconnect()
     wsManager = new WebSocketManager(url)
-    wsManager.connect()
   }
+  wsManager.connect()
 
   return wsManager
 }
@@ -239,7 +246,7 @@ type SocketLike = {
 // Compatibility layer for existing code
 export function getSocket(
   token?: string,
-  opts?: { userId?: string; citySlug?: string; businessId?: string }
+  opts?: { userId?: string; citySlug?: string; businessId?: string },
 ): SocketLike {
   const ws = getWebSocket(token, opts)
 

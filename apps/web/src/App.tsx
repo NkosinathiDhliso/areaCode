@@ -150,13 +150,10 @@ function AppContent() {
         if (profile.onboardingComplete === false) {
           setShowOnboarding(true)
         }
-      } catch (err: unknown) {
-        const apiErr = err as { statusCode?: number } | undefined
-        if (apiErr?.statusCode === 401) {
-          useConsumerAuthStore.getState().logout()
-          setRoute('login')
-          return
-        }
+      } catch {
+        // Silently skip — the API's setRefreshHandler handles real token
+        // expiry. Forcing logout here breaks the Google OAuth flow because
+        // /v1/users/me can transiently 401 before Cognito propagates the session.
       } finally {
         setOnboardingChecked(true)
       }

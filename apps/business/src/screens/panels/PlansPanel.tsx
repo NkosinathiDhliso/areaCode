@@ -28,32 +28,41 @@ export function PlansPanel() {
   const [plans, setPlans] = useState<PlansResponse | null>(null)
   const [loading, setLoading] = useState<string | null>(null)
   const [currentTier, setCurrentTier] = useState<'starter' | 'growth' | 'pro' | 'payg'>('starter')
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
-    async function fetch() {
+    async function load() {
       try {
         const [plansRes, profileRes] = await Promise.all([
           api.get<PlansResponse>('/v1/business/plans'),
           api.get<{ tier?: string }>('/v1/business/me'),
         ])
         setPlans(plansRes)
-        setCurrentTier((profileRes.tier ?? 'starter') as 'starter' | 'growth' | 'pro' | 'payg')
+        const raw = profileRes.tier ?? 'starter'
+        // 'free' is a legacy value — treat it as starter for display
+        const mapped = raw === 'free' ? 'starter' : raw
+        setCurrentTier(mapped as 'starter' | 'growth' | 'pro' | 'payg')
       } catch {
-        // Fail silently
+        setLoadError(true)
       }
     }
-    fetch()
+    void load()
   }, [])
 
   async function handleSelectPlan(plan: 'growth' | 'pro' | 'payg', interval?: string) {
     setLoading(plan)
+    setCheckoutError(null)
     try {
       const res = await api.post<{ checkoutUrl: string }>('/v1/business/checkout', { plan, interval })
       if (res.checkoutUrl && !res.checkoutUrl.startsWith('#')) {
         window.location.href = res.checkoutUrl
+      } else {
+        setCheckoutError('Payment provider did not return a checkout URL. Please try again.')
       }
-    } catch {
-      // Fail silently
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message
+      setCheckoutError(msg && msg.length < 200 ? msg : 'Failed to start checkout. Please try again.')
     } finally {
       setLoading(null)
     }
@@ -63,11 +72,7 @@ export function PlansPanel() {
     return val === null ? t('biz.plans.unlimited') : String(val)
   }
 
-  function renderPlanCard(
-    key: string,
-    plan: PlanInfo,
-    actionPlan?: 'growth' | 'pro' | 'payg',
-  ) {
+  function renderPlanCard(key: string, plan: PlanInfo, actionPlan?: 'growth' | 'pro' | 'payg') {
     const isStarter = !actionPlan
     const isPAYG = actionPlan === 'payg'
     const isCurrent = key === currentTier
@@ -81,37 +86,29 @@ export function PlansPanel() {
       <div
         key={key}
         className={`bg-[var(--bg-surface)] border rounded-2xl p-5 flex flex-col gap-3 ${
-          isCurrent ? 'border-[var(--accent)] ring-1 ring-[var(--accent)]' : key === 'growth' ? 'border-[var(--accent)]' : 'border-[var(--border)]'
+          isCurrent
+            ? 'border-[var(--accent)] ring-1 ring-[var(--accent)]'
+            : key === 'growth'
+              ? 'border-[var(--accent)]'
+              : 'border-[var(--border)]'
         }`}
       >
         <div className="flex flex-row items-center justify-between">
-          <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">
-            {plan.name}
-          </span>
-          {isCurrent && (
-            <span className="text-[var(--accent)] text-xs font-medium">
-              {t('biz.plans.current')}
-            </span>
-          )}
+          <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">{plan.name}</span>
+          {isCurrent && <span className="text-[var(--accent)] text-xs font-medium">{t('biz.plans.current')}</span>}
           {plan.trialDays && !isCurrent && (
-            <span className="text-[var(--success)] text-xs font-medium">
-              {plan.trialDays}-day free trial
-            </span>
+            <span className="text-[var(--success)] text-xs font-medium">{plan.trialDays}-day free trial</span>
           )}
         </div>
 
-        <span className="text-[var(--accent)] font-bold text-2xl tracking-[-0.03em]">
-          {priceDisplay}
-        </span>
+        <span className="text-[var(--accent)] font-bold text-2xl tracking-[-0.03em]">{priceDisplay}</span>
         {!isPAYG && plan.yearlyPriceCents !== undefined && plan.yearlyPriceCents > 0 && (
           <span className="text-[var(--text-muted)] text-xs">
             or {formatZAR(plan.yearlyPriceCents / 100)}/year (save ~17%)
           </span>
         )}
         {isPAYG && plan.weeklyPriceCents !== undefined && (
-          <span className="text-[var(--text-muted)] text-xs">
-            or {formatZAR(plan.weeklyPriceCents / 100)}/week
-          </span>
+          <span className="text-[var(--text-muted)] text-xs">or {formatZAR(plan.weeklyPriceCents / 100)}/week</span>
         )}
 
         <div className="flex flex-col gap-1 mt-1">
@@ -134,22 +131,29 @@ export function PlansPanel() {
           </button>
         )}
         {isCurrent && (
-          <span className="text-[var(--accent)] text-xs text-center font-medium">
-            {t('biz.plans.currentPlan')}
-          </span>
+          <span className="text-[var(--accent)] text-xs text-center font-medium">{t('biz.plans.currentPlan')}</span>
         )}
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="p-5 flex items-center justify-center py-16">
+        <span className="text-[var(--danger)] text-sm">Failed to load plans. Check your connection and refresh.</span>
       </div>
     )
   }
 
   return (
     <div className="p-5 flex flex-col gap-4">
-      <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">
-        {t('biz.plans.title')}
-      </h2>
-      <p className="text-[var(--text-secondary)] text-sm">
-        {t('biz.plans.subtitle')}
-      </p>
+      <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('biz.plans.title')}</h2>
+      <p className="text-[var(--text-secondary)] text-sm">{t('biz.plans.subtitle')}</p>
+      {checkoutError && (
+        <div className="bg-[var(--danger-subtle,#fee)] border border-[var(--danger)] rounded-xl px-4 py-3 text-[var(--danger)] text-sm">
+          {checkoutError}
+        </div>
+      )}
 
       {plans && (
         <div className="flex flex-col gap-4">

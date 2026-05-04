@@ -2,9 +2,20 @@ import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell,
-  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
 } from 'recharts'
 
 import { api } from '@area-code/shared/lib/api'
@@ -82,7 +93,10 @@ interface FullReport {
   musicProfile: MusicProfileResult | null
   repeatVisitors: { repeatRate: number; firstTimeVisitorCount: number; totalUniqueVisitors: number }
   trends: TrendResult
-  benchmarks: { metrics: Record<string, { venueValue: number; benchmarkAverage: number; percentAboveBelow: number }>; hasInsufficientData: boolean } | null
+  benchmarks: {
+    metrics: Record<string, { venueValue: number; benchmarkAverage: number; percentAboveBelow: number }>
+    hasInsufficientData: boolean
+  } | null
   journeyInsights: JourneyResult | null
   recommendations: RecommendationResult
 }
@@ -158,14 +172,15 @@ function PeakHoursChart({ data }: { data: PeakHoursResult }) {
       <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">Peak Hours</h3>
       <ResponsiveContainer width="100%" height={200}>
         <BarChart data={chartData}>
-          <XAxis
-            dataKey="hour"
-            tick={{ fontSize: 9, fill: 'var(--text-muted)' }}
-            interval={3}
-          />
+          <XAxis dataKey="hour" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} interval={3} />
           <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} width={30} />
           <Tooltip
-            contentStyle={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
+            contentStyle={{
+              background: 'var(--bg-raised)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              fontSize: 12,
+            }}
           />
           <Bar dataKey="count" fill="var(--accent)" radius={[2, 2, 0, 0]} />
         </BarChart>
@@ -206,12 +221,18 @@ function CrowdCompositionChart({ data }: { data: CrowdCompositionResult }) {
             ))}
           </Pie>
           <Tooltip
-            contentStyle={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
+            contentStyle={{
+              background: 'var(--bg-raised)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              fontSize: 12,
+            }}
           />
         </PieChart>
       </ResponsiveContainer>
       <p className="text-[var(--text-muted)] text-xs mt-2">
-        Total unique visitors: <span className="text-[var(--text-primary)] font-medium">{data.totalUniqueVisitors}</span>
+        Total unique visitors:{' '}
+        <span className="text-[var(--text-primary)] font-medium">{data.totalUniqueVisitors}</span>
       </p>
     </div>
   )
@@ -231,19 +252,16 @@ function MusicProfileChart({ data }: { data: MusicProfileResult }) {
       <ResponsiveContainer width="100%" height={250}>
         <RadarChart data={chartData}>
           <PolarGrid stroke="var(--border)" />
-          <PolarAngleAxis
-            dataKey="dimension"
-            tick={{ fontSize: 10, fill: 'var(--text-secondary)' }}
-          />
+          <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 10, fill: 'var(--text-secondary)' }} />
           <PolarRadiusAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} />
-          <Radar
-            dataKey="score"
-            stroke="var(--accent)"
-            fill="var(--accent)"
-            fillOpacity={0.25}
-          />
+          <Radar dataKey="score" stroke="var(--accent)" fill="var(--accent)" fillOpacity={0.25} />
           <Tooltip
-            contentStyle={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
+            contentStyle={{
+              background: 'var(--bg-raised)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              fontSize: 12,
+            }}
           />
         </RadarChart>
       </ResponsiveContainer>
@@ -276,10 +294,13 @@ export function ReportsPanel() {
   const [selectedIndex, setSelectedIndex] = useState(0)
 
   // Fetch report list
-  const { data: listData, isLoading: listLoading, error: listError } = useQuery({
+  const {
+    data: listData,
+    isLoading: listLoading,
+    error: listError,
+  } = useQuery({
     queryKey: ['business', 'reports', periodFilter],
-    queryFn: () =>
-      api.get<ReportListResponse>(`/v1/business/me/reports?period=${periodFilter}`),
+    queryFn: () => api.get<ReportListResponse>(`/v1/business/me/reports?period=${periodFilter}`),
     staleTime: 60_000,
   })
 
@@ -289,8 +310,7 @@ export function ReportsPanel() {
   // Fetch selected report detail
   const { data: report, isLoading: reportLoading } = useQuery({
     queryKey: ['business', 'report', currentReportId],
-    queryFn: () =>
-      api.get<ReportResponse>(`/v1/business/me/reports/${currentReportId}`),
+    queryFn: () => api.get<ReportResponse>(`/v1/business/me/reports/${currentReportId}`),
     enabled: !!currentReportId,
     staleTime: 300_000,
   })
@@ -323,12 +343,21 @@ export function ReportsPanel() {
 
   if (reports.length === 0) {
     return (
-      <div className="p-5 flex flex-col items-center justify-center h-full gap-4">
-        {/* Period toggle even when empty */}
-        <PeriodToggle value={periodFilter} onChange={(v) => { setPeriodFilter(v); setSelectedIndex(0) }} />
-        <span className="text-[var(--text-muted)] text-sm text-center">
-          No {periodFilter} reports yet. Reports are generated automatically each {periodFilter === 'weekly' ? 'Monday' : 'month'}.
-        </span>
+      <div className="p-5 flex flex-col gap-4">
+        <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('biz.panel.reports')}</h2>
+        <PeriodToggle
+          value={periodFilter}
+          onChange={(v) => {
+            setPeriodFilter(v)
+            setSelectedIndex(0)
+          }}
+        />
+        <div className="flex items-center justify-center py-16">
+          <span className="text-[var(--text-muted)] text-sm text-center">
+            No {periodFilter} reports yet. Reports are generated automatically each{' '}
+            {periodFilter === 'weekly' ? 'Monday' : 'month'}.
+          </span>
+        </div>
       </div>
     )
   }
@@ -337,12 +366,16 @@ export function ReportsPanel() {
 
   return (
     <div className="p-5 flex flex-col gap-4">
-      <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">
-        {t('biz.panel.reports')}
-      </h2>
+      <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('biz.panel.reports')}</h2>
 
       {/* Period toggle */}
-      <PeriodToggle value={periodFilter} onChange={(v) => { setPeriodFilter(v); setSelectedIndex(0) }} />
+      <PeriodToggle
+        value={periodFilter}
+        onChange={(v) => {
+          setPeriodFilter(v)
+          setSelectedIndex(0)
+        }}
+      />
 
       {/* Date navigation */}
       {currentListItem && (
@@ -386,7 +419,13 @@ export function ReportsPanel() {
 /*  Period toggle                                                     */
 /* ------------------------------------------------------------------ */
 
-function PeriodToggle({ value, onChange }: { value: 'weekly' | 'monthly'; onChange: (v: 'weekly' | 'monthly') => void }) {
+function PeriodToggle({
+  value,
+  onChange,
+}: {
+  value: 'weekly' | 'monthly'
+  onChange: (v: 'weekly' | 'monthly') => void
+}) {
   return (
     <div className="flex flex-row gap-1 bg-[var(--bg-raised)] rounded-xl p-1 self-start">
       {(['weekly', 'monthly'] as const).map((p) => (
@@ -424,12 +463,8 @@ function TeaserView({ report }: { report: TeaserReport }) {
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 h-32" />
         </div>
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--bg-base)]/60 rounded-2xl">
-          <span className="text-[var(--text-primary)] font-semibold text-center px-6">
-            {report.upgradeMessage}
-          </span>
-          <span className="text-[var(--accent)] text-sm font-medium">
-            Upgrade to Growth →
-          </span>
+          <span className="text-[var(--text-primary)] font-semibold text-center px-6">{report.upgradeMessage}</span>
+          <span className="text-[var(--accent)] text-sm font-medium">Upgrade to Growth →</span>
         </div>
       </div>
     </div>
@@ -454,12 +489,12 @@ function FullReportView({ report }: { report: FullReport }) {
             {Object.entries(report.trends.metrics).map(([key, delta]) => (
               <div key={key} className="flex flex-row items-center justify-between">
                 <span className="text-[var(--text-primary)] text-sm capitalize">
-                  {key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim()}
+                  {key
+                    .replace(/([A-Z])/g, ' $1')
+                    .replace(/_/g, ' ')
+                    .trim()}
                 </span>
-                <span
-                  className="text-sm font-medium"
-                  style={{ color: directionColor(delta.direction) }}
-                >
+                <span className="text-sm font-medium" style={{ color: directionColor(delta.direction) }}>
                   {directionIcon(delta.direction)} {Math.abs(Math.round(delta.percentChange))}%
                 </span>
               </div>
@@ -502,9 +537,7 @@ function FullReportView({ report }: { report: FullReport }) {
               {report.journeyInsights.topOverlapVenues.map((v) => (
                 <div key={v.venueName} className="flex flex-row items-center justify-between">
                   <span className="text-[var(--text-primary)] text-sm">{v.venueName}</span>
-                  <span className="text-[var(--text-muted)] text-sm">
-                    {Math.round(v.overlapPercentage)}% overlap
-                  </span>
+                  <span className="text-[var(--text-muted)] text-sm">{Math.round(v.overlapPercentage)}% overlap</span>
                 </div>
               ))}
             </div>
@@ -513,7 +546,9 @@ function FullReportView({ report }: { report: FullReport }) {
             <div className="border-t border-[var(--border)] pt-3">
               <p className="text-[var(--text-muted)] text-xs mb-1">Partnership opportunities:</p>
               {report.journeyInsights.partnershipSuggestions.map((s, i) => (
-                <p key={i} className="text-[var(--text-primary)] text-sm">• {s}</p>
+                <p key={i} className="text-[var(--text-primary)] text-sm">
+                  • {s}
+                </p>
               ))}
             </div>
           )}
@@ -531,15 +566,11 @@ function SummaryCards({ summary }: { summary: ReportSummary }) {
   return (
     <div className="grid grid-cols-3 gap-3">
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-3 flex flex-col items-center gap-1">
-        <span className="text-[var(--text-primary)] text-2xl font-bold font-[Syne]">
-          {summary.totalCheckIns}
-        </span>
+        <span className="text-[var(--text-primary)] text-2xl font-bold font-[Syne]">{summary.totalCheckIns}</span>
         <span className="text-[var(--text-muted)] text-xs">Check-ins</span>
       </div>
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-3 flex flex-col items-center gap-1">
-        <span className="text-[var(--text-primary)] text-lg font-semibold capitalize">
-          {summary.pulseState}
-        </span>
+        <span className="text-[var(--text-primary)] text-lg font-semibold capitalize">{summary.pulseState}</span>
         <span className="text-[var(--text-muted)] text-xs">Pulse</span>
       </div>
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-3 flex flex-col items-center gap-1">

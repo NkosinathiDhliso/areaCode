@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { api } from '@area-code/shared/lib/api'
 import type { Node } from '@area-code/shared/types'
@@ -15,9 +15,61 @@ export function NodeEditorPanel() {
   const [addVenueOpen, setAddVenueOpen] = useState(false)
   const [addVenueName, setAddVenueName] = useState('')
   const [addVenueAddress, setAddVenueAddress] = useState('')
-  const [addVenueCategory, setAddVenueCategory] = useState<'food' | 'coffee' | 'nightlife' | 'retail' | 'fitness' | 'arts'>('food')
+  const [addVenueCategory, setAddVenueCategory] = useState<
+    'food' | 'coffee' | 'nightlife' | 'retail' | 'fitness' | 'arts'
+  >('food')
   const [addVenueLoading, setAddVenueLoading] = useState(false)
   const [addVenueError, setAddVenueError] = useState('')
+  const [addVenueLat, setAddVenueLat] = useState<number | undefined>(undefined)
+  const [addVenueLng, setAddVenueLng] = useState<number | undefined>(undefined)
+  const addressInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!addVenueOpen) return
+    const apiKey = import.meta.env['VITE_GOOGLE_MAPS_API_KEY'] as string | undefined
+    if (!apiKey) return
+
+    function attachAutocomplete() {
+      if (!addressInputRef.current) return
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const autocomplete = new (window as any).google.maps.places.Autocomplete(addressInputRef.current, {
+        componentRestrictions: { country: 'za' },
+      })
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace() as {
+          formatted_address?: string
+          geometry?: { location: { lat: () => number; lng: () => number } }
+        }
+        if (place.formatted_address) setAddVenueAddress(place.formatted_address)
+        if (place.geometry?.location) {
+          setAddVenueLat(place.geometry.location.lat())
+          setAddVenueLng(place.geometry.location.lng())
+        }
+      })
+    }
+
+    // Poll until google.maps.places is ready (handles both fresh load and cached script)
+    function waitForGoogle(attempts = 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((window as any).google?.maps?.places) {
+        attachAutocomplete()
+        return
+      }
+      if (attempts < 50) setTimeout(() => waitForGoogle(attempts + 1), 100)
+    }
+
+    if (!document.getElementById('gmaps-places-script')) {
+      const script = document.createElement('script')
+      script.id = 'gmaps-places-script'
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
+      script.async = true
+      script.onload = attachAutocomplete
+      script.onerror = () => console.error('[AreaCode] Google Maps failed to load')
+      document.head.appendChild(script)
+    } else {
+      waitForGoogle()
+    }
+  }, [addVenueOpen])
 
   useEffect(() => {
     async function fetchNodes() {
@@ -65,11 +117,14 @@ export function NodeEditorPanel() {
         name: addVenueName.trim(),
         category: addVenueCategory,
         address: addVenueAddress.trim(),
+        ...(addVenueLat !== undefined && addVenueLng !== undefined ? { lat: addVenueLat, lng: addVenueLng } : {}),
       })
       setAddVenueOpen(false)
       setAddVenueName('')
       setAddVenueAddress('')
       setAddVenueCategory('food')
+      setAddVenueLat(undefined)
+      setAddVenueLng(undefined)
       // Refresh nodes list
       const nodesRes = await api.get<{ items: Node[] }>('/v1/business/me/nodes')
       const items = nodesRes.items ?? []
@@ -92,7 +147,7 @@ export function NodeEditorPanel() {
     setSaveSuccess(false)
     try {
       await api.put(`/v1/nodes/${selected.id}`, { name: name.trim() })
-      setNodes(nodes.map((n) => n.id === selected.id ? { ...n, name: name.trim() } : n))
+      setNodes(nodes.map((n) => (n.id === selected.id ? { ...n, name: name.trim() } : n)))
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 3000)
     } catch {
@@ -123,9 +178,7 @@ export function NodeEditorPanel() {
       </div>
 
       {nodes.length === 0 ? (
-        <p className="text-[var(--text-muted)] text-sm">
-          No nodes yet. Add your venue by entering your address below.
-        </p>
+        <p className="text-[var(--text-muted)] text-sm">No nodes yet. Add your venue by entering your address below.</p>
       ) : (
         <div className="flex flex-col gap-4">
           {nodes.length > 1 && (
@@ -135,7 +188,9 @@ export function NodeEditorPanel() {
               className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none appearance-none"
             >
               {nodes.map((n) => (
-                <option key={n.id} value={n.id}>{n.name}</option>
+                <option key={n.id} value={n.id}>
+                  {n.name}
+                </option>
               ))}
             </select>
           )}
@@ -151,7 +206,9 @@ export function NodeEditorPanel() {
               />
 
               <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-1">
-                <span className="text-[var(--text-secondary)] text-xs">Category: <span className="capitalize">{selected.category}</span></span>
+                <span className="text-[var(--text-secondary)] text-xs">
+                  Category: <span className="capitalize">{selected.category}</span>
+                </span>
                 <span className="text-[var(--text-muted)] text-xs">
                   {selected.lat.toFixed(4)}, {selected.lng.toFixed(4)}
                 </span>
@@ -181,9 +238,7 @@ export function NodeEditorPanel() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
             <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">Add Your Venue</h3>
-            <p className="text-[var(--text-secondary)] text-sm mb-4">
-              Enter your venue details to add it to the map.
-            </p>
+            <p className="text-[var(--text-secondary)] text-sm mb-4">Enter your venue details to add it to the map.</p>
             {addVenueError && <p className="text-[var(--danger)] text-sm mb-4">{addVenueError}</p>}
             <div className="flex flex-col gap-3 mb-4">
               <label className="text-[var(--text-primary)] text-xs font-medium">Venue Name</label>
@@ -196,6 +251,7 @@ export function NodeEditorPanel() {
               />
               <label className="text-[var(--text-primary)] text-xs font-medium">Address</label>
               <input
+                ref={addressInputRef}
                 type="text"
                 value={addVenueAddress}
                 onChange={(e) => setAddVenueAddress(e.target.value)}
