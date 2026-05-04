@@ -342,61 +342,43 @@ export async function searchBusinesses(query: string) {
     : allBiz
   const sliced = filtered.slice(0, 50)
 
-  // Compute additional fields for each business
-  const enriched = []
-  for (const b of sliced) {
-    const businessId = (b['businessId'] ?? b['id']) as string
+  // Compute additional fields for each business — all enrichments run in parallel
+  const enriched = await Promise.all(
+    sliced.map(async (b) => {
+      const businessId = (b['businessId'] ?? b['id']) as string
 
-    // staffCount
-    let staffCount = 0
-    try {
-      const staffResult = await getStaffByBusinessId(businessId)
-      staffCount = staffResult.filter((s: any) => s.isActive !== false).length
-    } catch {
-      // Non-critical
-    }
+      const [staffCount, nodeCount, activeRewardCount] = await Promise.all([
+        getStaffByBusinessId(businessId)
+          .then((r) => r.filter((s: any) => s.isActive !== false).length)
+          .catch(() => 0),
+        documentClient
+          .send(
+            new QueryCommand({
+              TableName: TableNames.nodes,
+              IndexName: 'BusinessIndex',
+              KeyConditionExpression: 'businessId = :bid',
+              ExpressionAttributeValues: { ':bid': businessId },
+              Select: 'COUNT',
+            }),
+          )
+          .then((r) => r.Count ?? 0)
+          .catch(() => 0),
+        documentClient
+          .send(
+            new ScanCommand({
+              TableName: TableNames.rewards,
+              FilterExpression: 'businessId = :bid AND isActive = :active',
+              ExpressionAttributeValues: { ':bid': businessId, ':active': true },
+              Select: 'COUNT',
+            }),
+          )
+          .then((r) => r.Count ?? 0)
+          .catch(() => 0),
+      ])
 
-    // nodeCount
-    let nodeCount = 0
-    try {
-      const nodesResult = await documentClient.send(
-        new QueryCommand({
-          TableName: TableNames.nodes,
-          IndexName: 'BusinessIndex',
-          KeyConditionExpression: 'businessId = :bid',
-          ExpressionAttributeValues: { ':bid': businessId },
-          Select: 'COUNT',
-        }),
-      )
-      nodeCount = nodesResult.Count ?? 0
-    } catch {
-      // Non-critical
-    }
-
-    // activeRewardCount
-    let activeRewardCount = 0
-    try {
-      const rewardsResult = await documentClient.send(
-        new ScanCommand({
-          TableName: TableNames.rewards,
-          FilterExpression: 'businessId = :bid AND isActive = :active',
-          ExpressionAttributeValues: { ':bid': businessId, ':active': true },
-          Select: 'COUNT',
-        }),
-      )
-      activeRewardCount = rewardsResult.Count ?? 0
-    } catch {
-      // Non-critical
-    }
-
-    enriched.push({
-      ...b,
-      id: businessId,
-      staffCount,
-      nodeCount,
-      activeRewardCount,
-    })
-  }
+      return { ...b, id: businessId, staffCount, nodeCount, activeRewardCount }
+    }),
+  )
   return enriched
 }
 
