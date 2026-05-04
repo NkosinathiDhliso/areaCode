@@ -24,7 +24,7 @@ export function AudiencePanel() {
         setError(true)
       }
     }
-    fetch()
+    void fetch()
   }, [])
 
   if (error) {
@@ -33,7 +33,13 @@ export function AudiencePanel() {
         <span className="text-[var(--danger)] text-sm text-center">
           {t('errors.loadFailed', 'Failed to load. Please try again.')}
         </span>
-        <button onClick={() => { setError(false); window.location.reload() }} className="text-[var(--accent)] text-sm">
+        <button
+          onClick={() => {
+            setError(false)
+            window.location.reload()
+          }}
+          className="text-[var(--accent)] text-sm"
+        >
           {t('common.retry', 'Retry')}
         </button>
       </div>
@@ -43,18 +49,14 @@ export function AudiencePanel() {
   if (!data || data.totalUniqueVisitors < 20) {
     return (
       <div className="p-5 flex flex-col items-center justify-center h-full gap-4">
-        <span className="text-[var(--text-muted)] text-sm text-center">
-          {t('biz.audience.minUsers')}
-        </span>
+        <span className="text-[var(--text-muted)] text-sm text-center">{t('biz.audience.minUsers')}</span>
       </div>
     )
   }
 
   return (
     <div className="p-5 flex flex-col gap-4">
-      <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">
-        {t('biz.audience.title')}
-      </h2>
+      <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('biz.audience.title')}</h2>
 
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
         <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">Tier Distribution</h3>

@@ -45,7 +45,7 @@ export function AbuseFlagDashboard() {
     setActionError(null)
     try {
       await api.post(`/v1/admin/abuse-flags/${flagId}/review`)
-      fetchFlags()
+      void fetchFlags()
     } catch {
       setActionError('Failed to mark as reviewed. Please try again.')
     } finally {
@@ -58,7 +58,7 @@ export function AbuseFlagDashboard() {
     setActionError(null)
     try {
       await api.post(`/v1/admin/abuse-flags/${flagId}/action`, { action })
-      fetchFlags()
+      void fetchFlags()
     } catch {
       setActionError('Action failed. Please try again.')
     } finally {
@@ -91,7 +91,10 @@ export function AbuseFlagDashboard() {
     <div className="p-5">
       {loadError && (
         <div className="bg-[var(--danger)]/10 border border-[var(--danger)] rounded-xl p-3 text-[var(--danger)] text-sm mb-4">
-          Failed to load abuse flags. <button onClick={() => void fetchFlags()} className="underline ml-1">Retry</button>
+          Failed to load abuse flags.{' '}
+          <button onClick={() => void fetchFlags()} className="underline ml-1">
+            Retry
+          </button>
         </div>
       )}
       {actionError && (
@@ -149,21 +152,21 @@ export function AbuseFlagDashboard() {
 
                 <div className="flex flex-row gap-2">
                   <button
-                    onClick={() => handleReview(flag.id)}
+                    onClick={() => void handleReview(flag.id)}
                     disabled={actionLoading === flag.id}
                     className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs transition-all active:scale-95 disabled:opacity-50"
                   >
                     Mark Reviewed
                   </button>
                   <button
-                    onClick={() => handleAction(flag.id, 'disable_user')}
+                    onClick={() => void handleAction(flag.id, 'disable_user')}
                     disabled={actionLoading === flag.id}
                     className="border border-[var(--danger)] text-[var(--danger)] rounded-xl px-3 py-1.5 text-xs transition-all active:scale-95 disabled:opacity-50"
                   >
                     Disable User
                   </button>
                   <button
-                    onClick={() => handleAction(flag.id, 'reset_flags')}
+                    onClick={() => void handleAction(flag.id, 'reset_flags')}
                     disabled={actionLoading === flag.id}
                     className="border border-[var(--warning)] text-[var(--warning)] rounded-xl px-3 py-1.5 text-xs transition-all active:scale-95 disabled:opacity-50"
                   >

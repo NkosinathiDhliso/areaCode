@@ -28,9 +28,7 @@ export function ConsumerManagement() {
     setLoading(true)
     setSearchError(null)
     try {
-      const res = await api.get<{ items: ConsumerDetail[] }>(
-        `/v1/admin/consumers?q=${encodeURIComponent(query)}`,
-      )
+      const res = await api.get<{ items: ConsumerDetail[] }>(`/v1/admin/consumers?q=${encodeURIComponent(query)}`)
       setResults(res.items)
     } catch {
       setSearchError('Search failed. Please try again.')
@@ -70,9 +68,7 @@ export function ConsumerManagement() {
 
   return (
     <div className="p-5">
-      <h2 className="text-[var(--text-primary)] font-bold text-xl mb-4 font-[Syne]">
-        {t('admin.consumers.title')}
-      </h2>
+      <h2 className="text-[var(--text-primary)] font-bold text-xl mb-4 font-[Syne]">{t('admin.consumers.title')}</h2>
 
       {searchError && (
         <div className="bg-[var(--danger)]/10 border border-[var(--danger)] rounded-xl p-3 text-[var(--danger)] text-sm mb-4">
@@ -117,9 +113,7 @@ export function ConsumerManagement() {
               </div>
               <div className="flex flex-row items-center gap-2">
                 <TierLabel tier={user.tier} />
-                {user.isDisabled && (
-                  <span className="text-[var(--danger)] text-xs">Disabled</span>
-                )}
+                {user.isDisabled && <span className="text-[var(--danger)] text-xs">Disabled</span>}
               </div>
             </div>
 
@@ -146,31 +140,31 @@ export function ConsumerManagement() {
                   {user.isDisabled && (
                     <ActionButton
                       label={t('admin.consumers.enable', 'Enable Account')}
-                      onClick={() => handleAction('enable', user.id)}
+                      onClick={() => void handleAction('enable', user.id)}
                     />
                   )}
                   <ActionButton
                     label={t('admin.consumers.resetFlags')}
-                    onClick={() => handleAction('reset-flags', user.id)}
+                    onClick={() => void handleAction('reset-flags', user.id)}
                   />
                   <ActionButton
                     label={t('admin.consumers.recalcTier')}
-                    onClick={() => handleAction('recalc-tier', user.id)}
+                    onClick={() => void handleAction('recalc-tier', user.id)}
                   />
                   <ActionButton
                     label={t('admin.consumers.overrideStreak')}
-                    onClick={() => handleAction('override-streak', user.id)}
+                    onClick={() => void handleAction('override-streak', user.id)}
                   />
                   {role === 'super_admin' && (
                     <ActionButton
                       label={t('admin.consumers.processErasure')}
-                      onClick={() => handleAction('process-erasure', user.id)}
+                      onClick={() => void handleAction('process-erasure', user.id)}
                       danger
                     />
                   )}
                   <ActionButton
                     label={t('admin.consumers.sendMessage')}
-                    onClick={() => handleAction('send-message', user.id)}
+                    onClick={() => void handleAction('send-message', user.id)}
                   />
                 </div>
               </div>
@@ -183,11 +177,10 @@ export function ConsumerManagement() {
       {confirmDisable && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
-            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
-              Disable Account?
-            </h3>
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">Disable Account?</h3>
             <p className="text-[var(--text-secondary)] text-sm mb-4">
-              This will revoke the user's session and prevent them from checking in or claiming rewards. This action creates an audit log entry.
+              This will revoke the user's session and prevent them from checking in or claiming rewards. This action
+              creates an audit log entry.
             </p>
             <div className="flex flex-row gap-3">
               <button
@@ -197,7 +190,7 @@ export function ConsumerManagement() {
                 Cancel
               </button>
               <button
-                onClick={() => handleDisableUser(confirmDisable)}
+                onClick={() => void handleDisableUser(confirmDisable)}
                 className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium"
               >
                 Disable
@@ -211,20 +204,10 @@ export function ConsumerManagement() {
 }
 
 function TierLabel({ tier }: { tier: Tier }) {
-  return (
-    <span className="text-[var(--text-muted)] text-xs capitalize">{tier}</span>
-  )
+  return <span className="text-[var(--text-muted)] text-xs capitalize">{tier}</span>
 }
 
-function ActionButton({
-  label,
-  onClick,
-  danger = false,
-}: {
-  label: string
-  onClick: () => void
-  danger?: boolean
-}) {
+function ActionButton({ label, onClick, danger = false }: { label: string; onClick: () => void; danger?: boolean }) {
   return (
     <button
       onClick={(e) => {

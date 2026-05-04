@@ -1,4 +1,4 @@
-import { useState, memo, useCallback } from 'react'
+import { useState, memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BottomSheet } from '@area-code/shared/components/BottomSheet'
 import { api } from '@area-code/shared/lib/api'
@@ -55,7 +55,6 @@ interface NodeDetailSheetProps {
 export const NodeDetailSheet = memo(function NodeDetailSheet({
   node,
   rewards,
-  pulseScore: _pulseScore,
   state,
   isOpen,
   onClose,
@@ -148,8 +147,8 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
         setClaimSuccess(false)
         setRegistrationNumber('')
       }, 2000)
-    } catch (err: any) {
-      setClaimError(err?.message || t('node.claimError'))
+    } catch (err: unknown) {
+      setClaimError((err as { message?: string })?.message || t('node.claimError'))
     } finally {
       setClaiming(false)
     }
@@ -255,7 +254,16 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
         onClick={handleDirections}
         className="w-full flex items-center justify-center gap-2 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] font-medium rounded-xl py-3 text-sm mb-3 transition-all duration-150 active:scale-95"
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <polygon points="3 11 22 2 13 21 11 13 3 11" />
         </svg>
         {t('node.directions', 'Get directions')}
@@ -307,9 +315,7 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
                   </label>
                   <select
                     value={reportType}
-                    onChange={(e) =>
-                      setReportType(e.target.value as typeof reportType)
-                    }
+                    onChange={(e) => setReportType(e.target.value as typeof reportType)}
                     className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none"
                   >
                     <option value="wrong_location">{t('node.report.wrongLocation', 'Wrong location')}</option>
@@ -358,24 +364,14 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
       {claimModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
-            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
-              {t('node.claimVenue')}
-            </h3>
-            <p className="text-[var(--text-secondary)] text-sm mb-4">
-              {t('node.claimDescription')}
-            </p>
-            {claimSuccess && (
-              <p className="text-[var(--success)] text-sm mb-4">{t('node.claimSuccess')}</p>
-            )}
-            {claimError && (
-              <p className="text-[var(--danger)] text-sm mb-4">{claimError}</p>
-            )}
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">{t('node.claimVenue')}</h3>
+            <p className="text-[var(--text-secondary)] text-sm mb-4">{t('node.claimDescription')}</p>
+            {claimSuccess && <p className="text-[var(--success)] text-sm mb-4">{t('node.claimSuccess')}</p>}
+            {claimError && <p className="text-[var(--danger)] text-sm mb-4">{claimError}</p>}
             {!claimSuccess && (
               <>
                 <div className="flex flex-col gap-3 mb-4">
-                  <label className="text-[var(--text-primary)] text-xs font-medium">
-                    {t('node.cipcNumber')}
-                  </label>
+                  <label className="text-[var(--text-primary)] text-xs font-medium">{t('node.cipcNumber')}</label>
                   <input
                     type="text"
                     value={registrationNumber}

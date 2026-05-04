@@ -80,6 +80,9 @@ export function ConsumerSignup({ onNavigate }: ConsumerSignupProps) {
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          onKeyDown={(e) =>
+            e.key === 'Enter' && !loading && !googleLoading && email && password.length >= 8 && void handleEmailSignup()
+          }
           placeholder={t('auth.signup.email', 'Email')}
           className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
         />
@@ -87,6 +90,9 @@ export function ConsumerSignup({ onNavigate }: ConsumerSignupProps) {
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) =>
+            e.key === 'Enter' && !loading && !googleLoading && email && password.length >= 8 && void handleEmailSignup()
+          }
           placeholder={t('auth.signup.password', 'Password')}
           className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
         />

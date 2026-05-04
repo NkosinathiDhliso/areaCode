@@ -26,12 +26,14 @@ export function RewardsScreen() {
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
 
   // Near-me rewards require auth
-  const { data: rewards, isLoading, error } = useQuery({
+  const {
+    data: rewards,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ['rewards', 'near-me', pos?.lat, pos?.lng],
     queryFn: () =>
-      api.get<NearbyReward[]>(
-        `/v1/rewards/near-me?lat=${pos?.lat ?? -26.2041}&lng=${pos?.lng ?? 28.0473}`,
-      ),
+      api.get<NearbyReward[]>(`/v1/rewards/near-me?lat=${pos?.lat ?? -26.2041}&lng=${pos?.lng ?? 28.0473}`),
     enabled: connectivity !== 'offline' && isAuthenticated,
     staleTime: 30_000,
   })
@@ -52,11 +54,19 @@ export function RewardsScreen() {
     )
   }
 
+  if (isError) {
+    return (
+      <div className="flex items-center justify-center h-full px-5">
+        <p className="text-[var(--text-secondary)] text-sm text-center">
+          {t('errors.loadFailed', 'Failed to load rewards. Please try again.')}
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4" data-scroll-container>
-      <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-4">
-        {t('rewards.nearYou')}
-      </h1>
+      <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-4">{t('rewards.nearYou')}</h1>
 
       {isLoading ? (
         <div className="flex flex-col gap-3">
@@ -70,10 +80,7 @@ export function RewardsScreen() {
             const slotsLeft = r.totalSlots ? r.totalSlots - r.claimedCount : null
             const isLow = slotsLeft !== null && slotsLeft <= 5
             return (
-              <div
-                key={r.id}
-                className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4"
-              >
+              <div key={r.id} className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
                 <div className="flex flex-row items-start justify-between">
                   <div className="flex-1">
                     <p className="text-[var(--text-primary)] text-sm font-medium">{r.title}</p>
@@ -82,7 +89,9 @@ export function RewardsScreen() {
                     </p>
                   </div>
                   {slotsLeft !== null && (
-                    <span className={`text-xs font-medium ${isLow ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'}`}>
+                    <span
+                      className={`text-xs font-medium ${isLow ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'}`}
+                    >
                       {slotsLeft} {t('node.left')}
                     </span>
                   )}

@@ -72,6 +72,9 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          onKeyDown={(e) =>
+            e.key === 'Enter' && !loading && !googleLoading && email && password && void handleEmailLogin()
+          }
           placeholder={t('auth.login.email', 'Email')}
           className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
         />
@@ -79,6 +82,9 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) =>
+            e.key === 'Enter' && !loading && !googleLoading && email && password && void handleEmailLogin()
+          }
           placeholder={t('auth.login.password', 'Password')}
           className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
         />

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@area-code/shared/lib/api'
 import type { GenreWeightEntry, MusicGenre, PersonalityDimension } from '@area-code/shared/types'
-import { PERSONALITY_DIMENSIONS, MUSIC_GENRES } from '@area-code/shared/constants/genre-weights'
+import { PERSONALITY_DIMENSIONS } from '@area-code/shared/constants/genre-weights'
 
 const GENRE_LABELS: Record<MusicGenre, string> = {
   amapiano: 'Amapiano',
@@ -117,7 +117,7 @@ export function GenreWeightEditor() {
       </div>
 
       <button
-        onClick={handleSave}
+        onClick={() => void handleSave()}
         disabled={saving}
         className="bg-[var(--accent)] text-white rounded-xl py-2 text-sm font-medium disabled:opacity-50"
       >

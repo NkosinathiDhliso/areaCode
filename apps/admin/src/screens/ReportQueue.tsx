@@ -30,14 +30,14 @@ export function ReportQueue() {
   }
 
   useEffect(() => {
-    fetchReports()
+    void fetchReports()
   }, [])
 
   async function handleAction(reportId: string, action: 'reviewed' | 'dismissed' | 'actioned') {
     setActionError(null)
     try {
       await api.post(`/v1/admin/reports/${reportId}/action`, { action })
-      fetchReports()
+      void fetchReports()
     } catch {
       setActionError('Failed to update report. Please try again.')
     }
@@ -53,7 +53,10 @@ export function ReportQueue() {
 
       {loadError && (
         <div className="bg-[var(--danger)]/10 border border-[var(--danger)] rounded-xl p-3 text-[var(--danger)] text-sm mb-4">
-          Failed to load reports. <button onClick={() => void fetchReports()} className="underline ml-1">Retry</button>
+          Failed to load reports.{' '}
+          <button onClick={() => void fetchReports()} className="underline ml-1">
+            Retry
+          </button>
         </div>
       )}
       {actionError && (
@@ -82,19 +85,19 @@ export function ReportQueue() {
                 <span className="text-[var(--text-muted)] text-xs">{formatRelativeTime(report.createdAt)}</span>
                 <div className="flex flex-row gap-2">
                   <button
-                    onClick={() => handleAction(report.id, 'reviewed')}
+                    onClick={() => void handleAction(report.id, 'reviewed')}
                     className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs"
                   >
                     {t('admin.reports.review')}
                   </button>
                   <button
-                    onClick={() => handleAction(report.id, 'dismissed')}
+                    onClick={() => void handleAction(report.id, 'dismissed')}
                     className="border border-[var(--border-strong)] text-[var(--text-muted)] rounded-xl px-3 py-1.5 text-xs"
                   >
                     {t('admin.reports.dismiss')}
                   </button>
                   <button
-                    onClick={() => handleAction(report.id, 'actioned')}
+                    onClick={() => void handleAction(report.id, 'actioned')}
                     className="border border-[var(--danger)] text-[var(--danger)] rounded-xl px-3 py-1.5 text-xs"
                   >
                     {t('admin.reports.action')}

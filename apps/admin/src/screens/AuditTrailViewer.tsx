@@ -57,12 +57,13 @@ export function AuditTrailViewer() {
   }
 
   useEffect(() => {
-    fetchLogs()
+    void fetchLogs()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function handleApplyFilters() {
     setNextCursor(null)
-    fetchLogs()
+    void fetchLogs()
   }
 
   function handleClearFilters() {
@@ -72,7 +73,7 @@ export function AuditTrailViewer() {
     setFilterEndDate('')
     setNextCursor(null)
     // Fetch with cleared filters
-    setTimeout(() => fetchLogs(), 0)
+    setTimeout(() => void fetchLogs(), 0)
   }
 
   return (
@@ -83,7 +84,10 @@ export function AuditTrailViewer() {
 
       {loadError && (
         <div className="bg-[var(--danger)]/10 border border-[var(--danger)] rounded-xl p-3 text-[var(--danger)] text-sm mb-4">
-          Failed to load audit logs. <button onClick={() => void fetchLogs()} className="underline ml-1">Retry</button>
+          Failed to load audit logs.{' '}
+          <button onClick={() => void fetchLogs()} className="underline ml-1">
+            Retry
+          </button>
         </div>
       )}
 
@@ -124,33 +128,23 @@ export function AuditTrailViewer() {
           >
             Apply Filters
           </button>
-          <button
-            onClick={handleClearFilters}
-            className="text-[var(--text-muted)] text-xs px-4 py-2"
-          >
+          <button onClick={handleClearFilters} className="text-[var(--text-muted)] text-xs px-4 py-2">
             Clear
           </button>
         </div>
       </div>
 
       {loading && logs.length === 0 && (
-        <div className="text-[var(--text-muted)] text-sm text-center py-12">
-          Loading audit logs...
-        </div>
+        <div className="text-[var(--text-muted)] text-sm text-center py-12">Loading audit logs...</div>
       )}
 
       {!loading && !loadError && logs.length === 0 && (
-        <div className="text-[var(--text-muted)] text-sm text-center py-12">
-          No audit logs found
-        </div>
+        <div className="text-[var(--text-muted)] text-sm text-center py-12">No audit logs found</div>
       )}
 
       <div className="flex flex-col gap-2">
         {logs.map((log) => (
-          <div
-            key={log.id}
-            className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4"
-          >
+          <div key={log.id} className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
             <div
               className="flex flex-row items-center justify-between cursor-pointer"
               onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
@@ -168,9 +162,7 @@ export function AuditTrailViewer() {
                   by {log.adminId.slice(0, 8)}... ({log.adminRole})
                 </span>
               </div>
-              <span className="text-[var(--text-muted)] text-xs">
-                {new Date(log.createdAt).toLocaleString()}
-              </span>
+              <span className="text-[var(--text-muted)] text-xs">{new Date(log.createdAt).toLocaleString()}</span>
             </div>
 
             {expandedId === log.id && (
@@ -199,7 +191,7 @@ export function AuditTrailViewer() {
 
       {nextCursor && (
         <button
-          onClick={() => fetchLogs(nextCursor)}
+          onClick={() => void fetchLogs(nextCursor)}
           disabled={loading}
           className="w-full text-[var(--accent)] text-sm font-medium py-3 mt-2"
         >

@@ -42,9 +42,7 @@ export function BusinessManagement() {
     setLoading(true)
     setSearchError(null)
     try {
-      const res = await api.get<{ items: BusinessDetail[] }>(
-        `/v1/admin/businesses?q=${encodeURIComponent(query)}`,
-      )
+      const res = await api.get<{ items: BusinessDetail[] }>(`/v1/admin/businesses?q=${encodeURIComponent(query)}`)
       setResults(res.items)
     } catch {
       setSearchError('Search failed. Please try again.')
@@ -96,7 +94,7 @@ export function BusinessManagement() {
     setStaffError(null)
     try {
       const res = await api.get<{ items: { id: string; phone?: string; email?: string }[] }>(
-        `/v1/admin/businesses/${businessId}/staff`
+        `/v1/admin/businesses/${businessId}/staff`,
       )
       setStaffList(res.items)
     } catch {
@@ -142,18 +140,16 @@ export function BusinessManagement() {
         setTierReason('')
         setTrialEndsAt('')
         setSetTierSuccess(false)
-        handleSearch()
+        void handleSearch()
       }, 1500)
-    } catch (err: any) {
-      setSetTierError(err?.message || 'Failed to set tier')
+    } catch (err: unknown) {
+      setSetTierError((err as { message?: string })?.message || 'Failed to set tier')
     }
   }
 
   return (
     <div className="p-5">
-      <h2 className="text-[var(--text-primary)] font-bold text-xl mb-4 font-[Syne]">
-        {t('admin.businesses.title')}
-      </h2>
+      <h2 className="text-[var(--text-primary)] font-bold text-xl mb-4 font-[Syne]">{t('admin.businesses.title')}</h2>
 
       {searchError && (
         <div className="bg-[var(--danger)]/10 border border-[var(--danger)] rounded-xl p-3 text-[var(--danger)] text-sm mb-4">
@@ -202,38 +198,59 @@ export function BusinessManagement() {
             {selected?.id === biz.id && (
               <div className="mt-4 pt-4 border-t border-[var(--border)] flex flex-row flex-wrap gap-2">
                 <button
-                  onClick={(e) => { e.stopPropagation(); setExtendTrialId(biz.id); setExtendDays('7') }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setExtendTrialId(biz.id)
+                    setExtendDays('7')
+                  }}
                   className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs"
                 >
                   {t('admin.businesses.extendTrial')}
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); setSetTierId(biz.id); setSelectedTier(biz.tier as 'starter' | 'growth' | 'pro'); setTierReason('') }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setSetTierId(biz.id)
+                    setSelectedTier(biz.tier as 'starter' | 'growth' | 'pro')
+                    setTierReason('')
+                  }}
                   className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs"
                 >
                   {t('admin.businesses.setTier', 'Set Tier')}
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); handleAction('deactivate-rewards', biz.id) }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void handleAction('deactivate-rewards', biz.id)
+                  }}
                   className="border border-[var(--danger)] text-[var(--danger)] rounded-xl px-3 py-1.5 text-xs"
                 >
                   {t('admin.businesses.deactivateRewards')}
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); handleAction('override-cipc', biz.id) }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void handleAction('override-cipc', biz.id)
+                  }}
                   className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs"
                 >
                   {t('admin.businesses.overrideCipc')}
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); void handleViewStaff(biz.id) }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void handleViewStaff(biz.id)
+                  }}
                   className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs"
                 >
                   {t('admin.businesses.staff')}
                 </button>
                 {role === 'super_admin' && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); setConfirmDisable(biz.id) }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setConfirmDisable(biz.id)
+                    }}
                     className="border border-[var(--danger)] text-[var(--danger)] rounded-xl px-3 py-1.5 text-xs font-medium"
                   >
                     {t('admin.businesses.disable', 'Disable Business')}
@@ -259,9 +276,7 @@ export function BusinessManagement() {
               onChange={(e) => setExtendDays(e.target.value)}
               className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm mb-4 focus:border-[var(--accent)] focus:outline-none"
             />
-            {extendTrialError && (
-              <p className="text-[var(--danger)] text-xs mb-3">{extendTrialError}</p>
-            )}
+            {extendTrialError && <p className="text-[var(--danger)] text-xs mb-3">{extendTrialError}</p>}
             <div className="flex flex-row gap-3">
               <button
                 onClick={() => setExtendTrialId(null)}
@@ -284,11 +299,10 @@ export function BusinessManagement() {
       {confirmDisable && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
-            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
-              Disable Business?
-            </h3>
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">Disable Business?</h3>
             <p className="text-[var(--text-secondary)] text-sm mb-4">
-              This will deactivate all nodes owned by this business. Consumers will no longer be able to check in or claim rewards at their venues. This action creates an audit log entry.
+              This will deactivate all nodes owned by this business. Consumers will no longer be able to check in or
+              claim rewards at their venues. This action creates an audit log entry.
             </p>
             <div className="flex flex-row gap-3">
               <button
@@ -298,7 +312,7 @@ export function BusinessManagement() {
                 Cancel
               </button>
               <button
-                onClick={() => handleDisableBusiness(confirmDisable)}
+                onClick={() => void handleDisableBusiness(confirmDisable)}
                 className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium"
               >
                 Disable
@@ -316,7 +330,15 @@ export function BusinessManagement() {
               <h3 className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">
                 {t('admin.businesses.staff')}
               </h3>
-              <button onClick={() => { setStaffBizId(null); setStaffList([]) }} className="text-[var(--text-muted)] text-sm">Close</button>
+              <button
+                onClick={() => {
+                  setStaffBizId(null)
+                  setStaffList([])
+                }}
+                className="text-[var(--text-muted)] text-sm"
+              >
+                Close
+              </button>
             </div>
             {staffLoading ? (
               <p className="text-[var(--text-muted)] text-sm">Loading...</p>
@@ -327,7 +349,10 @@ export function BusinessManagement() {
             ) : (
               <div className="flex flex-col gap-2 overflow-y-auto">
                 {staffList.map((s) => (
-                  <div key={s.id} className="flex flex-row items-center justify-between bg-[var(--bg-raised)] rounded-xl px-3 py-2.5">
+                  <div
+                    key={s.id}
+                    className="flex flex-row items-center justify-between bg-[var(--bg-raised)] rounded-xl px-3 py-2.5"
+                  >
                     <div className="flex flex-col min-w-0 mr-3">
                       <span className="text-[var(--text-primary)] text-sm truncate">{s.phone ?? s.email ?? s.id}</span>
                       {!s.isActive && <span className="text-[var(--danger)] text-xs">Revoked</span>}
@@ -382,15 +407,9 @@ export function BusinessManagement() {
             <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
               {t('admin.businesses.setTier')}
             </h3>
-            <p className="text-[var(--text-secondary)] text-sm mb-4">
-              Assign a subscription plan to this business.
-            </p>
-            {setTierSuccess && (
-              <p className="text-[var(--success)] text-sm mb-4">Tier updated successfully!</p>
-            )}
-            {setTierError && (
-              <p className="text-[var(--danger)] text-sm mb-4">{setTierError}</p>
-            )}
+            <p className="text-[var(--text-secondary)] text-sm mb-4">Assign a subscription plan to this business.</p>
+            {setTierSuccess && <p className="text-[var(--success)] text-sm mb-4">Tier updated successfully!</p>}
+            {setTierError && <p className="text-[var(--danger)] text-sm mb-4">{setTierError}</p>}
             {!setTierSuccess && (
               <>
                 <div className="flex flex-col gap-3 mb-4">

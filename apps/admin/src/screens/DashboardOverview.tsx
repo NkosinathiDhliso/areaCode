@@ -31,27 +31,35 @@ export function DashboardOverview() {
   }
 
   useEffect(() => {
-    fetchMetrics()
+    void fetchMetrics()
     const interval = setInterval(fetchMetrics, 60000)
     return () => clearInterval(interval)
   }, [])
 
   if (loading && !metrics) {
-    return (
-      <div className="p-5 text-[var(--text-muted)] text-sm text-center py-12">
-        Loading dashboard...
-      </div>
-    )
+    return <div className="p-5 text-[var(--text-muted)] text-sm text-center py-12">Loading dashboard...</div>
   }
 
   if (!metrics) {
     return (
       <div className="p-5 flex flex-col items-center gap-3 py-12">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="opacity-40" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m7 11.207 3.5-3.5 4 4L21 5.207"/></svg>
-        <p className="text-[var(--text-muted)] text-sm text-center">
-          Failed to load dashboard metrics
-        </p>
-        <button onClick={() => fetchMetrics()} className="text-[var(--accent)] text-sm">
+        <svg
+          width="32"
+          height="32"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="var(--text-muted)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="opacity-40"
+          aria-hidden="true"
+        >
+          <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+          <path d="m7 11.207 3.5-3.5 4 4L21 5.207" />
+        </svg>
+        <p className="text-[var(--text-muted)] text-sm text-center">Failed to load dashboard metrics</p>
+        <button onClick={() => void fetchMetrics()} className="text-[var(--accent)] text-sm">
           {t('common.retry', 'Retry')}
         </button>
       </div>
@@ -64,9 +72,24 @@ export function DashboardOverview() {
     { label: 'Check-Ins (All Time)', value: metrics.totalCheckInsAllTime, color: 'var(--success)' },
     { label: 'Check-Ins (Today)', value: metrics.totalCheckInsToday, color: 'var(--success)' },
     { label: 'Active Rewards', value: metrics.activeRewards, color: 'var(--warning)' },
-    { label: 'Pending Reports', value: metrics.pendingReports, color: 'var(--danger)', badge: metrics.pendingReports > 0 },
-    { label: 'Pending Erasures', value: metrics.pendingErasures, color: 'var(--danger)', badge: metrics.pendingErasures > 0 },
-    { label: 'Unreviewed Abuse Flags', value: metrics.unreviewedAbuseFlags, color: 'var(--danger)', badge: metrics.unreviewedAbuseFlags > 0 },
+    {
+      label: 'Pending Reports',
+      value: metrics.pendingReports,
+      color: 'var(--danger)',
+      badge: metrics.pendingReports > 0,
+    },
+    {
+      label: 'Pending Erasures',
+      value: metrics.pendingErasures,
+      color: 'var(--danger)',
+      badge: metrics.pendingErasures > 0,
+    },
+    {
+      label: 'Unreviewed Abuse Flags',
+      value: metrics.unreviewedAbuseFlags,
+      color: 'var(--danger)',
+      badge: metrics.unreviewedAbuseFlags > 0,
+    },
   ]
 
   return (
@@ -81,25 +104,16 @@ export function DashboardOverview() {
             key={card.label}
             className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 flex flex-col items-center gap-2 relative"
           >
-            {card.badge && (
-              <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-[var(--danger)]" />
-            )}
-            <span
-              className="text-3xl font-bold font-[Syne]"
-              style={{ color: card.color }}
-            >
+            {card.badge && <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-[var(--danger)]" />}
+            <span className="text-3xl font-bold font-[Syne]" style={{ color: card.color }}>
               {card.value.toLocaleString()}
             </span>
-            <span className="text-[var(--text-muted)] text-xs text-center">
-              {card.label}
-            </span>
+            <span className="text-[var(--text-muted)] text-xs text-center">{card.label}</span>
           </div>
         ))}
       </div>
 
-      <p className="text-[var(--text-muted)] text-xs mt-4 text-center">
-        Auto-refreshes every 60 seconds
-      </p>
+      <p className="text-[var(--text-muted)] text-xs mt-4 text-center">Auto-refreshes every 60 seconds</p>
     </div>
   )
 }

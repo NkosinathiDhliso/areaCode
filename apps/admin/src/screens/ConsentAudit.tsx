@@ -40,7 +40,7 @@ export function ConsentAudit() {
       }
     }
     setLoading(true)
-    fetch()
+    void fetch()
     return () => {
       cancelled = true
     }
@@ -77,7 +77,7 @@ export function ConsentAudit() {
       <div className="flex flex-row items-center justify-between mb-4">
         <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('admin.consent.title')}</h2>
         <button
-          onClick={handleExport}
+          onClick={() => void handleExport()}
           className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-4 py-2 text-xs"
         >
           {t('admin.consent.export')}
@@ -85,11 +85,13 @@ export function ConsentAudit() {
       </div>
 
       {exportMsg && (
-        <div className={`border rounded-xl p-3 text-sm mb-4 ${
-          exportMsg.type === 'success'
-            ? 'bg-[var(--success)]/10 border-[var(--success)] text-[var(--success)]'
-            : 'bg-[var(--danger)]/10 border-[var(--danger)] text-[var(--danger)]'
-        }`}>
+        <div
+          className={`border rounded-xl p-3 text-sm mb-4 ${
+            exportMsg.type === 'success'
+              ? 'bg-[var(--success)]/10 border-[var(--success)] text-[var(--success)]'
+              : 'bg-[var(--danger)]/10 border-[var(--danger)] text-[var(--danger)]'
+          }`}
+        >
           {exportMsg.text}
         </div>
       )}
