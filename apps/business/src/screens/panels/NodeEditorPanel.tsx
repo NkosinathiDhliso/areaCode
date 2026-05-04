@@ -35,6 +35,13 @@ export function NodeEditorPanel() {
   const [editLng, setEditLng] = useState<number | undefined>(undefined)
   const editAddressInputRef = useRef<HTMLInputElement>(null)
 
+  // Photo upload + share state
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const [photoMessage, setPhotoMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [shareCopied, setShareCopied] = useState(false)
+  const [shareError, setShareError] = useState<string | null>(null)
+
   useEffect(() => {
     if (!addVenueOpen) return
     const apiKey = import.meta.env['VITE_GOOGLE_MAPS_API_KEY'] as string | undefined
@@ -257,6 +264,71 @@ export function NodeEditorPanel() {
     }
   }
 
+  async function handlePhotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // reset so same file can be re-picked
+    if (!file || !selected) return
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setPhotoMessage({ type: 'error', text: 'Only JPG, PNG or WebP allowed.' })
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setPhotoMessage({ type: 'error', text: 'Image must be under 5MB.' })
+      return
+    }
+
+    setPhotoUploading(true)
+    setPhotoMessage(null)
+    try {
+      // 1. Get presigned URL
+      const presigned = await api.post<{ uploadUrl: string; s3Key: string }>('/v1/upload/presigned', {
+        fileType: 'node-image',
+        contentType: file.type,
+      })
+      // 2. PUT file directly to S3
+      const putRes = await fetch(presigned.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      })
+      if (!putRes.ok) throw new Error(`S3 upload failed (${putRes.status})`)
+      // 3. Register the image against the node
+      await api.post(`/v1/nodes/${selected.id}/images`, { s3Key: presigned.s3Key, displayOrder: 0 })
+      setPhotoMessage({ type: 'success', text: 'Photo uploaded.' })
+      setTimeout(() => setPhotoMessage(null), 3000)
+    } catch (err: unknown) {
+      setPhotoMessage({ type: 'error', text: (err as { message?: string })?.message || 'Upload failed.' })
+    } finally {
+      setPhotoUploading(false)
+    }
+  }
+
+  async function handleShare() {
+    if (!selected) return
+    setShareError(null)
+    try {
+      const { url } = await api.get<{ url: string }>('/v1/business/nodes/current/qr')
+      const shareData = { title: selected.name, text: `Check in at ${selected.name}`, url }
+      // Use native share sheet on mobile if available; otherwise copy to clipboard
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const nav: any = navigator
+      if (typeof nav.share === 'function') {
+        try {
+          await nav.share(shareData)
+          return
+        } catch {
+          /* fall back to clipboard */
+        }
+      }
+      await navigator.clipboard.writeText(url)
+      setShareCopied(true)
+      setTimeout(() => setShareCopied(false), 2500)
+    } catch (err: unknown) {
+      setShareError((err as { message?: string })?.message || 'Could not generate share link.')
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-5 flex items-center justify-center py-12">
@@ -351,6 +423,39 @@ export function NodeEditorPanel() {
                   )}
                 </span>
               </div>
+
+              <div className="flex flex-row gap-2">
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(e) => void handlePhotoSelected(e)}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={photoUploading}
+                  className="flex-1 border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm disabled:opacity-50"
+                >
+                  {photoUploading ? 'Uploading...' : 'Add Photo'}
+                </button>
+                <button
+                  onClick={() => void handleShare()}
+                  className="flex-1 border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+                >
+                  {shareCopied ? 'Link Copied!' : 'Share'}
+                </button>
+              </div>
+              {photoMessage && (
+                <p
+                  className={`text-xs ${
+                    photoMessage.type === 'success' ? 'text-[var(--success)]' : 'text-[var(--danger)]'
+                  }`}
+                >
+                  {photoMessage.text}
+                </p>
+              )}
+              {shareError && <p className="text-[var(--danger)] text-xs">{shareError}</p>}
 
               <button
                 onClick={() => void handleSave()}
