@@ -1,7 +1,14 @@
 import { createHmac } from 'node:crypto'
 import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet, kvSet, kvIncr, kvTtl } from '../../shared/kv/dynamodb-kv.js'
-import { emitPulseUpdate, emitToast, emitBusinessCheckin, emitBusinessCheckinDetail, emitFriendToast, emitTierChanged } from '../../shared/socket/events.js'
+import {
+  emitPulseUpdate,
+  emitToast,
+  emitBusinessCheckin,
+  emitBusinessCheckinDetail,
+  emitFriendToast,
+  emitTierChanged,
+} from '../../shared/socket/events.js'
 import { getMutualFollowIds, getFollowingIds } from '../social/repository.js'
 import { getUserById } from '../auth/repository.js'
 import { canEmitIdentity, sanitizeForBusiness } from '../../shared/privacy/privacy-guard.js'
@@ -14,9 +21,9 @@ import type { CheckInInput, CheckInResponse } from './types.js'
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
-const REWARD_COOLDOWN = 14400  // 4 hours
+const REWARD_COOLDOWN = 14400 // 4 hours
 const PRESENCE_COOLDOWN = 3600 // 1 hour
-const PROXIMITY_RADIUS = 200   // metres
+const PROXIMITY_RADIUS = 500 // metres (generous to accommodate poor GPS on low-end devices)
 
 // ─── QR Token Validation ────────────────────────────────────────────────────
 
@@ -24,10 +31,7 @@ function validateQrToken(nodeId: string, token: string): boolean {
   const secret = process.env['AREA_CODE_QR_HMAC_SECRET'] ?? ''
   for (let offset = 0; offset <= 1; offset++) {
     const ts = Math.floor(Date.now() / (15 * 60 * 1000)) - offset
-    const expected = createHmac('sha256', secret)
-      .update(`${nodeId}${ts}`)
-      .digest('hex')
-      .slice(0, 32)
+    const expected = createHmac('sha256', secret).update(`${nodeId}${ts}`).digest('hex').slice(0, 32)
     if (token === expected) return true
   }
   return false
@@ -52,10 +56,7 @@ function getNodeState(score: number) {
 
 // ─── Main Check-In Pipeline ─────────────────────────────────────────────────
 
-export async function processCheckIn(
-  userId: string,
-  input: CheckInInput,
-): Promise<CheckInResponse> {
+export async function processCheckIn(userId: string, input: CheckInInput): Promise<CheckInResponse> {
   if (DEV_MODE) {
     const cooldownUntil = new Date(Date.now() + 14400 * 1000).toISOString()
     return { success: true, cooldownUntil }
@@ -83,9 +84,7 @@ export async function processCheckIn(
     if (input.lat === undefined || input.lng === undefined) {
       throw AppError.badRequest('Location required for GPS check-in')
     }
-    const within = await repo.checkProximity(
-      input.nodeId, input.lat, input.lng, PROXIMITY_RADIUS,
-    )
+    const within = await repo.checkProximity(input.nodeId, input.lat, input.lng, PROXIMITY_RADIUS)
     if (!within) {
       throw AppError.unprocessable('You are too far from this venue')
     }
@@ -100,9 +99,10 @@ export async function processCheckIn(
   )
 
   // 3. Cooldown check
-  const cooldownKey = input.type === 'reward'
-    ? `checkin:cooldown:reward:${userId}:${input.nodeId}`
-    : `checkin:cooldown:presence:${userId}:${input.nodeId}`
+  const cooldownKey =
+    input.type === 'reward'
+      ? `checkin:cooldown:reward:${userId}:${input.nodeId}`
+      : `checkin:cooldown:presence:${userId}:${input.nodeId}`
   const cooldownTtl = input.type === 'reward' ? REWARD_COOLDOWN : PRESENCE_COOLDOWN
 
   const existing = await kvGet(cooldownKey)
@@ -166,7 +166,7 @@ export async function processCheckIn(
   const dailyCount = await kvIncr(`checkin:today:${input.nodeId}`, 86400)
   // Approximate unique users via a simple counter (DynamoDB has no SADD)
   const uniqueUsers = dailyCount // simplified approximation
-  const pulseScore = (dailyCount * 5) + (uniqueUsers * 2)
+  const pulseScore = dailyCount * 5 + uniqueUsers * 2
 
   if (cityId) {
     // Store pulse score in KV for quick lookup
@@ -204,10 +204,10 @@ export async function processCheckIn(
           const user = await getUserById(userId)
           const displayName = user?.displayName ?? 'Someone'
           const friendPayload: {
-            type: 'checkin';
-            message: string;
-            nodeId: string;
-            avatarUrl?: string;
+            type: 'checkin'
+            message: string
+            nodeId: string
+            avatarUrl?: string
           } = {
             type: 'checkin',
             message: `${displayName} just checked in at ${node.name}`,
@@ -250,13 +250,16 @@ export async function processCheckIn(
     // Sanitize payload to ensure only privacy-safe fields are emitted
     const sanitizedPayload = sanitizeForBusiness(businessPayload)
 
-    emitBusinessCheckin(node.businessId, sanitizedPayload as {
-      nodeId: string;
-      nodeName: string;
-      checkInCount: number;
-      timestamp: string;
-      consumerDisplayName?: string;
-    })
+    emitBusinessCheckin(
+      node.businessId,
+      sanitizedPayload as {
+        nodeId: string
+        nodeName: string
+        checkInCount: number
+        timestamp: string
+        consumerDisplayName?: string
+      },
+    )
 
     emitBusinessCheckinDetail(node.businessId, {
       nodeId: input.nodeId,
@@ -286,7 +289,7 @@ export async function processCheckIn(
             timestamp: new Date().toISOString(),
             ttl,
           },
-        })
+        }),
       )
     } catch {
       // Cache write failure is non-critical
@@ -299,14 +302,16 @@ export async function processCheckIn(
     const sqsUrl = process.env['AREA_CODE_REWARD_QUEUE_URL']
     if (sqsUrl) {
       const sqs = new SQSClient({ region: process.env['AWS_REGION'] ?? 'us-east-1' })
-      await sqs.send(new SendMessageCommand({
-        QueueUrl: sqsUrl,
-        MessageBody: JSON.stringify({
-          userId,
-          nodeId: input.nodeId,
-          checkInId: checkIn.checkInId,
+      await sqs.send(
+        new SendMessageCommand({
+          QueueUrl: sqsUrl,
+          MessageBody: JSON.stringify({
+            userId,
+            nodeId: input.nodeId,
+            checkInId: checkIn.checkInId,
+          }),
         }),
-      }))
+      )
     } else {
       // SQS not configured , skip reward evaluation silently in dev
     }
