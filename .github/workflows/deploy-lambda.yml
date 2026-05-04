@@ -1,7 +1,7 @@
 name: Deploy Lambda
 on:
   push:
-    branches: [main]
+    branches: [master, main]
     paths:
       - 'backend/src/**'
 
