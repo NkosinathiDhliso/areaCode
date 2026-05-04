@@ -67,8 +67,9 @@ export function NodeEditorPanel() {
     if (!document.getElementById('gmaps-places-script')) {
       const script = document.createElement('script')
       script.id = 'gmaps-places-script'
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`
       script.async = true
+      script.defer = true
       script.onload = attachAutocomplete
       script.onerror = () => {
         console.error('[AreaCode] Google Maps failed to load')
@@ -118,12 +119,12 @@ export function NodeEditorPanel() {
   }
 
   async function handleAddVenue() {
-    const currentAddress = (addressInputRef.current?.value ?? addVenueAddress).trim()
+    const currentAddress = (addressInputRef.current?.value || addVenueAddress).trim()
     if (!addVenueName.trim() || !currentAddress) return
     setAddVenueLoading(true)
     setAddVenueError('')
     try {
-      const address = (addressInputRef.current?.value ?? addVenueAddress).trim()
+      const address = (addressInputRef.current?.value || addVenueAddress).trim()
       await api.post<{ id: string; name: string }>('/v1/nodes/business-create', {
         name: addVenueName.trim(),
         category: addVenueCategory,

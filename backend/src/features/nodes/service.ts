@@ -414,13 +414,13 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lng: numb
         const { lat, lng } = data.results[0].geometry.location
         return { lat, lng }
       }
-      return null
+      // Fall through to OSM on ZERO_RESULTS / REQUEST_DENIED / other non-OK statuses
     } catch {
-      return null
+      // Fall through to OSM on network error
     }
   }
 
-  // Fallback: OpenStreetMap Nominatim (no API key, poor SA coverage)
+  // Fallback: OpenStreetMap Nominatim
   try {
     const response = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycode=za`,
