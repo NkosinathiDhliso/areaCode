@@ -371,8 +371,10 @@ export async function businessCreateNode(
     lat: geocoded.lat,
     lng: geocoded.lng,
     cityId: city.id,
+    businessId,
     submittedBy: businessId,
-  } as any)
+    claimStatus: 'claimed',
+  })
   return node
 }
 
@@ -457,6 +459,7 @@ export async function updateNode(
 // ─── Node Claiming ──────────────────────────────────────────────────────────
 
 export async function claimNode(nodeId: string, businessId: string, registrationNumber: string) {
+  void registrationNumber
   if (DEV_MODE) {
     return { nodeId, businessId, claimStatus: 'validated' }
   }
@@ -511,7 +514,7 @@ export async function reportNode(reporterId: string, nodeId: string, type: strin
 
 // ─── Who Is Here ────────────────────────────────────────────────────────────
 
-export async function getWhoIsHere(nodeId: string, limit: number, cursor?: string) {
+export async function getWhoIsHere(nodeId: string, limit: number) {
   if (DEV_MODE) {
     return {
       items: [
@@ -536,14 +539,12 @@ export async function getWhoIsHere(nodeId: string, limit: number, cursor?: strin
       hasMore: false,
     }
   }
-  return repo.getWhoIsHere(nodeId, limit, cursor)
+  return repo.getWhoIsHere(nodeId, limit)
 }
 
 // ─── S3 Presigned Upload ────────────────────────────────────────────────────
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/webp', 'image/png'] as const
-const MAX_SIZE = 5 * 1024 * 1024 // 5MB
-
 const EXT_MAP: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/webp': 'webp',

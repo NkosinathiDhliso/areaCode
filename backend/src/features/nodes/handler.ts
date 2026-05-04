@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { requireAuth, getAuth, optionalAuth, getOptionalAuth } from '../../shared/middleware/auth.js'
+import { requireAuth, getAuth, optionalAuth } from '../../shared/middleware/auth.js'
 import { validate } from '../../shared/middleware/validation.js'
 import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
 import * as service from './service.js'
@@ -80,7 +80,7 @@ export async function nodeRoutes(app: FastifyInstance) {
     async (request) => {
       const params = request.params as z.infer<typeof nodeIdParamsSchema>
       const query = request.query as z.infer<typeof whoIsHereQuerySchema>
-      return service.getWhoIsHere(params.nodeId, query.limit, query.cursor)
+      return service.getWhoIsHere(params.nodeId, query.limit)
     },
   )
 

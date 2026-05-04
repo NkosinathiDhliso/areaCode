@@ -17,13 +17,19 @@ export async function getNodesByCitySlug(citySlug: string) {
       TableName: TableNames.nodes,
       FilterExpression: 'cityId = :cityId AND isActive = :active',
       ExpressionAttributeValues: { ':cityId': city.id, ':active': true },
-    })
+    }),
   )
   return (result.Items || []).map((n) => ({
     id: n['nodeId'] ?? n['id'],
-    name: n['name'], slug: n['slug'], category: n['category'],
-    lat: n['lat'], lng: n['lng'], claimStatus: n['claimStatus'],
-    nodeColour: n['nodeColour'], nodeIcon: n['nodeIcon'], isVerified: n['isVerified'],
+    name: n['name'],
+    slug: n['slug'],
+    category: n['category'],
+    lat: n['lat'],
+    lng: n['lng'],
+    claimStatus: n['claimStatus'],
+    nodeColour: n['nodeColour'],
+    nodeIcon: n['nodeIcon'],
+    isVerified: n['isVerified'],
   }))
 }
 
@@ -35,17 +41,20 @@ export async function getNodeById(nodeId: string) {
   let city = null
   if (node.cityId) {
     const c = await documentClient.send(
-      new GetCommand({ TableName: TableNames.appData, Key: { pk: `CITY#${node.cityId}`, sk: `CITY#${node.cityId}` } })
+      new GetCommand({ TableName: TableNames.appData, Key: { pk: `CITY#${node.cityId}`, sk: `CITY#${node.cityId}` } }),
     )
     city = c.Item ? { name: c.Item['name'], slug: c.Item['slug'] } : null
   }
   return {
     ...node,
-    id: node.nodeId ?? (node as any).id,
+    id: node.nodeId ?? (node as unknown as { id?: string }).id,
     rewards: rewards.map((r) => ({
-      id: r.rewardId ?? (r as any).id,
-      title: r.title, type: r.type,
-      totalSlots: r.totalSlots, claimedCount: r.claimedCount, expiresAt: r.expiresAt,
+      id: r.rewardId ?? (r as unknown as { id?: string }).id,
+      title: r.title,
+      type: r.type,
+      totalSlots: r.totalSlots,
+      claimedCount: r.claimedCount,
+      expiresAt: r.expiresAt,
     })),
     city,
   }
@@ -58,14 +67,17 @@ export async function getNodeBySlug(slug: string) {
   let city = null
   if (node.cityId) {
     const c = await documentClient.send(
-      new GetCommand({ TableName: TableNames.appData, Key: { pk: `CITY#${node.cityId}`, sk: `CITY#${node.cityId}` } })
+      new GetCommand({ TableName: TableNames.appData, Key: { pk: `CITY#${node.cityId}`, sk: `CITY#${node.cityId}` } }),
     )
     city = c.Item ? { name: c.Item['name'], slug: c.Item['slug'] } : null
   }
   return {
-    name: node.name, category: node.category, lat: node.lat, lng: node.lng,
+    name: node.name,
+    category: node.category,
+    lat: node.lat,
+    lng: node.lng,
     city,
-    rewards: rewards.map((r) => ({ id: r.rewardId ?? (r as any).id })),
+    rewards: rewards.map((r) => ({ id: r.rewardId ?? (r as unknown as { id?: string }).id })),
   }
 }
 
@@ -76,29 +88,48 @@ export async function searchNodes(query: string, lat: number, lng: number) {
       TableName: TableNames.nodes,
       FilterExpression: 'isActive = :active',
       ExpressionAttributeValues: { ':active': true },
-    })
+    }),
   )
   const q = query.toLowerCase()
   return (result.Items || [])
-    .filter((n) => (n['name'] as string || '').toLowerCase().includes(q))
+    .filter((n) => ((n['name'] as string) || '').toLowerCase().includes(q))
     .map((n) => {
-      const nLat = n['lat'] as number; const nLng = n['lng'] as number
+      const nLat = n['lat'] as number
+      const nLng = n['lng'] as number
       const R = 6371000
       const dLat = ((nLat - lat) * Math.PI) / 180
       const dLng = ((nLng - lng) * Math.PI) / 180
-      const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat * Math.PI) / 180) * Math.cos((nLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos((lat * Math.PI) / 180) * Math.cos((nLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
       const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-      return { id: n['nodeId'] ?? n['id'], name: n['name'], slug: n['slug'], category: n['category'], lat: nLat, lng: nLng, similarity: 1, distance }
+      return {
+        id: n['nodeId'] ?? n['id'],
+        name: n['name'],
+        slug: n['slug'],
+        category: n['category'],
+        lat: nLat,
+        lng: nLng,
+        similarity: 1,
+        distance,
+      }
     })
     .sort((a, b) => a.distance - b.distance)
-    .slice(0, 20) as any[]
+    .slice(0, 20)
 }
 
 export async function createNode(data: {
-  name: string; slug: string; category: string;
-  lat: number; lng: number; cityId: string; submittedBy: string;
+  name: string
+  slug: string
+  category: string
+  lat: number
+  lng: number
+  cityId: string
+  submittedBy: string
+  businessId?: string
+  claimStatus?: string
 }) {
-  return dynamo.createNode(data as any)
+  return dynamo.createNode(data as unknown as Parameters<typeof dynamo.createNode>[0])
 }
 
 export async function updateNode(
@@ -124,12 +155,19 @@ export async function createReport(reporterId: string, nodeId: string, type: str
     new PutCommand({
       TableName: TableNames.appData,
       Item: {
-        pk: `REPORT#${reportId}`, sk: `NODE#${nodeId}`,
-        gsi1pk: `NODE_REPORTS#${nodeId}`, gsi1sk: new Date().toISOString(),
-        reportId, reporterId, nodeId, type, detail, status: 'pending',
+        pk: `REPORT#${reportId}`,
+        sk: `NODE#${nodeId}`,
+        gsi1pk: `NODE_REPORTS#${nodeId}`,
+        gsi1sk: new Date().toISOString(),
+        reportId,
+        reporterId,
+        nodeId,
+        type,
+        detail,
+        status: 'pending',
         createdAt: new Date().toISOString(),
       },
-    })
+    }),
   )
   return { id: reportId, reporterId, nodeId, type, detail, status: 'pending' }
 }
@@ -144,7 +182,7 @@ export async function countRecentFraudReports(nodeId: string) {
       FilterExpression: '#type = :type',
       ExpressionAttributeNames: { '#type': 'type' },
       ExpressionAttributeValues: { ':pk': `NODE_REPORTS#${nodeId}`, ':since': since, ':type': 'fake_rewards' },
-    })
+    }),
   )
   return result.Count ?? 0
 }
@@ -161,12 +199,12 @@ export async function countDismissedReports(reporterId: string) {
       FilterExpression: 'reporterId = :rid AND #status = :dismissed',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':rid': reporterId, ':dismissed': 'dismissed' },
-    })
+    }),
   )
   return result.Count ?? 0
 }
 
-export async function getWhoIsHere(nodeId: string, limit: number, _cursor?: string) {
+export async function getWhoIsHere(nodeId: string, limit: number) {
   const { checkIns } = await getCheckInsByNode(nodeId, { hours: 1, limit: limit + 1 })
   // Enrich with user data, deduplicate by userId
   const seen = new Set<string>()
@@ -177,9 +215,11 @@ export async function getWhoIsHere(nodeId: string, limit: number, _cursor?: stri
     const user = await getUserById(ci.userId)
     if (user) {
       items.push({
-        userId: user.userId ?? (user as any).id,
-        displayName: user.displayName, username: user.username,
-        avatarUrl: user.avatarUrl, tier: user.tier,
+        userId: user.userId ?? (user as unknown as { id?: string }).id,
+        displayName: user.displayName,
+        username: user.username,
+        avatarUrl: user.avatarUrl,
+        tier: user.tier,
         checkedInAt: ci.checkedInAt,
       })
     }
@@ -190,12 +230,14 @@ export async function getWhoIsHere(nodeId: string, limit: number, _cursor?: stri
 }
 
 export async function registerNodeImage(nodeId: string, s3Key: string, uploadedBy: string, displayOrder: number) {
-  return dynamo.addNodeImage({ nodeId, s3Key, uploadedBy, displayOrder } as any)
+  return dynamo.addNodeImage({ nodeId, s3Key, uploadedBy, displayOrder } as unknown as Parameters<
+    typeof dynamo.addNodeImage
+  >[0])
 }
 
 export async function getCityBySlug(slug: string) {
   const result = await documentClient.send(
-    new GetCommand({ TableName: TableNames.appData, Key: { pk: `CITY#${slug}`, sk: `CITY#${slug}` } })
+    new GetCommand({ TableName: TableNames.appData, Key: { pk: `CITY#${slug}`, sk: `CITY#${slug}` } }),
   )
   return result.Item ? { id: result.Item['cityId'] ?? slug, slug, name: result.Item['name'] } : null
 }
