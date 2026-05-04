@@ -9,16 +9,32 @@ import { Spinner } from '@area-code/shared/components/Spinner'
 const LivePanel = lazy(() => import('./panels/LivePanel').then((m) => ({ default: m.LivePanel })))
 const RewardsPanel = lazy(() => import('./panels/RewardsPanel').then((m) => ({ default: m.RewardsPanel })))
 const AudiencePanel = lazy(() => import('./panels/AudiencePanel').then((m) => ({ default: m.AudiencePanel })))
-const NodeEditorPanel = lazy(() => import('./panels/NodeEditorPanel').then((m) => ({ default: m.NodeEditorPanel })))
 const BoostPanel = lazy(() => import('./panels/BoostPanel').then((m) => ({ default: m.BoostPanel })))
 const PlansPanel = lazy(() => import('./panels/PlansPanel').then((m) => ({ default: m.PlansPanel })))
 const SettingsPanel = lazy(() => import('./panels/SettingsPanel').then((m) => ({ default: m.SettingsPanel })))
-const CheckInDetailPanel = lazy(() => import('./panels/CheckInDetailPanel').then((m) => ({ default: m.CheckInDetailPanel })))
-const RewardMetricsPanel = lazy(() => import('./panels/RewardMetricsPanel').then((m) => ({ default: m.RewardMetricsPanel })))
-const StaffRedemptionPanel = lazy(() => import('./panels/StaffRedemptionPanel').then((m) => ({ default: m.StaffRedemptionPanel })))
+const CheckInDetailPanel = lazy(() =>
+  import('./panels/CheckInDetailPanel').then((m) => ({ default: m.CheckInDetailPanel })),
+)
+const RewardMetricsPanel = lazy(() =>
+  import('./panels/RewardMetricsPanel').then((m) => ({ default: m.RewardMetricsPanel })),
+)
+const StaffRedemptionPanel = lazy(() =>
+  import('./panels/StaffRedemptionPanel').then((m) => ({ default: m.StaffRedemptionPanel })),
+)
 const ReportsPanel = lazy(() => import('./panels/ReportsPanel').then((m) => ({ default: m.ReportsPanel })))
 
-const PANELS: DashboardPanel[] = ['live', 'check-ins', 'rewards', 'reward-metrics', 'audience', 'node', 'boost', 'staff-redemptions', 'reports', 'plans', 'settings']
+const PANELS: DashboardPanel[] = [
+  'live',
+  'check-ins',
+  'rewards',
+  'reward-metrics',
+  'audience',
+  'boost',
+  'staff-redemptions',
+  'reports',
+  'plans',
+  'settings',
+]
 
 const PANEL_LABELS: Record<DashboardPanel, string> = {
   live: 'biz.panel.live',
@@ -26,7 +42,6 @@ const PANEL_LABELS: Record<DashboardPanel, string> = {
   rewards: 'biz.panel.rewards',
   'reward-metrics': 'biz.panel.rewardMetrics',
   audience: 'biz.panel.audience',
-  node: 'biz.panel.node',
   boost: 'biz.panel.boost',
   'staff-redemptions': 'biz.panel.staffRedemptions',
   reports: 'biz.panel.reports',
@@ -70,18 +85,28 @@ export function BusinessDashboard() {
 
   function renderPanel() {
     switch (currentPanel) {
-      case 'live': return <LivePanel />
-      case 'check-ins': return <CheckInDetailPanel />
-      case 'rewards': return <RewardsPanel />
-      case 'reward-metrics': return <RewardMetricsPanel />
-      case 'audience': return <AudiencePanel />
-      case 'node': return <NodeEditorPanel />
-      case 'boost': return <BoostPanel />
-      case 'staff-redemptions': return <StaffRedemptionPanel />
-      case 'reports': return <ReportsPanel />
-      case 'plans': return <PlansPanel />
-      case 'settings': return <SettingsPanel />
-      default: return <LivePanel />
+      case 'live':
+        return <LivePanel />
+      case 'check-ins':
+        return <CheckInDetailPanel />
+      case 'rewards':
+        return <RewardsPanel />
+      case 'reward-metrics':
+        return <RewardMetricsPanel />
+      case 'audience':
+        return <AudiencePanel />
+      case 'boost':
+        return <BoostPanel />
+      case 'staff-redemptions':
+        return <StaffRedemptionPanel />
+      case 'reports':
+        return <ReportsPanel />
+      case 'plans':
+        return <PlansPanel />
+      case 'settings':
+        return <SettingsPanel />
+      default:
+        return <LivePanel />
     }
   }
 
@@ -89,9 +114,7 @@ export function BusinessDashboard() {
     <div className="flex flex-col h-dvh bg-[var(--bg-base)] overflow-hidden">
       {/* Header */}
       <header className="flex flex-row items-center justify-between px-5 py-3 border-b border-[var(--border)]">
-        <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">
-          Area Code
-        </span>
+        <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">Area Code</span>
         <button onClick={logout} className="text-[var(--text-muted)] text-sm">
           {t('biz.logout')}
         </button>
@@ -125,9 +148,7 @@ export function BusinessDashboard() {
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        <Suspense fallback={<PanelFallback />}>
-          {renderPanel()}
-        </Suspense>
+        <Suspense fallback={<PanelFallback />}>{renderPanel()}</Suspense>
       </div>
     </div>
   )

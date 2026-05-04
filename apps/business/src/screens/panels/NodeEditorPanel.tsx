@@ -180,7 +180,7 @@ export function NodeEditorPanel() {
   return (
     <div className="p-5 flex flex-col gap-4">
       <div className="flex flex-row items-center justify-between">
-        <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">Node</h2>
+        <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">Your Venue</h2>
         {nodes.length === 0 && (
           <button
             onClick={() => setAddVenueOpen(true)}

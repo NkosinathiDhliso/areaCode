@@ -6,7 +6,9 @@ import { api } from '@area-code/shared/lib/api'
 import { getSocket } from '@area-code/shared/lib/socket'
 import { useSocketRoom } from '@area-code/shared/hooks/useSocketRoom'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
-import type { BusinessCheckinPayload, BusinessRewardClaimedPayload } from '@area-code/shared/types'
+import type { BusinessCheckinPayload } from '@area-code/shared/types'
+
+import { NodeEditorPanel } from './NodeEditorPanel'
 
 interface LiveStats {
   checkInsToday: number
@@ -53,7 +55,7 @@ export function LivePanel() {
   }, [])
 
   // Listen for business:reward_claimed events
-  const handleRewardClaimed = useCallback((_payload: BusinessRewardClaimedPayload) => {
+  const handleRewardClaimed = useCallback(() => {
     setRewardsClaimed((prev) => prev + 1)
   }, [])
 
@@ -72,13 +74,15 @@ export function LivePanel() {
 
   return (
     <div className="p-5 flex flex-col gap-6">
+      <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl">
+        <NodeEditorPanel />
+      </div>
+
       <div className="flex flex-col items-center gap-2 py-8">
         <span className="text-[var(--text-primary)] text-6xl font-bold font-[Syne] tracking-[-0.03em]">
           {stats?.checkInsToday ?? 0}
         </span>
-        <span className="text-[var(--text-secondary)] text-sm">
-          {t('biz.live.checkinsToday')}
-        </span>
+        <span className="text-[var(--text-secondary)] text-sm">{t('biz.live.checkinsToday')}</span>
       </div>
 
       {/* Live avatars */}
@@ -113,19 +117,27 @@ export function LivePanel() {
           <h3 className="text-[var(--text-primary)] font-medium mb-3">{t('biz.live.zeroState')}</h3>
           <ul className="flex flex-col gap-2 text-[var(--text-secondary)] text-sm">
             <li className="flex flex-row items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-[var(--bg-raised)] flex items-center justify-center text-xs">1</span>
+              <span className="w-5 h-5 rounded-full bg-[var(--bg-raised)] flex items-center justify-center text-xs">
+                1
+              </span>
               {t('biz.live.step1')}
             </li>
             <li className="flex flex-row items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-[var(--bg-raised)] flex items-center justify-center text-xs">2</span>
+              <span className="w-5 h-5 rounded-full bg-[var(--bg-raised)] flex items-center justify-center text-xs">
+                2
+              </span>
               {t('biz.live.step2')}
             </li>
             <li className="flex flex-row items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-[var(--bg-raised)] flex items-center justify-center text-xs">3</span>
+              <span className="w-5 h-5 rounded-full bg-[var(--bg-raised)] flex items-center justify-center text-xs">
+                3
+              </span>
               {t('biz.live.step3')}
             </li>
             <li className="flex flex-row items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-[var(--bg-raised)] flex items-center justify-center text-xs">4</span>
+              <span className="w-5 h-5 rounded-full bg-[var(--bg-raised)] flex items-center justify-center text-xs">
+                4
+              </span>
               {t('biz.live.step4')}
             </li>
           </ul>
