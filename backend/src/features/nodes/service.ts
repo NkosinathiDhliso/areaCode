@@ -488,10 +488,37 @@ export async function createNode(
 export async function updateNode(
   nodeId: string,
   businessId: string,
-  data: Partial<{ name: string; category: string; nodeColour: string; nodeIcon: string; qrCheckinEnabled: boolean }>,
+  data: Partial<{
+    name: string
+    category: string
+    nodeColour: string
+    nodeIcon: string
+    qrCheckinEnabled: boolean
+    address: string
+    lat: number
+    lng: number
+  }>,
 ) {
   if (DEV_MODE) return
-  const result = await repo.updateNode(nodeId, businessId, data)
+
+  // If address is provided, re-geocode (unless coords already supplied from Places autocomplete)
+  const patch: Record<string, unknown> = { ...data }
+  if (data.address) {
+    let geo: { lat: number; lng: number } | null = null
+    if (data.lat !== undefined && data.lng !== undefined) {
+      geo = { lat: data.lat, lng: data.lng }
+    } else {
+      geo = await geocodeAddress(data.address)
+    }
+    if (!geo) throw AppError.badRequest('Could not find address. Please check and try again.')
+    patch['lat'] = geo.lat
+    patch['lng'] = geo.lng
+    // address itself is not stored on the node record; only lat/lng + derived name
+  }
+  // Strip address from the DB patch (it's not a column on nodes)
+  delete patch['address']
+
+  const result = await repo.updateNode(nodeId, businessId, patch as Parameters<typeof repo.updateNode>[2])
   if (result.count === 0) throw AppError.forbidden('You do not own this node')
 }
 

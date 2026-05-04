@@ -42,7 +42,8 @@ export async function getNodesByCitySlug(citySlug: string) {
   return items
     .filter((n) => {
       const bid = n['businessId']
-      if (!bid || typeof bid !== 'string') return true // unclaimed/legacy stays visible
+      // Require an owning business on a paid tier. Orphan/legacy nodes are hidden.
+      if (!bid || typeof bid !== 'string') return false
       return paidBusinessIds.has(bid)
     })
     .map((n) => ({
@@ -161,7 +162,15 @@ export async function createNode(data: {
 export async function updateNode(
   nodeId: string,
   businessId: string,
-  data: Partial<{ name: string; category: string; nodeColour: string; nodeIcon: string; qrCheckinEnabled: boolean }>,
+  data: Partial<{
+    name: string
+    category: string
+    nodeColour: string
+    nodeIcon: string
+    qrCheckinEnabled: boolean
+    lat: number
+    lng: number
+  }>,
 ) {
   // Verify node belongs to business
   const node = await dynamo.getNodeById(nodeId)

@@ -40,6 +40,9 @@ export const updateNodeBodySchema = z.object({
   nodeColour: z.string().optional(),
   nodeIcon: z.string().optional(),
   qrCheckinEnabled: z.boolean().optional(),
+  address: z.string().min(5).max(200).optional(),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
 })
 
 export const claimNodeBodySchema = z.object({

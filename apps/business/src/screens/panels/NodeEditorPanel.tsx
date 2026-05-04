@@ -26,6 +26,15 @@ export function NodeEditorPanel() {
   const [addVenueLng, setAddVenueLng] = useState<number | undefined>(undefined)
   const addressInputRef = useRef<HTMLInputElement>(null)
 
+  // Edit-mode state for the selected venue
+  const [editAddress, setEditAddress] = useState('')
+  const [editCategory, setEditCategory] = useState<'food' | 'coffee' | 'nightlife' | 'retail' | 'fitness' | 'arts'>(
+    'food',
+  )
+  const [editLat, setEditLat] = useState<number | undefined>(undefined)
+  const [editLng, setEditLng] = useState<number | undefined>(undefined)
+  const editAddressInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     if (!addVenueOpen) return
     const apiKey = import.meta.env['VITE_GOOGLE_MAPS_API_KEY'] as string | undefined
@@ -113,10 +122,72 @@ export function NodeEditorPanel() {
     if (node) {
       setSelected(node)
       setName(node.name)
+      setEditCategory(node.category as typeof editCategory)
+      setEditAddress('')
+      setEditLat(undefined)
+      setEditLng(undefined)
       setSaveError(null)
       setSaveSuccess(false)
     }
   }
+
+  // Seed edit state when selected changes (including initial load)
+  useEffect(() => {
+    if (!selected) return
+    setEditCategory(selected.category as typeof editCategory)
+    setEditAddress('')
+    setEditLat(undefined)
+    setEditLng(undefined)
+  }, [selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Attach Google Places autocomplete to the edit address input once selected exists and script is ready
+  useEffect(() => {
+    if (!selected) return
+    const apiKey = import.meta.env['VITE_GOOGLE_MAPS_API_KEY'] as string | undefined
+    if (!apiKey) return
+
+    function attach() {
+      if (!editAddressInputRef.current) return
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const g = (window as any).google
+      if (!g?.maps?.places) return
+      const ac = new g.maps.places.Autocomplete(editAddressInputRef.current, {
+        componentRestrictions: { country: 'za' },
+      })
+      ac.addListener('place_changed', () => {
+        const place = ac.getPlace() as {
+          formatted_address?: string
+          geometry?: { location: { lat: () => number; lng: () => number } }
+        }
+        if (place.formatted_address) setEditAddress(place.formatted_address)
+        if (place.geometry?.location) {
+          setEditLat(place.geometry.location.lat())
+          setEditLng(place.geometry.location.lng())
+        }
+      })
+    }
+
+    function wait(attempts = 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((window as any).google?.maps?.places) {
+        attach()
+        return
+      }
+      if (attempts < 50) setTimeout(() => wait(attempts + 1), 100)
+    }
+
+    if (!document.getElementById('gmaps-places-script')) {
+      const script = document.createElement('script')
+      script.id = 'gmaps-places-script'
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`
+      script.async = true
+      script.defer = true
+      script.onload = () => wait()
+      document.head.appendChild(script)
+    } else {
+      wait()
+    }
+  }, [selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleAddVenue() {
     const currentAddress = (addressInputRef.current?.value || addVenueAddress).trim()
@@ -158,12 +229,29 @@ export function NodeEditorPanel() {
     setSaveError(null)
     setSaveSuccess(false)
     try {
-      await api.put(`/v1/nodes/${selected.id}`, { name: name.trim() })
-      setNodes(nodes.map((n) => (n.id === selected.id ? { ...n, name: name.trim() } : n)))
+      const typedAddress = (editAddressInputRef.current?.value || editAddress).trim()
+      const payload: Record<string, unknown> = { name: name.trim(), category: editCategory }
+      if (typedAddress) {
+        payload['address'] = typedAddress
+        if (editLat !== undefined && editLng !== undefined) {
+          payload['lat'] = editLat
+          payload['lng'] = editLng
+        }
+      }
+      await api.put(`/v1/nodes/${selected.id}`, payload)
+      // Refresh nodes to pick up any lat/lng changes
+      const nodesRes = await api.get<{ items: Node[] }>('/v1/business/me/nodes')
+      const items = nodesRes.items ?? []
+      setNodes(items)
+      const updated = items.find((n) => n.id === selected.id) ?? null
+      if (updated) setSelected(updated)
+      setEditAddress('')
+      setEditLat(undefined)
+      setEditLng(undefined)
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 3000)
-    } catch {
-      setSaveError('Failed to save changes. Please try again.')
+    } catch (err: unknown) {
+      setSaveError((err as { message?: string })?.message || 'Failed to save changes. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -221,18 +309,47 @@ export function NodeEditorPanel() {
                 className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none"
               />
 
-              <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-1">
-                <span className="text-[var(--text-secondary)] text-xs">
-                  Category: <span className="capitalize">{selected.category}</span>
-                </span>
+              <div className="flex flex-col gap-2">
+                <label className="text-[var(--text-secondary)] text-xs font-medium">Category</label>
+                <select
+                  value={editCategory}
+                  onChange={(e) => setEditCategory(e.target.value as typeof editCategory)}
+                  className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none appearance-none"
+                >
+                  <option value="food">Food</option>
+                  <option value="coffee">Coffee</option>
+                  <option value="nightlife">Nightlife</option>
+                  <option value="retail">Retail</option>
+                  <option value="fitness">Fitness</option>
+                  <option value="arts">Arts</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-[var(--text-secondary)] text-xs font-medium">
+                  Address <span className="text-[var(--text-muted)]">(leave blank to keep current)</span>
+                </label>
+                <input
+                  ref={editAddressInputRef}
+                  type="text"
+                  value={editAddress}
+                  onChange={(e) => {
+                    setEditAddress(e.target.value)
+                    setEditLat(undefined)
+                    setEditLng(undefined)
+                  }}
+                  placeholder="Type new address to change location"
+                  className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+                />
                 <span className="text-[var(--text-muted)] text-xs">
-                  {selected.lat.toFixed(4)}, {selected.lng.toFixed(4)}
+                  Current location: {selected.lat.toFixed(4)}, {selected.lng.toFixed(4)}
+                  {selected.claimStatus && (
+                    <>
+                      {' '}
+                      &middot; <span className="capitalize">{selected.claimStatus.replace(/_/g, ' ')}</span>
+                    </>
+                  )}
                 </span>
-                {selected.claimStatus && (
-                  <span className="text-[var(--text-muted)] text-xs capitalize">
-                    Status: {selected.claimStatus.replace(/_/g, ' ')}
-                  </span>
-                )}
               </div>
 
               <button
