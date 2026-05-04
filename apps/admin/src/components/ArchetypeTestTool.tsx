@@ -73,7 +73,7 @@ export function ArchetypeTestTool() {
             <div className="flex flex-row flex-wrap gap-2">
               {PERSONALITY_DIMENSIONS.map((d) => (
                 <div key={d} className="bg-[var(--bg-raised)] rounded-xl px-3 py-1 text-xs text-[var(--text-secondary)]">
-                  {d}: {result.dimensionScores![d].toFixed(2)}
+                  {d}: {(result.dimensionScores![d] ?? 0).toFixed(2)}
                 </div>
               ))}
             </div>

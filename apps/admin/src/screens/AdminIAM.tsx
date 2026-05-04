@@ -166,7 +166,7 @@ export function AdminIAM() {
               >
                 <div className="flex flex-col min-w-0 mr-3">
                   <span className="text-[var(--text-primary)] text-sm truncate">{a.email}</span>
-                  <span className="text-[var(--text-muted)] text-xs capitalize">{a.role.replace(/_/g, ' ')}</span>
+                  <span className="text-[var(--text-muted)] text-xs capitalize">{a.role?.replace(/_/g, ' ')}</span>
                   {!a.enabled && (
                     <span className="text-[var(--danger)] text-xs">Deactivated</span>
                   )}

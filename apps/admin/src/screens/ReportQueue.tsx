@@ -75,7 +75,7 @@ export function ReportQueue() {
                 )}
               </div>
               <div className="text-[var(--text-secondary)] text-sm mb-1 capitalize">
-                {report.type.replace('_', ' ')}
+                {report.type?.replace('_', ' ')}
               </div>
               {report.detail && <p className="text-[var(--text-muted)] text-xs mb-3">{report.detail}</p>}
               <div className="flex flex-row items-center justify-between">
