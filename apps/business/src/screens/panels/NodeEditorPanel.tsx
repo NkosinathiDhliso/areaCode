@@ -70,7 +70,7 @@ export function NodeEditorPanel() {
       script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`
       script.async = true
       script.defer = true
-      script.onload = attachAutocomplete
+      script.onload = () => waitForGoogle()
       script.onerror = () => {
         console.error('[AreaCode] Google Maps failed to load')
         setMapsUnavailable(true)
