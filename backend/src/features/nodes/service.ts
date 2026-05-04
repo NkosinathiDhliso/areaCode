@@ -5,7 +5,12 @@ import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet } from '../../shared/kv/dynamodb-kv.js'
 import { getActiveRewardsByNodeId } from '../rewards/dynamodb-repository.js'
 import * as repo from './repository.js'
+import * as nodesDynamo from './dynamodb-repository.js'
+import { findBusinessById } from '../business/repository.js'
 import { emitNodeCreated } from '../../shared/socket/events.js'
+
+// Tiers that count as 'paid' — nodes from these businesses appear on the public map.
+const PAID_TIERS = new Set(['starter', 'growth', 'pro', 'payg'])
 
 const s3 = new S3Client({ region: process.env['AWS_REGION'] ?? 'us-east-1' })
 const BUCKET = process.env['AREA_CODE_S3_MEDIA_BUCKET'] ?? 'area-code-media'
@@ -352,6 +357,12 @@ export async function businessCreateNode(
       citySlug: 'johannesburg',
     }
   }
+  // Enforce one-node-per-business: reject if this business already owns a node.
+  const existingForBiz = await nodesDynamo.getNodesByBusinessId(businessId)
+  if (existingForBiz.length > 0) {
+    throw AppError.conflict('You already have a venue. Edit your existing venue instead of creating another.')
+  }
+
   // Use coordinates from Google Places if provided, otherwise geocode the address
   let geocoded: { lat: number; lng: number } | null = null
   if (data.lat !== undefined && data.lng !== undefined) {
@@ -376,6 +387,14 @@ export async function businessCreateNode(
     submittedBy: businessId,
     claimStatus: 'claimed',
   })
+
+  // Only broadcast (and surface on the public map) if the business is on a paid tier.
+  const business = await findBusinessById(businessId)
+  const isPaid = business ? PAID_TIERS.has(business.tier ?? 'free') : false
+
+  if (!isPaid) {
+    return node
+  }
 
   // Broadcast to everyone viewing the map for this city so the new node appears instantly
   try {

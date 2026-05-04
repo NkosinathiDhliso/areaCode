@@ -181,12 +181,14 @@ export function NodeEditorPanel() {
     <div className="p-5 flex flex-col gap-4">
       <div className="flex flex-row items-center justify-between">
         <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">Node</h2>
-        <button
-          onClick={() => setAddVenueOpen(true)}
-          className="bg-[var(--accent)] text-white font-semibold rounded-xl px-4 py-2 text-sm"
-        >
-          + Add Venue
-        </button>
+        {nodes.length === 0 && (
+          <button
+            onClick={() => setAddVenueOpen(true)}
+            className="bg-[var(--accent)] text-white font-semibold rounded-xl px-4 py-2 text-sm"
+          >
+            + Create Your Venue
+          </button>
+        )}
       </div>
 
       {loadError ? (

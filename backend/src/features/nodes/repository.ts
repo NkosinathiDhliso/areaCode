@@ -7,6 +7,8 @@ import { getActiveRewardsByNodeId } from '../rewards/dynamodb-repository.js'
 import { getCheckInsByNode } from '../check-in/dynamodb-repository.js'
 import { getUserById } from '../auth/dynamodb-repository.js'
 
+const PAID_TIERS_SET = new Set(['starter', 'growth', 'pro', 'payg'])
+
 export async function getNodesByCitySlug(citySlug: string) {
   // Look up city first
   const city = await getCityBySlug(citySlug)
@@ -19,18 +21,42 @@ export async function getNodesByCitySlug(citySlug: string) {
       ExpressionAttributeValues: { ':cityId': city.id, ':active': true },
     }),
   )
-  return (result.Items || []).map((n) => ({
-    id: n['nodeId'] ?? n['id'],
-    name: n['name'],
-    slug: n['slug'],
-    category: n['category'],
-    lat: n['lat'],
-    lng: n['lng'],
-    claimStatus: n['claimStatus'],
-    nodeColour: n['nodeColour'],
-    nodeIcon: n['nodeIcon'],
-    isVerified: n['isVerified'],
-  }))
+  const items = result.Items || []
+
+  // Build a set of business-owned nodes whose business is on a paid tier.
+  // Nodes without a businessId (legacy/unclaimed) are always visible.
+  const businessIds = Array.from(
+    new Set(items.map((n) => n['businessId']).filter((b): b is string => typeof b === 'string' && b.length > 0)),
+  )
+  const paidBusinessIds = new Set<string>()
+  if (businessIds.length > 0) {
+    const { findBusinessById } = await import('../business/repository.js')
+    const businesses = await Promise.all(businessIds.map((id) => findBusinessById(id).catch(() => null)))
+    businesses.forEach((b, i) => {
+      if (b && PAID_TIERS_SET.has(b.tier ?? 'free')) {
+        paidBusinessIds.add(businessIds[i]!)
+      }
+    })
+  }
+
+  return items
+    .filter((n) => {
+      const bid = n['businessId']
+      if (!bid || typeof bid !== 'string') return true // unclaimed/legacy stays visible
+      return paidBusinessIds.has(bid)
+    })
+    .map((n) => ({
+      id: n['nodeId'] ?? n['id'],
+      name: n['name'],
+      slug: n['slug'],
+      category: n['category'],
+      lat: n['lat'],
+      lng: n['lng'],
+      claimStatus: n['claimStatus'],
+      nodeColour: n['nodeColour'],
+      nodeIcon: n['nodeIcon'],
+      isVerified: n['isVerified'],
+    }))
 }
 
 export async function getNodeById(nodeId: string) {
