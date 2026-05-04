@@ -250,8 +250,12 @@ export function SettingsPanel() {
                 className="flex flex-row items-center justify-between bg-[var(--bg-raised)] rounded-xl px-3 py-2"
               >
                 <div className="flex flex-col">
-                  <span className="text-[var(--text-primary)] text-sm">{s.name}</span>
-                  <span className="text-[var(--text-muted)] text-xs">{s.phone ?? ''}</span>
+                  <span className="text-[var(--text-primary)] text-sm">
+                    {s.name?.trim() || s.email || s.phone || 'Pending invite'}
+                  </span>
+                  {s.email && s.name?.trim() && <span className="text-[var(--text-muted)] text-xs">{s.email}</span>}
+                  {s.phone && <span className="text-[var(--text-muted)] text-xs">{s.phone}</span>}
+                  {!s.cognitoSub && <span className="text-[var(--warning)] text-xs">Invite pending acceptance</span>}
                 </div>
                 <button onClick={() => handleRemoveStaff(s.id)} className="text-[var(--danger)] text-xs">
                   Remove
@@ -271,9 +275,7 @@ export function SettingsPanel() {
         >
           Generate QR Code
         </button>
-        {qrError && (
-          <p className="text-[var(--warning)] text-xs mt-2">{qrError}</p>
-        )}
+        {qrError && <p className="text-[var(--warning)] text-xs mt-2">{qrError}</p>}
         {qrCheckinUrl && (
           <div className="mt-3 flex flex-col items-center gap-2">
             <img
@@ -285,7 +287,9 @@ export function SettingsPanel() {
               Print or screenshot this QR code for your venue
             </p>
             <button
-              onClick={async () => { await navigator.clipboard.writeText(qrCheckinUrl) }}
+              onClick={async () => {
+                await navigator.clipboard.writeText(qrCheckinUrl)
+              }}
               className="text-[var(--accent)] text-xs"
             >
               Copy check-in URL
