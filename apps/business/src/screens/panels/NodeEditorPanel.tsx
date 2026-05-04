@@ -21,6 +21,7 @@ export function NodeEditorPanel() {
   >('food')
   const [addVenueLoading, setAddVenueLoading] = useState(false)
   const [addVenueError, setAddVenueError] = useState('')
+  const [mapsUnavailable, setMapsUnavailable] = useState(false)
   const [addVenueLat, setAddVenueLat] = useState<number | undefined>(undefined)
   const [addVenueLng, setAddVenueLng] = useState<number | undefined>(undefined)
   const addressInputRef = useRef<HTMLInputElement>(null)
@@ -28,7 +29,11 @@ export function NodeEditorPanel() {
   useEffect(() => {
     if (!addVenueOpen) return
     const apiKey = import.meta.env['VITE_GOOGLE_MAPS_API_KEY'] as string | undefined
-    if (!apiKey) return
+    if (!apiKey) {
+      setMapsUnavailable(true)
+      return
+    }
+    setMapsUnavailable(false)
 
     function attachAutocomplete() {
       if (!addressInputRef.current) return
@@ -65,7 +70,7 @@ export function NodeEditorPanel() {
       script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
       script.async = true
       script.onload = attachAutocomplete
-      script.onerror = () => console.error('[AreaCode] Google Maps failed to load')
+      script.onerror = () => { console.error('[AreaCode] Google Maps failed to load'); setMapsUnavailable(true) }
       document.head.appendChild(script)
     } else {
       waitForGoogle()
@@ -257,6 +262,11 @@ export function NodeEditorPanel() {
                 className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
               />
               <label className="text-[var(--text-primary)] text-xs font-medium">Address</label>
+              {mapsUnavailable && (
+                <p className="text-[var(--text-muted)] text-xs -mt-1">
+                  Autocomplete unavailable — enter address manually.
+                </p>
+              )}
               <input
                 ref={addressInputRef}
                 type="text"

@@ -217,16 +217,31 @@ export function getWebSocket(
 
   const url = params.toString() ? `${WEBSOCKET_URL}?${params.toString()}` : WEBSOCKET_URL
 
-  // Only recreate if URL actually changed (different auth/user). Otherwise
-  // reuse the existing manager — connect() is idempotent for OPEN/connecting
-  // states, so callers during the handshake won't orphan the in-flight WS.
-  if (!wsManager || wsManager.url !== url) {
+  // Reuse existing connection when the base URL and token are unchanged.
+  // Room-specific query params (businessId, userId, citySlug) may differ across
+  // callers (e.g. App.tsx adds businessId; panels omit it).  Comparing only the
+  // origin+path and token prevents tearing down an in-flight connection, which
+  // causes the "WebSocket closed before connection established" browser warning.
+  const isSameConnection = wsManager != null && (() => {
+    try {
+      const a = new URL(wsManager.url)
+      const b = new URL(url)
+      return (
+        a.origin + a.pathname === b.origin + b.pathname &&
+        a.searchParams.get('token') === b.searchParams.get('token')
+      )
+    } catch {
+      return wsManager.url === url
+    }
+  })()
+
+  if (!isSameConnection) {
     if (wsManager) wsManager.disconnect()
     wsManager = new WebSocketManager(url)
   }
-  wsManager.connect()
+  wsManager!.connect()
 
-  return wsManager
+  return wsManager!
 }
 
 export function disconnectWebSocket(): void {
