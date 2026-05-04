@@ -420,7 +420,7 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lng: numb
     }
   }
 
-  // Fallback: OpenStreetMap Nominatim
+  // Fallback: OpenStreetMap Nominatim (free, no key)
   try {
     const response = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycode=za`,
