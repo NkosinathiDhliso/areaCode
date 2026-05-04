@@ -35,12 +35,10 @@ export function NodeEditorPanel() {
   const [editLng, setEditLng] = useState<number | undefined>(undefined)
   const editAddressInputRef = useRef<HTMLInputElement>(null)
 
-  // Photo upload + share state
+  // Photo upload state
   const photoInputRef = useRef<HTMLInputElement>(null)
   const [photoUploading, setPhotoUploading] = useState(false)
   const [photoMessage, setPhotoMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const [shareCopied, setShareCopied] = useState(false)
-  const [shareError, setShareError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!addVenueOpen) return
@@ -304,31 +302,6 @@ export function NodeEditorPanel() {
     }
   }
 
-  async function handleShare() {
-    if (!selected) return
-    setShareError(null)
-    try {
-      const { url } = await api.get<{ url: string }>('/v1/business/nodes/current/qr')
-      const shareData = { title: selected.name, text: `Check in at ${selected.name}`, url }
-      // Use native share sheet on mobile if available; otherwise copy to clipboard
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const nav: any = navigator
-      if (typeof nav.share === 'function') {
-        try {
-          await nav.share(shareData)
-          return
-        } catch {
-          /* fall back to clipboard */
-        }
-      }
-      await navigator.clipboard.writeText(url)
-      setShareCopied(true)
-      setTimeout(() => setShareCopied(false), 2500)
-    } catch (err: unknown) {
-      setShareError((err as { message?: string })?.message || 'Could not generate share link.')
-    }
-  }
-
   if (loading) {
     return (
       <div className="p-5 flex items-center justify-center py-12">
@@ -439,12 +412,6 @@ export function NodeEditorPanel() {
                 >
                   {photoUploading ? 'Uploading...' : 'Add Photo'}
                 </button>
-                <button
-                  onClick={() => void handleShare()}
-                  className="flex-1 border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
-                >
-                  {shareCopied ? 'Link Copied!' : 'Share'}
-                </button>
               </div>
               {photoMessage && (
                 <p
@@ -455,8 +422,6 @@ export function NodeEditorPanel() {
                   {photoMessage.text}
                 </p>
               )}
-              {shareError && <p className="text-[var(--danger)] text-xs">{shareError}</p>}
-
               <button
                 onClick={() => void handleSave()}
                 disabled={saving || !name.trim()}
