@@ -164,51 +164,45 @@ function AppContent() {
   // Must be called before any conditional returns to satisfy Rules of Hooks
   const activeDefaultTab = useNavigationStore((s) => s.activeDefaultTab)
 
-  // Auth screens render without bottom nav
-  if (!isAuthenticated) {
-    if (window.location.pathname.startsWith('/auth/callback')) {
-      return <ConsumerOAuthCallback onNavigate={setRoute} />
-    }
-    if (route === 'landing') return <AuthLanding onNavigate={setRoute} />
-    if (route === 'login') return <ConsumerLogin onNavigate={setRoute} />
-    if (route === 'signup') return <ConsumerSignup onNavigate={setRoute} />
+  // OAuth callback is the only screen rendered without the shell
+  if (window.location.pathname.startsWith('/auth/callback')) {
+    return <ConsumerOAuthCallback onNavigate={setRoute} />
   }
 
-  // Redirect authenticated users from landing to their time-based default tab
-  // Map tab is always accessible when explicitly navigated to
+  // Authenticated users landing on root: route them to their time-based default tab
+  let activeRoute = route
   if (isAuthenticated && route === 'landing') {
-    const defaultRoute = activeDefaultTab as AppRoute
-    if (defaultRoute === 'gets' || defaultRoute === 'ranks') {
-      // Use effect-free redirect by rendering the correct screen
-      return (
-        <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
-          <ConnectivityBanner />
-          {showOnboarding && <OnboardingFlow onComplete={() => setShowOnboarding(false)} />}
-          <div ref={contentRef} className="flex-1 relative overflow-hidden">
-            {defaultRoute === 'gets' && <RewardsScreen />}
-            {defaultRoute === 'ranks' && <LeaderboardScreen />}
-          </div>
-          <BottomNav active={defaultRoute} onNavigate={setRoute} />
-        </div>
-      )
-    }
+    activeRoute = activeDefaultTab as AppRoute
   }
+
+  // Gated routes for unauthenticated users fall back to the auth landing
+  const GATED: ReadonlyArray<AppRoute> = ['gets', 'ranks', 'feed', 'friends', 'profile', 'privacy', 'history']
+  const showAuthGate = !isAuthenticated && GATED.includes(activeRoute)
 
   return (
     <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
       <ConnectivityBanner />
       {showOnboarding && <OnboardingFlow onComplete={() => setShowOnboarding(false)} />}
       <div ref={contentRef} className="flex-1 relative overflow-hidden">
-        {route === 'map' && <MapScreen onNavigate={setRoute} />}
-        {route === 'gets' && <RewardsScreen />}
-        {route === 'ranks' && <LeaderboardScreen />}
-        {route === 'feed' && <FeedScreen />}
-        {route === 'friends' && <FriendsScreen />}
-        {route === 'profile' && <ProfileScreen onNavigate={setRoute} />}
-        {route === 'privacy' && <PrivacySettingsScreen onNavigate={setRoute} />}
-        {route === 'history' && <CheckInHistoryScreen onNavigate={setRoute} />}
+        {showAuthGate ? (
+          <AuthLanding onNavigate={setRoute} />
+        ) : (
+          <>
+            {activeRoute === 'landing' && !isAuthenticated && <AuthLanding onNavigate={setRoute} />}
+            {activeRoute === 'login' && <ConsumerLogin onNavigate={setRoute} />}
+            {activeRoute === 'signup' && <ConsumerSignup onNavigate={setRoute} />}
+            {activeRoute === 'map' && <MapScreen onNavigate={setRoute} />}
+            {activeRoute === 'gets' && <RewardsScreen />}
+            {activeRoute === 'ranks' && <LeaderboardScreen />}
+            {activeRoute === 'feed' && <FeedScreen />}
+            {activeRoute === 'friends' && <FriendsScreen />}
+            {activeRoute === 'profile' && <ProfileScreen onNavigate={setRoute} />}
+            {activeRoute === 'privacy' && <PrivacySettingsScreen onNavigate={setRoute} />}
+            {activeRoute === 'history' && <CheckInHistoryScreen onNavigate={setRoute} />}
+          </>
+        )}
       </div>
-      <BottomNav active={route} onNavigate={setRoute} />
+      <BottomNav active={activeRoute} onNavigate={setRoute} />
     </div>
   )
 }
