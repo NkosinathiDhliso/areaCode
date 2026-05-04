@@ -12,7 +12,13 @@ import { emitNodeCreated } from '../../shared/socket/events.js'
 // Tiers that count as 'paid' — nodes from these businesses appear on the public map.
 const PAID_TIERS = new Set(['starter', 'growth', 'pro', 'payg'])
 
-const s3 = new S3Client({ region: process.env['AWS_REGION'] ?? 'us-east-1' })
+const s3 = new S3Client({
+  region: process.env['AWS_REGION'] ?? 'us-east-1',
+  // Avoid SDK v3 default of injecting x-amz-checksum-crc32 + x-amz-sdk-checksum-algorithm
+  // into presigned PUT URLs — the browser cannot reproduce those headers, causing 403s.
+  requestChecksumCalculation: 'WHEN_REQUIRED',
+  responseChecksumValidation: 'WHEN_REQUIRED',
+})
 const BUCKET = process.env['AREA_CODE_S3_MEDIA_BUCKET'] ?? 'area-code-media'
 const ENV = process.env['AREA_CODE_ENV'] ?? 'dev'
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
