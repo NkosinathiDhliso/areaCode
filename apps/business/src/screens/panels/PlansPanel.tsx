@@ -28,21 +28,23 @@ export function PlansPanel() {
   const [plans, setPlans] = useState<PlansResponse | null>(null)
   const [loading, setLoading] = useState<string | null>(null)
   const [currentTier, setCurrentTier] = useState<'starter' | 'growth' | 'pro' | 'payg'>('starter')
+  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState(false)
+  const [trialSuccess, setTrialSuccess] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
       try {
         const [plansRes, profileRes] = await Promise.all([
           api.get<PlansResponse>('/v1/business/plans'),
-          api.get<{ tier?: string }>('/v1/business/me'),
+          api.get<{ tier?: string; trialEndsAt?: string | null }>('/v1/business/me'),
         ])
         setPlans(plansRes)
         const raw = profileRes.tier ?? 'starter'
-        // 'free' is a legacy value — treat it as starter for display
         const mapped = raw === 'free' ? 'starter' : raw
         setCurrentTier(mapped as 'starter' | 'growth' | 'pro' | 'payg')
+        setTrialEndsAt(profileRes.trialEndsAt ?? null)
       } catch {
         setLoadError(true)
       }
@@ -50,10 +52,22 @@ export function PlansPanel() {
     void load()
   }, [])
 
-  async function handleSelectPlan(plan: 'growth' | 'pro' | 'payg', interval?: string) {
+  const isOnActiveTrial = trialEndsAt != null && new Date(trialEndsAt).getTime() > Date.now()
+
+  async function handleSelectPlan(plan: 'growth' | 'pro' | 'payg', interval?: string, hasTrial?: boolean) {
     setLoading(plan)
     setCheckoutError(null)
+    setTrialSuccess(null)
     try {
+      // Plans with a free trial go to trial/start, not Yoco checkout
+      if (hasTrial && plan !== 'payg') {
+        await api.post('/v1/business/trial/start', { plan })
+        setCurrentTier(plan as 'growth' | 'pro')
+        const end = new Date(Date.now() + 14 * 86400000)
+        setTrialEndsAt(end.toISOString())
+        setTrialSuccess(`Your ${plan === 'growth' ? 'Growth' : 'Pro'} trial has started. Enjoy 14 days free.`)
+        return
+      }
       const res = await api.post<{ checkoutUrl: string }>('/v1/business/checkout', { plan, interval })
       if (res.checkoutUrl && !res.checkoutUrl.startsWith('#')) {
         window.location.href = res.checkoutUrl
@@ -62,7 +76,7 @@ export function PlansPanel() {
       }
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message
-      setCheckoutError(msg && msg.length < 200 ? msg : 'Failed to start checkout. Please try again.')
+      setCheckoutError(msg && msg.length < 200 ? msg : 'Failed to start. Please try again.')
     } finally {
       setLoading(null)
     }
@@ -73,7 +87,6 @@ export function PlansPanel() {
   }
 
   function renderPlanCard(key: string, plan: PlanInfo, actionPlan?: 'growth' | 'pro' | 'payg') {
-    const isStarter = !actionPlan
     const isPAYG = actionPlan === 'payg'
     const isCurrent = key === currentTier
     const priceDisplay = isPAYG
@@ -119,7 +132,7 @@ export function PlansPanel() {
 
         {actionPlan && !isCurrent && (
           <button
-            onClick={() => handleSelectPlan(actionPlan, isPAYG ? 'daily' : 'monthly')}
+            onClick={() => void handleSelectPlan(actionPlan, isPAYG ? 'daily' : 'monthly', !!plan.trialDays)}
             disabled={loading !== null}
             className={`font-semibold rounded-xl py-3 text-sm transition-all duration-150 active:scale-95 disabled:opacity-50 mt-1 ${
               key === 'growth'
@@ -127,7 +140,11 @@ export function PlansPanel() {
                 : 'border border-[var(--border-strong)] text-[var(--text-primary)] bg-transparent'
             }`}
           >
-            {loading === actionPlan ? '...' : plan.trialDays ? t('biz.plans.startTrial') : t('biz.plans.subscribe')}
+            {loading === actionPlan
+              ? '...'
+              : plan.trialDays
+                ? `Start ${plan.trialDays}-day free trial`
+                : t('biz.plans.subscribe')}
           </button>
         )}
         {isCurrent && (
@@ -149,6 +166,22 @@ export function PlansPanel() {
     <div className="p-5 flex flex-col gap-4">
       <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('biz.plans.title')}</h2>
       <p className="text-[var(--text-secondary)] text-sm">{t('biz.plans.subtitle')}</p>
+      {isOnActiveTrial && (
+        <div className="bg-[var(--success)]/10 border border-[var(--success)]/40 rounded-xl px-4 py-3 flex items-center gap-3">
+          <div>
+            <p className="text-[var(--text-primary)] text-sm font-medium">Free trial active</p>
+            <p className="text-[var(--text-secondary)] text-xs mt-0.5">
+              Expires{' '}
+              {new Date(trialEndsAt!).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </p>
+          </div>
+        </div>
+      )}
+      {trialSuccess && (
+        <div className="bg-[var(--success)]/10 border border-[var(--success)]/40 rounded-xl px-4 py-3 text-[var(--success)] text-sm">
+          {trialSuccess}
+        </div>
+      )}
       {checkoutError && (
         <div className="bg-[var(--danger-subtle,#fee)] border border-[var(--danger)] rounded-xl px-4 py-3 text-[var(--danger)] text-sm">
           {checkoutError}

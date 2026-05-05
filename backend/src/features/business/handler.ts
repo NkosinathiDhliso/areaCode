@@ -3,16 +3,9 @@ import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { validate } from '../../shared/middleware/validation.js'
 import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
 import * as service from './service.js'
-import {
-  checkoutBodySchema,
-  boostBodySchema,
-  staffInviteBodySchema,
-  staffIdParamsSchema,
-} from './types.js'
+import { checkoutBodySchema, boostBodySchema, staffInviteBodySchema, staffIdParamsSchema } from './types.js'
 import { z } from 'zod'
 import { getRedemptionsByStaffId } from '../rewards/repository.js'
-import { QueryCommand } from '@aws-sdk/lib-dynamodb'
-import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 
 const nodeIdParamsSchema = z.object({ nodeId: z.string().uuid() })
 const staffRedemptionParamsSchema = z.object({ staffId: z.string().uuid() })
@@ -23,97 +16,75 @@ const checkInQuerySchema = z.object({
 
 export async function businessRoutes(app: FastifyInstance) {
   // GET /v1/business/me
-  app.get(
-    '/v1/business/me',
-    { preHandler: [requireAuth('business')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return service.getBusinessProfile(auth.cognitoSub)
-    },
-  )
+  app.get('/v1/business/me', { preHandler: [requireAuth('business')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.getBusinessProfile(auth.cognitoSub)
+  })
 
   // GET /v1/business/me/live-stats
-  app.get(
-    '/v1/business/me/live-stats',
-    { preHandler: [requireAuth('business')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return service.getLiveStats(auth.userId)
-    },
-  )
+  app.get('/v1/business/me/live-stats', { preHandler: [requireAuth('business')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.getLiveStats(auth.userId)
+  })
 
   // GET /v1/business/me/nodes
-  app.get(
-    '/v1/business/me/nodes',
-    { preHandler: [requireAuth('business')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return service.getBusinessNodes(auth.userId)
-    },
-  )
+  app.get('/v1/business/me/nodes', { preHandler: [requireAuth('business')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.getBusinessNodes(auth.userId)
+  })
 
   // GET /v1/business/me/audience
-  app.get(
-    '/v1/business/me/audience',
-    { preHandler: [requireAuth('business')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return service.getAudienceAnalytics(auth.userId)
-    },
-  )
+  app.get('/v1/business/me/audience', { preHandler: [requireAuth('business')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.getAudienceAnalytics(auth.userId)
+  })
 
   // GET /v1/business/me/recent-redemptions
-  app.get(
-    '/v1/business/me/recent-redemptions',
-    { preHandler: [requireAuth('business')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return service.getRecentRedemptions(auth.userId)
-    },
-  )
+  app.get('/v1/business/me/recent-redemptions', { preHandler: [requireAuth('business')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.getRecentRedemptions(auth.userId)
+  })
 
   // GET /v1/business/rewards
-  app.get(
-    '/v1/business/rewards',
-    { preHandler: [requireAuth('business')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return service.getBusinessRewards(auth.userId)
-    },
-  )
+  app.get('/v1/business/rewards', { preHandler: [requireAuth('business')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.getBusinessRewards(auth.userId)
+  })
 
   // GET /v1/business/nodes/current/qr
-  app.get(
-    '/v1/business/nodes/current/qr',
-    { preHandler: [requireAuth('business')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return service.getCurrentNodeQr(auth.userId)
-    },
-  )
+  app.get('/v1/business/nodes/current/qr', { preHandler: [requireAuth('business')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.getCurrentNodeQr(auth.userId)
+  })
 
   // GET /v1/business/plans
   app.get('/v1/business/plans', async () => {
     return service.getPlans()
   })
 
+  // POST /v1/business/trial/start — activate a free trial without payment
+  app.post(
+    '/v1/business/trial/start',
+    {
+      preHandler: [requireAuth('business'), validate({ body: z.object({ plan: z.enum(['growth', 'pro']) }) })],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      const body = request.body as { plan: 'growth' | 'pro' }
+      return service.startTrial(auth.userId, body.plan)
+    },
+  )
+
   // POST /v1/business/checkout
   app.post(
     '/v1/business/checkout',
     {
-      preHandler: [
-        requireAuth('business'),
-        validate({ body: checkoutBodySchema }),
-      ],
+      preHandler: [requireAuth('business'), validate({ body: checkoutBodySchema })],
     },
     async (request) => {
       const auth = getAuth(request)
       const body = request.body as z.infer<typeof checkoutBodySchema>
-      return service.createCheckoutSession(
-        auth.userId,
-        body.plan,
-        body.interval,
-      )
+      return service.createCheckoutSession(auth.userId, body.plan, body.interval)
     },
   )
 
@@ -121,10 +92,7 @@ export async function businessRoutes(app: FastifyInstance) {
   app.post(
     '/v1/business/boost',
     {
-      preHandler: [
-        requireAuth('business'),
-        validate({ body: boostBodySchema }),
-      ],
+      preHandler: [requireAuth('business'), validate({ body: boostBodySchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -134,33 +102,30 @@ export async function businessRoutes(app: FastifyInstance) {
   )
 
   // POST /v1/webhooks/yoco
-  app.post('/v1/webhooks/yoco', {
-    preHandler: [rateLimitMiddleware({ key: 'yoco-webhook', max: 100, windowSeconds: 60, identifierFn: () => 'yoco' })],
-  }, async (request, reply) => {
-    const signature = request.headers['x-yoco-signature'] as string ?? ''
-    const body = request.body as Record<string, unknown>
-    const rawBody = (request as unknown as { rawBody?: string }).rawBody ?? JSON.stringify(body)
-    const eventId = body['id'] as string ?? ''
-    const eventType = body['type'] as string ?? ''
+  app.post(
+    '/v1/webhooks/yoco',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'yoco-webhook', max: 100, windowSeconds: 60, identifierFn: () => 'yoco' }),
+      ],
+    },
+    async (request, reply) => {
+      const signature = (request.headers['x-yoco-signature'] as string) ?? ''
+      const body = request.body as Record<string, unknown>
+      const rawBody = (request as unknown as { rawBody?: string }).rawBody ?? JSON.stringify(body)
+      const eventId = (body['id'] as string) ?? ''
+      const eventType = (body['type'] as string) ?? ''
 
-    const result = await service.processYocoWebhook(
-      eventId,
-      eventType,
-      body,
-      signature,
-      rawBody,
-    )
-    return reply.status(200).send({ ok: true, duplicate: result.duplicate })
-  })
+      const result = await service.processYocoWebhook(eventId, eventType, body, signature, rawBody)
+      return reply.status(200).send({ ok: true, duplicate: result.duplicate })
+    },
+  )
 
   // POST /v1/business/staff/invite
   app.post(
     '/v1/business/staff/invite',
     {
-      preHandler: [
-        requireAuth('business'),
-        validate({ body: staffInviteBodySchema }),
-      ],
+      preHandler: [requireAuth('business'), validate({ body: staffInviteBodySchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -170,34 +135,23 @@ export async function businessRoutes(app: FastifyInstance) {
   )
 
   // GET /v1/business/staff
-  app.get(
-    '/v1/business/staff',
-    { preHandler: [requireAuth('business')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return service.listStaff(auth.userId)
-    },
-  )
+  app.get('/v1/business/staff', { preHandler: [requireAuth('business')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.listStaff(auth.userId)
+  })
 
   // GET /v1/business/staff/invites
-  app.get(
-    '/v1/business/staff/invites',
-    { preHandler: [requireAuth('business')] },
-    async (request) => {
-      const auth = getAuth(request)
-      const invites = await service.listStaffInvites(auth.userId)
-      return { items: invites }
-    },
-  )
+  app.get('/v1/business/staff/invites', { preHandler: [requireAuth('business')] }, async (request) => {
+    const auth = getAuth(request)
+    const invites = await service.listStaffInvites(auth.userId)
+    return { items: invites }
+  })
 
   // DELETE /v1/business/staff/:id
   app.delete(
     '/v1/business/staff/:id',
     {
-      preHandler: [
-        requireAuth('business'),
-        validate({ params: staffIdParamsSchema }),
-      ],
+      preHandler: [requireAuth('business'), validate({ params: staffIdParamsSchema })],
     },
     async (request, reply) => {
       const auth = getAuth(request)
@@ -211,10 +165,7 @@ export async function businessRoutes(app: FastifyInstance) {
   app.get(
     '/v1/business/nodes/:nodeId/qr',
     {
-      preHandler: [
-        requireAuth('business'),
-        validate({ params: nodeIdParamsSchema }),
-      ],
+      preHandler: [requireAuth('business'), validate({ params: nodeIdParamsSchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -227,10 +178,7 @@ export async function businessRoutes(app: FastifyInstance) {
   app.get(
     '/v1/business/staff/:staffId/redemptions',
     {
-      preHandler: [
-        requireAuth('business'),
-        validate({ params: staffRedemptionParamsSchema }),
-      ],
+      preHandler: [requireAuth('business'), validate({ params: staffRedemptionParamsSchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -244,10 +192,7 @@ export async function businessRoutes(app: FastifyInstance) {
   app.get(
     '/v1/business/check-ins',
     {
-      preHandler: [
-        requireAuth('business'),
-        validate({ query: checkInQuerySchema }),
-      ],
+      preHandler: [requireAuth('business'), validate({ query: checkInQuerySchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -260,10 +205,7 @@ export async function businessRoutes(app: FastifyInstance) {
   app.get(
     '/v1/business/rewards/:rewardId/metrics',
     {
-      preHandler: [
-        requireAuth('business'),
-        validate({ params: z.object({ rewardId: z.string().uuid() }) }),
-      ],
+      preHandler: [requireAuth('business'), validate({ params: z.object({ rewardId: z.string().uuid() }) })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -273,12 +215,8 @@ export async function businessRoutes(app: FastifyInstance) {
   )
 
   // GET /v1/business/rewards/summary
-  app.get(
-    '/v1/business/rewards/summary',
-    { preHandler: [requireAuth('business')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return service.getRewardsSummary(auth.userId)
-    },
-  )
+  app.get('/v1/business/rewards/summary', { preHandler: [requireAuth('business')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.getRewardsSummary(auth.userId)
+  })
 }

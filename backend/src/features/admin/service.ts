@@ -125,11 +125,28 @@ export async function setBusinessTier(
 export async function getReportQueue(adminRole: AdminRole) {
   checkPermission(adminRole, 'view_reports')
   const rawItems = await repo.getReportQueue()
-  const items = rawItems.map((r: Record<string, unknown>) => ({
-    ...r,
-    nodeName: ((r['node'] as Record<string, unknown> | null)?.['name'] ?? 'Unknown') as string,
-    sameTypeCount: 0,
-  }))
+
+  // Count same-type occurrences across the queue for prioritisation
+  const typeCounts: Record<string, number> = {}
+  for (const r of rawItems as Record<string, unknown>[]) {
+    const t = (r['type'] as string) ?? 'other'
+    typeCounts[t] = (typeCounts[t] ?? 0) + 1
+  }
+
+  const items = rawItems.map((r: Record<string, unknown>) => {
+    const node = r['node'] as Record<string, unknown> | null
+    const nodeName =
+      (node?.['name'] as string | undefined) ??
+      (r['nodeId'] ? `Node ${(r['nodeId'] as string).slice(0, 8)}…` : 'Unknown node')
+    const type = (r['type'] as string) ?? 'other'
+    return {
+      ...r,
+      nodeName,
+      nodeSlug: node?.['slug'] as string | undefined,
+      sameTypeCount: typeCounts[type] ?? 0,
+    }
+  })
+
   return { items }
 }
 
@@ -698,7 +715,7 @@ export async function disableUser(adminId: string, adminRole: AdminRole, userId:
   await updateUser(userId, {
     isDisabled: true,
     disabledAt: new Date().toISOString(),
-  } as any)
+  } as Parameters<typeof updateUser>[1])
 
   // Revoke Cognito tokens
   const cognitoSub = (user as Record<string, unknown>)['cognitoSub'] as string | undefined

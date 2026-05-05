@@ -103,11 +103,80 @@ export function RewardsPanel() {
   )
 }
 
+function IconStar() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  )
+}
+function IconRepeat() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="17 1 21 5 17 9" />
+      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+      <polyline points="7 23 3 19 7 15" />
+      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+    </svg>
+  )
+}
+function IconAward() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="8" r="6" />
+      <path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11" />
+    </svg>
+  )
+}
+function IconZap() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  )
+}
+
 const REWARD_TYPES = [
   {
     value: 'daily_first',
     label: 'First Check-in Bonus',
-    emoji: '🥇',
+    Icon: IconStar,
     description: 'Reward the first person to check in each day.',
     example: 'e.g. "Free coffee for first check-in"',
     needsTrigger: false,
@@ -115,7 +184,7 @@ const REWARD_TYPES = [
   {
     value: 'nth_checkin',
     label: 'Every Nth Visit',
-    emoji: '🔁',
+    Icon: IconRepeat,
     description: 'Reward every Nth check-in at your venue.',
     example: 'e.g. "Every 5th visit gets 10% off"',
     needsTrigger: true,
@@ -126,7 +195,7 @@ const REWARD_TYPES = [
   {
     value: 'milestone',
     label: 'Loyalty Milestone',
-    emoji: '🏆',
+    Icon: IconAward,
     description: "Reward customers who've visited a set number of times total.",
     example: 'e.g. "10th visit = free meal"',
     needsTrigger: true,
@@ -137,7 +206,7 @@ const REWARD_TYPES = [
   {
     value: 'streak',
     label: 'Check-in Streak',
-    emoji: '🔥',
+    Icon: IconZap,
     description: 'Reward customers who check in on consecutive days.',
     example: 'e.g. "3-day streak = free dessert"',
     needsTrigger: true,
@@ -193,8 +262,8 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
 
   if (step === 'type') {
     return (
-      <div className="flex flex-col gap-3">
-        <p className="text-[var(--text-secondary)] text-sm font-medium">What kind of reward is this?</p>
+      <div className="flex flex-col gap-2">
+        <p className="text-[var(--text-secondary)] text-sm font-medium mb-1">What kind of reward is this?</p>
         {REWARD_TYPES.map((rt) => (
           <button
             key={rt.value}
@@ -204,11 +273,13 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
             }}
             className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-2xl p-4 flex items-start gap-3 text-left hover:border-[var(--accent)] transition-colors active:scale-[0.98]"
           >
-            <span className="text-2xl leading-none mt-0.5">{rt.emoji}</span>
+            <span className="text-[var(--accent)] mt-0.5 shrink-0">
+              <rt.Icon />
+            </span>
             <div className="flex-1 min-w-0">
               <p className="text-[var(--text-primary)] text-sm font-semibold">{rt.label}</p>
               <p className="text-[var(--text-secondary)] text-xs mt-0.5">{rt.description}</p>
-              <p className="text-[var(--text-muted)] text-xs mt-1 italic">{rt.example}</p>
+              <p className="text-[var(--text-muted)] text-xs mt-1">{rt.example}</p>
             </div>
           </button>
         ))}
@@ -234,7 +305,7 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
         >
           <path d="M15 18l-6-6 6-6" />
         </svg>
-        {selected.emoji} {selected.label}
+        <selected.Icon /> {selected.label}
       </button>
 
       {nodes.length > 1 && (

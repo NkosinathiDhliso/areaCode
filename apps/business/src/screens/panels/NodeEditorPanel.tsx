@@ -285,9 +285,10 @@ export function NodeEditorPanel() {
         contentType: file.type,
       })
       // 2. PUT file directly to S3
+      // No Content-Type header — the presigned URL signs only 'host',
+      // adding extra headers causes a SignatureDoesNotMatch 403.
       const putRes = await fetch(presigned.uploadUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': file.type },
         body: file,
       })
       if (!putRes.ok) throw new Error(`S3 upload failed (${putRes.status})`)

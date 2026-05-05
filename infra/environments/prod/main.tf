@@ -158,9 +158,13 @@ module "s3_media" {
   env    = local.env
   allowed_origins = [
     "https://areacode.co.za",
+    "https://www.areacode.co.za",
     "https://business.areacode.co.za",
     "https://staff.areacode.co.za",
-    "https://admin.areacode.co.za"
+    "https://admin.areacode.co.za",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175"
   ]
 }
 
@@ -781,6 +785,25 @@ module "api_gateway" {
       route_key  = "POST /v1/webhooks/yoco"
     }
   }
+}
+
+# --- Lambda IAM: API Lambda -> S3 media (presigned URL generation + reads) ---
+resource "aws_iam_role_policy" "api_s3_media" {
+  name = "s3-media-access"
+  role = module.lambda_api.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject"
+      ]
+      Resource = "${module.s3_media.bucket_arn}/*"
+    }]
+  })
 }
 
 # --- Lambda -> API Gateway permissions ---
