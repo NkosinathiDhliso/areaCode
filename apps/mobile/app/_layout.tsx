@@ -20,16 +20,8 @@ export default function RootLayout() {
   const { setOnline, setApiOnly, setOffline } = useConnectivityStore()
   const [ready, setReady] = useState(false)
 
-  // Initialize dev mocks if configured
   useEffect(() => {
-    async function init() {
-      if (__DEV__ && process.env.EXPO_PUBLIC_DEV_MOCK === 'true') {
-        const { initDevMocks } = await import('@area-code/shared/mocks')
-        await initDevMocks()
-      }
-      setReady(true)
-    }
-    void init()
+    setReady(true)
   }, [])
 
   useEffect(() => {

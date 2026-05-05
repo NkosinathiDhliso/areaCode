@@ -39,6 +39,27 @@ let app: FastifyInstance
 process.env['AREA_CODE_ENV'] = 'dev'
 delete process.env['AREA_CODE_FORCE_LIVE']
 
+// HARD GUARD: refuse to run if DynamoDB table names point at production.
+// Prevents the entire test suite from polluting prod data when run with
+// prod AWS credentials in the shell.
+const prodTableMarkers = [
+  'USERS_TABLE',
+  'NODES_TABLE',
+  'CHECKINS_TABLE',
+  'REWARDS_TABLE',
+  'BUSINESSES_TABLE',
+  'APP_DATA_TABLE',
+]
+for (const key of prodTableMarkers) {
+  const value = process.env[key]
+  if (value && /-prod-/.test(value)) {
+    throw new Error(
+      `E2E test refused to run: ${key}="${value}" points at production. ` +
+        `Unset prod AWS credentials/table env vars or run with a dev profile.`,
+    )
+  }
+}
+
 beforeAll(async () => {
   const { buildApp } = await import('../app.js')
   app = await buildApp()
@@ -275,7 +296,6 @@ describe('5. Admin Auth Flow', () => {
     expect(body.role).toBeDefined()
   })
 })
-
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 6. NODE DISCOVERY
@@ -611,7 +631,6 @@ describe('10. Business Dashboard', () => {
     expect([200, 401, 500]).toContain(res.statusCode)
   })
 })
-
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 11. STAFF REDEMPTION VALIDATION
@@ -1159,12 +1178,7 @@ describe('20. CORS & Security Headers', () => {
   })
 
   it('CORS allows localhost origins in dev mode', async () => {
-    const origins = [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'http://localhost:3002',
-      'http://localhost:3003',
-    ]
+    const origins = ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://localhost:3003']
     for (const origin of origins) {
       const res = await app.inject({
         method: 'GET',

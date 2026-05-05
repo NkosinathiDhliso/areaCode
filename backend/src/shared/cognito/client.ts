@@ -355,9 +355,7 @@ export async function adminPasswordAuth(email: string, password: string) {
 
 export async function listAdminUsers(): Promise<Array<{ sub: string; email: string; role: string; enabled: boolean }>> {
   const pool = getPool('admin')
-  const result = await cognitoClient.send(
-    new ListUsersCommand({ UserPoolId: pool.userPoolId, Limit: 60 }),
-  )
+  const result = await cognitoClient.send(new ListUsersCommand({ UserPoolId: pool.userPoolId, Limit: 60 }))
   return (result.Users ?? []).map((u) => {
     const attrs: Record<string, string> = {}
     for (const a of u.Attributes ?? []) {
@@ -388,6 +386,18 @@ export async function createAdminUser(email: string, tempPassword: string, role:
     }),
   )
   const sub = result.User?.Attributes?.find((a) => a.Name === 'sub')?.Value ?? ''
+
+  // Immediately convert the temp password to a permanent password so the admin can sign in
+  // without going through Cognito's NEW_PASSWORD_REQUIRED challenge flow.
+  await cognitoClient.send(
+    new AdminSetUserPasswordCommand({
+      UserPoolId: pool.userPoolId,
+      Username: email,
+      Password: tempPassword,
+      Permanent: true,
+    }),
+  )
+
   return { sub }
 }
 
