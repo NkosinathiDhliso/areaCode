@@ -6,6 +6,7 @@ import type { Node, Reward, NodeState } from '@area-code/shared/types'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import type { GeoStatus } from '@area-code/shared/stores/locationStore'
+import { useCooldownTimer } from '@area-code/shared/hooks/useCooldownTimer'
 import { CrowdVibeSection } from './CrowdVibeSection'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 
@@ -52,6 +53,7 @@ interface NodeDetailSheetProps {
   onRecalibrate?: () => void
   qrFallback?: boolean
   tooFar?: boolean
+  cooldownUntil?: string | null
 }
 
 export const NodeDetailSheet = memo(function NodeDetailSheet({
@@ -65,7 +67,9 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
   onRecalibrate,
   qrFallback = false,
   tooFar = false,
+  cooldownUntil = null,
 }: NodeDetailSheetProps) {
+  const { isActive: inCooldown, display: cooldownDisplay } = useCooldownTimer(cooldownUntil)
   const { t } = useTranslation()
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
   const isBusinessAuthenticated = useBusinessAuthStore((s) => s.isAuthenticated)
@@ -158,14 +162,21 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
     }
   }
 
-  const ctaInfo = getCtaInfo(geoStatus, qrFallback, tooFar, t)
+  const ctaInfo = getCtaInfo(geoStatus, qrFallback, tooFar, inCooldown, t)
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose}>
       {/* Header */}
       <div className="flex flex-row items-start justify-between mb-4">
         <div className="flex-1">
-          <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{node.name}</h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{node.name}</h2>
+            {inCooldown ? null : node.boostUntil && new Date(node.boostUntil).getTime() > Date.now() ? (
+              <span className="flex items-center gap-1 bg-[#FFD166]/15 border border-[#FFD166]/40 text-[#FFD166] text-xs font-semibold px-2 py-0.5 rounded-full">
+                ⚡ Boosted
+              </span>
+            ) : null}
+          </div>
           <p className="text-[var(--text-secondary)] text-sm mt-1">
             {node.category} · {state}
           </p>
@@ -251,6 +262,21 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
           {/* Crowd Vibe section */}
           <CrowdVibeSection nodeId={node.id} />
         </>
+      )}
+
+      {/* Already checked-in cooldown banner */}
+      {inCooldown && !tooFar && (
+        <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-2xl px-4 py-3 mb-3 flex items-center justify-between gap-3">
+          <div className="flex-1">
+            <p className="text-[var(--text-primary)] text-sm font-medium">{t('checkin.alreadyCheckedIn')}</p>
+            <p className="text-[var(--text-secondary)] text-xs mt-0.5">
+              {t('checkin.nextRewardIn')} {cooldownDisplay}
+            </p>
+          </div>
+          <span className="text-[var(--success)] text-xl" aria-label="checked in">
+            ✓
+          </span>
+        </div>
       )}
 
       {/* Too far banner */}
@@ -435,8 +461,13 @@ function getCtaInfo(
   geoStatus: GeoStatus,
   qrFallback: boolean,
   tooFar: boolean,
+  inCooldown: boolean,
   t: (key: string) => string,
 ): { label: string; disabled: boolean } {
+  if (inCooldown) {
+    return { label: t('checkin.alreadyCheckedIn'), disabled: true }
+  }
+
   if (qrFallback) {
     return { label: t('checkin.scanQr'), disabled: true }
   }

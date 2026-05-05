@@ -49,7 +49,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const onboarding = useUserStore((s) => s.onboarding)
   const markHintSeen = useUserStore((s) => s.markHintSeen)
   const { requestLocation, geoStatus } = useGeolocation()
-  const { checkIn, error: checkInError, qrFallback, tooFar, resetQrFallback, clearError } = useCheckIn()
+  const { checkIn, error: checkInError, qrFallback, tooFar, getCooldown, resetQrFallback, clearError } = useCheckIn()
 
   const citySlug = useUserStore((s) => s.user?.citySlug) ?? 'johannesburg'
 
@@ -413,6 +413,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
         onRecalibrate={handleRecenter}
         qrFallback={qrFallback}
         tooFar={tooFar}
+        cooldownUntil={selectedNode ? getCooldown(selectedNode.id) : null}
       />
 
       <SignupSheet isOpen={signupOpen} onClose={() => setSignupOpen(false)} onNavigate={onNavigate} />

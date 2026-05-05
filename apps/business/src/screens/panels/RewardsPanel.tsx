@@ -40,9 +40,7 @@ export function RewardsPanel() {
   return (
     <div className="p-5 flex flex-col gap-4">
       <div className="flex flex-row items-center justify-between">
-        <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">
-          {t('biz.panel.rewards')}
-        </h2>
+        <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('biz.panel.rewards')}</h2>
         <button
           onClick={() => setShowForm(!showForm)}
           className="bg-[var(--accent)] text-white rounded-full w-10 h-10 flex items-center justify-center text-xl"
@@ -63,7 +61,10 @@ export function RewardsPanel() {
               <p className="text-[var(--warning)] text-xs mb-3">{t('biz.rewards.slotWarning')}</p>
               <RewardForm
                 nodes={nodes}
-                onCreated={() => { setShowForm(false); void reload() }}
+                onCreated={() => {
+                  setShowForm(false)
+                  void reload()
+                }}
               />
             </>
           )}
@@ -102,24 +103,84 @@ export function RewardsPanel() {
   )
 }
 
+const REWARD_TYPES = [
+  {
+    value: 'daily_first',
+    label: 'First Check-in Bonus',
+    emoji: '🥇',
+    description: 'Reward the first person to check in each day.',
+    example: 'e.g. "Free coffee for first check-in"',
+    needsTrigger: false,
+  },
+  {
+    value: 'nth_checkin',
+    label: 'Every Nth Visit',
+    emoji: '🔁',
+    description: 'Reward every Nth check-in at your venue.',
+    example: 'e.g. "Every 5th visit gets 10% off"',
+    needsTrigger: true,
+    triggerLabel: 'Reward every',
+    triggerSuffix: 'check-ins',
+    triggerPlaceholder: '5',
+  },
+  {
+    value: 'milestone',
+    label: 'Loyalty Milestone',
+    emoji: '🏆',
+    description: "Reward customers who've visited a set number of times total.",
+    example: 'e.g. "10th visit = free meal"',
+    needsTrigger: true,
+    triggerLabel: 'Unlock after',
+    triggerSuffix: 'total visits',
+    triggerPlaceholder: '10',
+  },
+  {
+    value: 'streak',
+    label: 'Check-in Streak',
+    emoji: '🔥',
+    description: 'Reward customers who check in on consecutive days.',
+    example: 'e.g. "3-day streak = free dessert"',
+    needsTrigger: true,
+    triggerLabel: 'Streak length',
+    triggerSuffix: 'days in a row',
+    triggerPlaceholder: '3',
+  },
+] as const
+
+type RewardTypeValue = (typeof REWARD_TYPES)[number]['value']
+
 function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void }) {
+  const [step, setStep] = useState<'type' | 'details'>('type')
   const [nodeId, setNodeId] = useState(nodes[0]?.id ?? '')
   const [title, setTitle] = useState('')
-  const [type, setType] = useState('nth_checkin')
+  const [type, setType] = useState<RewardTypeValue>('nth_checkin')
   const [triggerValue, setTriggerValue] = useState('')
   const [slots, setSlots] = useState('')
+  const [unlimited, setUnlimited] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const selected = REWARD_TYPES.find((r) => r.value === type)!
+
   async function handleSubmit() {
-    if (!nodeId) { setError('Select a node first.'); return }
-    if (!title.trim()) { setError('Enter a reward title.'); return }
+    if (!nodeId) {
+      setError('Select a node first.')
+      return
+    }
+    if (!title.trim()) {
+      setError('Enter a reward title.')
+      return
+    }
+    if (selected.needsTrigger && (!triggerValue || parseInt(triggerValue, 10) < 1)) {
+      setError('Enter a valid trigger number.')
+      return
+    }
     setLoading(true)
     setError(null)
     try {
       const body: Record<string, unknown> = { nodeId, title: title.trim(), type }
-      if (triggerValue) body['triggerValue'] = parseInt(triggerValue, 10)
-      if (slots) body['totalSlots'] = parseInt(slots, 10)
+      if (selected.needsTrigger && triggerValue) body['triggerValue'] = parseInt(triggerValue, 10)
+      if (!unlimited && slots) body['totalSlots'] = parseInt(slots, 10)
       await api.post('/v1/business/rewards', body)
       onCreated()
     } catch (err: unknown) {
@@ -130,60 +191,134 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
     }
   }
 
+  if (step === 'type') {
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="text-[var(--text-secondary)] text-sm font-medium">What kind of reward is this?</p>
+        {REWARD_TYPES.map((rt) => (
+          <button
+            key={rt.value}
+            onClick={() => {
+              setType(rt.value)
+              setStep('details')
+            }}
+            className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-2xl p-4 flex items-start gap-3 text-left hover:border-[var(--accent)] transition-colors active:scale-[0.98]"
+          >
+            <span className="text-2xl leading-none mt-0.5">{rt.emoji}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[var(--text-primary)] text-sm font-semibold">{rt.label}</p>
+              <p className="text-[var(--text-secondary)] text-xs mt-0.5">{rt.description}</p>
+              <p className="text-[var(--text-muted)] text-xs mt-1 italic">{rt.example}</p>
+            </div>
+          </button>
+        ))}
+      </div>
+    )
+  }
+
   return (
-    <div className="flex flex-col gap-3">
-      {nodes.length > 1 && (
-        <select
-          value={nodeId}
-          onChange={(e) => setNodeId(e.target.value)}
-          className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none appearance-none"
-        >
-          {nodes.map((n) => (
-            <option key={n.id} value={n.id}>{n.name}</option>
-          ))}
-        </select>
-      )}
-      <input
-        type="text"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Reward title"
-        className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-      />
-      <select
-        value={type}
-        onChange={(e) => setType(e.target.value)}
-        className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none appearance-none"
+    <div className="flex flex-col gap-4">
+      <button
+        onClick={() => setStep('type')}
+        className="flex items-center gap-1.5 text-[var(--accent)] text-sm font-medium"
       >
-        <option value="nth_checkin">Nth Check-in</option>
-        <option value="daily_first">Daily First</option>
-        <option value="streak">Streak</option>
-        <option value="milestone">Milestone</option>
-      </select>
-      {(type === 'nth_checkin' || type === 'streak' || type === 'milestone') && (
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+        {selected.emoji} {selected.label}
+      </button>
+
+      {nodes.length > 1 && (
+        <div className="flex flex-col gap-1">
+          <label className="text-[var(--text-secondary)] text-xs font-medium">Venue</label>
+          <select
+            value={nodeId}
+            onChange={(e) => setNodeId(e.target.value)}
+            className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none appearance-none"
+          >
+            {nodes.map((n) => (
+              <option key={n.id} value={n.id}>
+                {n.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1">
+        <label className="text-[var(--text-secondary)] text-xs font-medium">Reward name</label>
         <input
-          type="number"
-          value={triggerValue}
-          onChange={(e) => setTriggerValue(e.target.value)}
-          placeholder={type === 'nth_checkin' ? 'Every N check-ins (e.g. 5)' : 'Trigger count'}
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder={selected.example.replace('e.g. ', '').replace(/"/g, '')}
           className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
         />
+      </div>
+
+      {selected.needsTrigger && (
+        <div className="flex flex-col gap-1">
+          <label className="text-[var(--text-secondary)] text-xs font-medium">{selected.triggerLabel}</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="1"
+              value={triggerValue}
+              onChange={(e) => setTriggerValue(e.target.value)}
+              placeholder={selected.triggerPlaceholder}
+              className="w-24 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+            />
+            <span className="text-[var(--text-secondary)] text-sm">{selected.triggerSuffix}</span>
+          </div>
+        </div>
       )}
-      <input
-        type="number"
-        value={slots}
-        onChange={(e) => setSlots(e.target.value)}
-        placeholder="Total slots (leave empty for unlimited)"
-        className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-      />
+
+      <div className="flex flex-col gap-2">
+        <label className="text-[var(--text-secondary)] text-xs font-medium">Available slots</label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={unlimited}
+            onChange={(e) => setUnlimited(e.target.checked)}
+            className="accent-[var(--accent)] w-4 h-4"
+          />
+          <span className="text-[var(--text-primary)] text-sm">Unlimited</span>
+        </label>
+        {!unlimited && (
+          <input
+            type="number"
+            min="1"
+            value={slots}
+            onChange={(e) => setSlots(e.target.value)}
+            placeholder="e.g. 50"
+            className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+          />
+        )}
+        {!unlimited && (
+          <p className="text-[var(--warning)] text-xs">
+            Slot count cannot be raised once live. Set a realistic number.
+          </p>
+        )}
+      </div>
+
+      {error && <p className="text-[var(--danger)] text-xs">{error}</p>}
+
       <button
         onClick={() => void handleSubmit()}
         disabled={loading || !title.trim() || !nodeId}
         className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3 text-sm disabled:opacity-50"
       >
-        {loading ? '...' : 'Create Reward'}
+        {loading ? 'Creating…' : 'Create Reward'}
       </button>
-      {error && <p className="text-[var(--danger)] text-xs mt-1">{error}</p>}
     </div>
   )
 }

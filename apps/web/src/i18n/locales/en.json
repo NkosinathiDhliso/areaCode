@@ -18,6 +18,8 @@
   "checkin.tooFarButton": "Too far to check in",
   "checkin.recalibrate": "Recalibrate",
   "checkin.cooldown": "Cooldown active",
+  "checkin.alreadyCheckedIn": "You're checked in here!",
+  "checkin.nextRewardIn": "Next reward unlocks in",
   "checkin.weakSignal": "Weak signal - move closer to the entrance",
   "checkin.locationUnavailable": "Location unavailable. Try moving to an open area.",
   "checkin.scanQr": "Scan the venue's QR code to check in",

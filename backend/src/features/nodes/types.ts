@@ -90,6 +90,7 @@ export interface Node {
   qrCheckinEnabled: boolean
   isVerified: boolean
   isActive: boolean
+  boostUntil?: string | null
   createdAt: string
   updatedAt: string
 }

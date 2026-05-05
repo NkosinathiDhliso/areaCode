@@ -1,12 +1,5 @@
 // DynamoDB Repository for Nodes Feature
-import {
-  GetCommand,
-  QueryCommand,
-  PutCommand,
-  UpdateCommand,
-  DeleteCommand,
-  ScanCommand,
-} from '@aws-sdk/lib-dynamodb'
+import { GetCommand, QueryCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
 import type { Node, NodeImage } from './types.js'
@@ -16,9 +9,7 @@ import type { Node, NodeImage } from './types.js'
 // ============================================================================
 
 export async function getNodeById(nodeId: string): Promise<Node | null> {
-  const result = await documentClient.send(
-    new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } })
-  )
+  const result = await documentClient.send(new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } }))
   return result.Item ? mapNode(result.Item) : null
 }
 
@@ -31,7 +22,7 @@ export async function getNodeBySlug(slug: string): Promise<Node | null> {
         FilterExpression: 'slug = :slug',
         ExpressionAttributeValues: { ':slug': slug },
         ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
-      })
+      }),
     )
     if (result.Items?.[0]) return result.Items[0] as Node
     lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
@@ -46,7 +37,7 @@ export async function getNodesByBusinessId(businessId: string): Promise<Node[]> 
       IndexName: 'BusinessIndex',
       KeyConditionExpression: 'businessId = :businessId',
       ExpressionAttributeValues: { ':businessId': businessId },
-    })
+    }),
   )
   return (result.Items || []) as Node[]
 }
@@ -71,7 +62,7 @@ export async function createNode(data: Omit<Node, 'nodeId' | 'createdAt'>): Prom
     new PutCommand({
       TableName: TableNames.nodes,
       Item: { ...node, id: nodeId },
-    })
+    }),
   )
 
   return mapNode(node as unknown as Record<string, unknown>)
@@ -79,7 +70,7 @@ export async function createNode(data: Omit<Node, 'nodeId' | 'createdAt'>): Prom
 
 export async function updateNode(
   nodeId: string,
-  data: Partial<Omit<Node, 'nodeId' | 'createdAt'>>
+  data: Partial<Omit<Node, 'nodeId' | 'createdAt'>>,
 ): Promise<Node | null> {
   const updateExpr = Object.keys(data)
     .map((key) => `#${key} = :${key}`)
@@ -99,16 +90,14 @@ export async function updateNode(
         ':updatedAt': new Date().toISOString(),
       },
       ReturnValues: 'ALL_NEW',
-    })
+    }),
   )
 
   return result.Attributes ? mapNode(result.Attributes) : null
 }
 
 export async function deleteNode(nodeId: string): Promise<void> {
-  await documentClient.send(
-    new DeleteCommand({ TableName: TableNames.nodes, Key: { nodeId } })
-  )
+  await documentClient.send(new DeleteCommand({ TableName: TableNames.nodes, Key: { nodeId } }))
 }
 
 export async function listNodes(options?: {
@@ -130,7 +119,7 @@ export async function listNodes(options?: {
         ExpressionAttributeValues: { ':cityId': options.cityId },
         Limit: options.limit || 50,
         ...(options.cursor ? { ExclusiveStartKey: JSON.parse(Buffer.from(options.cursor, 'base64').toString()) } : {}),
-      })
+      }),
     )
   } else {
     // Scan with filters
@@ -142,9 +131,7 @@ export async function listNodes(options?: {
       exprAttrValues[':category'] = options.category
     }
     if (options?.isActive !== undefined) {
-      filterExpr = filterExpr
-        ? `${filterExpr} AND isActive = :isActive`
-        : 'isActive = :isActive'
+      filterExpr = filterExpr ? `${filterExpr} AND isActive = :isActive` : 'isActive = :isActive'
       exprAttrValues[':isActive'] = options.isActive
     }
 
@@ -154,7 +141,7 @@ export async function listNodes(options?: {
         ...(filterExpr ? { FilterExpression: filterExpr } : {}),
         ExpressionAttributeValues: exprAttrValues,
         Limit: options?.limit || 50,
-      })
+      }),
     )
   }
 
@@ -184,6 +171,7 @@ function mapNode(item: Record<string, unknown>): Node {
     qrCheckinEnabled: (item['qrCheckinEnabled'] as boolean) ?? false,
     isVerified: (item['isVerified'] as boolean) ?? false,
     isActive: (item['isActive'] as boolean) ?? true,
+    boostUntil: (item['boostUntil'] as string | null | undefined) ?? null,
     createdAt: (item['createdAt'] as string) ?? '',
     updatedAt: (item['updatedAt'] as string) ?? '',
   }
@@ -202,7 +190,7 @@ export async function getNodeImages(nodeId: string): Promise<NodeImage[]> {
         ':pk': `NODE#${nodeId}`,
         ':skPrefix': 'IMAGE#',
       },
-    })
+    }),
   )
   return (result.Items || []) as NodeImage[]
 }
@@ -225,7 +213,7 @@ export async function addNodeImage(data: Omit<NodeImage, 'imageId' | 'createdAt'
         sk: `IMAGE#${imageId}`,
         ...image,
       },
-    })
+    }),
   )
 
   return image
@@ -236,7 +224,7 @@ export async function deleteNodeImage(nodeId: string, imageId: string): Promise<
     new DeleteCommand({
       TableName: TableNames.appData,
       Key: { pk: `NODE#${nodeId}`, sk: `IMAGE#${imageId}` },
-    })
+    }),
   )
 }
 
@@ -248,7 +236,7 @@ export async function findNearbyNodes(
   lat: number,
   lng: number,
   radiusKm: number = 5,
-  options?: { category?: string; limit?: number }
+  options?: { category?: string; limit?: number },
 ): Promise<Node[]> {
   // For simple implementation, we scan all nodes and filter by distance
   // In production, consider using DynamoDB with Geohash or Elasticsearch
@@ -257,7 +245,7 @@ export async function findNearbyNodes(
       TableName: TableNames.nodes,
       FilterExpression: 'isActive = :isActive',
       ExpressionAttributeValues: { ':isActive': true },
-    })
+    }),
   )
 
   const nodes = (result.Items || []) as Node[]
@@ -282,10 +270,7 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   const dLng = ((lng2 - lng1) * Math.PI) / 180
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) *
-      Math.sin(dLng / 2)
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) * Math.sin(dLng / 2)
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
   return R * c
 }

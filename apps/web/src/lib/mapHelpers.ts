@@ -23,6 +23,21 @@ export function getNodeState(score: number): NodeState {
   return 'dormant'
 }
 
+/** Returns true when the node currently has an active boost. */
+export function isNodeBoosted(boostUntil?: string | null): boolean {
+  if (!boostUntil) return false
+  return new Date(boostUntil).getTime() > Date.now()
+}
+
+/**
+ * Boosted nodes are shown as at least 'active' (score ≥ 11) even when quiet.
+ * This makes the marker more visible without fabricating check-in data.
+ */
+export function getEffectivePulseScore(score: number, boostUntil?: string | null): number {
+  if (isNodeBoosted(boostUntil)) return Math.max(score, 11)
+  return score
+}
+
 export function getMarkerSize(state: NodeState, score: number): number {
   const base = MARKER_BASES[state]
   return Math.min(base + score * 0.4, base * 2.5)
@@ -46,11 +61,7 @@ export function getCategoryColour(category: NodeCategory | string): string {
   return CATEGORY_HEX[category] ?? '#778CA9'
 }
 
-export function applyMarkerStyle(
-  el: HTMLElement,
-  size: number,
-  colour: string,
-): void {
+export function applyMarkerStyle(el: HTMLElement, size: number, colour: string): void {
   el.style.width = `${size}px`
   el.style.height = `${size}px`
   el.style.borderRadius = '50%'

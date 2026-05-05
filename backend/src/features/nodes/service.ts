@@ -655,6 +655,22 @@ export async function registerNodeImage(nodeId: string, businessId: string, s3Ke
   return repo.registerNodeImage(nodeId, s3Key, businessId, displayOrder)
 }
 
+// ─── Boost ──────────────────────────────────────────────────────────────────
+
+const BOOST_DURATION_MS: Record<string, number> = {
+  '2hr': 2 * 60 * 60 * 1000,
+  '6hr': 6 * 60 * 60 * 1000,
+  '24hr': 24 * 60 * 60 * 1000,
+}
+
+export async function activateNodeBoost(nodeId: string, duration: string) {
+  const ms = BOOST_DURATION_MS[duration]
+  if (!ms) throw AppError.badRequest(`Unknown boost duration: ${duration}`)
+  const boostUntil = new Date(Date.now() + ms).toISOString()
+  await nodesDynamo.updateNode(nodeId, { boostUntil })
+  return { nodeId, boostUntil }
+}
+
 // ─── Node Rewards ───────────────────────────────────────────────────────────
 
 export async function getNodeRewards(nodeId: string) {

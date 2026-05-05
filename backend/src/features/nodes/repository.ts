@@ -57,6 +57,7 @@ export async function getNodesByCitySlug(citySlug: string) {
       nodeColour: n['nodeColour'],
       nodeIcon: n['nodeIcon'],
       isVerified: n['isVerified'],
+      boostUntil: (n['boostUntil'] as string | null | undefined) ?? null,
     }))
 }
 

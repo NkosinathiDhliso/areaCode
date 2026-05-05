@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import { AppError } from '../../shared/errors/AppError.js'
 import * as repo from './repository.js'
 import { BUSINESS_PLANS, BOOST_PRICING, type BoostDuration } from './types.js'
+import { activateNodeBoost } from '../nodes/service.js'
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
@@ -216,12 +217,24 @@ export async function processYocoWebhook(
 
 async function handlePaymentSucceeded(payload: Record<string, unknown>) {
   const metadata = payload['metadata'] as Record<string, string> | undefined
-  if (!metadata?.['businessId'] || !metadata['plan']) return
+  if (!metadata?.['businessId']) return
 
   const businessId = metadata['businessId']
-  const plan = metadata['plan']
+  const paymentType = metadata['type']
 
-  // Clear grace period on successful payment
+  if (paymentType === 'boost') {
+    const nodeId = metadata['nodeId']
+    const duration = metadata['duration']
+    if (nodeId && duration) {
+      await activateNodeBoost(nodeId, duration)
+    }
+    return
+  }
+
+  // Default: subscription payment
+  const plan = metadata['plan']
+  if (!plan) return
+
   await repo.setPaymentGrace(businessId, null)
   await repo.updateBusinessTier(businessId, plan)
 }

@@ -2,21 +2,22 @@ import { useEffect, useRef } from 'react'
 import mapboxgl from 'mapbox-gl'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import type { Node, NodeCategory, NodeState } from '@area-code/shared/types'
-import { getNodeState, getCategoryColour } from '../lib/mapHelpers'
+import { getNodeState, getCategoryColour, isNodeBoosted, getEffectivePulseScore } from '../lib/mapHelpers'
 
-const STATE_CONFIG: Record<NodeState, { animation: string; speed: string; haloOpacity: number; ringOpacity: number }> = {
-  dormant: { animation: 'breathe', speed: '4s',   haloOpacity: 0.12, ringOpacity: 0.08 },
-  quiet:   { animation: 'breathe', speed: '3s',   haloOpacity: 0.2,  ringOpacity: 0.25 },
-  active:  { animation: 'pulse',   speed: '1.5s', haloOpacity: 0.3,  ringOpacity: 0.5 },
-  buzzing: { animation: 'pulse',   speed: '0.8s', haloOpacity: 0.4,  ringOpacity: 0.6 },
-  popping: { animation: 'pulse',   speed: '0.4s', haloOpacity: 0.5,  ringOpacity: 0.7 },
-}
+const STATE_CONFIG: Record<NodeState, { animation: string; speed: string; haloOpacity: number; ringOpacity: number }> =
+  {
+    dormant: { animation: 'breathe', speed: '4s', haloOpacity: 0.12, ringOpacity: 0.08 },
+    quiet: { animation: 'breathe', speed: '3s', haloOpacity: 0.2, ringOpacity: 0.25 },
+    active: { animation: 'pulse', speed: '1.5s', haloOpacity: 0.3, ringOpacity: 0.5 },
+    buzzing: { animation: 'pulse', speed: '0.8s', haloOpacity: 0.4, ringOpacity: 0.6 },
+    popping: { animation: 'pulse', speed: '0.4s', haloOpacity: 0.5, ringOpacity: 0.7 },
+  }
 
 // Bigger base sizes so nodes are actually visible on the map
 const CORE_SIZE: Record<NodeState, number> = {
   dormant: 12,
-  quiet:   16,
-  active:  22,
+  quiet: 16,
+  active: 22,
   buzzing: 30,
   popping: 40,
 }
@@ -26,6 +27,8 @@ function getCoreSize(state: NodeState, score: number): number {
   return Math.min(base + score * 0.3, base * 2)
 }
 
+const BOOST_GOLD = '#FFD166'
+
 function buildMarkerElement(
   node: Node,
   coreSize: number,
@@ -33,6 +36,7 @@ function buildMarkerElement(
   state: NodeState,
   score: number,
   onTap: () => void,
+  boosted = false,
 ): HTMLDivElement {
   const cfg = STATE_CONFIG[state]
   // Container must be large enough for the halo + blur spread
@@ -71,6 +75,23 @@ function buildMarkerElement(
   container.appendChild(halo)
 
   // ── Layer 2: Outer ring(s) ──
+  if (boosted) {
+    const boostRing = document.createElement('div')
+    Object.assign(boostRing.style, {
+      position: 'absolute',
+      width: `${coreSize * 2.6}px`,
+      height: `${coreSize * 2.6}px`,
+      borderRadius: '50%',
+      border: `2px solid ${BOOST_GOLD}`,
+      opacity: '0.7',
+      animation: 'pulse 1.2s ease-in-out infinite',
+      pointerEvents: 'none',
+      boxShadow: `0 0 8px ${BOOST_GOLD}60`,
+    })
+    boostRing.dataset.layer = 'boost-ring'
+    container.appendChild(boostRing)
+  }
+
   if (state === 'popping') {
     const outerGlow = document.createElement('div')
     Object.assign(outerGlow.style, {
@@ -100,7 +121,10 @@ function buildMarkerElement(
   ring.dataset.layer = 'ring'
   ring.addEventListener('mousedown', (e) => e.stopPropagation())
   ring.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true })
-  ring.addEventListener('click', (e) => { e.stopPropagation(); onTap() })
+  ring.addEventListener('click', (e) => {
+    e.stopPropagation()
+    onTap()
+  })
   container.appendChild(ring)
 
   if (state === 'buzzing' || state === 'popping') {
@@ -127,9 +151,7 @@ function buildMarkerElement(
     borderRadius: '50%',
     background: `radial-gradient(circle at 35% 35%, ${colour}ff, ${colour}cc 60%, ${colour}88)`,
     animation: `${cfg.animation} ${cfg.speed} ease-in-out infinite`,
-    boxShadow: state === 'dormant'
-      ? 'none'
-      : `0 0 ${glowSpread}px ${colour}60, 0 0 ${glowSpread * 2}px ${colour}30`,
+    boxShadow: state === 'dormant' ? 'none' : `0 0 ${glowSpread}px ${colour}60, 0 0 ${glowSpread * 2}px ${colour}30`,
     cursor: 'pointer',
     pointerEvents: 'auto',
   })
@@ -137,7 +159,10 @@ function buildMarkerElement(
   // Stop mousedown/touchstart so Mapbox doesn't interpret it as a drag
   core.addEventListener('mousedown', (e) => e.stopPropagation())
   core.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true })
-  core.addEventListener('click', (e) => { e.stopPropagation(); onTap() })
+  core.addEventListener('click', (e) => {
+    e.stopPropagation()
+    onTap()
+  })
   container.appendChild(core)
 
   // ── Layer 4: Live count badge ──
@@ -172,6 +197,7 @@ function updateMarkerElement(
   colour: string,
   state: NodeState,
   score: number,
+  boosted = false,
 ): void {
   const cfg = STATE_CONFIG[state]
   const totalSize = coreSize * 4
@@ -183,7 +209,8 @@ function updateMarkerElement(
   const halo = el.querySelector('[data-layer="halo"]') as HTMLElement | null
   if (halo) {
     Object.assign(halo.style, {
-      width: `${haloSize}px`, height: `${haloSize}px`,
+      width: `${haloSize}px`,
+      height: `${haloSize}px`,
       background: `radial-gradient(circle, ${colour} 0%, transparent 70%)`,
       opacity: String(cfg.haloOpacity),
       filter: `blur(${blurRadius}px)`,
@@ -194,8 +221,10 @@ function updateMarkerElement(
   const ring = el.querySelector('[data-layer="ring"]') as HTMLElement | null
   if (ring) {
     Object.assign(ring.style, {
-      width: `${coreSize * 1.7}px`, height: `${coreSize * 1.7}px`,
-      borderColor: colour, opacity: String(cfg.ringOpacity),
+      width: `${coreSize * 1.7}px`,
+      height: `${coreSize * 1.7}px`,
+      borderColor: colour,
+      opacity: String(cfg.ringOpacity),
     })
   }
 
@@ -203,12 +232,35 @@ function updateMarkerElement(
   const core = el.querySelector('[data-layer="core"]') as HTMLElement | null
   if (core) {
     Object.assign(core.style, {
-      width: `${coreSize}px`, height: `${coreSize}px`,
+      width: `${coreSize}px`,
+      height: `${coreSize}px`,
       background: `radial-gradient(circle at 35% 35%, ${colour}ff, ${colour}cc 60%, ${colour}88)`,
       animation: `${cfg.animation} ${cfg.speed} ease-in-out infinite`,
-      boxShadow: state === 'dormant' ? 'none'
-        : `0 0 ${glowSpread}px ${colour}60, 0 0 ${glowSpread * 2}px ${colour}30`,
+      boxShadow: state === 'dormant' ? 'none' : `0 0 ${glowSpread}px ${colour}60, 0 0 ${glowSpread * 2}px ${colour}30`,
     })
+  }
+
+  const boostRing = el.querySelector('[data-layer="boost-ring"]') as HTMLElement | null
+  if (boosted && !boostRing) {
+    const br = document.createElement('div')
+    Object.assign(br.style, {
+      position: 'absolute',
+      width: `${coreSize * 2.6}px`,
+      height: `${coreSize * 2.6}px`,
+      borderRadius: '50%',
+      border: `2px solid ${BOOST_GOLD}`,
+      opacity: '0.7',
+      animation: 'pulse 1.2s ease-in-out infinite',
+      pointerEvents: 'none',
+      boxShadow: `0 0 8px ${BOOST_GOLD}60`,
+    })
+    br.dataset.layer = 'boost-ring'
+    el.appendChild(br)
+  } else if (!boosted && boostRing) {
+    boostRing.remove()
+  } else if (boosted && boostRing) {
+    boostRing.style.width = `${coreSize * 2.6}px`
+    boostRing.style.height = `${coreSize * 2.6}px`
   }
 
   let badge = el.querySelector('[data-layer="badge"]') as HTMLElement | null
@@ -216,11 +268,19 @@ function updateMarkerElement(
     if (!badge) {
       badge = document.createElement('div')
       Object.assign(badge.style, {
-        position: 'absolute', top: `${totalSize * 0.15}px`, right: `${totalSize * 0.15}px`,
-        background: '#1e1e2e', border: '1px solid rgba(255,255,255,0.08)',
-        borderRadius: '9999px', padding: '2px 6px', fontSize: '11px',
-        fontWeight: '600', color: '#f0f0f5', lineHeight: '1.3',
-        whiteSpace: 'nowrap', pointerEvents: 'none',
+        position: 'absolute',
+        top: `${totalSize * 0.15}px`,
+        right: `${totalSize * 0.15}px`,
+        background: '#1e1e2e',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: '9999px',
+        padding: '2px 6px',
+        fontSize: '11px',
+        fontWeight: '600',
+        color: '#f0f0f5',
+        lineHeight: '1.3',
+        whiteSpace: 'nowrap',
+        pointerEvents: 'none',
       })
       badge.dataset.layer = 'badge'
       el.appendChild(badge)
@@ -261,9 +321,7 @@ export function useMapMarkers(
       if (cancelled) return
 
       const nodeArray = Object.values(nodes)
-      const filtered = categoryFilter
-        ? nodeArray.filter((n) => n.category === categoryFilter)
-        : nodeArray
+      const filtered = categoryFilter ? nodeArray.filter((n) => n.category === categoryFilter) : nodeArray
 
       const filteredIds = new Set(filtered.map((n) => n.id))
 
@@ -275,7 +333,9 @@ export function useMapMarkers(
       }
 
       for (const node of filtered) {
-        const score = pulseScores[node.id] ?? 0
+        const rawScore = pulseScores[node.id] ?? 0
+        const boosted = isNodeBoosted(node.boostUntil)
+        const score = getEffectivePulseScore(rawScore, node.boostUntil)
         const state = getNodeState(score)
         const coreSize = getCoreSize(state, score)
         const colour = getCategoryColour(node.category)
@@ -283,17 +343,23 @@ export function useMapMarkers(
 
         if (existing) {
           existing.setLngLat([node.lng, node.lat])
-          updateMarkerElement(existing.getElement(), coreSize, colour, state, score)
+          updateMarkerElement(existing.getElement(), coreSize, colour, state, score, boosted)
           continue
         }
 
-        const el = buildMarkerElement(node, coreSize, colour, state, score, () => {
-          onNodeTapRef.current(node)
-        })
+        const el = buildMarkerElement(
+          node,
+          coreSize,
+          colour,
+          state,
+          score,
+          () => {
+            onNodeTapRef.current(node)
+          },
+          boosted,
+        )
 
-        const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
-          .setLngLat([node.lng, node.lat])
-          .addTo(map)
+        const marker = new mapboxgl.Marker({ element: el, anchor: 'center' }).setLngLat([node.lng, node.lat]).addTo(map)
 
         markersRef.current.set(node.id, marker)
       }

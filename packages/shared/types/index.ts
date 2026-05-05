@@ -130,6 +130,7 @@ export interface Node {
   isVerified: boolean
   isActive: boolean
   createdAt: string
+  boostUntil?: string | null
 }
 
 export interface PulseScore {
