@@ -29,9 +29,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   function toggle(genre: MusicGenre) {
     setSelected((prev) =>
-      prev.includes(genre)
-        ? prev.filter((g) => g !== genre)
-        : prev.length < 5 ? [...prev, genre] : prev,
+      prev.includes(genre) ? prev.filter((g) => g !== genre) : prev.length < 5 ? [...prev, genre] : prev,
     )
   }
 
@@ -54,8 +52,11 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[var(--bg-base)]">
-      <div className="w-full max-w-[380px] mx-4 py-8 px-5 flex flex-col items-center">
+    <div
+      className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto"
+      style={{ backgroundColor: 'var(--bg-base)' }}
+    >
+      <div className="w-full max-w-[380px] mx-4 py-8 px-5 flex flex-col items-center min-h-full justify-center">
         <h1 className="text-[var(--text-primary)] text-2xl font-extrabold text-center mb-2 font-[Syne]">
           What do you listen to?
         </h1>
@@ -82,15 +83,9 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           })}
         </div>
 
-        <p className="text-[var(--text-muted)] text-[11px] text-center mb-4">
-          {selected.length}/5 selected
-        </p>
+        <p className="text-[var(--text-muted)] text-[11px] text-center mb-4">{selected.length}/5 selected</p>
 
-        {error && (
-          <p className="text-[var(--danger)] text-xs text-center mb-3">
-            {error}
-          </p>
-        )}
+        {error && <p className="text-[var(--danger)] text-xs text-center mb-3">{error}</p>}
 
         <button
           onClick={handleContinue}

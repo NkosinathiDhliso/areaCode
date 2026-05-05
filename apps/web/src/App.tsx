@@ -169,6 +169,12 @@ function AppContent() {
     return <ConsumerOAuthCallback onNavigate={setRoute} />
   }
 
+  // Onboarding takes the entire screen until completed — never overlay it on top
+  // of other screens (stacking-context bugs caused content bleed-through).
+  if (showOnboarding) {
+    return <OnboardingFlow onComplete={() => setShowOnboarding(false)} />
+  }
+
   // Authenticated users landing on root: route them to their time-based default tab
   let activeRoute = route
   if (isAuthenticated && route === 'landing') {
@@ -182,7 +188,6 @@ function AppContent() {
   return (
     <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
       <ConnectivityBanner />
-      {showOnboarding && <OnboardingFlow onComplete={() => setShowOnboarding(false)} />}
       <div ref={contentRef} className="flex-1 relative overflow-hidden">
         {showAuthGate ? (
           <AuthLanding onNavigate={setRoute} />
