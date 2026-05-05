@@ -11,7 +11,6 @@
   "dependencies": {
     "@area-code/shared": "workspace:*",
     "@tanstack/react-query": "^5.0.0",
-    "framer-motion": "^12.0.0",
     "i18next": "^24.0.0",
     "lucide-react": "^1.14.0",
     "mapbox-gl": "^3.9.0",
