@@ -6,7 +6,7 @@ import type {
   BusinessRewardClaimedPayload,
   TierChangedPayload,
 } from './types.js'
-import { getIO } from './server.js'
+import { tryGetIO } from './server.js'
 import { cityRoom, nodeRoom, userRoom, businessRoom } from './rooms.js'
 
 /**
@@ -17,18 +17,18 @@ export function emitPulseUpdate(
   citySlug: string,
   payload: { nodeId: string; pulseScore: number; checkInCount: number; state: NodeState },
 ) {
-  getIO().to(cityRoom(citySlug)).emit('node:pulse_update', payload)
+  tryGetIO()?.to(cityRoom(citySlug)).emit('node:pulse_update', payload)
 }
 
 export function emitStateSurge(
   citySlug: string,
   payload: { nodeId: string; fromState: NodeState; toState: NodeState },
 ) {
-  getIO().to(cityRoom(citySlug)).emit('node:state_surge', payload)
+  tryGetIO()?.to(cityRoom(citySlug)).emit('node:state_surge', payload)
 }
 
 export function emitStateChange(citySlug: string, payload: { nodeId: string; state: NodeState }) {
-  getIO().to(cityRoom(citySlug)).emit('node:state_change', payload)
+  tryGetIO()?.to(cityRoom(citySlug)).emit('node:state_change', payload)
 }
 
 export function emitNodeCreated(
@@ -45,7 +45,7 @@ export function emitNodeCreated(
     isVerified?: boolean
   },
 ) {
-  getIO().to(cityRoom(citySlug)).emit('node:created', payload)
+  tryGetIO()?.to(cityRoom(citySlug)).emit('node:created', payload)
 }
 
 export function emitToast(
@@ -59,7 +59,7 @@ export function emitToast(
     avatarUrl?: string
   },
 ) {
-  getIO().to(cityRoom(citySlug)).emit('toast:new', payload)
+  tryGetIO()?.to(cityRoom(citySlug)).emit('toast:new', payload)
 }
 
 export function emitRewardClaimed(
@@ -71,23 +71,23 @@ export function emitRewardClaimed(
     codeExpiresAt: string
   },
 ) {
-  getIO().to(userRoom(userId)).emit('reward:claimed', payload)
+  tryGetIO()?.to(userRoom(userId)).emit('reward:claimed', payload)
 }
 
 export function emitRewardSlotsUpdate(nodeId: string, payload: { rewardId: string; slotsRemaining: number }) {
-  getIO().to(nodeRoom(nodeId)).emit('reward:slots_update', payload)
+  tryGetIO()?.to(nodeRoom(nodeId)).emit('reward:slots_update', payload)
 }
 
 export function emitLeaderboardUpdate(userId: string, payload: { userId: string; rank: number; delta: number }) {
-  getIO().to(userRoom(userId)).emit('leaderboard:update', payload)
+  tryGetIO()?.to(userRoom(userId)).emit('leaderboard:update', payload)
 }
 
 export function emitBusinessCheckin(businessId: string, payload: BusinessCheckinPayload) {
-  getIO().to(businessRoom(businessId)).emit('business:checkin', payload)
+  tryGetIO()?.to(businessRoom(businessId)).emit('business:checkin', payload)
 }
 
 export function emitBusinessRewardClaimed(businessId: string, payload: BusinessRewardClaimedPayload) {
-  getIO().to(businessRoom(businessId)).emit('business:reward_claimed', payload)
+  tryGetIO()?.to(businessRoom(businessId)).emit('business:reward_claimed', payload)
 }
 
 export function emitFriendToast(
@@ -99,13 +99,13 @@ export function emitFriendToast(
     avatarUrl?: string
   },
 ) {
-  getIO().to(userRoom(userId)).emit('toast:friend_checkin', payload)
+  tryGetIO()?.to(userRoom(userId)).emit('toast:friend_checkin', payload)
 }
 
 export function emitBusinessCheckinDetail(businessId: string, payload: BusinessCheckinDetailPayload) {
-  getIO().to(businessRoom(businessId)).emit('business:checkin_detail', payload)
+  tryGetIO()?.to(businessRoom(businessId)).emit('business:checkin_detail', payload)
 }
 
 export function emitTierChanged(userId: string, payload: TierChangedPayload) {
-  getIO().to(userRoom(userId)).emit('tier:changed', payload)
+  tryGetIO()?.to(userRoom(userId)).emit('tier:changed', payload)
 }
