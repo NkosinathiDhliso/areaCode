@@ -37,9 +37,9 @@ export function useCheckIn() {
     return checkIn(lastPayloadRef.current)
   }, [checkIn])
 
-  const resetQrFallback = useCallback(() => {
-    setQrFallback(false)
+  const clearError = useCallback(() => {
+    setError(null)
   }, [])
 
-  return { checkIn, retry, isPending, error, qrFallback, resetQrFallback }
+  return { checkIn, retry, isPending, error, qrFallback, resetQrFallback, clearError }
 }

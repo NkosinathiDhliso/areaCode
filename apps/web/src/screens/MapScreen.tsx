@@ -25,12 +25,6 @@ interface MapScreenProps {
 
 const DEFAULT_ZOOM = 13
 
-// Use the user's city from their profile, fallback to Johannesburg
-function getUserCitySlug(): string {
-  const userStore = useUserStore.getState()
-  return userStore.user?.citySlug ?? 'johannesburg'
-}
-
 export function MapScreen({ onNavigate }: MapScreenProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -44,7 +38,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const onboarding = useUserStore((s) => s.onboarding)
   const markHintSeen = useUserStore((s) => s.markHintSeen)
   const { requestLocation, geoStatus } = useGeolocation()
-  const { checkIn, qrFallback, resetQrFallback } = useCheckIn()
+  const { checkIn, error: checkInError, qrFallback, resetQrFallback, clearError } = useCheckIn()
 
   const citySlug = useUserStore((s) => s.user?.citySlug) ?? 'johannesburg'
 
@@ -141,6 +135,17 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     }
   }
 
+  function handleRecenter() {
+    void requestLocation().then((pos) => {
+      if (pos) {
+        mapRef.current?.flyTo({
+          center: [pos.lng, pos.lat],
+          zoom: DEFAULT_ZOOM,
+        })
+      }
+    })
+  }
+
   function handleEnableLocation() {
     void requestLocation().then((pos) => {
       if (pos) {
@@ -162,6 +167,77 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   return (
     <div className="h-full w-full relative">
       <div ref={containerRef} className="absolute inset-0 w-full h-full" />
+
+      {/* Floating Action Buttons */}
+      <div className="absolute bottom-24 right-4 flex flex-col gap-3 z-10">
+        <button
+          onClick={() => setSearchOpen(true)}
+          className="p-3 rounded-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] shadow-lg active:scale-95 transition-all"
+          aria-label="Search"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+        </button>
+        <button
+          onClick={handleRecenter}
+          className="p-3 rounded-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] shadow-lg active:scale-95 transition-all"
+          aria-label="Recenter"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12 2v3M12 19v3M22 12h-3M5 12H2" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Check-in error display */}
+      {checkInError && (
+        <div className="absolute top-20 left-4 right-4 z-20">
+          <div className="bg-[var(--danger)] text-white text-xs font-medium rounded-xl px-4 py-3 shadow-lg flex items-center justify-between">
+            <div className="flex-1 mr-2">
+              <p>{checkInError}</p>
+              {checkInError.includes('too far') && (
+                <p className="mt-1 opacity-90 font-normal">Try tapping the crosshair to recenter.</p>
+              )}
+            </div>
+            <button onClick={clearError} className="p-1 opacity-70 hover:opacity-100 transition-opacity">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Map error fallback */}
       {mapError && (
