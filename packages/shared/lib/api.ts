@@ -20,8 +20,6 @@ interface ApiError {
   statusCode: number
 }
 
-type TokenRefresher = () => Promise<string | null>
-
 class ApiClient {
   private baseUrl: string
   private getToken: (() => string | null) | null = null
@@ -85,8 +83,12 @@ class ApiClient {
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+    const headers: Record<string, string> = {}
+
+    // Only set Content-Type when we actually have a body — otherwise Fastify
+    // rejects body-less POST/PATCH with 400 'Body cannot be empty when content-type is application/json'.
+    if (body !== undefined && body !== null) {
+      headers['Content-Type'] = 'application/json'
     }
 
     const token = this.getToken?.()
