@@ -33,33 +33,33 @@ const SPOTIFY_SCOPES = 'user-top-read'
 
 // Known Spotify genre strings → our 12 genre taxonomy
 const SPOTIFY_GENRE_MAP: Record<string, string> = {
-  'amapiano': 'amapiano',
+  amapiano: 'amapiano',
   'south african house': 'amapiano',
   'deep house': 'deep_house',
-  'house': 'deep_house',
-  'afrobeats': 'afrobeats',
+  house: 'deep_house',
+  afrobeats: 'afrobeats',
   'afro house': 'afrobeats',
-  'afropop': 'afrobeats',
+  afropop: 'afrobeats',
   'hip hop': 'hip_hop',
-  'rap': 'hip_hop',
+  rap: 'hip_hop',
   'south african hip hop': 'hip_hop',
   'r&b': 'rnb',
-  'rnb': 'rnb',
+  rnb: 'rnb',
   'neo soul': 'rnb',
-  'kwaito': 'kwaito',
-  'gqom': 'gqom',
-  'jazz': 'jazz',
+  kwaito: 'kwaito',
+  gqom: 'gqom',
+  jazz: 'jazz',
   'south african jazz': 'jazz',
   'smooth jazz': 'jazz',
-  'rock': 'rock',
-  'alternative': 'rock',
-  'indie': 'rock',
-  'pop': 'pop',
+  rock: 'rock',
+  alternative: 'rock',
+  indie: 'rock',
+  pop: 'pop',
   'dance pop': 'pop',
-  'gospel': 'gospel',
+  gospel: 'gospel',
   'south african gospel': 'gospel',
-  'maskandi': 'maskandi',
-  'isicathamiya': 'maskandi',
+  maskandi: 'maskandi',
+  isicathamiya: 'maskandi',
   'zulu music': 'maskandi',
 }
 
@@ -94,7 +94,7 @@ export async function exchangeSpotifyCode(code: string): Promise<SpotifyTokenRes
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': `Basic ${Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64')}`,
+      Authorization: `Basic ${Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64')}`,
     },
     body: body.toString(),
   })
@@ -118,19 +118,21 @@ interface SpotifyTopArtistsResponse {
 
 export async function fetchSpotifyTopGenres(accessToken: string): Promise<string[]> {
   const res = await fetch('https://api.spotify.com/v1/me/top/artists?limit=20&time_range=medium_term', {
-    headers: { 'Authorization': `Bearer ${accessToken}` },
+    headers: { Authorization: `Bearer ${accessToken}` },
   })
 
   if (!res.ok) {
     throw new Error(`Spotify top artists failed: ${res.status}`)
   }
 
-  const data = await res.json() as SpotifyTopArtistsResponse
+  const data = (await res.json()) as SpotifyTopArtistsResponse
 
   // Collect all genre strings from top artists
   const rawGenres: string[] = []
-  for (const artist of data.items) {
-    rawGenres.push(...artist.genres)
+  for (const artist of data.items ?? []) {
+    if (Array.isArray(artist?.genres)) {
+      rawGenres.push(...artist.genres)
+    }
   }
 
   // Map to our taxonomy and count occurrences
@@ -141,7 +143,10 @@ export async function fetchSpotifyTopGenres(accessToken: string): Promise<string
     let mapped = SPOTIFY_GENRE_MAP[lower]
     if (!mapped) {
       for (const [pattern, genre] of Object.entries(SPOTIFY_GENRE_MAP)) {
-        if (lower.includes(pattern)) { mapped = genre; break }
+        if (lower.includes(pattern)) {
+          mapped = genre
+          break
+        }
       }
     }
     if (mapped) {
@@ -188,26 +193,26 @@ export async function generateAppleDeveloperToken(): Promise<string> {
 
 // Apple Music genre name → our taxonomy
 const APPLE_GENRE_MAP: Record<string, string> = {
-  'Amapiano': 'amapiano',
-  'House': 'deep_house',
+  Amapiano: 'amapiano',
+  House: 'deep_house',
   'Deep House': 'deep_house',
-  'Afrobeats': 'afrobeats',
-  'African': 'afrobeats',
+  Afrobeats: 'afrobeats',
+  African: 'afrobeats',
   'Hip-Hop/Rap': 'hip_hop',
   'Hip-Hop': 'hip_hop',
   'R&B/Soul': 'rnb',
   'R&B': 'rnb',
-  'Soul': 'rnb',
-  'Kwaito': 'kwaito',
-  'Gqom': 'gqom',
-  'Jazz': 'jazz',
-  'Rock': 'rock',
-  'Alternative': 'rock',
-  'Pop': 'pop',
-  'Gospel': 'gospel',
-  'Christian': 'gospel',
-  'Maskandi': 'maskandi',
-  'World': 'maskandi',
+  Soul: 'rnb',
+  Kwaito: 'kwaito',
+  Gqom: 'gqom',
+  Jazz: 'jazz',
+  Rock: 'rock',
+  Alternative: 'rock',
+  Pop: 'pop',
+  Gospel: 'gospel',
+  Christian: 'gospel',
+  Maskandi: 'maskandi',
+  World: 'maskandi',
 }
 
 interface AppleMusicSong {
@@ -220,25 +225,19 @@ interface AppleMusicLibraryResponse {
   data?: AppleMusicSong[]
 }
 
-export async function fetchAppleMusicTopGenres(
-  developerToken: string,
-  userToken: string,
-): Promise<string[]> {
-  const res = await fetch(
-    'https://api.music.apple.com/v1/me/library/songs?limit=50&sort=-dateAdded',
-    {
-      headers: {
-        'Authorization': `Bearer ${developerToken}`,
-        'Music-User-Token': userToken,
-      },
+export async function fetchAppleMusicTopGenres(developerToken: string, userToken: string): Promise<string[]> {
+  const res = await fetch('https://api.music.apple.com/v1/me/library/songs?limit=50&sort=-dateAdded', {
+    headers: {
+      Authorization: `Bearer ${developerToken}`,
+      'Music-User-Token': userToken,
     },
-  )
+  })
 
   if (!res.ok) {
     throw new Error(`Apple Music library fetch failed: ${res.status}`)
   }
 
-  const data = await res.json() as AppleMusicLibraryResponse
+  const data = (await res.json()) as AppleMusicLibraryResponse
 
   const counts = new Map<string, number>()
   for (const song of data.data ?? []) {
