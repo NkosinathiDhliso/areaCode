@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   BarChart,
   Bar,
@@ -307,6 +307,24 @@ export function ReportsPanel() {
   const reports = listData?.reports ?? []
   const currentReportId = reports[selectedIndex]?.reportId
 
+  // On-demand report generation
+  const queryClient = useQueryClient()
+  const generateMutation = useMutation({
+    mutationFn: () =>
+      api.post<
+        | { generated: true; reportId: string }
+        | { generated: false; reason: 'no_nodes' | 'no_check_ins' | 'pii'; message: string }
+      >('/v1/business/me/reports/generate', { periodType: periodFilter }),
+    onSuccess: (res) => {
+      if (res.generated) {
+        void queryClient.invalidateQueries({ queryKey: ['business', 'reports', periodFilter] })
+        setSelectedIndex(0)
+      }
+    },
+  })
+  const generateBanner =
+    generateMutation.data && !generateMutation.data.generated ? generateMutation.data.message : null
+
   // Fetch selected report detail
   const { data: report, isLoading: reportLoading } = useQuery({
     queryKey: ['business', 'report', currentReportId],
@@ -352,11 +370,23 @@ export function ReportsPanel() {
             setSelectedIndex(0)
           }}
         />
-        <div className="flex items-center justify-center py-16">
-          <span className="text-[var(--text-muted)] text-sm text-center">
-            No {periodFilter} reports yet. Reports are generated automatically each{' '}
-            {periodFilter === 'weekly' ? 'Monday' : 'month'}.
+        <div className="flex flex-col items-center justify-center py-12 gap-4">
+          <span className="text-[var(--text-muted)] text-sm text-center max-w-[280px]">
+            No {periodFilter} reports yet. Generate one now from your recent check-ins.
           </span>
+          <button
+            onClick={() => generateMutation.mutate()}
+            disabled={generateMutation.isPending}
+            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3 px-6 text-sm disabled:opacity-50"
+          >
+            {generateMutation.isPending ? 'Generating…' : `Generate ${periodFilter} report now`}
+          </button>
+          {generateBanner && (
+            <p className="text-[var(--text-secondary)] text-xs text-center max-w-[280px]">{generateBanner}</p>
+          )}
+          {generateMutation.isError && (
+            <p className="text-[var(--danger)] text-xs text-center">Could not generate. Please try again.</p>
+          )}
         </div>
       </div>
     )
@@ -368,14 +398,24 @@ export function ReportsPanel() {
     <div className="p-5 flex flex-col gap-4">
       <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('biz.panel.reports')}</h2>
 
-      {/* Period toggle */}
-      <PeriodToggle
-        value={periodFilter}
-        onChange={(v) => {
-          setPeriodFilter(v)
-          setSelectedIndex(0)
-        }}
-      />
+      {/* Period toggle + on-demand generate */}
+      <div className="flex flex-row items-center justify-between gap-2">
+        <PeriodToggle
+          value={periodFilter}
+          onChange={(v) => {
+            setPeriodFilter(v)
+            setSelectedIndex(0)
+          }}
+        />
+        <button
+          onClick={() => generateMutation.mutate()}
+          disabled={generateMutation.isPending}
+          className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs disabled:opacity-50"
+        >
+          {generateMutation.isPending ? 'Generating…' : 'Generate now'}
+        </button>
+      </div>
+      {generateBanner && <p className="text-[var(--text-secondary)] text-xs">{generateBanner}</p>}
 
       {/* Date navigation */}
       {currentListItem && (

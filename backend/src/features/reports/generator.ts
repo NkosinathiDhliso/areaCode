@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { QueryCommand, BatchGetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
+import { QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb'
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { anonymizeCheckIns, type RawCheckIn } from './anonymize.js'
@@ -13,12 +13,7 @@ import { analyzeJourney } from './analyzers/journey.js'
 import { generateRecommendations } from './analyzers/recommendations.js'
 import { scanForPii } from './pii-scanner.js'
 import { storeReport, getPreviousReport } from './repository.js'
-import type {
-  GenerateReportMessage,
-  Report,
-  ReportMetrics,
-  MusicPrefs,
-} from './types.js'
+import type { GenerateReportMessage, Report, ReportMetrics, MusicPrefs } from './types.js'
 
 // ============================================================================
 // Constants
@@ -52,7 +47,7 @@ async function getBusinessNodes(businessId: string): Promise<Array<{ nodeId: str
       IndexName: 'BusinessIndex',
       KeyConditionExpression: 'businessId = :businessId',
       ExpressionAttributeValues: { ':businessId': businessId },
-    })
+    }),
   )
 
   return (result.Items || []).map((item) => ({
@@ -65,11 +60,7 @@ async function getBusinessNodes(businessId: string): Promise<Array<{ nodeId: str
  * Load all check-ins for a node within the reporting period.
  * Paginates through all results using the NodeIndex GSI.
  */
-async function loadCheckInsForNode(
-  nodeId: string,
-  periodStart: string,
-  periodEnd: string,
-): Promise<RawCheckIn[]> {
+async function loadCheckInsForNode(nodeId: string, periodStart: string, periodEnd: string): Promise<RawCheckIn[]> {
   const checkIns: RawCheckIn[] = []
   let lastKey: Record<string, unknown> | undefined
 
@@ -86,7 +77,7 @@ async function loadCheckInsForNode(
           ':end': periodEnd,
         },
         ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
-      })
+      }),
     )
 
     for (const item of result.Items || []) {
@@ -112,9 +103,7 @@ async function loadCheckInsForNode(
  * Load user tiers and music preferences via BatchGetItem.
  * Returns a map of userId -> { tier, musicPrefs }.
  */
-async function loadUserData(
-  userIds: string[],
-): Promise<Map<string, { tier: string; musicPrefs: MusicPrefs | null }>> {
+async function loadUserData(userIds: string[]): Promise<Map<string, { tier: string; musicPrefs: MusicPrefs | null }>> {
   const userDataMap = new Map<string, { tier: string; musicPrefs: MusicPrefs | null }>()
 
   if (userIds.length === 0) return userDataMap
@@ -131,10 +120,11 @@ async function loadUserData(
           RequestItems: {
             [TableNames.users]: {
               Keys: keys,
-              ProjectionExpression: 'userId, tier, musicGenres, energy, cultural_rootedness, sophistication, edge, spirituality',
+              ProjectionExpression:
+                'userId, tier, musicGenres, energy, cultural_rootedness, sophistication, edge, spirituality',
             },
           },
-        })
+        }),
       )
 
       const items = result.Responses?.[TableNames.users] || []
@@ -182,7 +172,7 @@ async function loadCategoryVenueMetrics(
       KeyConditionExpression: 'nodeId = :nodeId',
       ExpressionAttributeValues: { ':nodeId': nodes[0]!.nodeId },
       Limit: 1,
-    })
+    }),
   )
 
   const firstNode = firstNodeResult.Items?.[0]
@@ -199,7 +189,7 @@ async function loadCategoryVenueMetrics(
       IndexName: 'LocationIndex',
       KeyConditionExpression: 'cityId = :cityId',
       ExpressionAttributeValues: { ':cityId': cityId },
-    })
+    }),
   )
 
   const cityNodes = cityNodesResult.Items || []
@@ -230,7 +220,7 @@ async function loadCategoryVenueMetrics(
             ':prefix': 'LATEST',
           },
           Limit: 1,
-        })
+        }),
       )
 
       const metricsItem = metricsResult.Items?.[0]
@@ -271,7 +261,7 @@ async function loadAllVenueVisitorMap(
       IndexName: 'LocationIndex',
       KeyConditionExpression: 'cityId = :cityId',
       ExpressionAttributeValues: { ':cityId': cityId },
-    })
+    }),
   )
 
   const otherNodes = (cityNodesResult.Items || []).filter((n) => {
@@ -292,9 +282,7 @@ async function loadAllVenueVisitorMap(
       for (const ci of checkIns) {
         // Hash the visitor token the same way as the business's check-ins
         const { createHash } = await import('node:crypto')
-        const token = createHash('sha256')
-          .update(`${ci.userId}${periodStart}${ANONYMIZATION_SALT}`)
-          .digest('hex')
+        const token = createHash('sha256').update(`${ci.userId}${periodStart}${ANONYMIZATION_SALT}`).digest('hex')
         visitors.add(token)
       }
 
@@ -356,7 +344,7 @@ async function queueEmailNotification(businessId: string, reportId: string, peri
           reportId,
           periodType,
         }),
-      })
+      }),
     )
   } catch (error) {
     console.warn('[generator] Email notification queue failed:', error)
@@ -392,8 +380,28 @@ export async function handler(event: SQSEvent): Promise<void> {
   }
 }
 
+/**
+ * Generate a report on demand (synchronously, without SQS).
+ * Used by the `POST /v1/business/me/reports/generate` endpoint so businesses
+ * can trigger report generation directly from the dashboard.
+ */
+export async function generateReportNow(
+  businessId: string,
+  periodType: 'weekly' | 'monthly',
+  periodStart: string,
+  periodEnd: string,
+): Promise<{ reportId: string } | { skipped: 'no_nodes' | 'no_check_ins' | 'pii' }> {
+  return generateReportInternal({ businessId, periodType, periodStart, periodEnd })
+}
+
 async function processRecord(body: string): Promise<void> {
   const message: GenerateReportMessage = JSON.parse(body)
+  await generateReportInternal(message)
+}
+
+async function generateReportInternal(
+  message: GenerateReportMessage,
+): Promise<{ reportId: string } | { skipped: 'no_nodes' | 'no_check_ins' | 'pii' }> {
   const { businessId, periodType, periodStart, periodEnd } = message
 
   console.log(`[generator] Processing report for business=${businessId}, period=${periodType}, start=${periodStart}`)
@@ -402,7 +410,7 @@ async function processRecord(body: string): Promise<void> {
   const nodes = await getBusinessNodes(businessId)
   if (nodes.length === 0) {
     console.log(`[generator] No nodes for business ${businessId}, skipping`)
-    return
+    return { skipped: 'no_nodes' }
   }
 
   // 2. Load check-ins for all nodes in the period
@@ -414,7 +422,7 @@ async function processRecord(body: string): Promise<void> {
 
   if (allRawCheckIns.length === 0) {
     console.log(`[generator] No check-ins for business ${businessId} in period, skipping`)
-    return
+    return { skipped: 'no_check_ins' }
   }
 
   // 3. Load user tiers and music prefs
@@ -512,33 +520,18 @@ async function processRecord(body: string): Promise<void> {
         KeyConditionExpression: 'nodeId = :nodeId',
         ExpressionAttributeValues: { ':nodeId': firstNode.nodeId },
         Limit: 1,
-      })
+      }),
     )
     cityId = nodeResult.Items?.[0]?.['cityId'] as string | undefined
   } catch {
     // Skip journey if we can't determine city
   }
 
-  const allVenueVisitorMap = await loadAllVenueVisitorMap(
-    businessNodeIds,
-    periodStart,
-    periodEnd,
-    cityId,
-  )
+  const allVenueVisitorMap = await loadAllVenueVisitorMap(businessNodeIds, periodStart, periodEnd, cityId)
 
   const journeyInsights = analyzeJourney(currentVisitorTokens, allVenueVisitorMap)
 
   // Recommendations
-  const reportSections = {
-    peakHours,
-    crowdComposition,
-    musicProfile: musicProfile.hasInsufficientData ? null : musicProfile,
-    repeatVisitors,
-    trends,
-    benchmarks: benchmarks.hasInsufficientData ? null : benchmarks,
-    journeyInsights: journeyInsights.hasInsufficientData ? null : journeyInsights,
-  }
-
   const recommendations = generateRecommendations({
     peakHours,
     crowdComposition,
@@ -553,9 +546,7 @@ async function processRecord(body: string): Promise<void> {
   const reportId = randomUUID()
   const generatedAt = new Date().toISOString()
 
-  const topGenre = musicProfile.hasInsufficientData
-    ? null
-    : musicProfile.topGenres[0]?.genre ?? null
+  const topGenre = musicProfile.hasInsufficientData ? null : (musicProfile.topGenres[0]?.genre ?? null)
 
   const headlineRecommendation = recommendations.recommendations[0]?.text ?? 'No recommendations available.'
 
@@ -590,18 +581,27 @@ async function processRecord(body: string): Promise<void> {
 
   if (!piiResult.clean) {
     console.error(`[generator] PII detected in report for business ${businessId}:`, piiResult.violations)
-    return
+    return { skipped: 'pii' }
   }
 
   // 8. Store report
   await storeReport(report)
   console.log(`[generator] Report stored: reportId=${reportId}, business=${businessId}`)
 
-  // 9. Send notifications
-  await sendWebSocketNotification(businessId, reportId)
-  await queueEmailNotification(businessId, reportId, periodType)
+  // 9. Send notifications (non-blocking — failures should not abort generation)
+  try {
+    await sendWebSocketNotification(businessId, reportId)
+  } catch (err) {
+    console.warn(`[generator] WebSocket notification failed:`, err)
+  }
+  try {
+    await queueEmailNotification(businessId, reportId, periodType)
+  } catch (err) {
+    console.warn(`[generator] Email notification failed:`, err)
+  }
 
   console.log(`[generator] Report generation complete for business ${businessId}`)
+  return { reportId }
 }
 
 // ============================================================================
