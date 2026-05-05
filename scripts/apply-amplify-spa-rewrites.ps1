@@ -30,7 +30,7 @@ $apps = @(
 # The Amplify-recommended SPA fallback rewrite.
 # Source: https://docs.aws.amazon.com/amplify/latest/userguide/redirects.html#redirects-for-single-page-web-apps-spa
 $spaRule = @{
-    source = "</^[^.]+$|\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>"
+    source = '</^[^.]+$|\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>'
     target = "/index.html"
     status = "200"
 }

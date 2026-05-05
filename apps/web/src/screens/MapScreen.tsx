@@ -49,7 +49,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const onboarding = useUserStore((s) => s.onboarding)
   const markHintSeen = useUserStore((s) => s.markHintSeen)
   const { requestLocation, geoStatus } = useGeolocation()
-  const { checkIn, error: checkInError, qrFallback, resetQrFallback, clearError } = useCheckIn()
+  const { checkIn, error: checkInError, qrFallback, tooFar, resetQrFallback, clearError } = useCheckIn()
 
   const citySlug = useUserStore((s) => s.user?.citySlug) ?? 'johannesburg'
 
@@ -82,12 +82,15 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   useEffect(() => {
     void requestLocation().then((pos) => {
       if (pos && isInsideSouthAfrica(pos.lat, pos.lng)) {
+        setLocationConfused(false)
         mapRef.current?.flyTo({
           center: [pos.lng, pos.lat],
           zoom: DEFAULT_ZOOM,
         })
       } else {
         // GPS returned a non-SA location (likely IP fallback) — stay on default center
+        // and surface a banner so the user can enable precise location
+        if (pos) setLocationConfused(true)
         mapRef.current?.flyTo({
           center: FALLBACK_CENTER,
           zoom: DEFAULT_ZOOM,
@@ -154,18 +157,21 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   }
 
   const [locating, setLocating] = useState(false)
+  const [locationConfused, setLocationConfused] = useState(false)
 
   function handleRecenter() {
     setLocating(true)
     void requestLocation({ forceRefresh: true }).then((pos) => {
       setLocating(false)
       if (pos && isInsideSouthAfrica(pos.lat, pos.lng)) {
+        setLocationConfused(false)
         mapRef.current?.flyTo({
           center: [pos.lng, pos.lat],
           zoom: DEFAULT_ZOOM,
         })
       } else {
         // GPS failed or returned non-SA coordinates — fly to Joburg default
+        if (pos) setLocationConfused(true)
         mapRef.current?.flyTo({
           center: FALLBACK_CENTER,
           zoom: DEFAULT_ZOOM,
@@ -190,7 +196,9 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
   const selectedScore = selectedNode ? (pulseScores[selectedNode.id] ?? 0) : 0
   const [locationBannerDismissed, setLocationBannerDismissed] = useState(false)
+  const [confusedBannerDismissed, setConfusedBannerDismissed] = useState(false)
   const showLocationBanner = permissionState === 'denied' && !locationBannerDismissed
+  const showConfusedBanner = locationConfused && !confusedBannerDismissed && permissionState !== 'denied'
 
   return (
     <div className="h-full w-full relative">
@@ -305,6 +313,41 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
               {t('location.enable')}
             </button>
             <button onClick={() => setLocationBannerDismissed(true)} className="text-[var(--text-muted)]">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* GPS confused banner — shows when we got a position but it's outside South Africa
+          (typically browser IP-based fallback when precise location is blocked or unavailable) */}
+      {showConfusedBanner && (
+        <div className="absolute top-16 left-4 right-4 z-20">
+          <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl px-4 py-3 flex items-center justify-between">
+            <div className="flex-1 mr-3">
+              <p className="text-[var(--text-primary)] text-xs font-medium">{t('location.confusedTitle')}</p>
+              <p className="text-[var(--text-secondary)] text-[11px] mt-0.5">{t('location.confusedHint')}</p>
+            </div>
+            <button
+              onClick={handleRecenter}
+              disabled={locating}
+              className="bg-[var(--accent)] text-white text-xs font-semibold rounded-lg px-3 py-1.5 mr-2 disabled:opacity-60"
+            >
+              {locating ? t('checkin.locating') : t('location.tryAgain')}
+            </button>
+            <button onClick={() => setConfusedBannerDismissed(true)} className="text-[var(--text-muted)]">
               <svg
                 width="14"
                 height="14"
