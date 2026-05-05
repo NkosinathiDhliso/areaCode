@@ -17,12 +17,13 @@ const sharedBuildOptions = {
   banner: {
     js: [
       // ESM compatibility shims for __dirname / require
-      'import { createRequire as _cr } from "module";',
-      'import { fileURLToPath as _fp } from "url";',
-      'import { dirname as _dn } from "path";',
-      'const require = _cr(import.meta.url);',
-      'const __filename = _fp(import.meta.url);',
-      'const __dirname = _dn(__filename);',
+      // Use long aliases to avoid collisions with minified identifiers
+      'import { createRequire as __cjs_require } from "module";',
+      'import { fileURLToPath as __cjs_fileurl } from "url";',
+      'import { dirname as __cjs_dirname } from "path";',
+      'const require = __cjs_require(import.meta.url);',
+      'const __filename = __cjs_fileurl(import.meta.url);',
+      'const __dirname = __cjs_dirname(__filename);',
     ].join(''),
   },
 }

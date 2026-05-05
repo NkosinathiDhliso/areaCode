@@ -66,14 +66,17 @@ export async function buildApp() {
     'https://master.d166bb81tg4k61.amplifyapp.com', // staff
     'https://master.d1ay6jict0ql9w.amplifyapp.com', // admin
   ]
-  void app.register(cors, {
+  await app.register(cors, {
     origin: isProd
       ? [
           'https://areacode.co.za',
           'https://www.areacode.co.za',
           'https://business.areacode.co.za',
+          'https://www.business.areacode.co.za',
           'https://staff.areacode.co.za',
+          'https://www.staff.areacode.co.za',
           'https://admin.areacode.co.za',
+          'https://www.admin.areacode.co.za',
           ...amplifyOrigins,
         ]
       : [
