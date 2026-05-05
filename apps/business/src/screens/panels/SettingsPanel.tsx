@@ -4,6 +4,8 @@ import type { BusinessAccount, StaffAccount } from '@area-code/shared/types'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { NodeEditorPanel } from './NodeEditorPanel'
+
 interface StaffInvite {
   id: string
   inviteToken: string
@@ -147,6 +149,11 @@ export function SettingsPanel() {
           Failed to load settings. Please refresh and try again.
         </div>
       )}
+
+      {/* Venue details + photo (moved from Live panel) */}
+      <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl">
+        <NodeEditorPanel />
+      </div>
 
       {/* Subscription */}
       {biz && (
