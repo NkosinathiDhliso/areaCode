@@ -59,7 +59,28 @@ variable "spotify_client_secret" {
 variable "spotify_redirect_uri" {
   description = "Spotify OAuth callback URL — must exactly match what is configured in the Spotify dashboard"
   type        = string
-  default     = "https://areacode.co.za/api/v1/streaming/spotify/callback"
+  default     = "https://www.areacode.co.za/api/v1/streaming/spotify/callback"
+}
+
+variable "yoco_public_key" {
+  description = "Yoco live public key (pk_live_…)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "yoco_secret_key" {
+  description = "Yoco live secret key (sk_live_…)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "google_maps_api_key" {
+  description = "Google Maps API key for geocoding/places"
+  type        = string
+  sensitive   = true
+  default     = ""
 }
 
 # --- Data sources for secrets (some optional) ---
@@ -450,6 +471,11 @@ module "lambda_api" {
     SPOTIFY_CLIENT_ID                       = var.spotify_client_id
     SPOTIFY_CLIENT_SECRET                   = var.spotify_client_secret
     SPOTIFY_REDIRECT_URI                    = var.spotify_redirect_uri
+    # Yoco payments — supplied via TF variables (terraform.tfvars or TF_VAR_*)
+    YOCO_PROD_PUBLIC_KEY                    = var.yoco_public_key
+    YOCO_PROD_SECRET_KEY                    = var.yoco_secret_key
+    # Google Maps — supplied via TF variable
+    GOOGLE_MAPS_API_KEY                     = var.google_maps_api_key
   }
 }
 
