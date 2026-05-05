@@ -25,6 +25,17 @@ interface MapScreenProps {
 
 const DEFAULT_ZOOM = 13
 
+// South Africa bounding box — any GPS result outside this is almost certainly
+// an IP-based fallback (e.g. US) and should be discarded.
+// Generous bounds: lat -22 to -35, lng 16 to 33
+const SA_BOUNDS = { minLat: -35, maxLat: -22, minLng: 16, maxLng: 33 }
+function isInsideSouthAfrica(lat: number, lng: number): boolean {
+  return lat >= SA_BOUNDS.minLat && lat <= SA_BOUNDS.maxLat && lng >= SA_BOUNDS.minLng && lng <= SA_BOUNDS.maxLng
+}
+
+// Fallback center: Johannesburg CBD
+const FALLBACK_CENTER: [number, number] = [28.0473, -26.2041]
+
 export function MapScreen({ onNavigate }: MapScreenProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -38,7 +49,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const onboarding = useUserStore((s) => s.onboarding)
   const markHintSeen = useUserStore((s) => s.markHintSeen)
   const { requestLocation, geoStatus } = useGeolocation()
-  const { checkIn, error: checkInError, qrFallback, tooFar, resetQrFallback, clearError } = useCheckIn()
+  const { checkIn, error: checkInError, qrFallback, resetQrFallback, clearError } = useCheckIn()
 
   const citySlug = useUserStore((s) => s.user?.citySlug) ?? 'johannesburg'
 
@@ -70,9 +81,15 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   // Geolocation acquisition via the GPS state machine hook
   useEffect(() => {
     void requestLocation().then((pos) => {
-      if (pos) {
+      if (pos && isInsideSouthAfrica(pos.lat, pos.lng)) {
         mapRef.current?.flyTo({
           center: [pos.lng, pos.lat],
+          zoom: DEFAULT_ZOOM,
+        })
+      } else {
+        // GPS returned a non-SA location (likely IP fallback) — stay on default center
+        mapRef.current?.flyTo({
+          center: FALLBACK_CENTER,
           zoom: DEFAULT_ZOOM,
         })
       }
@@ -142,9 +159,15 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     setLocating(true)
     void requestLocation({ forceRefresh: true }).then((pos) => {
       setLocating(false)
-      if (pos) {
+      if (pos && isInsideSouthAfrica(pos.lat, pos.lng)) {
         mapRef.current?.flyTo({
           center: [pos.lng, pos.lat],
+          zoom: DEFAULT_ZOOM,
+        })
+      } else {
+        // GPS failed or returned non-SA coordinates — fly to Joburg default
+        mapRef.current?.flyTo({
+          center: FALLBACK_CENTER,
           zoom: DEFAULT_ZOOM,
         })
       }
