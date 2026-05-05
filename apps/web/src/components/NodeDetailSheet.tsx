@@ -49,7 +49,9 @@ interface NodeDetailSheetProps {
   onClose: () => void
   onCheckIn: () => void
   onSignup: () => void
+  onRecalibrate?: () => void
   qrFallback?: boolean
+  tooFar?: boolean
 }
 
 export const NodeDetailSheet = memo(function NodeDetailSheet({
@@ -60,7 +62,9 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
   onClose,
   onCheckIn,
   onSignup,
+  onRecalibrate,
   qrFallback = false,
+  tooFar = false,
 }: NodeDetailSheetProps) {
   const { t } = useTranslation()
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
@@ -154,7 +158,7 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
     }
   }
 
-  const ctaInfo = getCtaInfo(geoStatus, qrFallback, t)
+  const ctaInfo = getCtaInfo(geoStatus, qrFallback, tooFar, t)
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose}>
@@ -247,6 +251,28 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
           {/* Crowd Vibe section */}
           <CrowdVibeSection nodeId={node.id} />
         </>
+      )}
+
+      {/* Too far banner */}
+      {tooFar && (
+        <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-2xl px-4 py-3 mb-3 flex items-center justify-between gap-3">
+          <div className="flex-1">
+            <p className="text-[var(--text-primary)] text-sm font-medium">
+              {t('checkin.tooFar', "You're too far from this venue")}
+            </p>
+            <p className="text-[var(--text-secondary)] text-xs mt-0.5">
+              {t('checkin.tooFarHint', 'Move closer or recalibrate your location.')}
+            </p>
+          </div>
+          {onRecalibrate && (
+            <button
+              onClick={onRecalibrate}
+              className="flex-shrink-0 bg-[var(--accent)] text-white text-xs font-semibold rounded-lg px-3 py-2 active:scale-95 transition-all"
+            >
+              {t('checkin.recalibrate', 'Recalibrate')}
+            </button>
+          )}
+        </div>
       )}
 
       {/* Get Directions — always visible */}
@@ -408,10 +434,15 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
 function getCtaInfo(
   geoStatus: GeoStatus,
   qrFallback: boolean,
+  tooFar: boolean,
   t: (key: string) => string,
 ): { label: string; disabled: boolean } {
   if (qrFallback) {
     return { label: t('checkin.scanQr'), disabled: true }
+  }
+
+  if (tooFar) {
+    return { label: t('checkin.tooFarButton'), disabled: true }
   }
 
   switch (geoStatus) {

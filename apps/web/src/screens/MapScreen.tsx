@@ -38,7 +38,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const onboarding = useUserStore((s) => s.onboarding)
   const markHintSeen = useUserStore((s) => s.markHintSeen)
   const { requestLocation, geoStatus } = useGeolocation()
-  const { checkIn, error: checkInError, qrFallback, resetQrFallback, clearError } = useCheckIn()
+  const { checkIn, error: checkInError, qrFallback, tooFar, resetQrFallback, clearError } = useCheckIn()
 
   const citySlug = useUserStore((s) => s.user?.citySlug) ?? 'johannesburg'
 
@@ -87,9 +87,10 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       setSelectedNode(node)
       setSheetOpen(true)
       resetQrFallback()
+      clearError()
       if (!onboarding.hintSeen) markHintSeen('hintSeen')
     },
-    [onboarding.hintSeen, markHintSeen, resetQrFallback],
+    [onboarding.hintSeen, markHintSeen, resetQrFallback, clearError],
   )
 
   // Marker management (extracted hook)
@@ -325,13 +326,18 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
         pulseScore={selectedScore}
         state={getNodeState(selectedScore)}
         isOpen={sheetOpen}
-        onClose={() => setSheetOpen(false)}
+        onClose={() => {
+          setSheetOpen(false)
+          clearError()
+        }}
         onCheckIn={handleCheckIn}
         onSignup={() => {
           setSheetOpen(false)
           setSignupOpen(true)
         }}
+        onRecalibrate={handleRecenter}
         qrFallback={qrFallback}
+        tooFar={tooFar}
       />
 
       <SignupSheet isOpen={signupOpen} onClose={() => setSignupOpen(false)} onNavigate={onNavigate} />
