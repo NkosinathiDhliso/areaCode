@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars (gitignored) and fill in real values.
+# Used by `terraform plan/apply` in this directory automatically.
+
+spotify_client_id     = ""
+spotify_client_secret = ""
+spotify_redirect_uri  = "https://www.areacode.co.za/api/v1/streaming/spotify/callback"
+
+yoco_public_key = "pk_live_..."
+yoco_secret_key = "sk_live_..."
+
+google_maps_api_key = "AIza..."

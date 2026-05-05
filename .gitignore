@@ -9,6 +9,9 @@ dist/
 *.tfstate
 *.tfstate.backup
 .terraform.lock.hcl
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
 infra/modules/lambda/placeholder.zip
 tfplan
 
