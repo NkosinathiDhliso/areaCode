@@ -15,48 +15,55 @@ export function useGeolocation() {
   const permissionState = useLocationStore((s) => s.permissionState)
   const geoStatus = useLocationStore((s) => s.geoStatus)
 
-  const requestLocation = useCallback((): Promise<{ lat: number; lng: number; accuracy: number } | null> => {
-    if (!hasGeolocation()) {
-      setGeoStatus('denied')
-      return Promise.resolve(null)
-    }
+  const requestLocation = useCallback(
+    (opts?: { forceRefresh?: boolean }): Promise<{ lat: number; lng: number; accuracy: number } | null> => {
+      if (!hasGeolocation()) {
+        setGeoStatus('denied')
+        return Promise.resolve(null)
+      }
 
-    setGeoStatus('requesting')
+      setGeoStatus('requesting')
 
-    return new Promise((resolve) => {
-      const timeoutId = setTimeout(() => {
-        setGeoStatus('timeout')
-        resolve(lastKnownPosition ? { ...lastKnownPosition, accuracy: accuracy ?? Infinity } : null)
-      }, GPS_TIMEOUT)
+      // forceRefresh = true → maximumAge: 0 forces a brand-new GPS fix
+      // (default) → maximumAge: 10000 allows a 10-second-old cached position
+      const maxAge = opts?.forceRefresh ? 0 : 10000
 
-      getCurrentPosition(
-        (coords) => {
-          clearTimeout(timeoutId)
-          setPosition(coords.latitude, coords.longitude, coords.accuracy)
-          setPermissionState('granted')
+      return new Promise((resolve) => {
+        const timeoutId = setTimeout(() => {
+          setGeoStatus('timeout')
+          resolve(lastKnownPosition ? { ...lastKnownPosition, accuracy: accuracy ?? Infinity } : null)
+        }, GPS_TIMEOUT)
 
-          if (coords.accuracy > ACCURACY_THRESHOLD) {
-            setGeoStatus('poorAccuracy')
-          } else {
-            setGeoStatus('acquired')
-          }
+        getCurrentPosition(
+          (coords) => {
+            clearTimeout(timeoutId)
+            setPosition(coords.latitude, coords.longitude, coords.accuracy)
+            setPermissionState('granted')
 
-          resolve({ lat: coords.latitude, lng: coords.longitude, accuracy: coords.accuracy })
-        },
-        (err) => {
-          clearTimeout(timeoutId)
-          if (err.code === err.PERMISSION_DENIED) {
-            setGeoStatus('denied')
-            setPermissionState('denied')
-          } else {
-            setGeoStatus('timeout')
-          }
-          resolve(null)
-        },
-        { enableHighAccuracy: true, timeout: GPS_TIMEOUT, maximumAge: 10000 },
-      )
-    })
-  }, [lastKnownPosition, accuracy, setPosition, setPermissionState, setGeoStatus])
+            if (coords.accuracy > ACCURACY_THRESHOLD) {
+              setGeoStatus('poorAccuracy')
+            } else {
+              setGeoStatus('acquired')
+            }
+
+            resolve({ lat: coords.latitude, lng: coords.longitude, accuracy: coords.accuracy })
+          },
+          (err) => {
+            clearTimeout(timeoutId)
+            if (err.code === err.PERMISSION_DENIED) {
+              setGeoStatus('denied')
+              setPermissionState('denied')
+            } else {
+              setGeoStatus('timeout')
+            }
+            resolve(null)
+          },
+          { enableHighAccuracy: true, timeout: GPS_TIMEOUT, maximumAge: maxAge },
+        )
+      })
+    },
+    [lastKnownPosition, accuracy, setPosition, setPermissionState, setGeoStatus],
+  )
 
   return {
     requestLocation,

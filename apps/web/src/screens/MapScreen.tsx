@@ -136,8 +136,12 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     }
   }
 
+  const [locating, setLocating] = useState(false)
+
   function handleRecenter() {
-    void requestLocation().then((pos) => {
+    setLocating(true)
+    void requestLocation({ forceRefresh: true }).then((pos) => {
+      setLocating(false)
       if (pos) {
         mapRef.current?.flyTo({
           center: [pos.lng, pos.lat],
@@ -192,7 +196,12 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
         </button>
         <button
           onClick={handleRecenter}
-          className="p-3 rounded-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] shadow-lg active:scale-95 transition-all"
+          disabled={locating}
+          className={`p-3 rounded-full border shadow-lg transition-all ${
+            locating
+              ? 'bg-[var(--accent)] border-[var(--accent)] text-white animate-spin'
+              : 'bg-[var(--bg-raised)] border-[var(--border)] text-[var(--text-primary)] active:scale-95'
+          }`}
           aria-label="Recenter"
         >
           <svg
