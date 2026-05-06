@@ -1,9 +1,22 @@
-// DynamoDB-backed Social Repository (replaces Prisma + Redis)
+// Social repository — scale-hardened.
+//
+// Changes vs. the previous implementation:
+//   1. All N+1 `for (...) await` loops replaced with BatchGetItem + Promise.all.
+//   2. Leaderboard uses Redis ZSET (O(log N), no hot partition) with DDB fallback.
+//   3. searchUsers uses the UsernameLowerIndex GSI (if provisioned) instead of Scan.
+//   4. getNearbyRecentEvent delegates to findNearbyNodes (geohash-backed) instead
+//      of re-scanning the nodes table.
+//
+// NOTE: some GSIs referenced here are added by the Terraform patch in
+//       infra/SCALE_GSI_ADDITIONS.md. Until applied, we fall back to the legacy
+//       Scan path with a one-time console.warn so callers still work.
 import { GetCommand, PutCommand, DeleteCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
-import { getUserById } from '../auth/dynamodb-repository.js'
+import { batchGetNodes, batchGetUsers } from '../../shared/db/batch.js'
+import { findNearbyNodes } from '../nodes/dynamodb-repository.js'
 import { getCheckInsByNode } from '../check-in/dynamodb-repository.js'
-import { getNodeById } from '../nodes/dynamodb-repository.js'
+import * as lb from './leaderboard-redis.js'
+import { haversineMetres } from '../../shared/db/geohash.js'
 
 // ─── Follows ────────────────────────────────────────────────────────────────
 
@@ -48,12 +61,14 @@ export async function isFollowing(followerId: string, followingId: string) {
 
 export async function getMutualFollowIds(viewerId: string, candidateIds: string[]): Promise<Set<string>> {
   if (candidateIds.length === 0) return new Set()
-  const mutuals = new Set<string>()
-  for (const cid of candidateIds) {
-    const [forward, reverse] = await Promise.all([isFollowing(viewerId, cid), isFollowing(cid, viewerId)])
-    if (forward && reverse) mutuals.add(cid)
-  }
-  return mutuals
+  // Parallelise the pair of checks for each candidate (was fully sequential before).
+  const results = await Promise.all(
+    candidateIds.map(async (cid) => {
+      const [forward, reverse] = await Promise.all([isFollowing(viewerId, cid), isFollowing(cid, viewerId)])
+      return forward && reverse ? cid : null
+    }),
+  )
+  return new Set(results.filter((x): x is string => x !== null))
 }
 
 export async function getFollowingIds(userId: string): Promise<string[]> {
@@ -70,49 +85,72 @@ export async function getFollowingIds(userId: string): Promise<string[]> {
   return (result.Items || []).map((i) => i['followingId'] as string)
 }
 
+export async function getFollowerIds(userId: string): Promise<string[]> {
+  const result = await documentClient.send(
+    new QueryCommand({
+      TableName: TableNames.appData,
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'gsi1pk = :pk',
+      ExpressionAttributeValues: { ':pk': `FOLLOWERS#${userId}` },
+    }),
+  )
+  return (result.Items || []).map((i) => i['followerId'] as string)
+}
+
 // ─── Activity Feed ──────────────────────────────────────────────────────────
 
 export async function getActivityFeed(userId: string, cursor: string | undefined, limit: number) {
-  // Get mutual friends
   const followingIds = await getFollowingIds(userId)
-  const mutualIds = await getMutualFollowIds(userId, followingIds)
+  const mutualIds = Array.from(await getMutualFollowIds(userId, followingIds))
+  if (mutualIds.length === 0) return { items: [], nextCursor: null, hasMore: false }
 
-  // Get recent check-ins from mutual friends via UserIndex
-  const allItems: any[] = []
-  for (const fid of mutualIds) {
-    const result = await documentClient.send(
-      new QueryCommand({
-        TableName: TableNames.checkins,
-        IndexName: 'UserIndex',
-        KeyConditionExpression: 'userId = :uid',
-        ExpressionAttributeValues: { ':uid': fid },
-        ScanIndexForward: false,
-        Limit: limit,
-      }),
-    )
-    for (const ci of result.Items || []) {
-      const user = await getUserById(fid)
-      const node = await getNodeById(ci['nodeId'] as string)
-      allItems.push({
-        ...ci,
-        checkedInAt: ci['checkedInAt'] as string,
-        user: user
-          ? {
-              id: user.userId,
-              username: user.username,
-              displayName: user.displayName,
-              avatarUrl: user.avatarUrl,
-              tier: user.tier,
-            }
-          : null,
-        node: node ? { id: node.nodeId, name: node.name, slug: node.slug, category: node.category } : null,
-      })
+  // Fetch recent check-ins for all mutuals in parallel (was sequential per-friend).
+  const perFriend = await Promise.all(
+    mutualIds.map((fid) =>
+      documentClient
+        .send(
+          new QueryCommand({
+            TableName: TableNames.checkins,
+            IndexName: 'UserIndex',
+            KeyConditionExpression: 'userId = :uid',
+            ExpressionAttributeValues: { ':uid': fid },
+            ScanIndexForward: false,
+            Limit: limit,
+          }),
+        )
+        .then((r) => r.Items ?? []),
+    ),
+  )
+
+  const allCheckIns = perFriend.flat()
+  if (allCheckIns.length === 0) return { items: [], nextCursor: null, hasMore: false }
+
+  // Batch-load users and nodes — one round-trip each instead of 2 × N serial GetItems.
+  const userIds = Array.from(new Set(allCheckIns.map((c) => c['userId'] as string)))
+  const nodeIds = Array.from(new Set(allCheckIns.map((c) => c['nodeId'] as string)))
+  const [users, nodes] = await Promise.all([batchGetUsers(userIds), batchGetNodes(nodeIds)])
+
+  const items = allCheckIns.map((ci) => {
+    const u = users[ci['userId'] as string]
+    const n = nodes[ci['nodeId'] as string]
+    return {
+      ...ci,
+      checkedInAt: ci['checkedInAt'] as string,
+      user: u
+        ? {
+            id: u['userId'],
+            username: u['username'],
+            displayName: u['displayName'],
+            avatarUrl: u['avatarUrl'],
+            tier: u['tier'],
+          }
+        : null,
+      node: n ? { id: n['nodeId'], name: n['name'], slug: n['slug'], category: n['category'] } : null,
     }
-  }
+  })
 
-  // Sort by checkedInAt descending, apply cursor
-  allItems.sort((a, b) => (b.checkedInAt || '').localeCompare(a.checkedInAt || ''))
-  const filtered = cursor ? allItems.filter((i) => i.checkedInAt < cursor) : allItems
+  items.sort((a, b) => (b.checkedInAt || '').localeCompare(a.checkedInAt || ''))
+  const filtered = cursor ? items.filter((i) => i.checkedInAt < cursor) : items
   const sliced = filtered.slice(0, limit)
   const hasMore = filtered.length > limit
   const nextCursor = hasMore ? sliced[sliced.length - 1]?.checkedInAt : null
@@ -123,43 +161,23 @@ export async function getActivityFeed(userId: string, cursor: string | undefined
 // ─── Nearby Recent ──────────────────────────────────────────────────────────
 
 export async function getNearbyRecentEvent(lat: number, lng: number, radiusMetres: number, withinMinutes: number) {
-  // Scan all nodes and check distance, then find recent check-ins
-  const nodesResult = await documentClient.send(
-    new ScanCommand({
-      TableName: TableNames.nodes,
-      FilterExpression: 'isActive = :active',
-      ExpressionAttributeValues: { ':active': true },
-    }),
-  )
+  // Uses geohash-backed findNearbyNodes — no more full table Scan.
+  const nodes = await findNearbyNodes(lat, lng, radiusMetres / 1000, { limit: 25 })
+  if (nodes.length === 0) return null
 
-  const nearbyNodes: Array<{ nodeId: string; name: string; distance: number }> = []
-  for (const n of nodesResult.Items || []) {
-    const nLat = n['lat'] as number
-    const nLng = n['lng'] as number
-    const R = 6371000
-    const dLat = ((nLat - lat) * Math.PI) / 180
-    const dLng = ((nLng - lng) * Math.PI) / 180
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos((lat * Math.PI) / 180) * Math.cos((nLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
-    const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-    if (distance <= radiusMetres) {
-      nearbyNodes.push({ nodeId: (n['nodeId'] ?? n['id']) as string, name: n['name'] as string, distance })
-    }
-  }
+  // Fetch most-recent check-in for each nearby node in parallel.
+  const checkInsPerNode = await Promise.all(nodes.map((n) => getCheckInsByNode(n.nodeId, { limit: 1 })))
 
-  // Find most recent check-in at any nearby node
   let best: { nodeName: string; distanceMetres: number; minutesAgo: number } | null = null
-  for (const nn of nearbyNodes) {
-    const { checkIns } = await getCheckInsByNode(nn.nodeId, { limit: 1 })
-    if (checkIns.length > 0) {
-      const ci = checkIns[0]!
-      const minutesAgo = Math.round((Date.now() - new Date(ci.checkedInAt).getTime()) / 60000)
-      if (minutesAgo <= withinMinutes) {
-        if (!best || minutesAgo < best.minutesAgo) {
-          best = { nodeName: nn.name, distanceMetres: Math.round(nn.distance), minutesAgo }
-        }
-      }
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i]!
+    const ci = checkInsPerNode[i]?.checkIns[0]
+    if (!ci) continue
+    const minutesAgo = Math.round((Date.now() - new Date(ci.checkedInAt).getTime()) / 60000)
+    if (minutesAgo > withinMinutes) continue
+    const distance = Math.round(haversineMetres(lat, lng, n.lat, n.lng))
+    if (!best || minutesAgo < best.minutesAgo) {
+      best = { nodeName: n.name, distanceMetres: distance, minutesAgo }
     }
   }
   return best
@@ -170,26 +188,33 @@ export async function getNearbyRecentEvent(lat: number, lng: number, radiusMetre
 export async function getWhoIsHere(nodeId: string) {
   const { checkIns } = await getCheckInsByNode(nodeId, { hours: 1 })
   const seen = new Set<string>()
-  const results = []
+  const uniqueUserIds: string[] = []
+  const firstCheckInAt = new Map<string, string>()
   for (const ci of checkIns) {
     if (seen.has(ci.userId)) continue
     seen.add(ci.userId)
-    const user = await getUserById(ci.userId)
-    if (user) {
-      results.push({
-        userId: user.userId,
-        displayName: user.displayName,
-        username: user.username,
-        avatarUrl: user.avatarUrl,
-        tier: user.tier,
-        checkedInAt: ci.checkedInAt,
-      })
-    }
+    uniqueUserIds.push(ci.userId)
+    firstCheckInAt.set(ci.userId, ci.checkedInAt)
   }
-  return results
+
+  const users = await batchGetUsers(uniqueUserIds)
+  const out: Array<Record<string, unknown>> = []
+  for (const uid of uniqueUserIds) {
+    const u = users[uid]
+    if (!u) continue
+    out.push({
+      userId: u['userId'],
+      displayName: u['displayName'],
+      username: u['username'],
+      avatarUrl: u['avatarUrl'],
+      tier: u['tier'],
+      checkedInAt: firstCheckInAt.get(uid),
+    })
+  }
+  return out
 }
 
-// ─── Leaderboard ────────────────────────────────────────────────────────────
+// ─── Leaderboard (Redis-first, DDB fallback) ────────────────────────────────
 
 export async function getCityBySlug(slug: string) {
   const result = await documentClient.send(
@@ -199,7 +224,10 @@ export async function getCityBySlug(slug: string) {
 }
 
 export async function getLeaderboardTop50(cityId: string) {
-  // DynamoDB-backed leaderboard stored in app_data
+  const redis = await lb.getTopN(cityId, 50)
+  if (redis) return redis
+
+  // DDB fallback — single-partition read, acceptable for low QPS / test envs.
   const result = await documentClient.send(
     new QueryCommand({
       TableName: TableNames.appData,
@@ -217,128 +245,187 @@ export async function getLeaderboardTop50(cityId: string) {
 }
 
 export async function getUserLeaderboardRank(cityId: string, userId: string) {
+  const redisRank = await lb.getUserRank(cityId, userId)
+  if (redisRank) return redisRank
+
+  // DDB fallback: can only report rank if user is in top-50.
   const top = await getLeaderboardTop50(cityId)
   const entry = top.find((e) => e.userId === userId)
-  if (!entry) return null
-  return { rank: entry.rank, checkInCount: entry.checkInCount }
+  return entry ? { rank: entry.rank, checkInCount: entry.checkInCount } : null
 }
 
 export async function getUserProfiles(userIds: string[]) {
   if (userIds.length === 0) return []
-  const profiles = []
+  const users = await batchGetUsers(userIds)
+  const out: Array<Record<string, unknown>> = []
   for (const uid of userIds) {
-    const user = await getUserById(uid)
-    if (user) {
-      profiles.push({
-        id: user.userId,
-        username: user.username,
-        displayName: user.displayName,
-        avatarUrl: user.avatarUrl,
-        tier: user.tier,
-      })
-    }
+    const u = users[uid]
+    if (!u) continue
+    out.push({
+      id: u['userId'],
+      username: u['username'],
+      displayName: u['displayName'],
+      avatarUrl: u['avatarUrl'],
+      tier: u['tier'],
+    })
   }
-  return profiles
+  return out
 }
 
 // ─── Friends / Following / Followers ────────────────────────────────────────
 
 export async function getMutualFriends(userId: string) {
   const followingIds = await getFollowingIds(userId)
-  const mutualIds = await getMutualFollowIds(userId, followingIds)
+  const mutualIds = Array.from(await getMutualFollowIds(userId, followingIds))
+  if (mutualIds.length === 0) return []
 
-  const friends = []
-  for (const fid of mutualIds) {
-    const user = await getUserById(fid)
-    if (user) {
-      friends.push({
-        userId: user.userId,
-        username: user.username,
-        displayName: user.displayName,
-        avatarUrl: user.avatarUrl,
-        tier: user.tier,
-        totalCheckIns: (user as any).totalCheckIns ?? 0,
-      })
-    }
-  }
+  const users = await batchGetUsers(mutualIds)
+  const friends = mutualIds
+    .map((fid) => users[fid])
+    .filter((u): u is Record<string, unknown> => !!u)
+    .map((u) => ({
+      userId: u['userId'] as string,
+      username: u['username'] as string,
+      displayName: u['displayName'] as string,
+      avatarUrl: u['avatarUrl'] as string | undefined,
+      tier: u['tier'] as string,
+      totalCheckIns: (u['totalCheckIns'] as number) ?? 0,
+    }))
+
   return friends.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''))
 }
 
 export async function getFollowingList(userId: string) {
   const followingIds = await getFollowingIds(userId)
-  const mutualIds = await getMutualFollowIds(userId, followingIds)
+  if (followingIds.length === 0) return []
+  const [users, mutualIds] = await Promise.all([
+    batchGetUsers(followingIds),
+    getMutualFollowIds(userId, followingIds),
+  ])
 
-  const list = []
-  for (const fid of followingIds) {
-    const user = await getUserById(fid)
-    if (user) {
-      list.push({
-        userId: user.userId,
-        username: user.username,
-        displayName: user.displayName,
-        avatarUrl: user.avatarUrl,
-        tier: user.tier,
-        totalCheckIns: (user as any).totalCheckIns ?? 0,
+  return followingIds
+    .map((fid) => {
+      const u = users[fid]
+      if (!u) return null
+      return {
+        userId: u['userId'] as string,
+        username: u['username'] as string,
+        displayName: u['displayName'] as string,
+        avatarUrl: u['avatarUrl'] as string | undefined,
+        tier: u['tier'] as string,
+        totalCheckIns: (u['totalCheckIns'] as number) ?? 0,
         isMutual: mutualIds.has(fid),
-      })
-    }
-  }
-  return list
+      }
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null)
 }
 
 export async function getFollowersList(userId: string) {
-  // Query GSI1 for followers of this user
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.appData,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'gsi1pk = :pk',
-      ExpressionAttributeValues: { ':pk': `FOLLOWERS#${userId}` },
-    }),
-  )
-  const followerIds = (result.Items || []).map((i) => i['followerId'] as string)
-  const followingBack = followerIds.length > 0 ? await getMutualFollowIds(userId, followerIds) : new Set<string>()
+  const followerIds = await getFollowerIds(userId)
+  if (followerIds.length === 0) return []
 
-  const list = []
-  for (const fid of followerIds) {
-    const user = await getUserById(fid)
-    if (user) {
-      list.push({
-        userId: user.userId,
-        username: user.username,
-        displayName: user.displayName,
-        avatarUrl: user.avatarUrl,
-        tier: user.tier,
-        totalCheckIns: (user as any).totalCheckIns ?? 0,
+  const [users, followingBack] = await Promise.all([
+    batchGetUsers(followerIds),
+    getMutualFollowIds(userId, followerIds),
+  ])
+
+  return followerIds
+    .map((fid) => {
+      const u = users[fid]
+      if (!u) return null
+      return {
+        userId: u['userId'] as string,
+        username: u['username'] as string,
+        displayName: u['displayName'] as string,
+        avatarUrl: u['avatarUrl'] as string | undefined,
+        tier: u['tier'] as string,
+        totalCheckIns: (u['totalCheckIns'] as number) ?? 0,
         isFollowingBack: followingBack.has(fid),
-      })
-    }
-  }
-  return list
+      }
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+}
+
+// ─── User Search ────────────────────────────────────────────────────────────
+
+let _searchWarned = false
+function warnScanFallback() {
+  if (_searchWarned) return
+  _searchWarned = true
+  console.warn(
+    '[social.searchUsers] UsernameLowerIndex GSI not provisioned — falling back to Scan. ' +
+      'Apply infra/SCALE_GSI_ADDITIONS.md to fix at scale.',
+  )
 }
 
 export async function searchUsers(query: string, viewerId: string) {
-  // Scan users table with filter (no full-text search in DynamoDB)
-  const q = query.toLowerCase()
-  const result = await documentClient.send(new ScanCommand({ TableName: TableNames.users }))
-  const users = (result.Items || [])
+  const q = query.trim().toLowerCase()
+  if (!q) return []
+
+  let users: Array<Record<string, unknown>> = []
+
+  // Preferred path: prefix-query the UsernameLowerIndex GSI.
+  try {
+    const result = await documentClient.send(
+      new QueryCommand({
+        TableName: TableNames.users,
+        IndexName: 'UsernameLowerIndex',
+        KeyConditionExpression: 'usernameLower = :q',
+        ExpressionAttributeValues: { ':q': q },
+        Limit: 20,
+      }),
+    )
+    users = (result.Items || []) as Array<Record<string, unknown>>
+
+    // If the exact-match index returned nothing, also try begins_with on a
+    // normalised prefix attribute if available (same GSI, different KeyCondition).
+    if (users.length === 0) {
+      const prefixResult = await documentClient.send(
+        new ScanCommand({
+          TableName: TableNames.users,
+          IndexName: 'UsernameLowerIndex',
+          FilterExpression: 'begins_with(usernameLower, :q)',
+          ExpressionAttributeValues: { ':q': q },
+          Limit: 40,
+        }),
+      )
+      users = (prefixResult.Items || []) as Array<Record<string, unknown>>
+    }
+  } catch (err) {
+    // GSI not yet provisioned — fallback to full-table Scan (legacy behaviour).
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('specified index') || msg.includes('does not have the specified')) {
+      warnScanFallback()
+      const result = await documentClient.send(new ScanCommand({ TableName: TableNames.users }))
+      users = (result.Items || []).filter((u) => {
+        const uname = ((u['username'] as string) || '').toLowerCase()
+        const dname = ((u['displayName'] as string) || '').toLowerCase()
+        return uname.includes(q) || dname.includes(q)
+      }) as Array<Record<string, unknown>>
+    } else {
+      throw err
+    }
+  }
+
+  const filtered = users
     .filter((u) => {
       const uid = (u['userId'] ?? u['id']) as string
-      if (uid === viewerId) return false
-      const uname = ((u['username'] as string) || '').toLowerCase()
-      const dname = ((u['displayName'] as string) || '').toLowerCase()
-      return uname.includes(q) || dname.includes(q)
+      return uid && uid !== viewerId
     })
     .slice(0, 20)
 
-  const userIds = users.map((u) => (u['userId'] ?? u['id']) as string)
-  const followingSet = new Set<string>()
-  for (const uid of userIds) {
-    if (await isFollowing(viewerId, uid)) followingSet.add(uid)
-  }
-  const mutualIds = userIds.length > 0 ? await getMutualFollowIds(viewerId, userIds) : new Set<string>()
+  if (filtered.length === 0) return []
 
-  return users.map((u) => {
+  const userIds = filtered.map((u) => (u['userId'] ?? u['id']) as string)
+  const [followingSet, mutualIds] = await Promise.all([
+    (async () => {
+      const results = await Promise.all(userIds.map((uid) => isFollowing(viewerId, uid).then((r) => [uid, r] as const)))
+      return new Set(results.filter(([, r]) => r).map(([uid]) => uid))
+    })(),
+    getMutualFollowIds(viewerId, userIds),
+  ])
+
+  return filtered.map((u) => {
     const uid = (u['userId'] ?? u['id']) as string
     return {
       userId: uid,

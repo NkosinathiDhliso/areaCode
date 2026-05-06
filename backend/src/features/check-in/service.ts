@@ -13,6 +13,7 @@ import { getMutualFollowIds, getFollowingIds } from '../social/repository.js'
 import { getUserById } from '../auth/repository.js'
 import { canEmitIdentity, sanitizeForBusiness } from '../../shared/privacy/privacy-guard.js'
 import { runAbuseChecks } from './abuse.js'
+import { bumpCheckIn as bumpLeaderboard } from '../social/leaderboard-redis.js'
 import * as repo from './repository.js'
 import { getUserCheckInCountAtNode } from './dynamodb-repository.js'
 import { PutCommand } from '@aws-sdk/lib-dynamodb'
@@ -164,8 +165,12 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
   if (cityId) {
     // Store pulse score in KV for quick lookup
     await kvSet(`pulse:${cityId}:${input.nodeId}`, String(pulseScore), 86400)
-    // Increment leaderboard counter
-    await kvIncr(`leaderboard:${cityId}:${userId}`, 0) // no TTL
+    // Increment Redis ZSET leaderboard (atomic, O(log N), no hot partition).
+    // Falls back silently to a per-user KV counter when Redis is unavailable.
+    const lbResult = await bumpLeaderboard(cityId, userId, 1)
+    if (lbResult === null) {
+      await kvIncr(`leaderboard:${cityId}:${userId}`, 0)
+    }
   }
 
   // 7. Emit socket events

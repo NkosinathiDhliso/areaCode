@@ -2,6 +2,7 @@
 import { GetCommand, QueryCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
+import { encodeGeohash, haversineMetres, neighbourCells, pickPrecision } from '../../shared/db/geohash.js'
 import type { Node, NodeImage } from './types.js'
 
 // ============================================================================
@@ -58,10 +59,14 @@ export async function createNode(data: Omit<Node, 'nodeId' | 'createdAt'>): Prom
     nodeColour: data.nodeColour || 'default',
   }
 
+  // Precompute geohash attributes for sparse spatial index (see shared/db/geohash.ts).
+  const geohash5 = encodeGeohash(node.lat, node.lng, 5)
+  const geohash7 = encodeGeohash(node.lat, node.lng, 7)
+
   await documentClient.send(
     new PutCommand({
       TableName: TableNames.nodes,
-      Item: { ...node, id: nodeId },
+      Item: { ...node, id: nodeId, geohash5, geohash7 },
     }),
   )
 
@@ -232,45 +237,98 @@ export async function deleteNodeImage(nodeId: string, imageId: string): Promise<
 // NEARBY SEARCH (Using lat/lng comparison)
 // ============================================================================
 
+let _nearbyScanWarned = false
+
+/**
+ * Geohash-backed spatial query — O(9 queries) regardless of table size.
+ *
+ *   1. Pick a geohash precision whose cell size comfortably exceeds the radius.
+ *   2. Compute the centre cell + 8 neighbours (avoids edge misses).
+ *   3. Query the Geohash5Index GSI for each cell in parallel.
+ *   4. Filter by exact Haversine distance and sort.
+ *
+ * Falls back to Scan with a warning if the GSI is not yet provisioned.
+ */
 export async function findNearbyNodes(
   lat: number,
   lng: number,
   radiusKm: number = 5,
   options?: { category?: string; limit?: number },
 ): Promise<Node[]> {
-  // For simple implementation, we scan all nodes and filter by distance
-  // In production, consider using DynamoDB with Geohash or Elasticsearch
-  const result = await documentClient.send(
-    new ScanCommand({
-      TableName: TableNames.nodes,
-      FilterExpression: 'isActive = :isActive',
-      ExpressionAttributeValues: { ':isActive': true },
-    }),
-  )
+  const radiusMetres = radiusKm * 1000
+  const precision = pickPrecision(radiusMetres)
+  const cells = neighbourCells(lat, lng, precision)
+  const limit = options?.limit ?? 20
 
-  const nodes = (result.Items || []) as Node[]
+  let items: Array<Record<string, unknown>> = []
 
-  // Filter by distance using Haversine formula
-  const nearbyNodes = nodes
-    .map((node) => ({
-      node,
-      distance: calculateDistance(lat, lng, node.lat, node.lng),
-    }))
-    .filter(({ distance }) => distance <= radiusKm)
-    .sort((a, b) => a.distance - b.distance)
-    .slice(0, options?.limit || 20)
-    .map(({ node }) => node)
+  try {
+    const perCell = await Promise.all(
+      cells.map((cell) => {
+        const values: Record<string, unknown> = { ':a': true }
+        let keyCondition: string
+        if (precision === 5) {
+          values[':c'] = cell
+          keyCondition = 'geohash5 = :c'
+        } else {
+          values[':c'] = cell.slice(0, 5)
+          values[':p'] = cell.slice(0, precision)
+          keyCondition = 'geohash5 = :c AND begins_with(geohash7, :p)'
+        }
+        if (options?.category) values[':cat'] = options.category
 
-  return nearbyNodes
-}
+        return documentClient
+          .send(
+            new QueryCommand({
+              TableName: TableNames.nodes,
+              IndexName: 'Geohash5Index',
+              KeyConditionExpression: keyCondition,
+              FilterExpression: options?.category
+                ? 'isActive = :a AND category = :cat'
+                : 'isActive = :a',
+              ExpressionAttributeValues: values,
+            }),
+          )
+          .then((r) => r.Items ?? [])
+      }),
+    )
+    items = perCell.flat()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('specified index') || msg.includes('does not have the specified')) {
+      if (!_nearbyScanWarned) {
+        _nearbyScanWarned = true
+        console.warn(
+          '[nodes.findNearbyNodes] Geohash5Index GSI not provisioned — falling back to Scan. ' +
+            'Apply infra/SCALE_GSI_ADDITIONS.md to fix at scale.',
+        )
+      }
+      const result = await documentClient.send(
+        new ScanCommand({
+          TableName: TableNames.nodes,
+          FilterExpression: options?.category ? 'isActive = :a AND category = :cat' : 'isActive = :a',
+          ExpressionAttributeValues: options?.category
+            ? { ':a': true, ':cat': options.category }
+            : { ':a': true },
+        }),
+      )
+      items = (result.Items || []) as Array<Record<string, unknown>>
+    } else {
+      throw err
+    }
+  }
 
-function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371 // Earth's radius in km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180
-  const dLng = ((lng2 - lng1) * Math.PI) / 180
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) * Math.sin(dLng / 2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-  return R * c
+  // De-dupe (cells can overlap), compute exact distance, filter, sort, limit.
+  const seen = new Set<string>()
+  const scored: Array<{ node: Node; distance: number }> = []
+  for (const item of items) {
+    const nodeId = (item['nodeId'] ?? item['id']) as string
+    if (!nodeId || seen.has(nodeId)) continue
+    seen.add(nodeId)
+    const n = mapNode(item)
+    const distM = haversineMetres(lat, lng, n.lat, n.lng)
+    if (distM <= radiusMetres) scored.push({ node: n, distance: distM })
+  }
+  scored.sort((a, b) => a.distance - b.distance)
+  return scored.slice(0, limit).map((s) => s.node)
 }
