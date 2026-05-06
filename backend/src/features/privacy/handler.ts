@@ -3,34 +3,23 @@ import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { validate } from '../../shared/middleware/validation.js'
 import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
 import * as service from './service.js'
-import {
-  updatePrivacyBodySchema,
-  blockParamsSchema,
-  createReportBodySchema,
-} from './types.js'
+import { updatePrivacyBodySchema, blockParamsSchema, createReportBodySchema } from './types.js'
 import { z } from 'zod'
 
 export async function privacyRoutes(app: FastifyInstance) {
   // ─── Privacy Settings ─────────────────────────────────────────────────
 
   // GET /v1/users/me/privacy — return current privacy settings
-  app.get(
-    '/v1/users/me/privacy',
-    { preHandler: [requireAuth('consumer')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return service.getPrivacySettings(auth.userId)
-    },
-  )
+  app.get('/v1/users/me/privacy', { preHandler: [requireAuth('consumer')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.getPrivacySettings(auth.userId)
+  })
 
   // PATCH /v1/users/me/privacy — update privacy level
   app.patch(
     '/v1/users/me/privacy',
     {
-      preHandler: [
-        requireAuth('consumer'),
-        validate({ body: updatePrivacyBodySchema }),
-      ],
+      preHandler: [requireAuth('consumer'), validate({ body: updatePrivacyBodySchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -63,10 +52,7 @@ export async function privacyRoutes(app: FastifyInstance) {
   app.delete(
     '/v1/users/me/block/:targetUserId',
     {
-      preHandler: [
-        requireAuth('consumer'),
-        validate({ params: blockParamsSchema }),
-      ],
+      preHandler: [requireAuth('consumer'), validate({ params: blockParamsSchema })],
     },
     async (request, reply) => {
       const auth = getAuth(request)
@@ -77,15 +63,11 @@ export async function privacyRoutes(app: FastifyInstance) {
   )
 
   // GET /v1/users/me/blocks — list blocked users
-  app.get(
-    '/v1/users/me/blocks',
-    { preHandler: [requireAuth('consumer')] },
-    async (request) => {
-      const auth = getAuth(request)
-      const blocked = await service.listBlockedUsers(auth.userId)
-      return { blocked }
-    },
-  )
+  app.get('/v1/users/me/blocks', { preHandler: [requireAuth('consumer')] }, async (request) => {
+    const auth = getAuth(request)
+    const blocked = await service.listBlockedUsers(auth.userId)
+    return { blocked }
+  })
 
   // ─── Reports ──────────────────────────────────────────────────────────
 

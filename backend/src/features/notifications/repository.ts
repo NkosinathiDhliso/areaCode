@@ -71,9 +71,7 @@ export async function getNotificationHistory(
       },
       ScanIndexForward: false,
       Limit: limit,
-      ...(options?.cursor
-        ? { ExclusiveStartKey: JSON.parse(Buffer.from(options.cursor, 'base64').toString()) }
-        : {}),
+      ...(options?.cursor ? { ExclusiveStartKey: JSON.parse(Buffer.from(options.cursor, 'base64').toString()) } : {}),
     }),
   )
 
@@ -130,12 +128,7 @@ export async function markNotificationsAsRead(userId: string): Promise<{ updated
   return { updatedCount }
 }
 
-export async function upsertPushToken(
-  userId: string,
-  token: string,
-  platform: string,
-  deviceId?: string,
-) {
+export async function upsertPushToken(userId: string, token: string, platform: string, deviceId?: string) {
   const now = new Date().toISOString()
   await documentClient.send(
     new PutCommand({
@@ -143,12 +136,15 @@ export async function upsertPushToken(
       Item: {
         pk: `USER_TOKEN#${userId}`,
         sk: `TOKEN#${token}`,
-        userId, token, platform, deviceId,
+        userId,
+        token,
+        platform,
+        deviceId,
         isActive: true,
         lastUsedAt: now,
         createdAt: now,
       },
-    })
+    }),
   )
   return { userId, token, platform, deviceId, isActive: true, lastUsedAt: now }
 }
@@ -158,7 +154,7 @@ export async function getNotificationPreferences(userId: string) {
     new GetCommand({
       TableName: TableNames.appData,
       Key: { pk: `NOTIF_PREFS#${userId}`, sk: `NOTIF_PREFS#${userId}` },
-    })
+    }),
   )
   return result.Item ?? null
 }
@@ -184,7 +180,7 @@ export async function upsertNotificationPreferences(
         ...prefs,
         updatedAt: now,
       },
-    })
+    }),
   )
   return { userId, ...prefs, updatedAt: now }
 }
@@ -200,7 +196,7 @@ export async function getActivePushTokens(userId: string) {
         ':prefix': 'TOKEN#',
         ':active': true,
       },
-    })
+    }),
   )
   return result.Items ?? []
 }
@@ -212,7 +208,7 @@ export async function deactivatePushToken(userId: string, token: string) {
       Key: { pk: `USER_TOKEN#${userId}`, sk: `TOKEN#${token}` },
       UpdateExpression: 'SET isActive = :inactive',
       ExpressionAttributeValues: { ':inactive': false },
-    })
+    }),
   )
   return { count: 1 }
 }

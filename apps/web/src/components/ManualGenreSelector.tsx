@@ -6,9 +6,18 @@ import { MUSIC_GENRES } from '@area-code/shared/constants/genre-weights'
 import type { MusicGenre } from '@area-code/shared/types'
 
 const GENRE_LABELS: Record<MusicGenre, string> = {
-  amapiano: 'Amapiano', deep_house: 'Deep House', afrobeats: 'Afrobeats',
-  hip_hop: 'Hip Hop', rnb: 'R&B', kwaito: 'Kwaito', gqom: 'Gqom',
-  jazz: 'Jazz', rock: 'Rock', pop: 'Pop', gospel: 'Gospel', maskandi: 'Maskandi',
+  amapiano: 'Amapiano',
+  deep_house: 'Deep House',
+  afrobeats: 'Afrobeats',
+  hip_hop: 'Hip Hop',
+  rnb: 'R&B',
+  kwaito: 'Kwaito',
+  gqom: 'Gqom',
+  jazz: 'Jazz',
+  rock: 'Rock',
+  pop: 'Pop',
+  gospel: 'Gospel',
+  maskandi: 'Maskandi',
 }
 
 export function ManualGenreSelector() {
@@ -21,9 +30,7 @@ export function ManualGenreSelector() {
 
   function toggle(genre: MusicGenre) {
     setSelected((prev) =>
-      prev.includes(genre)
-        ? prev.filter((g) => g !== genre)
-        : prev.length < 5 ? [...prev, genre] : prev,
+      prev.includes(genre) ? prev.filter((g) => g !== genre) : prev.length < 5 ? [...prev, genre] : prev,
     )
   }
 

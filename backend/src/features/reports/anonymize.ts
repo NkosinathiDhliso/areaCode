@@ -13,19 +13,16 @@ export interface RawCheckIn {
   avatarUrl?: string | null
   nodeId: string
   tier: string
-  checkedInAt: string  // ISO 8601
+  checkedInAt: string // ISO 8601
 }
 
 // ============================================================================
 // SAST Timezone Helpers
 // ============================================================================
 
-const SAST_OFFSET_MS = 2 * 60 * 60 * 1000  // UTC+2
+const SAST_OFFSET_MS = 2 * 60 * 60 * 1000 // UTC+2
 
-const DAY_NAMES = [
-  'Sunday', 'Monday', 'Tuesday', 'Wednesday',
-  'Thursday', 'Friday', 'Saturday',
-] as const
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const
 
 /**
  * Convert a UTC ISO 8601 timestamp to SAST and extract hourOfDay and dayOfWeek.
@@ -51,20 +48,14 @@ function toSAST(isoTimestamp: string): { hourOfDay: number; dayOfWeek: string } 
  * periods without storing userId in the report.
  */
 function hashVisitorToken(userId: string, periodStart: string, salt: string): string {
-  return createHash('sha256')
-    .update(`${userId}${periodStart}${salt}`)
-    .digest('hex')
+  return createHash('sha256').update(`${userId}${periodStart}${salt}`).digest('hex')
 }
 
 /**
  * Anonymize raw check-ins by stripping all PII and producing
  * AnonymizedCheckIn[] with hashed visitor tokens and SAST time fields.
  */
-export function anonymizeCheckIns(
-  rawCheckIns: RawCheckIn[],
-  periodStart: string,
-  salt: string,
-): AnonymizedCheckIn[] {
+export function anonymizeCheckIns(rawCheckIns: RawCheckIn[], periodStart: string, salt: string): AnonymizedCheckIn[] {
   return rawCheckIns.map((raw) => {
     const { hourOfDay, dayOfWeek } = toSAST(raw.checkedInAt)
 

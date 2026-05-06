@@ -2,8 +2,17 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
 import {
-  Flame, Zap, Sparkles, CloudMoon,
-  UtensilsCrossed, Coffee, Moon, ShoppingBag, Dumbbell, Palette, MapPin,
+  Flame,
+  Zap,
+  Sparkles,
+  CloudMoon,
+  UtensilsCrossed,
+  Coffee,
+  Moon,
+  ShoppingBag,
+  Dumbbell,
+  Palette,
+  MapPin,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { AppRoute } from '../types'
@@ -80,7 +89,7 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
 
         {/* Hero */}
         <h1 className="font-[Syne] text-3xl font-extrabold leading-tight tracking-[-0.02em]">
-          {t('landing.heroLine1', 'See what\'s alive')}
+          {t('landing.heroLine1', "See what's alive")}
           <span className="block bg-[linear-gradient(90deg,var(--accent-bright),var(--accent))] bg-clip-text text-transparent">
             {t('landing.heroLine2', 'in your city.')}
           </span>
@@ -129,7 +138,12 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
                   className="w-full flex items-center justify-between rounded-xl bg-[var(--bg-raised)] px-3 py-2.5 mb-2 last:mb-0 text-left transition-all hover:border-[var(--accent)] border border-transparent group cursor-pointer"
                 >
                   <div className="flex items-center gap-2.5">
-                    <CategoryIcon size={16} strokeWidth={1.5} className="text-[var(--text-muted)] shrink-0" aria-hidden="true" />
+                    <CategoryIcon
+                      size={16}
+                      strokeWidth={1.5}
+                      className="text-[var(--text-muted)] shrink-0"
+                      aria-hidden="true"
+                    />
                     <div>
                       <p className="text-sm font-semibold group-hover:text-[var(--accent)]">{spot.name}</p>
                       <p className="text-xs text-[var(--text-muted)]">{spot.area}</p>
@@ -154,10 +168,7 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
 
         {/* Bottom links */}
         <div className="mt-auto pt-8 flex flex-col items-center gap-2">
-          <button
-            onClick={() => go('login', '/login')}
-            className="text-sm text-[var(--accent)]"
-          >
+          <button onClick={() => go('login', '/login')} className="text-sm text-[var(--accent)]">
             {t('landing.hasAccount', 'Already have an account? Sign in')}
           </button>
           <p className="text-[11px] text-[var(--text-muted)]">Cape Town · Johannesburg · Durban</p>

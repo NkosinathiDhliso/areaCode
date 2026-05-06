@@ -32,12 +32,7 @@ const positiveMetricsArb: fc.Arbitrary<ReportMetrics> = fc.record({
   pulseScore: fc.double({ min: 0.01, max: 100, noNaN: true }),
 })
 
-const TREND_METRICS = [
-  'totalCheckIns',
-  'uniqueVisitors',
-  'repeatVisitorRate',
-  'pulseScore',
-] as const
+const TREND_METRICS = ['totalCheckIns', 'uniqueVisitors', 'repeatVisitorRate', 'pulseScore'] as const
 
 // ─── Property 8: Trend Computation Correctness ──────────────────────────────
 
@@ -47,26 +42,22 @@ describe('Feature: venue-intelligence-reports, Property 8: Trend Computation Cor
      * **Validates: Requirements 6.1, 6.2**
      */
     fc.assert(
-      fc.property(
-        reportMetricsArb,
-        positiveMetricsArb,
-        (currentMetrics, previousMetrics) => {
-          const result = analyzeTrends(currentMetrics, previousMetrics)
+      fc.property(reportMetricsArb, positiveMetricsArb, (currentMetrics, previousMetrics) => {
+        const result = analyzeTrends(currentMetrics, previousMetrics)
 
-          expect(result.hasPriorData).toBe(true)
+        expect(result.hasPriorData).toBe(true)
 
-          for (const key of TREND_METRICS) {
-            const delta = result.metrics[key]!
-            const current = currentMetrics[key]
-            const previous = previousMetrics[key]
+        for (const key of TREND_METRICS) {
+          const delta = result.metrics[key]!
+          const current = currentMetrics[key]
+          const previous = previousMetrics[key]
 
-            const expectedChange = ((current - previous) / previous) * 100
-            expect(delta.percentChange).toBeCloseTo(expectedChange, 5)
-            expect(delta.current).toBe(current)
-            expect(delta.previous).toBe(previous)
-          }
-        },
-      ),
+          const expectedChange = ((current - previous) / previous) * 100
+          expect(delta.percentChange).toBeCloseTo(expectedChange, 5)
+          expect(delta.current).toBe(current)
+          expect(delta.previous).toBe(previous)
+        }
+      }),
       { numRuns: 100 },
     )
   })
@@ -76,26 +67,22 @@ describe('Feature: venue-intelligence-reports, Property 8: Trend Computation Cor
      * **Validates: Requirements 6.2**
      */
     fc.assert(
-      fc.property(
-        reportMetricsArb,
-        positiveMetricsArb,
-        (currentMetrics, previousMetrics) => {
-          const result = analyzeTrends(currentMetrics, previousMetrics)
+      fc.property(reportMetricsArb, positiveMetricsArb, (currentMetrics, previousMetrics) => {
+        const result = analyzeTrends(currentMetrics, previousMetrics)
 
-          for (const key of TREND_METRICS) {
-            const delta = result.metrics[key]!
-            const { percentChange, direction } = delta
+        for (const key of TREND_METRICS) {
+          const delta = result.metrics[key]!
+          const { percentChange, direction } = delta
 
-            if (percentChange > 1) {
-              expect(direction).toBe('up')
-            } else if (percentChange < -1) {
-              expect(direction).toBe('down')
-            } else {
-              expect(direction).toBe('flat')
-            }
+          if (percentChange > 1) {
+            expect(direction).toBe('up')
+          } else if (percentChange < -1) {
+            expect(direction).toBe('down')
+          } else {
+            expect(direction).toBe('flat')
           }
-        },
-      ),
+        }
+      }),
       { numRuns: 100 },
     )
   })

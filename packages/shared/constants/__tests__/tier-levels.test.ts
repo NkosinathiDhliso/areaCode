@@ -9,19 +9,15 @@ import { getTier, TIER_LEVELS } from '../tier-levels'
  */
 describe('getTier', () => {
   const tierOrder = ['local', 'regular', 'fixture', 'institution', 'legend'] as const
-  const tierIndex = (tier: string) => tierOrder.indexOf(tier as typeof tierOrder[number])
+  const tierIndex = (tier: string) => tierOrder.indexOf(tier as (typeof tierOrder)[number])
 
   it('is monotonic: more check-ins never produce a lower tier', () => {
     fc.assert(
-      fc.property(
-        fc.nat(1000),
-        fc.nat(500),
-        (base, delta) => {
-          const lower = getTier(base)
-          const higher = getTier(base + delta)
-          expect(tierIndex(higher)).toBeGreaterThanOrEqual(tierIndex(lower))
-        },
-      ),
+      fc.property(fc.nat(1000), fc.nat(500), (base, delta) => {
+        const lower = getTier(base)
+        const higher = getTier(base + delta)
+        expect(tierIndex(higher)).toBeGreaterThanOrEqual(tierIndex(lower))
+      }),
       { numRuns: 500 },
     )
   })

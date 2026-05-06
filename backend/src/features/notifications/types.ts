@@ -6,13 +6,15 @@ export const pushTokenBodySchema = z.object({
   deviceId: z.string().optional(),
 })
 
-export const notificationPrefsSchema = z.object({
-  streakAtRisk: z.boolean().optional(),
-  rewardActivated: z.boolean().optional(),
-  rewardClaimedPush: z.boolean().optional(),
-  leaderboardPrewarning: z.boolean().optional(),
-  followedUserCheckin: z.boolean().optional(),
-}).strict()
+export const notificationPrefsSchema = z
+  .object({
+    streakAtRisk: z.boolean().optional(),
+    rewardActivated: z.boolean().optional(),
+    rewardClaimedPush: z.boolean().optional(),
+    leaderboardPrewarning: z.boolean().optional(),
+    followedUserCheckin: z.boolean().optional(),
+  })
+  .strict()
 
 export const notificationHistoryQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).optional().default(20),

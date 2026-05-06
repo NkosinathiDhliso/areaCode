@@ -21,7 +21,7 @@ export async function handler() {
       FilterExpression: 'begins_with(pk, :prefix) AND #status = :pending AND requestedAt < :cutoff',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':prefix': 'ERASURE#', ':pending': 'pending', ':cutoff': thirtyDaysAgo },
-    })
+    }),
   )
 
   let erasedCount = 0
@@ -37,14 +37,14 @@ export async function handler() {
           TableName: TableNames.appData,
           FilterExpression: 'contains(pk, :uid) OR contains(sk, :uid)',
           ExpressionAttributeValues: { ':uid': userId },
-        })
+        }),
       )
       for (const item of userItems.Items || []) {
         await documentClient.send(
           new DeleteCommand({
             TableName: TableNames.appData,
             Key: { pk: item['pk'] as string, sk: item['sk'] as string },
-          })
+          }),
         )
       }
 
@@ -56,7 +56,7 @@ export async function handler() {
           UpdateExpression: 'SET #status = :completed, processedAt = :now',
           ExpressionAttributeNames: { '#status': 'status' },
           ExpressionAttributeValues: { ':completed': 'completed', ':now': new Date().toISOString() },
-        })
+        }),
       )
       erasedCount++
     } catch (err) {

@@ -39,10 +39,7 @@ export function initPrivacyGuard(deps: {
  * @param viewerId - The user requesting the data (null for anonymous/unauthenticated)
  * @returns PrivacyCheckResult with visibility level and reason
  */
-export async function checkPrivacy(
-  targetUserId: string,
-  viewerId: string | null,
-): Promise<PrivacyCheckResult> {
+export async function checkPrivacy(targetUserId: string, viewerId: string | null): Promise<PrivacyCheckResult> {
   // Own data is always fully visible
   if (viewerId && viewerId === targetUserId) {
     return { visibility: 'full', reason: 'own_data' }
@@ -117,10 +114,9 @@ export async function checkPrivacy(
  * @param viewerId - The user requesting the data
  * @returns Filtered entries with privacy applied
  */
-export async function filterByPrivacy<T extends { userId: string; displayName?: string | null; username?: string | null; avatarUrl?: string | null }>(
-  entries: T[],
-  viewerId: string | null,
-): Promise<Array<T & { privacyVisibility: PrivacyVisibility }>> {
+export async function filterByPrivacy<
+  T extends { userId: string; displayName?: string | null; username?: string | null; avatarUrl?: string | null },
+>(entries: T[], viewerId: string | null): Promise<Array<T & { privacyVisibility: PrivacyVisibility }>> {
   const results: Array<T & { privacyVisibility: PrivacyVisibility }> = []
 
   for (const entry of entries) {
@@ -156,13 +152,11 @@ export async function filterByPrivacy<T extends { userId: string; displayName?: 
  * @param userId - The user who checked in
  * @returns Whether identity data (displayName, avatarUrl) can be included in city-wide events
  */
-export async function canEmitIdentity(userId: string): Promise<boolean> {
+export async function canEmitIdentity(userId: string, cachedUser?: { privacyLevel?: string }): Promise<boolean> {
   try {
-    if (_getUserById) {
-      const user = await _getUserById(userId)
-      const level = (user?.privacyLevel as PrivacyLevel) ?? DEFAULT_PRIVACY_LEVEL
-      return level === 'public'
-    }
+    const user = cachedUser ?? (await _getUserById?.(userId))
+    const level = (user?.privacyLevel as PrivacyLevel) ?? DEFAULT_PRIVACY_LEVEL
+    return level === 'public'
   } catch {
     // Fail closed
   }
@@ -176,8 +170,14 @@ export async function canEmitIdentity(userId: string): Promise<boolean> {
  */
 export function sanitizeForBusiness(data: Record<string, unknown>): Record<string, unknown> {
   const ALLOWED_FIELDS = new Set([
-    'nodeId', 'nodeName', 'checkInCount', 'timestamp',
-    'displayName', 'tier', 'visitCount', 'type',
+    'nodeId',
+    'nodeName',
+    'checkInCount',
+    'timestamp',
+    'displayName',
+    'tier',
+    'visitCount',
+    'type',
   ])
 
   const sanitized: Record<string, unknown> = {}

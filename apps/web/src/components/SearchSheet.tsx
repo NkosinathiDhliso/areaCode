@@ -77,11 +77,7 @@ export function SearchSheet({ isOpen, onClose, onSelectNode }: SearchSheetProps)
         className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none mb-4"
       />
 
-      {loading && (
-        <p className="text-[var(--text-muted)] text-sm text-center py-4">
-          {t('search.searching')}
-        </p>
-      )}
+      {loading && <p className="text-[var(--text-muted)] text-sm text-center py-4">{t('search.searching')}</p>}
 
       {results.length > 0 && (
         <div className="flex flex-col gap-2 max-h-[50dvh] overflow-y-auto">
@@ -101,9 +97,7 @@ export function SearchSheet({ isOpen, onClose, onSelectNode }: SearchSheetProps)
       )}
 
       {query.length >= 2 && !loading && results.length === 0 && (
-        <p className="text-[var(--text-muted)] text-sm text-center py-4">
-          {t('search.noResults')}
-        </p>
+        <p className="text-[var(--text-muted)] text-sm text-center py-4">{t('search.noResults')}</p>
       )}
     </BottomSheet>
   )

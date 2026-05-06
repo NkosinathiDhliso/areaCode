@@ -6,6 +6,8 @@ import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { Skeleton } from '@area-code/shared/components/Skeleton'
 import { EmptyState } from '@area-code/shared/components/EmptyState'
+import { analytics } from '@area-code/shared/analytics/client'
+import { useEffect } from 'react'
 
 interface NearbyReward {
   id: string
@@ -37,6 +39,20 @@ export function RewardsScreen() {
     enabled: connectivity !== 'offline' && isAuthenticated,
     staleTime: 30_000,
   })
+
+  useEffect(() => {
+    if (rewards && rewards.length > 0) {
+      rewards.forEach((r) => {
+        // Assume r.nodeSlug maps to nodeId contextually, though nodeId is missing in NearbyReward.
+        // We'll track what we have to fit the taxonomy pattern loosely, or omit node if not available.
+        // Actually, let's track it with the nodeSlug since that's the closest identifier we have here.
+        analytics.track('reward_viewed', {
+          rewardId: r.id,
+          nodeId: r.nodeSlug, // Fallback identifier
+        })
+      })
+    }
+  }, [rewards])
 
   if (!isAuthenticated) {
     return (

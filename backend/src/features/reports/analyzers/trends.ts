@@ -8,12 +8,7 @@ import type { ReportMetrics, TrendDelta, TrendResult } from '../types.js'
 const FLAT_THRESHOLD = 1
 
 /** Metrics to compute trends for */
-const TREND_METRICS = [
-  'totalCheckIns',
-  'uniqueVisitors',
-  'repeatVisitorRate',
-  'pulseScore',
-] as const
+const TREND_METRICS = ['totalCheckIns', 'uniqueVisitors', 'repeatVisitorRate', 'pulseScore'] as const
 
 // ============================================================================
 // Trends Analyzer
@@ -31,10 +26,7 @@ const TREND_METRICS = [
  * - If previous = 0 and current > 0 → direction = "up", percentChange = 100
  * - If previous = 0 and current = 0 → direction = "flat", percentChange = 0
  */
-export function analyzeTrends(
-  currentMetrics: ReportMetrics,
-  previousMetrics: ReportMetrics | null,
-): TrendResult {
+export function analyzeTrends(currentMetrics: ReportMetrics, previousMetrics: ReportMetrics | null): TrendResult {
   // No prior data available
   if (previousMetrics === null) {
     const metrics: Record<string, TrendDelta> = {}

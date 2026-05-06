@@ -67,6 +67,18 @@ function pathToRoute(path: string): AppRoute {
 }
 
 export function App() {
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      import('@axe-core/react').then((axe) => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const React = require('react')
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const ReactDOM = require('react-dom')
+        axe.default(React, ReactDOM, 1000)
+      })
+    }
+  }, [])
+
   return (
     <ErrorBoundary>
       <AppContent />

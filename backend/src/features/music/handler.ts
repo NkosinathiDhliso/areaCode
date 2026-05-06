@@ -15,10 +15,7 @@ export async function musicRoutes(app: FastifyInstance) {
   app.patch(
     '/v1/users/me/genres',
     {
-      preHandler: [
-        requireAuth('consumer'),
-        validate({ body: updateGenresBodySchema }),
-      ],
+      preHandler: [requireAuth('consumer'), validate({ body: updateGenresBodySchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -33,10 +30,7 @@ export async function musicRoutes(app: FastifyInstance) {
   app.post(
     '/v1/users/me/streaming/connect',
     {
-      preHandler: [
-        requireAuth('consumer'),
-        validate({ body: connectStreamingBodySchema }),
-      ],
+      preHandler: [requireAuth('consumer'), validate({ body: connectStreamingBodySchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -58,15 +52,11 @@ export async function musicRoutes(app: FastifyInstance) {
   )
 
   // DELETE /v1/users/me/streaming/disconnect
-  app.delete(
-    '/v1/users/me/streaming/disconnect',
-    { preHandler: [requireAuth('consumer')] },
-    async (request, reply) => {
-      const auth = getAuth(request)
-      await service.disconnectStreaming(auth.userId)
-      return reply.status(204).send()
-    },
-  )
+  app.delete('/v1/users/me/streaming/disconnect', { preHandler: [requireAuth('consumer')] }, async (request, reply) => {
+    const auth = getAuth(request)
+    await service.disconnectStreaming(auth.userId)
+    return reply.status(204).send()
+  })
 
   // GET /v1/nodes/:nodeId/crowd-vibe
   app.get(
@@ -79,12 +69,8 @@ export async function musicRoutes(app: FastifyInstance) {
   )
 
   // GET /v1/business/me/audience/music
-  app.get(
-    '/v1/business/me/audience/music',
-    { preHandler: [requireAuth('business')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return service.getBusinessAudienceMusic(auth.userId)
-    },
-  )
+  app.get('/v1/business/me/audience/music', { preHandler: [requireAuth('business')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.getBusinessAudienceMusic(auth.userId)
+  })
 }

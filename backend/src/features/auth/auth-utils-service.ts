@@ -2,17 +2,9 @@ import { AppError } from '../../shared/errors/AppError.js'
 import * as repo from './repository.js'
 import * as cognito from '../../shared/cognito/client.js'
 
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
-
 // ─── Staff Invite ───────────────────────────────────────────────────────────
 
 export async function acceptStaffInvite(token: string, name: string, phone: string) {
-  if (DEV_MODE) {
-    return {
-      id: `dev-staff-${Date.now()}`, businessId: 'dev-biz-1', name, phone,
-      cognitoSub: `staff-${Date.now()}`, isActive: true, createdAt: new Date().toISOString(),
-    }
-  }
   const invite = await repo.findStaffInviteByToken(token)
   if (!invite) throw AppError.notFound('Invite not found or expired')
   if (invite.accepted) throw AppError.gone('Invite already accepted')
@@ -31,7 +23,11 @@ export async function acceptStaffInvite(token: string, name: string, phone: stri
   const biz = await findBusinessById(businessId)
   if (biz) {
     const STAFF_LIMITS: Record<string, number | null> = {
-      free: 2, starter: 2, growth: 5, pro: null, payg: 2,
+      free: 2,
+      starter: 2,
+      growth: 5,
+      pro: null,
+      payg: 2,
     }
     const limit = STAFF_LIMITS[biz.tier ?? 'free']
     if (limit !== null && limit !== undefined) {
@@ -49,11 +45,15 @@ export async function acceptStaffInvite(token: string, name: string, phone: stri
   if (!cognitoUser) throw AppError.internal('Failed to create staff Cognito user')
 
   const staff = await repo.createStaffAccount({
-    businessId, name, phone, cognitoSub: cognitoUser.sub,
+    businessId,
+    name,
+    phone,
+    cognitoSub: cognitoUser.sub,
   })
 
   await cognito.updateUserAttributes('staff', phone, {
-    staffId: staff.staffId, businessId,
+    staffId: staff.staffId,
+    businessId,
   })
 
   return staff
@@ -62,8 +62,6 @@ export async function acceptStaffInvite(token: string, name: string, phone: stri
 // ─── Token Revocation ───────────────────────────────────────────────────────
 
 export async function revokeUserTokens(role: string, cognitoSub: string) {
-  if (DEV_MODE) return
-
   const { CognitoIdentityProviderClient, AdminUserGlobalSignOutCommand } =
     await import('@aws-sdk/client-cognito-identity-provider')
   const region = process.env['AWS_REGION'] ?? 'us-east-1'
@@ -79,8 +77,10 @@ export async function revokeUserTokens(role: string, cognitoSub: string) {
   if (!userPoolId) return
 
   const client = new CognitoIdentityProviderClient({ region })
-  await client.send(new AdminUserGlobalSignOutCommand({
-    UserPoolId: userPoolId,
-    Username: cognitoSub,
-  }))
+  await client.send(
+    new AdminUserGlobalSignOutCommand({
+      UserPoolId: userPoolId,
+      Username: cognitoSub,
+    }),
+  )
 }

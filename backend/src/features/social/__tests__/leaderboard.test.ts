@@ -13,9 +13,7 @@ describe('leaderboard sort invariant', () => {
     rank: number
   }
 
-  function buildLeaderboard(
-    scores: Array<{ userId: string; count: number }>,
-  ): LeaderboardEntry[] {
+  function buildLeaderboard(scores: Array<{ userId: string; count: number }>): LeaderboardEntry[] {
     return [...scores]
       .sort((a, b) => b.count - a.count)
       .map((s, i) => ({
@@ -32,44 +30,34 @@ describe('leaderboard sort invariant', () => {
 
   it('entries are always sorted descending by check-in count', () => {
     fc.assert(
-      fc.property(
-        fc.array(scoreArb, { minLength: 2, maxLength: 50 }),
-        (scores) => {
-          const board = buildLeaderboard(scores)
-          for (let i = 1; i < board.length; i++) {
-            expect(board[i - 1]!.checkInCount)
-              .toBeGreaterThanOrEqual(board[i]!.checkInCount)
-          }
-        },
-      ),
+      fc.property(fc.array(scoreArb, { minLength: 2, maxLength: 50 }), (scores) => {
+        const board = buildLeaderboard(scores)
+        for (let i = 1; i < board.length; i++) {
+          expect(board[i - 1]!.checkInCount).toBeGreaterThanOrEqual(board[i]!.checkInCount)
+        }
+      }),
       { numRuns: 300 },
     )
   })
 
   it('ranks are sequential starting from 1', () => {
     fc.assert(
-      fc.property(
-        fc.array(scoreArb, { minLength: 1, maxLength: 50 }),
-        (scores) => {
-          const board = buildLeaderboard(scores)
-          board.forEach((entry, i) => {
-            expect(entry.rank).toBe(i + 1)
-          })
-        },
-      ),
+      fc.property(fc.array(scoreArb, { minLength: 1, maxLength: 50 }), (scores) => {
+        const board = buildLeaderboard(scores)
+        board.forEach((entry, i) => {
+          expect(entry.rank).toBe(i + 1)
+        })
+      }),
       { numRuns: 200 },
     )
   })
 
   it('top 50 cap is respected', () => {
     fc.assert(
-      fc.property(
-        fc.array(scoreArb, { minLength: 51, maxLength: 100 }),
-        (scores) => {
-          const board = buildLeaderboard(scores).slice(0, 50)
-          expect(board.length).toBeLessThanOrEqual(50)
-        },
-      ),
+      fc.property(fc.array(scoreArb, { minLength: 51, maxLength: 100 }), (scores) => {
+        const board = buildLeaderboard(scores).slice(0, 50)
+        expect(board.length).toBeLessThanOrEqual(50)
+      }),
       { numRuns: 100 },
     )
   })

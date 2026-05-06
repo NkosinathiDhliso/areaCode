@@ -19,8 +19,6 @@ import { PutCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import type { CheckInInput, CheckInResponse } from './types.js'
 
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
-
 const REWARD_COOLDOWN = 14400 // 4 hours
 const PRESENCE_COOLDOWN = 3600 // 1 hour
 const PROXIMITY_RADIUS = 500 // metres (generous to accommodate poor GPS on low-end devices)
@@ -57,11 +55,6 @@ function getNodeState(score: number) {
 // ─── Main Check-In Pipeline ─────────────────────────────────────────────────
 
 export async function processCheckIn(userId: string, input: CheckInInput): Promise<CheckInResponse> {
-  if (DEV_MODE) {
-    const cooldownUntil = new Date(Date.now() + 14400 * 1000).toISOString()
-    return { success: true, cooldownUntil }
-  }
-
   // 0. Check if user account is disabled
   const userRecord = await getUserById(userId)
   if (userRecord?.isDisabled === true) {
@@ -120,8 +113,8 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
   })
 
   // Capture tier before incrementing for change detection
-  const userBeforeIncrement = await getUserById(userId)
-  const oldTier = userBeforeIncrement?.tier ?? 'local'
+  // (reuse userRecord fetched at step 0 to avoid redundant DynamoDB read)
+  const oldTier = userRecord?.tier ?? 'local'
 
   const incrementResult = await repo.incrementTotalCheckIns(userId)
   const newTier = incrementResult.tier
@@ -196,13 +189,12 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
     // Emit personalised friend toasts to each mutual follow's user room
     // Only emit if the user's privacy allows identity sharing
     try {
-      const canEmit = await canEmitIdentity(userId)
+      const canEmit = await canEmitIdentity(userId, userRecord ?? undefined)
       if (canEmit) {
         const followingIds = await getFollowingIds(userId)
         const friendIds = await getMutualFollowIds(userId, followingIds)
         if (friendIds.size > 0) {
-          const user = await getUserById(userId)
-          const displayName = user?.displayName ?? 'Someone'
+          const displayName = userRecord?.displayName ?? 'Someone'
           const friendPayload: {
             type: 'checkin'
             message: string
@@ -213,8 +205,8 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
             message: `${displayName} just checked in at ${node.name}`,
             nodeId: input.nodeId,
           }
-          if (user?.avatarUrl) {
-            friendPayload.avatarUrl = user.avatarUrl
+          if (userRecord?.avatarUrl) {
+            friendPayload.avatarUrl = userRecord.avatarUrl
           }
           for (const friendId of friendIds) {
             emitFriendToast(friendId, friendPayload)
@@ -229,9 +221,8 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
   // 7b. Emit to business room if node is owned by a business
   // Business owners see aggregate data; strip username/avatarUrl for non-public users
   if (node.businessId) {
-    const canShowIdentity = await canEmitIdentity(userId)
-    const user = await getUserById(userId)
-    const tier = user?.tier ?? 'local'
+    const canShowIdentity = await canEmitIdentity(userId, userRecord ?? undefined)
+    const tier = userRecord?.tier ?? 'local'
     const visitCount = await getUserCheckInCountAtNode(userId, input.nodeId)
 
     const businessPayload: Record<string, unknown> = {
@@ -243,8 +234,8 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
       timestamp: new Date().toISOString(),
       type: input.type,
     }
-    if (canShowIdentity && user?.displayName) {
-      businessPayload['displayName'] = user.displayName
+    if (canShowIdentity && userRecord?.displayName) {
+      businessPayload['displayName'] = userRecord.displayName
     }
 
     // Sanitize payload to ensure only privacy-safe fields are emitted
@@ -264,7 +255,7 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
     emitBusinessCheckinDetail(node.businessId, {
       nodeId: input.nodeId,
       nodeName: node.name,
-      displayName: canShowIdentity ? (user?.displayName ?? undefined) : undefined,
+      displayName: canShowIdentity ? (userRecord?.displayName ?? undefined) : undefined,
       tier,
       visitCount,
       timestamp: new Date().toISOString(),
@@ -281,7 +272,7 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
           Item: {
             pk: `BIZ_CHECKIN#${node.businessId}#${dateStr}`,
             sk: `CHECKIN#${ts}#${checkIn.checkInId}`,
-            displayName: canShowIdentity ? (user?.displayName ?? null) : null,
+            displayName: canShowIdentity ? (userRecord?.displayName ?? null) : null,
             tier,
             visitCount,
             nodeId: input.nodeId,
@@ -312,8 +303,6 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
           }),
         }),
       )
-    } else {
-      // SQS not configured , skip reward evaluation silently in dev
     }
   }
 

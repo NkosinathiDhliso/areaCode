@@ -6,17 +6,13 @@ import * as service from './service.js'
 
 export async function sessionRoutes(app: FastifyInstance) {
   // GET /v1/users/me/sessions
-  app.get(
-    '/v1/users/me/sessions',
-    { preHandler: [requireAuth('consumer', 'business', 'staff')] },
-    async (request) => {
-      const auth = getAuth(request)
-      const query = request.query as Record<string, unknown>
-      const currentSessionId = query?.currentSessionId as string | undefined
-      const sessions = await sessionService.getUserSessions(auth.userId, currentSessionId)
-      return { sessions }
-    },
-  )
+  app.get('/v1/users/me/sessions', { preHandler: [requireAuth('consumer', 'business', 'staff')] }, async (request) => {
+    const auth = getAuth(request)
+    const query = request.query as Record<string, unknown>
+    const currentSessionId = query?.currentSessionId as string | undefined
+    const sessions = await sessionService.getUserSessions(auth.userId, currentSessionId)
+    return { sessions }
+  })
 
   // DELETE /v1/users/me/sessions/:sessionId
   app.delete(

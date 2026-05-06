@@ -20,9 +20,7 @@ const BENCHMARK_SIGNIFICANCE_THRESHOLD = 20
 // Day names for formatting
 // ============================================================================
 
-const DAYS_OF_WEEK = [
-  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
-] as const
+const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const
 
 // ============================================================================
 // Recommendations Engine
@@ -77,9 +75,7 @@ export function generateRecommendations(report: ReportSections): RecommendationR
 // Individual Recommendation Generators
 // ============================================================================
 
-function generatePeakHoursRecommendation(
-  report: ReportSections,
-): RecommendationResult['recommendations'][0] | null {
+function generatePeakHoursRecommendation(report: ReportSections): RecommendationResult['recommendations'][0] | null {
   const { peakHours } = report
 
   if (peakHours.topWindows.length === 0) return null
@@ -105,9 +101,7 @@ function generatePeakHoursRecommendation(
   }
 }
 
-function generateMusicRecommendation(
-  report: ReportSections,
-): RecommendationResult['recommendations'][0] | null {
+function generateMusicRecommendation(report: ReportSections): RecommendationResult['recommendations'][0] | null {
   const { musicProfile, crowdComposition } = report
 
   if (!musicProfile || musicProfile.hasInsufficientData) return null
@@ -163,9 +157,7 @@ function generateMusicRecommendation(
   return null
 }
 
-function generateRetentionRecommendation(
-  report: ReportSections,
-): RecommendationResult['recommendations'][0] | null {
+function generateRetentionRecommendation(report: ReportSections): RecommendationResult['recommendations'][0] | null {
   const { trends, repeatVisitors } = report
 
   if (!trends.hasPriorData) return null
@@ -185,9 +177,7 @@ function generateRetentionRecommendation(
   return null
 }
 
-function generateBenchmarkRecommendation(
-  report: ReportSections,
-): RecommendationResult['recommendations'][0] | null {
+function generateBenchmarkRecommendation(report: ReportSections): RecommendationResult['recommendations'][0] | null {
   const { benchmarks } = report
 
   if (!benchmarks || benchmarks.hasInsufficientData) return null
@@ -216,11 +206,8 @@ function generateBenchmarkRecommendation(
   }
 }
 
-function generateGeneralRecommendation(
-  report: ReportSections,
-): RecommendationResult['recommendations'][0] {
-  const totalCheckIns = Object.values(report.peakHours.hourlyDistribution)
-    .reduce((sum, c) => sum + c, 0)
+function generateGeneralRecommendation(report: ReportSections): RecommendationResult['recommendations'][0] {
+  const totalCheckIns = Object.values(report.peakHours.hourlyDistribution).reduce((sum, c) => sum + c, 0)
   const uniqueVisitors = report.crowdComposition.totalUniqueVisitors
 
   return {
@@ -239,10 +226,15 @@ function formatHour(hour: number): string {
 
 function formatMetricName(key: string): string {
   switch (key) {
-    case 'totalCheckIns': return 'total check-ins'
-    case 'uniqueVisitors': return 'unique visitors'
-    case 'repeatVisitorRate': return 'repeat visitor rate'
-    case 'pulseScore': return 'pulse score'
-    default: return key
+    case 'totalCheckIns':
+      return 'total check-ins'
+    case 'uniqueVisitors':
+      return 'unique visitors'
+    case 'repeatVisitorRate':
+      return 'repeat visitor rate'
+    case 'pulseScore':
+      return 'pulse score'
+    default:
+      return key
   }
 }

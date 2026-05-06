@@ -3,8 +3,11 @@ import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { validate } from '../../shared/middleware/validation.js'
 import * as service from './service.js'
 import {
-  createRewardBodySchema, updateRewardBodySchema,
-  rewardIdParamsSchema, redeemBodySchema, nearMeQuerySchema,
+  createRewardBodySchema,
+  updateRewardBodySchema,
+  rewardIdParamsSchema,
+  redeemBodySchema,
+  nearMeQuerySchema,
 } from './types.js'
 import { z } from 'zod'
 
@@ -13,10 +16,7 @@ export async function rewardRoutes(app: FastifyInstance) {
   app.post(
     '/v1/business/rewards',
     {
-      preHandler: [
-        requireAuth('business'),
-        validate({ body: createRewardBodySchema }),
-      ],
+      preHandler: [requireAuth('business'), validate({ body: createRewardBodySchema })],
     },
     async (request, reply) => {
       const auth = getAuth(request)
@@ -30,10 +30,7 @@ export async function rewardRoutes(app: FastifyInstance) {
   app.put(
     '/v1/business/rewards/:id',
     {
-      preHandler: [
-        requireAuth('business'),
-        validate({ params: rewardIdParamsSchema, body: updateRewardBodySchema }),
-      ],
+      preHandler: [requireAuth('business'), validate({ params: rewardIdParamsSchema, body: updateRewardBodySchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -47,10 +44,7 @@ export async function rewardRoutes(app: FastifyInstance) {
   app.get(
     '/v1/rewards/near-me',
     {
-      preHandler: [
-        requireAuth('consumer'),
-        validate({ query: nearMeQuerySchema }),
-      ],
+      preHandler: [requireAuth('consumer'), validate({ query: nearMeQuerySchema })],
     },
     async (request) => {
       const query = request.query as z.infer<typeof nearMeQuerySchema>
@@ -59,23 +53,16 @@ export async function rewardRoutes(app: FastifyInstance) {
   )
 
   // GET /v1/users/me/unclaimed-rewards
-  app.get(
-    '/v1/users/me/unclaimed-rewards',
-    { preHandler: [requireAuth('consumer')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return service.getUnclaimedRewards(auth.userId)
-    },
-  )
+  app.get('/v1/users/me/unclaimed-rewards', { preHandler: [requireAuth('consumer')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.getUnclaimedRewards(auth.userId)
+  })
 
   // POST /v1/rewards/:rewardId/redeem (staff auth)
   app.post(
     '/v1/rewards/:id/redeem',
     {
-      preHandler: [
-        requireAuth('staff'),
-        validate({ params: rewardIdParamsSchema, body: redeemBodySchema }),
-      ],
+      preHandler: [requireAuth('staff'), validate({ params: rewardIdParamsSchema, body: redeemBodySchema })],
     },
     async (request) => {
       const auth = getAuth(request)

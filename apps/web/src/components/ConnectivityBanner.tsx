@@ -17,9 +17,7 @@ export function ConnectivityBanner() {
 
   if (state === 'online') return null
 
-  const relativeTime = lastUpdated
-    ? `${Math.round((Date.now() - new Date(lastUpdated).getTime()) / 60000)}m`
-    : ''
+  const relativeTime = lastUpdated ? `${Math.round((Date.now() - new Date(lastUpdated).getTime()) / 60000)}m` : ''
 
   return (
     <div
@@ -30,13 +28,9 @@ export function ConnectivityBanner() {
       }`}
       role="alert"
     >
-      {state === 'offline'
-        ? t('offline.banner')
-        : t('apiOnly.indicator')}
+      {state === 'offline' ? t('offline.banner') : t('apiOnly.indicator')}
       {lastUpdated && state === 'offline' && (
-        <span className="ml-2 opacity-70">
-          {t('offline.lastUpdated', { time: relativeTime })}
-        </span>
+        <span className="ml-2 opacity-70">{t('offline.lastUpdated', { time: relativeTime })}</span>
       )}
     </div>
   )

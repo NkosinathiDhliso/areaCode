@@ -2,8 +2,6 @@ import { AppError } from '../../shared/errors/AppError.js'
 import { filterByPrivacy } from '../../shared/privacy/privacy-guard.js'
 import * as repo from './repository.js'
 
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
-
 // ─── Identity Stripper ──────────────────────────────────────────────────────
 
 export interface IdentityFields {
@@ -47,7 +45,7 @@ export async function followUser(followerId: string, followingId: string) {
   if (followerId === followingId) {
     throw AppError.badRequest('Cannot follow yourself')
   }
-  if (DEV_MODE) return
+
   try {
     await repo.followUser(followerId, followingId)
   } catch {
@@ -56,38 +54,20 @@ export async function followUser(followerId: string, followingId: string) {
 }
 
 export async function unfollowUser(followerId: string, followingId: string) {
-  if (DEV_MODE) return
   await repo.unfollowUser(followerId, followingId)
 }
 
 // ─── Activity Feed ──────────────────────────────────────────────────────────
 
-export async function getActivityFeed(
-  userId: string,
-  cursor: string | undefined,
-  limit: number,
-) {
-  if (DEV_MODE) {
-    return {
-      items: [
-        { id: 'feed-1', checkedInAt: new Date(Date.now() - 300000).toISOString(), user: { id: 'dev-user-2', username: 'sipho_jozi', displayName: 'Sipho', avatarUrl: null, tier: 'trailblazer' }, node: { id: 'dev-3', name: "Kitchener's Bar", slug: 'kitcheners-bar', category: 'nightlife' }, isFriend: true },
-        { id: 'feed-2', checkedInAt: new Date(Date.now() - 900000).toISOString(), user: { id: 'dev-user-3', username: 'thandi_sa', displayName: 'Thandi', avatarUrl: null, tier: 'explorer' }, node: { id: 'dev-6', name: 'Arts on Main', slug: 'arts-on-main', category: 'culture' }, isFriend: true },
-        { id: 'feed-3', checkedInAt: new Date(Date.now() - 1800000).toISOString(), user: { id: 'dev-user-4', username: 'bongani_jhb', displayName: 'Bongani', avatarUrl: null, tier: 'explorer' }, node: { id: 'dev-1', name: 'Father Coffee', slug: 'father-coffee', category: 'coffee' }, isFriend: true },
-        { id: 'feed-4', checkedInAt: new Date(Date.now() - 3600000).toISOString(), user: { id: 'dev-user-5', username: 'lerato_rosebank', displayName: 'Lerato', avatarUrl: null, tier: 'local' }, node: { id: 'dev-7', name: "Nando's Rosebank", slug: 'nandos-rosebank', category: 'food' }, isFriend: true },
-        { id: 'feed-5', checkedInAt: new Date(Date.now() - 7200000).toISOString(), user: { id: 'dev-user-1', username: 'neo_sandton', displayName: 'Neo', avatarUrl: null, tier: 'local' }, node: { id: 'dev-5', name: 'Sandton City', slug: 'sandton-city', category: 'shopping' }, isFriend: true },
-      ],
-      nextCursor: null,
-      hasMore: false,
-    }
-  }
+export async function getActivityFeed(userId: string, cursor: string | undefined, limit: number) {
   const result = await repo.getActivityFeed(userId, cursor, limit)
   // Apply privacy filtering — excluded users are removed, anonymous users have identity nulled
   const filteredItems = await filterByPrivacy(
     result.items.map((item: Record<string, unknown>) => ({
-      userId: (item.user as Record<string, unknown>)?.id as string ?? '',
-      displayName: (item.user as Record<string, unknown>)?.displayName as string | null ?? null,
-      username: (item.user as Record<string, unknown>)?.username as string | null ?? null,
-      avatarUrl: (item.user as Record<string, unknown>)?.avatarUrl as string | null ?? null,
+      userId: ((item.user as Record<string, unknown>)?.id as string) ?? '',
+      displayName: ((item.user as Record<string, unknown>)?.displayName as string | null) ?? null,
+      username: ((item.user as Record<string, unknown>)?.username as string | null) ?? null,
+      avatarUrl: ((item.user as Record<string, unknown>)?.avatarUrl as string | null) ?? null,
       _original: item,
     })),
     userId,
@@ -114,30 +94,14 @@ export async function getActivityFeed(
 
 // ─── Nearby Recent ──────────────────────────────────────────────────────────
 
-export async function getNearbyRecentEvent(
-  lat: number,
-  lng: number,
-  radiusMetres: number,
-  withinMinutes: number,
-) {
-  if (DEV_MODE) return { event: null }
-  const event = await repo.getNearbyRecentEvent(
-    lat, lng, radiusMetres, withinMinutes,
-  )
+export async function getNearbyRecentEvent(lat: number, lng: number, radiusMetres: number, withinMinutes: number) {
+  const event = await repo.getNearbyRecentEvent(lat, lng, radiusMetres, withinMinutes)
   return { event }
 }
 
 // ─── Who Is Here ────────────────────────────────────────────────────────────
 
 export async function getWhoIsHere(nodeId: string, viewerId?: string) {
-  if (DEV_MODE) {
-    return {
-      totalCount: 5,
-      tierDistribution: { local: 2, regular: 1, fixture: 1, institution: 1 } as Record<string, number>,
-      friends: [] as Array<{ userId: string; displayName: string; username: string; avatarUrl: string | null; tier: string; checkedInAt: string }>,
-    }
-  }
-
   const entries = await repo.getWhoIsHere(nodeId)
 
   // Apply privacy filtering — excluded users are removed entirely,
@@ -169,17 +133,6 @@ export async function getWhoIsHere(nodeId: string, viewerId?: string) {
 // ─── Leaderboard ────────────────────────────────────────────────────────────
 
 export async function getCityLeaderboard(citySlug: string, viewerId?: string) {
-  if (DEV_MODE) {
-    const entries = [
-      { userId: 'dev-user-1', username: 'sipho_jozi', displayName: 'Sipho M.', avatarUrl: null, tier: 'trailblazer', rank: 1, checkInCount: 142, isFriend: true },
-      { userId: 'dev-user-2', username: null, displayName: null, avatarUrl: null, tier: 'explorer', rank: 2, checkInCount: 98, isFriend: false },
-      { userId: 'dev-user-3', username: null, displayName: null, avatarUrl: null, tier: 'explorer', rank: 3, checkInCount: 76, isFriend: false },
-      { userId: 'dev-user-4', username: 'lerato_rosebank', displayName: 'Lerato D.', avatarUrl: null, tier: 'local', rank: 4, checkInCount: 54, isFriend: true },
-      { userId: 'dev-user-5', username: null, displayName: null, avatarUrl: null, tier: 'local', rank: 5, checkInCount: 41, isFriend: false },
-    ]
-    return { entries, userRank: viewerId ? { rank: 12, checkInCount: 8 } : null }
-  }
-
   const city = await repo.getCityBySlug(citySlug)
   if (!city) throw AppError.notFound('City not found')
 
@@ -215,7 +168,10 @@ export async function getCityLeaderboard(citySlug: string, viewerId?: string) {
 
   // Also apply friend visibility for the isFriend flag (backward compat)
   const friendIds = viewerId
-    ? await repo.getMutualFollowIds(viewerId, privacyFiltered.map((e) => e.userId))
+    ? await repo.getMutualFollowIds(
+        viewerId,
+        privacyFiltered.map((e) => e.userId),
+      )
     : new Set<string>()
 
   const entries = privacyFiltered.map((entry) => ({
@@ -229,9 +185,6 @@ export async function getCityLeaderboard(citySlug: string, viewerId?: string) {
 // ─── Friends List ───────────────────────────────────────────────────────────
 
 export async function getFriendsList(userId: string) {
-  if (DEV_MODE) {
-    return { friends: [], count: 0 }
-  }
   const friends = await repo.getMutualFriends(userId)
   return { friends, count: friends.length }
 }
@@ -239,9 +192,6 @@ export async function getFriendsList(userId: string) {
 // ─── Following List ─────────────────────────────────────────────────────────
 
 export async function getFollowingList(userId: string) {
-  if (DEV_MODE) {
-    return { users: [], count: 0 }
-  }
   const users = await repo.getFollowingList(userId)
   return { users, count: users.length }
 }
@@ -249,9 +199,6 @@ export async function getFollowingList(userId: string) {
 // ─── Followers List ─────────────────────────────────────────────────────────
 
 export async function getFollowersList(userId: string) {
-  if (DEV_MODE) {
-    return { users: [], count: 0 }
-  }
   const users = await repo.getFollowersList(userId)
   return { users, count: users.length }
 }
@@ -259,9 +206,6 @@ export async function getFollowersList(userId: string) {
 // ─── User Search ────────────────────────────────────────────────────────────
 
 export async function searchUsers(viewerId: string, query: string) {
-  if (DEV_MODE) {
-    return { users: [] }
-  }
   const users = await repo.searchUsers(query, viewerId)
   return { users }
 }

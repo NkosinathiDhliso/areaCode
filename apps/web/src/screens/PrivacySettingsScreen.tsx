@@ -55,9 +55,7 @@ export function PrivacySettingsScreen({ onNavigate }: PrivacySettingsScreenProps
         </button>
       </div>
 
-      <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-6">
-        {t('privacy.settings.heading')}
-      </h1>
+      <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-6">{t('privacy.settings.heading')}</h1>
 
       {/* Privacy level picker */}
       <div className="mb-6">
@@ -79,9 +77,7 @@ export function PrivacySettingsScreen({ onNavigate }: PrivacySettingsScreenProps
         )}
 
         {!isLoading && (!data?.blocked || data.blocked.length === 0) && (
-          <p className="text-[var(--text-muted)] text-sm text-center py-6">
-            {t('privacy.blockedUsers.empty')}
-          </p>
+          <p className="text-[var(--text-muted)] text-sm text-center py-6">{t('privacy.blockedUsers.empty')}</p>
         )}
 
         {!isLoading && data?.blocked && data.blocked.length > 0 && (
@@ -91,16 +87,9 @@ export function PrivacySettingsScreen({ onNavigate }: PrivacySettingsScreenProps
                 key={user.userId}
                 className="flex flex-row items-center gap-3 bg-[var(--bg-raised)] rounded-2xl px-4 py-3"
               >
-                <Avatar
-                  url={user.avatarUrl}
-                  displayName={user.displayName}
-                  size="sm"
-                  tier={user.tier}
-                />
+                <Avatar url={user.avatarUrl} displayName={user.displayName} size="sm" tier={user.tier} />
                 <div className="flex-1">
-                  <p className="text-[var(--text-primary)] text-sm font-medium">
-                    {user.displayName}
-                  </p>
+                  <p className="text-[var(--text-primary)] text-sm font-medium">{user.displayName}</p>
                   <p className="text-[var(--text-muted)] text-xs">@{user.username}</p>
                 </div>
                 <BlockUserButton

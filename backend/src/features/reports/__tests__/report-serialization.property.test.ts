@@ -18,7 +18,20 @@ import type { Report } from '../types'
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const
 const TIERS = ['local', 'regular', 'fixture', 'institution', 'legend'] as const
 const PULSE_STATES = ['dormant', 'quiet', 'active', 'buzzing', 'popping'] as const
-const GENRES = ['amapiano', 'deep_house', 'afrobeats', 'hip_hop', 'rnb', 'kwaito', 'gqom', 'jazz', 'rock', 'pop', 'gospel', 'maskandi'] as const
+const GENRES = [
+  'amapiano',
+  'deep_house',
+  'afrobeats',
+  'hip_hop',
+  'rnb',
+  'kwaito',
+  'gqom',
+  'jazz',
+  'rock',
+  'pop',
+  'gospel',
+  'maskandi',
+] as const
 const DIMENSIONS = ['energy', 'cultural_rootedness', 'sophistication', 'edge', 'spirituality'] as const
 const REC_TYPES = ['peak_hours', 'music', 'retention', 'benchmark', 'general'] as const
 
@@ -35,22 +48,22 @@ const safeDouble3 = (opts: { min: number; max: number }) =>
     return Object.is(rounded, -0) ? 0 : rounded
   })
 
-const isoDateArb = fc.integer({
-  min: new Date('2024-01-01').getTime(),
-  max: new Date('2026-12-31').getTime(),
-}).map((ts) => new Date(ts).toISOString())
+const isoDateArb = fc
+  .integer({
+    min: new Date('2024-01-01').getTime(),
+    max: new Date('2026-12-31').getTime(),
+  })
+  .map((ts) => new Date(ts).toISOString())
 
 const peakHoursResultArb = fc.record({
-  hourlyDistribution: fc.tuple(
-    ...Array.from({ length: 24 }, (_, i) =>
-      fc.integer({ min: 0, max: 500 }).map((count) => [i, count] as const)
+  hourlyDistribution: fc
+    .tuple(
+      ...Array.from({ length: 24 }, (_, i) => fc.integer({ min: 0, max: 500 }).map((count) => [i, count] as const)),
     )
-  ).map((entries) => Object.fromEntries(entries) as Record<number, number>),
-  dailyDistribution: fc.tuple(
-    ...DAYS_OF_WEEK.map((day) =>
-      fc.integer({ min: 0, max: 500 }).map((count) => [day, count] as const)
-    )
-  ).map((entries) => Object.fromEntries(entries) as Record<string, number>),
+    .map((entries) => Object.fromEntries(entries) as Record<number, number>),
+  dailyDistribution: fc
+    .tuple(...DAYS_OF_WEEK.map((day) => fc.integer({ min: 0, max: 500 }).map((count) => [day, count] as const)))
+    .map((entries) => Object.fromEntries(entries) as Record<string, number>),
   topWindows: fc.array(
     fc.record({
       startHour: fc.integer({ min: 0, max: 23 }),
@@ -63,25 +76,19 @@ const peakHoursResultArb = fc.record({
 })
 
 const crowdCompositionResultArb = fc.record({
-  tierPercentages: fc.tuple(
-    ...TIERS.map((tier) =>
-      safeDouble({ min: 0, max: 100 }).map((pct) => [tier, pct] as const)
-    )
-  ).map((entries) => Object.fromEntries(entries) as Record<string, number>),
-  tierUniqueCounts: fc.tuple(
-    ...TIERS.map((tier) =>
-      fc.integer({ min: 0, max: 500 }).map((count) => [tier, count] as const)
-    )
-  ).map((entries) => Object.fromEntries(entries) as Record<string, number>),
+  tierPercentages: fc
+    .tuple(...TIERS.map((tier) => safeDouble({ min: 0, max: 100 }).map((pct) => [tier, pct] as const)))
+    .map((entries) => Object.fromEntries(entries) as Record<string, number>),
+  tierUniqueCounts: fc
+    .tuple(...TIERS.map((tier) => fc.integer({ min: 0, max: 500 }).map((count) => [tier, count] as const)))
+    .map((entries) => Object.fromEntries(entries) as Record<string, number>),
   totalUniqueVisitors: fc.integer({ min: 0, max: 2500 }),
 })
 
 const musicProfileResultArb = fc.record({
-  archetypeDimensions: fc.tuple(
-    ...DIMENSIONS.map((dim) =>
-      safeDouble3({ min: 0, max: 1 }).map((val) => [dim, val] as const)
-    )
-  ).map((entries) => Object.fromEntries(entries) as Record<string, number>),
+  archetypeDimensions: fc
+    .tuple(...DIMENSIONS.map((dim) => safeDouble3({ min: 0, max: 1 }).map((val) => [dim, val] as const)))
+    .map((entries) => Object.fromEntries(entries) as Record<string, number>),
   topGenres: fc.array(
     fc.record({
       genre: fc.constantFrom(...GENRES),

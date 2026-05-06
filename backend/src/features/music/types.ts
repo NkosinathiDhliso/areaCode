@@ -1,8 +1,18 @@
 import { z } from 'zod'
 
 const VALID_GENRES = [
-  'amapiano', 'deep_house', 'afrobeats', 'hip_hop', 'rnb',
-  'kwaito', 'gqom', 'jazz', 'rock', 'pop', 'gospel', 'maskandi',
+  'amapiano',
+  'deep_house',
+  'afrobeats',
+  'hip_hop',
+  'rnb',
+  'kwaito',
+  'gqom',
+  'jazz',
+  'rock',
+  'pop',
+  'gospel',
+  'maskandi',
 ] as const
 
 export const updateGenresBodySchema = z.object({

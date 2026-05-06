@@ -8,9 +8,13 @@ import { getStaffById } from '../auth/dynamodb-repository.js'
 export { getNodeById }
 
 export async function createReward(data: {
-  nodeId: string; type: string; title: string;
-  description?: string; triggerValue?: number;
-  totalSlots?: number; expiresAt?: string;
+  nodeId: string
+  type: string
+  title: string
+  description?: string
+  triggerValue?: number
+  totalSlots?: number
+  expiresAt?: string
 }) {
   return dynamo.createReward(data as any)
 }
@@ -41,7 +45,7 @@ export async function countActiveRewardsForBusiness(businessId: string) {
       IndexName: 'BusinessIndex',
       KeyConditionExpression: 'businessId = :bid',
       ExpressionAttributeValues: { ':bid': businessId },
-    })
+    }),
   )
   const nodeIds = (nodesResult.Items || []).map((n) => (n['nodeId'] ?? n['id']) as string)
   let count = 0
@@ -59,7 +63,7 @@ export async function getRewardsNearMe(lat: number, lng: number) {
       TableName: TableNames.rewards,
       FilterExpression: 'isActive = :active',
       ExpressionAttributeValues: { ':active': true },
-    })
+    }),
   )
   const rewards = rewardsResult.Items || []
 
@@ -70,16 +74,22 @@ export async function getRewardsNearMe(lat: number, lng: number) {
     const R = 6371000
     const dLat = ((node.lat - lat) * Math.PI) / 180
     const dLng = ((node.lng - lng) * Math.PI) / 180
-    const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat * Math.PI) / 180) * Math.cos((node.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((lat * Math.PI) / 180) * Math.cos((node.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
     const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
     if (distance <= 5000) {
       results.push({
         id: r['rewardId'] ?? r['id'],
-        title: r['title'], type: r['type'],
+        title: r['title'],
+        type: r['type'],
         total_slots: r['totalSlots'] ?? null,
         claimed_count: r['claimedCount'] ?? 0,
-        node_id: node.nodeId, node_name: node.name, node_slug: node.slug,
-        distance, expires_at: r['expiresAt'] ?? null,
+        node_id: node.nodeId,
+        node_name: node.name,
+        node_slug: node.slug,
+        distance,
+        expires_at: r['expiresAt'] ?? null,
       })
     }
   }
@@ -113,7 +123,7 @@ export async function findRedemptionByCode(code: string) {
       TableName: TableNames.appData,
       FilterExpression: 'redemptionCode = :code',
       ExpressionAttributeValues: { ':code': code },
-    })
+    }),
   )
   if (!result.Items?.[0]) return null
   const rdm = result.Items[0] as Record<string, unknown>
@@ -141,7 +151,7 @@ export async function getRecentRedemptions(businessId: string, limit = 20) {
       IndexName: 'BusinessIndex',
       KeyConditionExpression: 'businessId = :bid',
       ExpressionAttributeValues: { ':bid': businessId },
-    })
+    }),
   )
   const nodeIds = new Set((nodesResult.Items || []).map((n) => (n['nodeId'] ?? n['id']) as string))
   // Scan redemptions and filter
@@ -150,7 +160,7 @@ export async function getRecentRedemptions(businessId: string, limit = 20) {
       TableName: TableNames.appData,
       FilterExpression: 'begins_with(pk, :prefix) AND attribute_exists(redeemedAt)',
       ExpressionAttributeValues: { ':prefix': 'REDEMPTION#' },
-    })
+    }),
   )
   const items = (result.Items || [])
     .filter((i) => {
@@ -175,7 +185,7 @@ export async function getRedemptionsByStaffId(staffId: string, businessId: strin
       TableName: TableNames.appData,
       FilterExpression: 'begins_with(pk, :prefix) AND staffId = :staffId',
       ExpressionAttributeValues: { ':prefix': 'REDEMPTION#', ':staffId': staffId },
-    })
+    }),
   )
   const items = (result.Items || []).slice(0, limit)
   const enriched = []

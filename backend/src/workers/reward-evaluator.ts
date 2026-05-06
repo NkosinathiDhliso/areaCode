@@ -1,5 +1,10 @@
 import { randomBytes } from 'node:crypto'
-import { emitRewardClaimed, emitRewardSlotsUpdate, emitToast, emitBusinessRewardClaimed } from '../shared/socket/events.js'
+import {
+  emitRewardClaimed,
+  emitRewardSlotsUpdate,
+  emitToast,
+  emitBusinessRewardClaimed,
+} from '../shared/socket/events.js'
 import { userRoom } from '../shared/socket/rooms.js'
 import { getIO } from '../shared/socket/server.js'
 import * as repo from './reward-evaluator-repository.js'
@@ -36,7 +41,10 @@ async function evaluateRewards(userId: string, nodeId: string) {
 
     try {
       await repo.createRedemption({
-        rewardId: reward.id, userId, redemptionCode: code, codeExpiresAt,
+        rewardId: reward.id,
+        userId,
+        redemptionCode: code,
+        codeExpiresAt,
       })
     } catch {
       continue // ON CONFLICT , already claimed
@@ -56,9 +64,7 @@ async function emitClaimEvents(
   codeExpiresAt: string,
 ) {
   const slots = reward.totalSlots ?? null
-  const slotsRemaining = slots !== null
-    ? slots - (reward.claimedCount ?? 0) - 1
-    : null
+  const slotsRemaining = slots !== null ? slots - (reward.claimedCount ?? 0) - 1 : null
 
   const io = getIO()
   const sockets = await io.in(userRoom(userId)).fetchSockets()
@@ -69,10 +75,12 @@ async function emitClaimEvents(
       rewardTitle: reward.title,
       redemptionCode: code,
       codeExpiresAt,
+      nodeId,
     })
   } else {
     // Deliver via push notification (Expo / Web Push)
-    const { canSendRewardPush, incrementRewardPushCount, notifyUser } = await import('../features/notifications/service.js')
+    const { canSendRewardPush, incrementRewardPushCount, notifyUser } =
+      await import('../features/notifications/service.js')
     const canPush = await canSendRewardPush(userId)
     if (canPush) {
       await incrementRewardPushCount(userId)

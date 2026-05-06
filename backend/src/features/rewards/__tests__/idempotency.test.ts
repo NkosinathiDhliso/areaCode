@@ -12,25 +12,20 @@ import * as fc from 'fast-check'
 describe('reward redemption idempotency', () => {
   it('same (rewardId, userId) pair never produces duplicates in a set', () => {
     fc.assert(
-      fc.property(
-        fc.uuid(),
-        fc.uuid(),
-        fc.integer({ min: 1, max: 10 }),
-        (rewardId, userId, attempts) => {
-          const redemptions = new Map<string, string>()
-          const key = `${rewardId}:${userId}`
+      fc.property(fc.uuid(), fc.uuid(), fc.integer({ min: 1, max: 10 }), (rewardId, userId, attempts) => {
+        const redemptions = new Map<string, string>()
+        const key = `${rewardId}:${userId}`
 
-          for (let i = 0; i < attempts; i++) {
-            // ON CONFLICT DO NOTHING behaviour
-            if (!redemptions.has(key)) {
-              redemptions.set(key, `code-${i}`)
-            }
+        for (let i = 0; i < attempts; i++) {
+          // ON CONFLICT DO NOTHING behaviour
+          if (!redemptions.has(key)) {
+            redemptions.set(key, `code-${i}`)
           }
+        }
 
-          // Only one entry per (rewardId, userId)
-          expect(redemptions.size).toBe(1)
-        },
-      ),
+        // Only one entry per (rewardId, userId)
+        expect(redemptions.size).toBe(1)
+      }),
       { numRuns: 300 },
     )
   })

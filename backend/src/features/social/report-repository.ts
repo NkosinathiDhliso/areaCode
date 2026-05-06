@@ -62,7 +62,7 @@ export async function createReport(data: {
         gsi1sk: `${priority}#${now}`,
         ...report,
       },
-    })
+    }),
   )
 
   // Create high-priority abuse flag for harassment/stalking reports
@@ -91,7 +91,7 @@ export async function createReport(data: {
           priority: 'high',
           createdAt: now,
         },
-      })
+      }),
     )
   }
 
@@ -107,7 +107,7 @@ export async function getReportQueue(limit = 50): Promise<UserReport[]> {
       ExpressionAttributeValues: { ':pk': 'REPORT_QUEUE' },
       ScanIndexForward: false, // newest first, high priority first
       Limit: limit,
-    })
+    }),
   )
   return (result.Items || []) as UserReport[]
 }

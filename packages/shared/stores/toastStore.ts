@@ -27,10 +27,7 @@ export const useToastStore = create<ToastStore>()(
       set((state) => {
         state.queue.push(toast)
         // Sort by priority (lower = higher priority)
-        state.queue.sort(
-          (a, b) =>
-            (TOAST_PRIORITY[a.type] ?? 5) - (TOAST_PRIORITY[b.type] ?? 5),
-        )
+        state.queue.sort((a, b) => (TOAST_PRIORITY[a.type] ?? 5) - (TOAST_PRIORITY[b.type] ?? 5))
         // Drop oldest lowest-priority if queue > 3
         while (state.queue.length > 3) {
           state.queue.pop()

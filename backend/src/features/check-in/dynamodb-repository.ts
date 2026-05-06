@@ -1,12 +1,5 @@
 // DynamoDB Repository for Check-In Feature
-import {
-  GetCommand,
-  QueryCommand,
-  PutCommand,
-  UpdateCommand,
-  DeleteCommand,
-  ScanCommand,
-} from '@aws-sdk/lib-dynamodb'
+import { GetCommand, QueryCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
 import type { CheckIn } from './types.js'
@@ -21,7 +14,7 @@ export async function getCheckInById(checkInId: string, timestamp?: number): Pro
       new GetCommand({
         TableName: TableNames.checkins,
         Key: { checkInId, timestamp },
-      })
+      }),
     )
     return result.Item ? mapCheckIn(result.Item) : null
   }
@@ -32,14 +25,12 @@ export async function getCheckInById(checkInId: string, timestamp?: number): Pro
       KeyConditionExpression: 'checkInId = :id',
       ExpressionAttributeValues: { ':id': checkInId },
       Limit: 1,
-    })
+    }),
   )
   return result.Items?.[0] ? mapCheckIn(result.Items[0]) : null
 }
 
-export async function createCheckIn(
-  data: Omit<CheckIn, 'checkInId' | 'checkedInAt'>
-): Promise<CheckIn> {
+export async function createCheckIn(data: Omit<CheckIn, 'checkInId' | 'checkedInAt'>): Promise<CheckIn> {
   const checkInId = generateId()
   const now = new Date().toISOString()
   const ts = Date.now() // numeric timestamp for SK
@@ -57,7 +48,7 @@ export async function createCheckIn(
         ...checkIn,
         timestamp: ts,
       },
-    })
+    }),
   )
 
   return checkIn
@@ -70,7 +61,7 @@ export async function getCheckInsByUser(
     cursor?: string
     startTime?: string
     endTime?: string
-  }
+  },
 ): Promise<{ checkIns: CheckIn[]; nextCursor?: string }> {
   let keyCondition = 'userId = :userId'
   const exprValues: Record<string, unknown> = { ':userId': userId }
@@ -90,10 +81,8 @@ export async function getCheckInsByUser(
       ExpressionAttributeValues: exprValues,
       ScanIndexForward: false,
       Limit: options?.limit || 50,
-      ...(options?.cursor
-        ? { ExclusiveStartKey: JSON.parse(Buffer.from(options.cursor, 'base64').toString()) }
-        : {}),
-    })
+      ...(options?.cursor ? { ExclusiveStartKey: JSON.parse(Buffer.from(options.cursor, 'base64').toString()) } : {}),
+    }),
   )
 
   const checkIns = (result.Items || []).map((i) => mapCheckIn(i))
@@ -110,7 +99,7 @@ export async function getCheckInsByNode(
     limit?: number
     cursor?: string
     hours?: number
-  }
+  },
 ): Promise<{ checkIns: CheckIn[]; nextCursor?: string }> {
   let filterExpr = ''
   const exprValues: Record<string, unknown> = { ':nodeId': nodeId }
@@ -130,10 +119,8 @@ export async function getCheckInsByNode(
       ...(filterExpr ? { FilterExpression: filterExpr } : {}),
       ScanIndexForward: false,
       Limit: options?.limit || 50,
-      ...(options?.cursor
-        ? { ExclusiveStartKey: JSON.parse(Buffer.from(options.cursor, 'base64').toString()) }
-        : {}),
-    })
+      ...(options?.cursor ? { ExclusiveStartKey: JSON.parse(Buffer.from(options.cursor, 'base64').toString()) } : {}),
+    }),
   )
 
   const checkIns = (result.Items || []).map((i) => mapCheckIn(i))
@@ -144,11 +131,7 @@ export async function getCheckInsByNode(
   return { checkIns, nextCursor }
 }
 
-export async function getRecentCheckInCount(
-  userId: string,
-  nodeId: string,
-  hours: number
-): Promise<number> {
+export async function getRecentCheckInCount(userId: string, nodeId: string, hours: number): Promise<number> {
   const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
 
   const result = await documentClient.send(
@@ -162,16 +145,13 @@ export async function getRecentCheckInCount(
         ':nodeId': nodeId,
         ':cutoff': cutoff,
       },
-    })
+    }),
   )
 
   return result.Count || 0
 }
 
-export async function getUserCheckInCountAtNode(
-  userId: string,
-  nodeId: string,
-): Promise<number> {
+export async function getUserCheckInCountAtNode(userId: string, nodeId: string): Promise<number> {
   const result = await documentClient.send(
     new QueryCommand({
       TableName: TableNames.checkins,
@@ -183,7 +163,7 @@ export async function getUserCheckInCountAtNode(
         ':nodeId': nodeId,
       },
       Select: 'COUNT',
-    })
+    }),
   )
 
   return result.Count || 0
@@ -197,7 +177,7 @@ export async function getUserCheckInCount(userId: string): Promise<number> {
       KeyConditionExpression: 'userId = :userId',
       ExpressionAttributeValues: { ':userId': userId },
       Select: 'COUNT',
-    })
+    }),
   )
 
   return result.Count || 0
@@ -210,7 +190,7 @@ export async function getUserCheckInCount(userId: string): Promise<number> {
 export async function getLeaderboard(
   cityId: string,
   weekEnding: string,
-  limit: number = 100
+  limit: number = 100,
 ): Promise<Array<{ userId: string; rank: number; checkInCount: number }>> {
   const result = await documentClient.send(
     new QueryCommand({
@@ -221,7 +201,7 @@ export async function getLeaderboard(
       },
       ScanIndexForward: true,
       Limit: limit,
-    })
+    }),
   )
 
   return (result.Items || []).map((item, index) => ({
@@ -236,7 +216,7 @@ export async function updateLeaderboardEntry(
   weekEnding: string,
   userId: string,
   checkInCount: number,
-  rank: number
+  rank: number,
 ): Promise<void> {
   await documentClient.send(
     new PutCommand({
@@ -251,7 +231,7 @@ export async function updateLeaderboardEntry(
         weekEnding,
         updatedAt: new Date().toISOString(),
       },
-    })
+    }),
   )
 }
 
@@ -259,10 +239,7 @@ export async function updateLeaderboardEntry(
 // ABUSE DETECTION
 // ============================================================================
 
-export async function getCheckInVelocity(
-  userId: string,
-  minutes: number
-): Promise<number> {
+export async function getCheckInVelocity(userId: string, minutes: number): Promise<number> {
   const cutoff = new Date(Date.now() - minutes * 60 * 1000).toISOString()
 
   const result = await documentClient.send(
@@ -275,7 +252,7 @@ export async function getCheckInVelocity(
         ':userId': userId,
         ':cutoff': cutoff,
       },
-    })
+    }),
   )
 
   return result.Count || 0
@@ -301,7 +278,7 @@ export async function markCheckInForDeletion(checkInId: string): Promise<void> {
         ':deleted': true,
         ':ttl': ttl,
       },
-    })
+    }),
   )
 }
 

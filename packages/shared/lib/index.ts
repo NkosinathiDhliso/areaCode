@@ -2,7 +2,15 @@ export { api, type ApiError } from './api'
 export { getSocket, disconnectSocket, setSocketOverride } from './websocket'
 export { getWebSocket, disconnectWebSocket } from './websocket'
 export { storage } from './storage'
-export { isWeb, setPageTitle, getDeviceInfo, isOnline, isSaveDataEnabled, hasGeolocation, getCurrentPosition } from './platform'
+export {
+  isWeb,
+  setPageTitle,
+  getDeviceInfo,
+  isOnline,
+  isSaveDataEnabled,
+  hasGeolocation,
+  getCurrentPosition,
+} from './platform'
 export { haversineDistance, isWithinRadius } from './geoUtils'
 export { formatZAR, formatRelativeTime, formatLocalTime, formatLocalDate, formatCountdown, toE164 } from './formatters'
 export * from './featureGating'

@@ -1,8 +1,4 @@
-import {
-  GetCommand,
-  PutCommand,
-  QueryCommand,
-} from '@aws-sdk/lib-dynamodb'
+import { GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import type { Report } from './types.js'
 
@@ -51,7 +47,7 @@ export async function storeReport(report: Report): Promise<void> {
         generatedAt: report.generatedAt,
         totalCheckIns: report.summary.totalCheckIns,
       },
-    })
+    }),
   )
 }
 
@@ -76,7 +72,7 @@ export async function getReport(businessId: string, reportId: string): Promise<R
         ':reportId': reportId,
       },
       Limit: 1,
-    })
+    }),
   )
 
   const item = result.Items?.[0]
@@ -125,10 +121,8 @@ export async function listReports(
       ...(period ? { FilterExpression: 'periodType = :period' } : {}),
       ScanIndexForward: false,
       Limit: LIST_PAGE_SIZE,
-      ...(cursor
-        ? { ExclusiveStartKey: JSON.parse(Buffer.from(cursor, 'base64').toString()) }
-        : {}),
-    })
+      ...(cursor ? { ExclusiveStartKey: JSON.parse(Buffer.from(cursor, 'base64').toString()) } : {}),
+    }),
   )
 
   const items = (result.Items || []).map((item) => ({
@@ -170,7 +164,7 @@ export async function getPreviousReport(
         pk: `REPORT#${businessId}`,
         sk: `${periodType}#${previousPeriodStart}`,
       },
-    })
+    }),
   )
 
   const item = result.Item

@@ -1,64 +1,24 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+// Load test-layer mocks BEFORE any app imports
+import './setup-mocks.js'
+
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 
 /**
  * End-to-End API Tests for Area Code Platform
  * ============================================
- * Tests every critical path using Fastify's inject() in dev mode.
- * Dev mode uses mock auth (Bearer dev-<userId>) and mock data,
- * so no live AWS services are needed.
+ * Tests every critical path using Fastify's inject() with vi.mock().
+ * All external dependencies (Cognito, DynamoDB, SQS) are mocked at
+ * the test layer — production code contains zero mock logic.
  *
- * Coverage:
- *  1. Health & Infrastructure
- *  2. Consumer Auth Flow (signup → login → OTP → profile)
- *  3. Business Auth Flow (signup → login → OTP → profile)
- *  4. Staff Auth Flow (login → OTP)
- *  5. Admin Auth Flow (email/password login)
- *  6. Node Discovery (trending, search, city, detail)
- *  7. Check-In Pipeline (GPS check-in → cooldown response)
- *  8. Reward Lifecycle (create → list → near-me → redeem)
- *  9. Social Graph (follow → unfollow → feed → leaderboard)
- * 10. Business Dashboard (profile, stats, nodes, audience, staff)
- * 11. Staff Redemption Validation
- * 12. Admin Moderation (consumers, businesses, reports, abuse flags, audit)
- * 13. Notifications (push token, preferences, history)
- * 14. Music & Crowd Vibe (genres, streaming, crowd-vibe)
- * 15. Privacy & Blocking (settings, block/unblock, reports)
- * 16. Session Management (list, revoke)
- * 17. Profile & Tier Progress
- * 18. POPIA Compliance (consent, account deletion, data erasure)
- * 19. Validation & Error Handling (bad payloads, missing auth)
- * 20. CORS & Security Headers
+ * Coverage: Auth flows, Node Discovery, Check-In Pipeline,
+ * Reward Lifecycle, Social Graph, Business Dashboard, Admin,
+ * Notifications, Music, Privacy, Sessions, Profile, POPIA, Validation, CORS.
  */
 
 // ─── Setup ──────────────────────────────────────────────────────────────────
 
 let app: FastifyInstance
-
-// Ensure dev mode is active for mock auth/data
-process.env['AREA_CODE_ENV'] = 'dev'
-delete process.env['AREA_CODE_FORCE_LIVE']
-
-// HARD GUARD: refuse to run if DynamoDB table names point at production.
-// Prevents the entire test suite from polluting prod data when run with
-// prod AWS credentials in the shell.
-const prodTableMarkers = [
-  'USERS_TABLE',
-  'NODES_TABLE',
-  'CHECKINS_TABLE',
-  'REWARDS_TABLE',
-  'BUSINESSES_TABLE',
-  'APP_DATA_TABLE',
-]
-for (const key of prodTableMarkers) {
-  const value = process.env[key]
-  if (value && /-prod-/.test(value)) {
-    throw new Error(
-      `E2E test refused to run: ${key}="${value}" points at production. ` +
-        `Unset prod AWS credentials/table env vars or run with a dev profile.`,
-    )
-  }
-}
 
 beforeAll(async () => {
   const { buildApp } = await import('../app.js')
@@ -487,11 +447,9 @@ describe('9. Social Graph', () => {
       url: '/v1/feed',
       headers: consumerAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
-    if (res.statusCode === 200) {
-      const body = res.json()
-      expect(body).toBeDefined()
-    }
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body).toBeDefined()
   })
 
   it('GET /v1/leaderboard/:citySlug returns leaderboard', async () => {
@@ -500,11 +458,9 @@ describe('9. Social Graph', () => {
       url: '/v1/leaderboard/johannesburg',
       headers: consumerAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
-    if (res.statusCode === 200) {
-      const body = res.json()
-      expect(body).toBeDefined()
-    }
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body).toBeDefined()
   })
 
   it('GET /v1/users/me/friends returns friends list', async () => {
@@ -513,7 +469,7 @@ describe('9. Social Graph', () => {
       url: '/v1/users/me/friends',
       headers: consumerAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/users/me/following returns following list', async () => {
@@ -522,7 +478,7 @@ describe('9. Social Graph', () => {
       url: '/v1/users/me/following',
       headers: consumerAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/users/me/followers returns followers list', async () => {
@@ -531,7 +487,7 @@ describe('9. Social Graph', () => {
       url: '/v1/users/me/followers',
       headers: consumerAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/users/search returns search results', async () => {
@@ -540,7 +496,7 @@ describe('9. Social Graph', () => {
       url: '/v1/users/search?q=test',
       headers: consumerAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 })
 
@@ -555,7 +511,7 @@ describe('10. Business Dashboard', () => {
       url: '/v1/business/me',
       headers: businessAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/business/me/live-stats returns live stats', async () => {
@@ -564,7 +520,7 @@ describe('10. Business Dashboard', () => {
       url: '/v1/business/me/live-stats',
       headers: businessAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/business/me/nodes returns business nodes', async () => {
@@ -573,7 +529,7 @@ describe('10. Business Dashboard', () => {
       url: '/v1/business/me/nodes',
       headers: businessAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/business/me/audience returns audience analytics', async () => {
@@ -582,7 +538,7 @@ describe('10. Business Dashboard', () => {
       url: '/v1/business/me/audience',
       headers: businessAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/business/me/recent-redemptions returns redemptions', async () => {
@@ -591,7 +547,7 @@ describe('10. Business Dashboard', () => {
       url: '/v1/business/me/recent-redemptions',
       headers: businessAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/business/rewards returns business rewards', async () => {
@@ -600,7 +556,7 @@ describe('10. Business Dashboard', () => {
       url: '/v1/business/rewards',
       headers: businessAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/business/me/invites returns staff invites', async () => {
@@ -618,7 +574,7 @@ describe('10. Business Dashboard', () => {
       url: '/v1/business/plans',
       headers: businessAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('business endpoints reject unauthenticated requests', async () => {
@@ -672,7 +628,7 @@ describe('12. Admin Moderation', () => {
       url: '/v1/admin/dashboard',
       headers: adminAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/admin/consumers returns consumer list', async () => {
@@ -681,7 +637,7 @@ describe('12. Admin Moderation', () => {
       url: '/v1/admin/consumers',
       headers: adminAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/admin/consumers?q=test supports search', async () => {
@@ -690,7 +646,7 @@ describe('12. Admin Moderation', () => {
       url: '/v1/admin/consumers?q=test',
       headers: adminAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/admin/businesses returns business list', async () => {
@@ -699,7 +655,7 @@ describe('12. Admin Moderation', () => {
       url: '/v1/admin/businesses',
       headers: adminAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/admin/reports returns report queue', async () => {
@@ -708,7 +664,7 @@ describe('12. Admin Moderation', () => {
       url: '/v1/admin/reports',
       headers: adminAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/admin/abuse-flags returns abuse flags', async () => {
@@ -717,7 +673,7 @@ describe('12. Admin Moderation', () => {
       url: '/v1/admin/abuse-flags',
       headers: adminAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/admin/audit-logs returns audit trail', async () => {
@@ -726,7 +682,7 @@ describe('12. Admin Moderation', () => {
       url: '/v1/admin/audit-logs',
       headers: adminAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/admin/consent returns consent records', async () => {
@@ -735,7 +691,7 @@ describe('12. Admin Moderation', () => {
       url: '/v1/admin/consent',
       headers: adminAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/admin/erasure-queue returns erasure queue', async () => {
@@ -744,7 +700,7 @@ describe('12. Admin Moderation', () => {
       url: '/v1/admin/erasure-queue',
       headers: adminAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/admin/archetypes returns archetype list', async () => {
@@ -753,7 +709,7 @@ describe('12. Admin Moderation', () => {
       url: '/v1/admin/archetypes',
       headers: adminAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/admin/genre-weights returns genre weight matrix', async () => {
@@ -762,7 +718,7 @@ describe('12. Admin Moderation', () => {
       url: '/v1/admin/genre-weights',
       headers: adminAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('admin endpoints require admin auth', async () => {
@@ -803,7 +759,7 @@ describe('13. Notifications', () => {
       url: '/v1/users/me/notification-preferences',
       headers: consumerAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('PATCH /v1/users/me/notification-preferences updates preferences', async () => {
@@ -813,7 +769,7 @@ describe('13. Notifications', () => {
       headers: consumerAuth(),
       payload: { streakAtRisk: true },
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/users/me/notifications returns notification history', async () => {
@@ -822,7 +778,7 @@ describe('13. Notifications', () => {
       url: '/v1/users/me/notifications',
       headers: consumerAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('POST /v1/users/me/notifications/mark-read marks all as read', async () => {
@@ -831,7 +787,7 @@ describe('13. Notifications', () => {
       url: '/v1/users/me/notifications/mark-read',
       headers: consumerAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 })
 
@@ -847,7 +803,7 @@ describe('14. Music & Crowd Vibe', () => {
       headers: consumerAuth(),
       payload: { musicGenres: ['amapiano', 'deep_house', 'afrobeats'] },
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/nodes/:nodeId/crowd-vibe returns crowd vibe data', async () => {
@@ -855,7 +811,7 @@ describe('14. Music & Crowd Vibe', () => {
       method: 'GET',
       url: '/v1/nodes/00000000-0000-0000-0000-000000000001/crowd-vibe',
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/business/me/audience/music returns audience music data', async () => {
@@ -864,7 +820,7 @@ describe('14. Music & Crowd Vibe', () => {
       url: '/v1/business/me/audience/music',
       headers: businessAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 })
 
@@ -909,7 +865,7 @@ describe('15. Privacy & Blocking', () => {
       url: '/v1/users/me/blocks',
       headers: consumerAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('DELETE /v1/users/me/block/:targetUserId unblocks a user', async () => {
@@ -947,7 +903,7 @@ describe('16. Session Management', () => {
       url: '/v1/users/me/sessions',
       headers: consumerAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('DELETE /v1/users/me/sessions/:sessionId revokes a session', async () => {
@@ -956,7 +912,7 @@ describe('16. Session Management', () => {
       url: '/v1/users/me/sessions/session-to-revoke',
       headers: consumerAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('POST /v1/users/me/sessions/revoke-all revokes all other sessions', async () => {
@@ -966,7 +922,7 @@ describe('16. Session Management', () => {
       headers: consumerAuth(),
       payload: { currentSessionId: 'keep-this-session' },
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('POST /v1/users/me/sessions/revoke-all rejects missing currentSessionId', async () => {
@@ -991,7 +947,7 @@ describe('17. Profile & Tier Progress', () => {
       url: '/v1/users/me',
       headers: consumerAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('PATCH /v1/users/me updates profile', async () => {
@@ -1001,7 +957,7 @@ describe('17. Profile & Tier Progress', () => {
       headers: consumerAuth(),
       payload: { displayName: 'Updated Name' },
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('GET /v1/users/me/tier-progress returns tier progress', async () => {
@@ -1010,7 +966,7 @@ describe('17. Profile & Tier Progress', () => {
       url: '/v1/users/me/tier-progress',
       headers: consumerAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
     if (res.statusCode === 200) {
       const body = res.json()
       expect(body.currentTier).toBeDefined()
@@ -1025,7 +981,7 @@ describe('17. Profile & Tier Progress', () => {
       url: '/v1/users/me/streak',
       headers: consumerAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
     if (res.statusCode === 200) {
       const body = res.json()
       expect(body).toHaveProperty('streakCount')
@@ -1039,7 +995,7 @@ describe('17. Profile & Tier Progress', () => {
       url: '/v1/users/me/check-in-history',
       headers: consumerAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('POST /v1/users/me/onboarding/complete marks onboarding done', async () => {
@@ -1048,7 +1004,7 @@ describe('17. Profile & Tier Progress', () => {
       url: '/v1/users/me/onboarding/complete',
       headers: consumerAuth(),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 })
 
@@ -1064,7 +1020,7 @@ describe('18. POPIA Compliance', () => {
       headers: consumerAuth(),
       payload: { consentVersion: 'v1.0', analyticsOptIn: true },
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('PUT /v1/users/me/consent rejects extra fields (strict)', async () => {
@@ -1083,7 +1039,7 @@ describe('18. POPIA Compliance', () => {
       url: '/v1/users/me',
       headers: consumerAuth('erasure-test-user'),
     })
-    expect([200, 500]).toContain(res.statusCode)
+    expect(res.statusCode).toBe(200)
   })
 
   it('DELETE /v1/users/me/check-in-history deletes check-in history', async () => {
@@ -1198,6 +1154,15 @@ describe('20. CORS & Security Headers', () => {
     // Fastify CORS plugin either omits the header or sets it to false
     expect(res.headers['access-control-allow-origin']).not.toBe('https://evil.com')
   })
+
+  it('responses include security headers', async () => {
+    const res = await app.inject({ method: 'GET', url: '/health' })
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['x-content-type-options']).toBe('nosniff')
+    expect(res.headers['x-frame-options']).toBe('DENY')
+    expect(res.headers['referrer-policy']).toBe('strict-origin-when-cross-origin')
+    expect(res.headers['permissions-policy']).toBeDefined()
+  })
 })
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1285,14 +1250,14 @@ describe('21b. Full User Journey — Business', () => {
       url: '/v1/business/me',
       headers: businessAuth('journey-biz'),
     })
-    expect([200, 500]).toContain(profileRes.statusCode)
+    expect(profileRes.statusCode).toBe(200)
 
     const statsRes = await app.inject({
       method: 'GET',
       url: '/v1/business/me/live-stats',
       headers: businessAuth('journey-biz'),
     })
-    expect([200, 500]).toContain(statsRes.statusCode)
+    expect(statsRes.statusCode).toBe(200)
   })
 })
 
@@ -1354,7 +1319,7 @@ describe('21d. Full User Journey — Admin Moderation', () => {
       url: '/v1/admin/dashboard',
       headers: adminAuth(),
     })
-    expect([200, 500]).toContain(dashRes.statusCode)
+    expect(dashRes.statusCode).toBe(200)
 
     // Step 3: Consumer management
     const consumersRes = await app.inject({
@@ -1362,7 +1327,7 @@ describe('21d. Full User Journey — Admin Moderation', () => {
       url: '/v1/admin/consumers',
       headers: adminAuth(),
     })
-    expect([200, 500]).toContain(consumersRes.statusCode)
+    expect(consumersRes.statusCode).toBe(200)
 
     // Step 4: Business management
     const bizRes = await app.inject({
@@ -1370,7 +1335,7 @@ describe('21d. Full User Journey — Admin Moderation', () => {
       url: '/v1/admin/businesses',
       headers: adminAuth(),
     })
-    expect([200, 500]).toContain(bizRes.statusCode)
+    expect(bizRes.statusCode).toBe(200)
 
     // Step 5: Report queue
     const reportsRes = await app.inject({
@@ -1378,7 +1343,7 @@ describe('21d. Full User Journey — Admin Moderation', () => {
       url: '/v1/admin/reports',
       headers: adminAuth(),
     })
-    expect([200, 500]).toContain(reportsRes.statusCode)
+    expect(reportsRes.statusCode).toBe(200)
 
     // Step 6: Abuse flags
     const flagsRes = await app.inject({
@@ -1386,7 +1351,7 @@ describe('21d. Full User Journey — Admin Moderation', () => {
       url: '/v1/admin/abuse-flags',
       headers: adminAuth(),
     })
-    expect([200, 500]).toContain(flagsRes.statusCode)
+    expect(flagsRes.statusCode).toBe(200)
 
     // Step 7: Audit trail
     const auditRes = await app.inject({
@@ -1394,6 +1359,6 @@ describe('21d. Full User Journey — Admin Moderation', () => {
       url: '/v1/admin/audit-logs',
       headers: adminAuth(),
     })
-    expect([200, 500]).toContain(auditRes.statusCode)
+    expect(auditRes.statusCode).toBe(200)
   }, 20_000)
 })

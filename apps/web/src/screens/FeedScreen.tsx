@@ -25,13 +25,7 @@ export function FeedScreen() {
   const { t } = useTranslation()
   const sentinelRef = useRef<HTMLDivElement>(null)
 
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-  } = useInfiniteQuery({
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteQuery({
     queryKey: ['feed'],
     queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
       const params = new URLSearchParams({ limit: '20' })
@@ -39,7 +33,7 @@ export function FeedScreen() {
       return api.get<FeedResponse>(`/v1/feed?${params}`)
     },
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage.hasMore ? lastPage.nextCursor : undefined,
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.nextCursor : undefined),
     staleTime: 30_000,
   })
 
@@ -64,9 +58,7 @@ export function FeedScreen() {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4" data-scroll-container>
-      <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-4">
-        {t('feed.title')}
-      </h1>
+      <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-4">{t('feed.title')}</h1>
 
       {isLoading ? (
         <div className="flex flex-col gap-3">
@@ -93,9 +85,7 @@ export function FeedScreen() {
                   {' checked in to '}
                   <span className="font-medium">{item.node.name}</span>
                 </p>
-                <p className="text-[var(--text-muted)] text-xs mt-0.5">
-                  {formatRelativeTime(item.checkedInAt)}
-                </p>
+                <p className="text-[var(--text-muted)] text-xs mt-0.5">{formatRelativeTime(item.checkedInAt)}</p>
               </div>
             </div>
           ))}

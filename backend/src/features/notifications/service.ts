@@ -23,12 +23,7 @@ const NOTIFICATION_TYPE_TO_PREF: Record<string, keyof typeof DEFAULTS> = {
   friend_checkin: 'followedUserCheckin',
 }
 
-export async function registerPushToken(
-  userId: string,
-  token: string,
-  platform: string,
-  deviceId?: string,
-) {
+export async function registerPushToken(userId: string, token: string, platform: string, deviceId?: string) {
   return repo.upsertPushToken(userId, token, platform, deviceId)
 }
 
@@ -37,19 +32,13 @@ export async function getPreferences(userId: string) {
   return prefs ?? { userId, ...DEFAULTS, updatedAt: new Date() }
 }
 
-export async function updatePreferences(
-  userId: string,
-  prefs: Partial<typeof DEFAULTS>,
-) {
+export async function updatePreferences(userId: string, prefs: Partial<typeof DEFAULTS>) {
   return repo.upsertNotificationPreferences(userId, prefs)
 }
 
 // ─── Notification History ───────────────────────────────────────────────────
 
-export async function getNotificationHistory(
-  userId: string,
-  options?: { limit?: number; cursor?: string },
-) {
+export async function getNotificationHistory(userId: string, options?: { limit?: number; cursor?: string }) {
   return repo.getNotificationHistory(userId, options)
 }
 
@@ -63,10 +52,7 @@ export async function markAllNotificationsAsRead(userId: string) {
  * Check if a notification of the given type should be sent to the user
  * based on their notification preferences.
  */
-async function shouldSendNotification(
-  userId: string,
-  notificationType: string,
-): Promise<boolean> {
+async function shouldSendNotification(userId: string, notificationType: string): Promise<boolean> {
   const prefKey = NOTIFICATION_TYPE_TO_PREF[notificationType]
   if (!prefKey) {
     // No preference mapping — always send (e.g. tier_change, badge_earned)
@@ -107,9 +93,7 @@ export interface SendNotificationResult {
  * 3. Persists the notification to history
  * 4. Emits a `notification:new` WebSocket event
  */
-export async function sendNotification(
-  options: SendNotificationOptions,
-): Promise<SendNotificationResult> {
+export async function sendNotification(options: SendNotificationOptions): Promise<SendNotificationResult> {
   const { userId, type, title, body, data = {}, skipPreferenceCheck } = options
 
   // 1. Check preferences
@@ -140,13 +124,16 @@ export async function sendNotification(
 
   if (sockets.length > 0) {
     // Deliver via WebSocket
-    io.to(room).emit('notification:new' as 'reward:claimed', {
-      type,
-      title,
-      body,
-      data,
-      createdAt: new Date().toISOString(),
-    } as never)
+    io.to(room).emit(
+      'notification:new' as 'reward:claimed',
+      {
+        type,
+        title,
+        body,
+        data,
+        createdAt: new Date().toISOString(),
+      } as never,
+    )
     deliveryChannel = 'socket'
   } else {
     // Fallback to push
@@ -205,11 +192,7 @@ export async function sendNotification(
  * This is the original low-level delivery function. For new code, prefer
  * `sendNotification()` which adds preference checking and history persistence.
  */
-export async function notifyUser(
-  userId: string,
-  event: string,
-  payload: Record<string, unknown>,
-) {
+export async function notifyUser(userId: string, event: string, payload: Record<string, unknown>) {
   const io = getIO()
   const room = userRoom(userId)
   const sockets = await io.in(room).fetchSockets()
@@ -281,7 +264,7 @@ async function sendExpoPush(
     return { success: false }
   }
 
-  const json = await res.json() as { data?: { status?: string; details?: { error?: string } } }
+  const json = (await res.json()) as { data?: { status?: string; details?: { error?: string } } }
   const status = json.data?.status
 
   if (status === 'error') {
@@ -327,10 +310,7 @@ async function sendWebPush(
       keys: { p256dh: string; auth: string }
     }
 
-    await webpush.sendNotification(
-      subscription,
-      JSON.stringify({ title, body, data }),
-    )
+    await webpush.sendNotification(subscription, JSON.stringify({ title, body, data }))
 
     return { success: true }
   } catch (err: unknown) {

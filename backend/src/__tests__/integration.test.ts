@@ -33,15 +33,20 @@ describe('check-in → reward evaluation flow', () => {
     // Step 4: Pulse score update
     const dailyCount = 5
     const uniqueUsers = 3
-    const pulseScore = (dailyCount * 5) + (uniqueUsers * 2)
+    const pulseScore = dailyCount * 5 + uniqueUsers * 2
     expect(pulseScore).toBe(31) // Should be "buzzing" state
 
     // Step 5: State determination
-    const state = pulseScore >= 61 ? 'popping'
-      : pulseScore >= 31 ? 'buzzing'
-      : pulseScore >= 11 ? 'active'
-      : pulseScore >= 1 ? 'quiet'
-      : 'dormant'
+    const state =
+      pulseScore >= 61
+        ? 'popping'
+        : pulseScore >= 31
+          ? 'buzzing'
+          : pulseScore >= 11
+            ? 'active'
+            : pulseScore >= 1
+              ? 'quiet'
+              : 'dormant'
     expect(state).toBe('buzzing')
 
     // Step 6: Response shape

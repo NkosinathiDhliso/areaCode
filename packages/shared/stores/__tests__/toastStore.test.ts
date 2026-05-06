@@ -3,9 +3,7 @@ import * as fc from 'fast-check'
 import { useToastStore } from '../toastStore'
 import type { Toast, ToastType } from '../../types'
 
-const TOAST_TYPES: ToastType[] = [
-  'surge', 'reward_pressure', 'checkin', 'reward_new', 'streak', 'leaderboard',
-]
+const TOAST_TYPES: ToastType[] = ['surge', 'reward_pressure', 'checkin', 'reward_new', 'streak', 'leaderboard']
 
 const PRIORITY_MAP: Record<ToastType, number> = {
   surge: 1,
@@ -40,17 +38,14 @@ describe('toast queue management', () => {
     const toastTypeArb = fc.constantFrom(...TOAST_TYPES)
 
     fc.assert(
-      fc.property(
-        fc.array(toastTypeArb, { minLength: 1, maxLength: 20 }),
-        (types) => {
-          useToastStore.setState({ queue: [] })
+      fc.property(fc.array(toastTypeArb, { minLength: 1, maxLength: 20 }), (types) => {
+        useToastStore.setState({ queue: [] })
 
-          for (let i = 0; i < types.length; i++) {
-            useToastStore.getState().addToast(makeToast(types[i]!, `t-${i}`))
-            expect(useToastStore.getState().queue.length).toBeLessThanOrEqual(3)
-          }
-        },
-      ),
+        for (let i = 0; i < types.length; i++) {
+          useToastStore.getState().addToast(makeToast(types[i]!, `t-${i}`))
+          expect(useToastStore.getState().queue.length).toBeLessThanOrEqual(3)
+        }
+      }),
       { numRuns: 300 },
     )
   })
@@ -70,23 +65,20 @@ describe('toast queue management', () => {
     )
 
     fc.assert(
-      fc.property(
-        fc.array(nonSurgeTypeArb, { minLength: 1, maxLength: 5 }),
-        (priorTypes) => {
-          useToastStore.setState({ queue: [] })
+      fc.property(fc.array(nonSurgeTypeArb, { minLength: 1, maxLength: 5 }), (priorTypes) => {
+        useToastStore.setState({ queue: [] })
 
-          // Add non-surge toasts first
-          for (let i = 0; i < priorTypes.length; i++) {
-            useToastStore.getState().addToast(makeToast(priorTypes[i]!, `prior-${i}`))
-          }
+        // Add non-surge toasts first
+        for (let i = 0; i < priorTypes.length; i++) {
+          useToastStore.getState().addToast(makeToast(priorTypes[i]!, `prior-${i}`))
+        }
 
-          // Add a surge toast
-          useToastStore.getState().addToast(makeToast('surge', 'surge-1'))
+        // Add a surge toast
+        useToastStore.getState().addToast(makeToast('surge', 'surge-1'))
 
-          const queue = useToastStore.getState().queue
-          expect(queue[0]?.type).toBe('surge')
-        },
-      ),
+        const queue = useToastStore.getState().queue
+        expect(queue[0]?.type).toBe('surge')
+      }),
       { numRuns: 200 },
     )
   })
@@ -95,21 +87,18 @@ describe('toast queue management', () => {
     const toastTypeArb = fc.constantFrom(...TOAST_TYPES)
 
     fc.assert(
-      fc.property(
-        fc.array(toastTypeArb, { minLength: 2, maxLength: 5 }),
-        (types) => {
-          useToastStore.setState({ queue: [] })
+      fc.property(fc.array(toastTypeArb, { minLength: 2, maxLength: 5 }), (types) => {
+        useToastStore.setState({ queue: [] })
 
-          for (let i = 0; i < types.length; i++) {
-            useToastStore.getState().addToast(makeToast(types[i]!, `t-${i}`))
-          }
+        for (let i = 0; i < types.length; i++) {
+          useToastStore.getState().addToast(makeToast(types[i]!, `t-${i}`))
+        }
 
-          const queue = useToastStore.getState().queue
-          for (let i = 1; i < queue.length; i++) {
-            expect(queue[i - 1]!.priority).toBeLessThanOrEqual(queue[i]!.priority)
-          }
-        },
-      ),
+        const queue = useToastStore.getState().queue
+        for (let i = 1; i < queue.length; i++) {
+          expect(queue[i - 1]!.priority).toBeLessThanOrEqual(queue[i]!.priority)
+        }
+      }),
       { numRuns: 300 },
     )
   })

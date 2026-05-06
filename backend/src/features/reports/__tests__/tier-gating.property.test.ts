@@ -21,7 +21,18 @@ import type { Report, TeaserReport } from '../types'
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const
 const TIERS_LIST = ['local', 'regular', 'fixture', 'institution', 'legend'] as const
 const PULSE_STATES = ['dormant', 'quiet', 'active', 'buzzing', 'popping'] as const
-const GENRES = ['amapiano', 'deep_house', 'afrobeats', 'hip_hop', 'rnb', 'kwaito', 'gqom', 'jazz', 'rock', 'pop'] as const
+const GENRES = [
+  'amapiano',
+  'deep_house',
+  'afrobeats',
+  'hip_hop',
+  'rnb',
+  'kwaito',
+  'gqom',
+  'jazz',
+  'rock',
+  'pop',
+] as const
 const DIMENSIONS = ['energy', 'cultural_rootedness', 'sophistication', 'edge', 'spirituality'] as const
 const REC_TYPES = ['peak_hours', 'music', 'retention', 'benchmark', 'general'] as const
 
@@ -31,10 +42,12 @@ const safeDouble = (opts: { min: number; max: number }) =>
     return Object.is(rounded, -0) ? 0 : rounded
   })
 
-const isoDateArb = fc.integer({
-  min: new Date('2024-01-01').getTime(),
-  max: new Date('2026-12-31').getTime(),
-}).map((ts) => new Date(ts).toISOString())
+const isoDateArb = fc
+  .integer({
+    min: new Date('2024-01-01').getTime(),
+    max: new Date('2026-12-31').getTime(),
+  })
+  .map((ts) => new Date(ts).toISOString())
 
 const reportSummaryArb = fc.record({
   totalCheckIns: fc.integer({ min: 0, max: 10000 }),
@@ -44,7 +57,9 @@ const reportSummaryArb = fc.record({
 })
 
 const peakHoursResultArb = fc.record({
-  hourlyDistribution: fc.constant(Object.fromEntries(Array.from({ length: 24 }, (_, i) => [i, 0])) as Record<number, number>),
+  hourlyDistribution: fc.constant(
+    Object.fromEntries(Array.from({ length: 24 }, (_, i) => [i, 0])) as Record<number, number>,
+  ),
   dailyDistribution: fc.constant(Object.fromEntries(DAYS_OF_WEEK.map((d) => [d, 0])) as Record<string, number>),
   topWindows: fc.array(
     fc.record({
@@ -142,10 +157,10 @@ const reportArb: fc.Arbitrary<Report> = fc.record({
   periodStart: isoDateArb,
   periodEnd: isoDateArb,
   generatedAt: isoDateArb,
-  nodes: fc.array(
-    fc.record({ nodeId: fc.uuid(), nodeName: fc.string({ minLength: 1, maxLength: 50 }) }),
-    { minLength: 1, maxLength: 5 },
-  ),
+  nodes: fc.array(fc.record({ nodeId: fc.uuid(), nodeName: fc.string({ minLength: 1, maxLength: 50 }) }), {
+    minLength: 1,
+    maxLength: 5,
+  }),
   summary: reportSummaryArb,
   peakHours: peakHoursResultArb,
   crowdComposition: crowdCompositionResultArb,

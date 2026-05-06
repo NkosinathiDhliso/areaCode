@@ -3,8 +3,6 @@ import { findBusinessById } from '../business/repository.js'
 import * as repo from './repository.js'
 import { notifyNewRewardConsumers } from '../notifications/service.js'
 
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
-
 const DEV_REWARDS = [
   {
     id: 'rew-1',
@@ -154,8 +152,6 @@ export async function updateReward(
 }
 
 export async function getRewardsNearMe(lat: number, lng: number) {
-  if (DEV_MODE) return DEV_REWARDS
-
   const raw = await repo.getRewardsNearMe(lat, lng)
   return raw.map((r) => ({
     id: r.id,
@@ -172,31 +168,10 @@ export async function getRewardsNearMe(lat: number, lng: number) {
 }
 
 export async function getUnclaimedRewards(userId: string) {
-  if (DEV_MODE) {
-    return [
-      {
-        id: 'claim-1',
-        rewardTitle: 'Free Coffee',
-        redemptionCode: 'AC-COFFEE-1234',
-        codeExpiresAt: new Date(Date.now() + 86400000).toISOString(),
-        nodeName: 'Father Coffee',
-      },
-      {
-        id: 'claim-2',
-        rewardTitle: '20% Off Cocktails',
-        redemptionCode: 'AC-DRINK-5678',
-        codeExpiresAt: new Date(Date.now() + 86400000).toISOString(),
-        nodeName: "Kitchener's Bar",
-      },
-    ]
-  }
   return repo.getUnclaimedRewards(userId)
 }
 
 export async function redeemReward(code: string, staffId?: string) {
-  if (DEV_MODE) {
-    return { success: true, rewardTitle: 'Free Coffee', redeemedAt: new Date().toISOString() }
-  }
   const redemption = await repo.findRedemptionByCode(code)
   if (!redemption) throw AppError.badRequest('invalid_code')
   if (redemption.redeemedAt) throw AppError.badRequest('already_redeemed')
@@ -227,9 +202,6 @@ export async function redeemReward(code: string, staffId?: string) {
 }
 
 export async function getRecentRedemptions(businessId: string) {
-  if (DEV_MODE) {
-    return { items: [{ code: 'AC-COFFEE-1234', redeemedAt: new Date().toISOString() }] }
-  }
   const items = await repo.getRecentRedemptions(businessId)
   return {
     items: items.map((r) => ({
@@ -242,24 +214,6 @@ export async function getRecentRedemptions(businessId: string) {
 // ─── Staff Recent Redemptions ───────────────────────────────────────────────
 
 export async function getStaffRecentRedemptions(staffId: string) {
-  if (DEV_MODE) {
-    return {
-      items: [
-        {
-          code: 'AC-MOCK-1234',
-          rewardTitle: 'Free Coffee',
-          displayName: 'Thabo M.',
-          redeemedAt: new Date(Date.now() - 600000).toISOString(),
-        },
-        {
-          code: 'AC-MOCK-5678',
-          rewardTitle: '20% Off Cocktails',
-          displayName: 'Naledi K.',
-          redeemedAt: new Date(Date.now() - 3600000).toISOString(),
-        },
-      ],
-    }
-  }
   const rawItems = await repo.getStaffRecentRedemptions(staffId)
   const items = rawItems.map((r: Record<string, unknown>) => ({
     code: (r['redemptionCode'] ?? r['code'] ?? '') as string,

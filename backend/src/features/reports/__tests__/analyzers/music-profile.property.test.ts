@@ -16,23 +16,28 @@ import type { MusicPrefs } from '../../types.js'
 
 // ─── Custom Arbitraries ─────────────────────────────────────────────────────
 
-const ARCHETYPE_DIMENSIONS = [
-  'energy',
-  'cultural_rootedness',
-  'sophistication',
-  'edge',
-  'spirituality',
-] as const
+const ARCHETYPE_DIMENSIONS = ['energy', 'cultural_rootedness', 'sophistication', 'edge', 'spirituality'] as const
 
 const GENRE_POOL = [
-  'amapiano', 'house', 'hip-hop', 'jazz', 'rock', 'pop', 'r&b',
-  'afrobeats', 'kwaito', 'gqom', 'classical', 'electronic', 'reggae',
+  'amapiano',
+  'house',
+  'hip-hop',
+  'jazz',
+  'rock',
+  'pop',
+  'r&b',
+  'afrobeats',
+  'kwaito',
+  'gqom',
+  'classical',
+  'electronic',
+  'reggae',
 ] as const
 
 /** Generate a 64-char hex string (SHA-256 hash format) */
-const hexTokenArb = fc.uint8Array({ minLength: 32, maxLength: 32 }).map(
-  (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(''),
-)
+const hexTokenArb = fc
+  .uint8Array({ minLength: 32, maxLength: 32 })
+  .map((bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(''))
 
 /** Generate music preferences with dimension scores 0–100 and 1–5 genres */
 const musicPrefsArb: fc.Arbitrary<MusicPrefs> = fc.record({
@@ -49,7 +54,8 @@ const musicPrefsArb: fc.Arbitrary<MusicPrefs> = fc.record({
  * all visitors have music preferences (sufficient data scenario).
  */
 function sufficientDataArb() {
-  return fc.array(hexTokenArb, { minLength: 5, maxLength: 50 })
+  return fc
+    .array(hexTokenArb, { minLength: 5, maxLength: 50 })
     .chain((tokens) => {
       // Deduplicate tokens
       const uniqueTokens = [...new Set(tokens)]
@@ -57,16 +63,18 @@ function sufficientDataArb() {
         // Ensure at least 5 unique tokens
         return fc.constant({ visitorIds: [] as string[], musicPrefsMap: new Map<string, MusicPrefs>() })
       }
-      return fc.tuple(
-        fc.constant(uniqueTokens),
-        fc.array(musicPrefsArb, { minLength: uniqueTokens.length, maxLength: uniqueTokens.length }),
-      ).map(([ids, prefs]) => {
-        const map = new Map<string, MusicPrefs>()
-        for (let i = 0; i < ids.length; i++) {
-          map.set(ids[i]!, prefs[i]!)
-        }
-        return { visitorIds: ids, musicPrefsMap: map }
-      })
+      return fc
+        .tuple(
+          fc.constant(uniqueTokens),
+          fc.array(musicPrefsArb, { minLength: uniqueTokens.length, maxLength: uniqueTokens.length }),
+        )
+        .map(([ids, prefs]) => {
+          const map = new Map<string, MusicPrefs>()
+          for (let i = 0; i < ids.length; i++) {
+            map.set(ids[i]!, prefs[i]!)
+          }
+          return { visitorIds: ids, musicPrefsMap: map }
+        })
     })
     .filter((data) => data.visitorIds.length >= 5)
 }
@@ -76,34 +84,43 @@ function sufficientDataArb() {
  * (insufficient data scenario).
  */
 function insufficientDataArb() {
-  return fc.record({
-    withPrefs: fc.integer({ min: 0, max: 4 }),
-    withoutPrefs: fc.integer({ min: 0, max: 20 }),
-  }).chain(({ withPrefs, withoutPrefs }) => {
-    const totalWithPrefs = withPrefs
-    const totalWithout = withoutPrefs
-    return fc.tuple(
-      fc.array(hexTokenArb, { minLength: totalWithPrefs + totalWithout, maxLength: totalWithPrefs + totalWithout }),
-      fc.array(musicPrefsArb, { minLength: totalWithPrefs, maxLength: totalWithPrefs }),
-    ).map(([allTokens, prefs]) => {
-      const uniqueTokens = [...new Set(allTokens)]
-      const map = new Map<string, MusicPrefs>()
-      // Only assign prefs to the first `totalWithPrefs` unique tokens
-      const tokensWithPrefs = uniqueTokens.slice(0, totalWithPrefs)
-      for (let i = 0; i < tokensWithPrefs.length && i < prefs.length; i++) {
-        map.set(tokensWithPrefs[i]!, prefs[i]!)
-      }
-      return { visitorIds: uniqueTokens, musicPrefsMap: map }
-    })
-  })
-  // Ensure fewer than 5 visitors actually have prefs in the map
-  .filter((data) => {
-    let count = 0
-    for (const id of data.visitorIds) {
-      if (data.musicPrefsMap.has(id)) count++
-    }
-    return count < 5
-  })
+  return (
+    fc
+      .record({
+        withPrefs: fc.integer({ min: 0, max: 4 }),
+        withoutPrefs: fc.integer({ min: 0, max: 20 }),
+      })
+      .chain(({ withPrefs, withoutPrefs }) => {
+        const totalWithPrefs = withPrefs
+        const totalWithout = withoutPrefs
+        return fc
+          .tuple(
+            fc.array(hexTokenArb, {
+              minLength: totalWithPrefs + totalWithout,
+              maxLength: totalWithPrefs + totalWithout,
+            }),
+            fc.array(musicPrefsArb, { minLength: totalWithPrefs, maxLength: totalWithPrefs }),
+          )
+          .map(([allTokens, prefs]) => {
+            const uniqueTokens = [...new Set(allTokens)]
+            const map = new Map<string, MusicPrefs>()
+            // Only assign prefs to the first `totalWithPrefs` unique tokens
+            const tokensWithPrefs = uniqueTokens.slice(0, totalWithPrefs)
+            for (let i = 0; i < tokensWithPrefs.length && i < prefs.length; i++) {
+              map.set(tokensWithPrefs[i]!, prefs[i]!)
+            }
+            return { visitorIds: uniqueTokens, musicPrefsMap: map }
+          })
+      })
+      // Ensure fewer than 5 visitors actually have prefs in the map
+      .filter((data) => {
+        let count = 0
+        for (const id of data.visitorIds) {
+          if (data.musicPrefsMap.has(id)) count++
+        }
+        return count < 5
+      })
+  )
 }
 
 // ─── Property 6: Music Profile Aggregation Correctness ──────────────────────
@@ -150,9 +167,7 @@ describe('Feature: venue-intelligence-reports, Property 6: Music Profile Aggrega
 
         // Sorted descending by visitorCount
         for (let i = 1; i < result.topGenres.length; i++) {
-          expect(result.topGenres[i]!.visitorCount).toBeLessThanOrEqual(
-            result.topGenres[i - 1]!.visitorCount,
-          )
+          expect(result.topGenres[i]!.visitorCount).toBeLessThanOrEqual(result.topGenres[i - 1]!.visitorCount)
         }
 
         // Verify visitor counts are correct

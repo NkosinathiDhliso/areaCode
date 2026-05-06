@@ -18,7 +18,7 @@ export async function getActiveRewardsForNode(nodeId: string) {
   let citySlug = ''
   if (node?.cityId) {
     const cityResult = await documentClient.send(
-      new GetCommand({ TableName: TableNames.appData, Key: { pk: `CITY#${node.cityId}`, sk: `CITY#${node.cityId}` } })
+      new GetCommand({ TableName: TableNames.appData, Key: { pk: `CITY#${node.cityId}`, sk: `CITY#${node.cityId}` } }),
     )
     citySlug = (cityResult.Item?.['slug'] as string) ?? ''
   }
@@ -62,7 +62,7 @@ export async function incrementClaimedCount(rewardId: string) {
       UpdateExpression: 'SET claimedCount = if_not_exists(claimedCount, :zero) + :inc',
       ExpressionAttributeValues: { ':zero': 0, ':inc': 1 },
       ReturnValues: 'ALL_NEW',
-    })
+    }),
   )
   return result.Attributes
 }

@@ -21,9 +21,7 @@ export function CategoryFilterBar({ onFilter }: CategoryFilterBarProps) {
       <button
         onClick={() => handleTap(null)}
         className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 ${
-          active === null
-            ? 'gradient-accent text-white'
-            : 'glass text-[var(--text-secondary)]'
+          active === null ? 'gradient-accent text-white' : 'glass text-[var(--text-secondary)]'
         }`}
       >
         {t('map.categories.all', 'All')}
@@ -33,9 +31,7 @@ export function CategoryFilterBar({ onFilter }: CategoryFilterBarProps) {
           key={cat.value}
           onClick={() => handleTap(cat.value)}
           className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 ${
-            active === cat.value
-              ? 'gradient-accent text-white'
-              : 'glass text-[var(--text-secondary)]'
+            active === cat.value ? 'gradient-accent text-white' : 'glass text-[var(--text-secondary)]'
           }`}
         >
           {t(`map.categories.${cat.value}`)}

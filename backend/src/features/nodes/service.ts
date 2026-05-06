@@ -21,7 +21,6 @@ const s3 = new S3Client({
 })
 const BUCKET = process.env['AREA_CODE_S3_MEDIA_BUCKET'] ?? 'area-code-media'
 const ENV = process.env['AREA_CODE_ENV'] ?? 'dev'
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
 // ─── State Thresholds ───────────────────────────────────────────────────────
 
@@ -180,19 +179,10 @@ const DEV_NODES = [
 // ─── Node Queries ───────────────────────────────────────────────────────────
 
 export async function getNodesByCitySlug(citySlug: string) {
-  if (DEV_MODE) {
-    return DEV_NODES.filter((n) => n.citySlug === citySlug)
-  }
   return repo.getNodesByCitySlug(citySlug)
 }
 
 export async function getNodeDetail(nodeId: string) {
-  if (DEV_MODE) {
-    const node = DEV_NODES.find((n) => n.id === nodeId)
-    if (!node) throw AppError.notFound('Node not found')
-    return { ...node, pulseScore: node.pulseScore }
-  }
-
   const node = await repo.getNodeById(nodeId)
   if (!node) throw AppError.notFound('Node not found')
 
@@ -208,18 +198,6 @@ export async function getNodeDetail(nodeId: string) {
 }
 
 export async function getNodePublic(nodeSlug: string) {
-  if (DEV_MODE) {
-    const node = DEV_NODES.find((n) => n.slug === nodeSlug)
-    if (!node) throw AppError.notFound('Node not found')
-    return {
-      name: node.name,
-      category: node.category,
-      city: 'Johannesburg',
-      pulseScore: node.pulseScore,
-      activeRewardCount: 2,
-      ogImage: null,
-    }
-  }
   const node = await repo.getNodeBySlug(nodeSlug)
   if (!node) throw AppError.notFound('Node not found')
 
@@ -235,10 +213,7 @@ export async function getNodePublic(nodeSlug: string) {
 
 export async function searchNodes(query: string, lat: number, lng: number) {
   if (query.length < 2) throw AppError.badRequest('Query must be at least 2 characters')
-  if (DEV_MODE) {
-    const q = query.toLowerCase()
-    return DEV_NODES.filter((n) => n.name.toLowerCase().includes(q))
-  }
+
   return repo.searchNodes(query, lat, lng)
 }
 
@@ -259,28 +234,6 @@ interface TrendingItem {
 const CITY_SLUGS = ['johannesburg', 'cape-town', 'durban']
 
 export async function getTrendingNodes(limit = 10): Promise<{ items: TrendingItem[] }> {
-  if (DEV_MODE) {
-    // Sort dev nodes by pulseScore descending and return top N
-    const sorted = [...DEV_NODES]
-      .filter((n) => n.pulseScore > 0)
-      .sort((a, b) => b.pulseScore - a.pulseScore)
-      .slice(0, limit)
-
-    return {
-      items: sorted.map((n) => ({
-        name: n.name,
-        area: 'Johannesburg',
-        state: getNodeState(n.pulseScore),
-        checkIns: Math.ceil(n.pulseScore / 5),
-        nodeId: n.id,
-        slug: n.slug,
-        category: n.category,
-        lat: n.lat,
-        lng: n.lng,
-      })),
-    }
-  }
-
   // Fetch nodes from all cities in parallel
   const cityResults = await Promise.all(
     CITY_SLUGS.map(async (slug) => {
@@ -351,18 +304,6 @@ export async function businessCreateNode(
   businessId: string,
   data: { name: string; category: string; address: string; lat?: number; lng?: number },
 ) {
-  if (DEV_MODE) {
-    const id = `dev-${Date.now()}`
-    return {
-      id,
-      name: data.name,
-      slug: slugify(data.name),
-      category: data.category,
-      lat: data.lat ?? -26.2041,
-      lng: data.lng ?? 28.0473,
-      citySlug: 'johannesburg',
-    }
-  }
   // Enforce one-node-per-business: reject if this business already owns a node.
   const existingForBiz = await nodesDynamo.getNodesByBusinessId(businessId)
   if (existingForBiz.length > 0) {
@@ -465,18 +406,6 @@ export async function createNode(
   businessId: string,
   data: { name: string; category: string; lat: number; lng: number; citySlug: string },
 ) {
-  if (DEV_MODE) {
-    const id = `dev-${Date.now()}`
-    return {
-      id,
-      name: data.name,
-      slug: slugify(data.name),
-      category: data.category,
-      lat: data.lat,
-      lng: data.lng,
-      citySlug: data.citySlug,
-    }
-  }
   const city = await repo.getCityBySlug(data.citySlug)
   if (!city) throw AppError.badRequest('Invalid city')
 
@@ -505,8 +434,6 @@ export async function updateNode(
     lng: number
   }>,
 ) {
-  if (DEV_MODE) return
-
   // If address is provided, re-geocode (unless coords already supplied from Places autocomplete)
   const patch: Record<string, unknown> = { ...data }
   if (data.address) {
@@ -532,9 +459,7 @@ export async function updateNode(
 
 export async function claimNode(nodeId: string, businessId: string, registrationNumber: string) {
   void registrationNumber
-  if (DEV_MODE) {
-    return { nodeId, businessId, claimStatus: 'validated' }
-  }
+
   const node = await repo.getNodeById(nodeId)
   if (!node) throw AppError.notFound('Node not found')
   if (node.claimStatus === 'claimed') {
@@ -562,9 +487,6 @@ export async function claimNode(nodeId: string, businessId: string, registration
 // ─── Reporting ──────────────────────────────────────────────────────────────
 
 export async function reportNode(reporterId: string, nodeId: string, type: string, detail?: string) {
-  if (DEV_MODE) {
-    return { id: `report-${Date.now()}`, reporterId, nodeId, type, detail, status: 'pending' }
-  }
   // Check if reporter is banned (3 dismissed reports in 30 days)
   const dismissed = await repo.countDismissedReports(reporterId)
   if (dismissed >= 3) {
@@ -587,30 +509,6 @@ export async function reportNode(reporterId: string, nodeId: string, type: strin
 // ─── Who Is Here ────────────────────────────────────────────────────────────
 
 export async function getWhoIsHere(nodeId: string, limit: number) {
-  if (DEV_MODE) {
-    return {
-      items: [
-        {
-          userId: 'dev-user-2',
-          username: 'sipho_jozi',
-          displayName: 'Sipho',
-          avatarUrl: null,
-          tier: 'trailblazer',
-          checkedInAt: new Date(Date.now() - 120000).toISOString(),
-        },
-        {
-          userId: 'dev-user-3',
-          username: 'thandi_sa',
-          displayName: 'Thandi',
-          avatarUrl: null,
-          tier: 'explorer',
-          checkedInAt: new Date(Date.now() - 300000).toISOString(),
-        },
-      ],
-      nextCursor: null,
-      hasMore: false,
-    }
-  }
   return repo.getWhoIsHere(nodeId, limit)
 }
 
@@ -643,9 +541,6 @@ export async function createPresignedUpload(ownerId: string, fileType: string, c
 }
 
 export async function registerNodeImage(nodeId: string, businessId: string, s3Key: string, displayOrder: number) {
-  if (DEV_MODE) {
-    return { id: `img-${Date.now()}`, nodeId, s3Key, displayOrder }
-  }
   // Verify ownership
   const node = await repo.getNodeById(nodeId)
   if (!node || node.businessId !== businessId) {
@@ -674,9 +569,6 @@ export async function activateNodeBoost(nodeId: string, duration: string) {
 // ─── Node Rewards ───────────────────────────────────────────────────────────
 
 export async function getNodeRewards(nodeId: string) {
-  if (DEV_MODE) {
-    return { items: [] }
-  }
   const rewards = await getActiveRewardsByNodeId(nodeId)
   return { items: rewards }
 }

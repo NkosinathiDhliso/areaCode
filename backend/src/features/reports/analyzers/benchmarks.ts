@@ -8,12 +8,7 @@ import type { BenchmarkComparison, BenchmarkResult, ReportMetrics } from '../typ
 const MIN_VENUES_FOR_BENCHMARK = 3
 
 /** Metrics to benchmark against category averages */
-const BENCHMARK_METRICS = [
-  'totalCheckIns',
-  'uniqueVisitors',
-  'repeatVisitorRate',
-  'pulseScore',
-] as const
+const BENCHMARK_METRICS = ['totalCheckIns', 'uniqueVisitors', 'repeatVisitorRate', 'pulseScore'] as const
 
 // ============================================================================
 // Benchmarks Analyzer
@@ -31,10 +26,7 @@ const BENCHMARK_METRICS = [
  * Division by zero handling:
  * - If benchmarkAverage = 0, percentAboveBelow = 0
  */
-export function analyzeBenchmarks(
-  venueMetrics: ReportMetrics,
-  categoryVenueMetrics: ReportMetrics[],
-): BenchmarkResult {
+export function analyzeBenchmarks(venueMetrics: ReportMetrics, categoryVenueMetrics: ReportMetrics[]): BenchmarkResult {
   // Insufficient data when fewer than 3 venues
   if (categoryVenueMetrics.length < MIN_VENUES_FOR_BENCHMARK) {
     return {

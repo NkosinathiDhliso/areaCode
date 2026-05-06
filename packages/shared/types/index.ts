@@ -341,6 +341,7 @@ export interface ServerToClientEvents {
     rewardTitle: string
     redemptionCode: string
     codeExpiresAt: string
+    nodeId: string
   }) => void
   'reward:slots_update': (payload: { rewardId: string; slotsRemaining: number }) => void
   'leaderboard:update': (payload: { userId: string; rank: number; delta: number }) => void

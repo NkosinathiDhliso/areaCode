@@ -1,0 +1,48 @@
+name: Load Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: 'Environment to run against (dev/prod)'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+
+jobs:
+  k6-load-test:
+    name: Run k6 Load Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set API URL
+        id: set-url
+        run: |
+          if [ "${{ github.event.inputs.target_env }}" = "prod" ]; then
+            echo "API_URL=https://api.areacode.co.za/v1" >> $GITHUB_ENV
+          else
+            # Default to dev/staging URL - replace with actual dev URL if different
+            echo "API_URL=https://api-dev.areacode.co.za/v1" >> $GITHUB_ENV
+          fi
+
+      - name: Run k6 Load Test
+        uses: grafana/k6-action@v0.3.1
+        with:
+          filename: load-tests/k6.js
+        env:
+          API_URL: ${{ env.API_URL }}

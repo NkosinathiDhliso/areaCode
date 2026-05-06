@@ -69,6 +69,7 @@ export function emitRewardClaimed(
     rewardTitle: string
     redemptionCode: string
     codeExpiresAt: string
+    nodeId: string
   },
 ) {
   tryGetIO()?.to(userRoom(userId)).emit('reward:claimed', payload)

@@ -11,23 +11,16 @@ const codeParamsSchema = z.object({ code: z.string().min(1) })
 
 export async function staffRoutes(app: FastifyInstance) {
   // GET /v1/staff/recent-redemptions
-  app.get(
-    '/v1/staff/recent-redemptions',
-    { preHandler: [requireAuth('staff')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return getStaffRecentRedemptions(auth.userId)
-    },
-  )
+  app.get('/v1/staff/recent-redemptions', { preHandler: [requireAuth('staff')] }, async (request) => {
+    const auth = getAuth(request)
+    return getStaffRecentRedemptions(auth.userId)
+  })
 
   // GET /v1/staff/redeem/:code/preview
   app.get(
     '/v1/staff/redeem/:code/preview',
     {
-      preHandler: [
-        requireAuth('staff'),
-        validate({ params: codeParamsSchema }),
-      ],
+      preHandler: [requireAuth('staff'), validate({ params: codeParamsSchema })],
     },
     async (request) => {
       const params = request.params as z.infer<typeof codeParamsSchema>
@@ -66,10 +59,7 @@ export async function staffRoutes(app: FastifyInstance) {
   app.post(
     '/v1/staff/redeem/:code/confirm',
     {
-      preHandler: [
-        requireAuth('staff'),
-        validate({ params: codeParamsSchema }),
-      ],
+      preHandler: [requireAuth('staff'), validate({ params: codeParamsSchema })],
     },
     async (request) => {
       const auth = getAuth(request)

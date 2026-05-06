@@ -4,6 +4,7 @@ import { getSocket } from '../lib/socket'
 import { useRewardStore } from '../stores/rewardStore'
 import { useToastStore } from '../stores/toastStore'
 import type { Toast } from '../types'
+import { analytics } from '../analytics/client'
 
 /**
  * Subscribes to reward-related socket events:
@@ -24,6 +25,7 @@ export function useRewardSocket(token?: string) {
       rewardTitle: string
       redemptionCode: string
       codeExpiresAt: string
+      nodeId: string
     }) => {
       const toast: Toast = {
         id: `reward-${payload.rewardId}-${Date.now()}`,
@@ -33,6 +35,11 @@ export function useRewardSocket(token?: string) {
         timestamp: Date.now(),
       }
       addToast(toast)
+
+      analytics.track('reward_claimed', {
+        rewardId: payload.rewardId,
+        nodeId: payload.nodeId,
+      })
     }
 
     const slotsHandler = (payload: { rewardId: string; slotsRemaining: number }) => {

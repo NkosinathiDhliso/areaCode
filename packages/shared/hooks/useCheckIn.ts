@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 
 import { api, type ApiError } from '../lib/api'
 import type { CheckInRequest, CheckInResponse } from '../types'
+import { analytics } from '../analytics/client'
 
 export function useCheckIn() {
   const [isPending, setIsPending] = useState(false)
@@ -14,6 +15,12 @@ export function useCheckIn() {
 
   const checkIn = useCallback(async (payload: CheckInRequest): Promise<CheckInResponse | null> => {
     lastPayloadRef.current = payload
+
+    analytics.track('checkin_started', {
+      nodeId: payload.nodeId,
+      method: 'qrCode' in payload && payload.qrCode ? 'qr' : 'gps',
+    })
+
     setIsPending(true)
     setError(null)
     setQrFallback(false)
@@ -23,6 +30,13 @@ export function useCheckIn() {
       if (res.cooldownUntil) {
         setCooldowns((prev) => ({ ...prev, [payload.nodeId]: res.cooldownUntil }))
       }
+
+      analytics.track('checkin_completed', {
+        nodeId: payload.nodeId,
+        type: payload.type,
+        success: true,
+      })
+
       return res
     } catch (err) {
       const apiError = err as ApiError
@@ -42,6 +56,13 @@ export function useCheckIn() {
         const message = apiError.message ?? 'Check-in failed'
         setError(message)
       }
+
+      analytics.track('checkin_completed', {
+        nodeId: payload.nodeId,
+        type: payload.type,
+        success: false,
+      })
+
       return null
     } finally {
       setIsPending(false)

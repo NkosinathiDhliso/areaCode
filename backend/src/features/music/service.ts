@@ -1,8 +1,6 @@
 import * as repo from './repository.js'
 import type { DimensionScoreVector, CrowdVibeSnapshot, BusinessMusicAudience } from './shared-types.js'
 
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
-
 // Re-export the archetype resolver logic inline to avoid cross-package import issues at runtime
 const DIMENSIONS = ['energy', 'cultural_rootedness', 'sophistication', 'edge', 'spirituality'] as const
 
@@ -136,10 +134,6 @@ export async function updateGenres(userId: string, musicGenres: string[]) {
   const scores = computeScores(musicGenres)
   const archetypeId = resolveArchetypeId(scores)
 
-  if (DEV_MODE) {
-    return { id: userId, musicGenres, dimensionScores: scores, archetypeId }
-  }
-
   return repo.updateUserGenres(userId, musicGenres, scores, archetypeId)
 }
 
@@ -151,10 +145,6 @@ export async function connectStreaming(
   musicUserToken?: string,
   frontendOrigin?: string,
 ) {
-  if (DEV_MODE) {
-    return { success: true, provider, genres: ['amapiano', 'deep_house'] }
-  }
-
   // Lazy import to avoid loading OAuth module when not needed
   const oauth = await import('./streaming-oauth.js')
 
@@ -276,7 +266,6 @@ export async function handleSpotifyCallback(code: string, state: string): Promis
 }
 
 export async function disconnectStreaming(userId: string) {
-  if (DEV_MODE) return
   await repo.clearUserMusicData(userId)
 }
 
@@ -289,8 +278,6 @@ export async function getCrowdVibe(nodeId: string): Promise<CrowdVibeSnapshot> {
     aggregateDimensionScores: null,
     totalCheckedIn: 0,
   }
-
-  if (DEV_MODE) return empty
 
   const users = await repo.getCrowdVibeData(nodeId)
   if (users.length === 0) return empty
@@ -349,8 +336,6 @@ export async function getBusinessAudienceMusic(businessId: string): Promise<Busi
     peakArchetypeByTime: [],
     totalWithMusicPrefs: 0,
   }
-
-  if (DEV_MODE) return empty
 
   const users = await repo.getBusinessAudienceMusicData(businessId)
   const withPrefs = users.filter((u) => u.musicGenres.length > 0)

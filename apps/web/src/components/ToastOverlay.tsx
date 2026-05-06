@@ -26,11 +26,14 @@ export function ToastOverlay() {
     setTouchStartX(e.touches[0]?.clientX ?? null)
   }, [])
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (touchStartX === null) return
-    const diff = (e.touches[0]?.clientX ?? 0) - touchStartX
-    setTranslateX(diff)
-  }, [touchStartX])
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      if (touchStartX === null) return
+      const diff = (e.touches[0]?.clientX ?? 0) - touchStartX
+      setTranslateX(diff)
+    },
+    [touchStartX],
+  )
 
   const handleTouchEnd = useCallback(() => {
     if (Math.abs(translateX) > 80 && currentToast) {

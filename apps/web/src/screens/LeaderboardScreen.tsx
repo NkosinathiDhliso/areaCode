@@ -25,9 +25,7 @@ export function LeaderboardScreen() {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4" data-scroll-container>
-      <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-1">
-        {t('leaderboard.title')}
-      </h1>
+      <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-1">{t('leaderboard.title')}</h1>
       <p className="text-[var(--text-muted)] text-xs mb-4">{t('leaderboard.thisWeek')}</p>
 
       {isLoading ? (
@@ -43,9 +41,7 @@ export function LeaderboardScreen() {
               key={entry.userId}
               className="flex flex-row items-center gap-3 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3"
             >
-              <span className="text-[var(--text-muted)] text-sm font-medium w-6 text-right">
-                {entry.rank}
-              </span>
+              <span className="text-[var(--text-muted)] text-sm font-medium w-6 text-right">{entry.rank}</span>
               {entry.isFriend ? (
                 <Avatar
                   url={entry.avatarUrl}
@@ -64,9 +60,7 @@ export function LeaderboardScreen() {
                 </p>
               </div>
               <TierBadge tier={entry.tier as Tier} />
-              <span className="text-[var(--text-secondary)] text-sm font-medium ml-2">
-                {entry.checkInCount}
-              </span>
+              <span className="text-[var(--text-secondary)] text-sm font-medium ml-2">{entry.checkInCount}</span>
             </div>
           ))}
 
@@ -75,23 +69,17 @@ export function LeaderboardScreen() {
             <>
               <div className="border-t border-[var(--border)] my-2" />
               <div className="flex flex-row items-center gap-3 bg-[var(--bg-raised)] border border-[var(--accent)] rounded-2xl px-4 py-3">
-                <span className="text-[var(--accent)] text-sm font-medium w-6 text-right">
-                  {data.userRank.rank}
-                </span>
+                <span className="text-[var(--accent)] text-sm font-medium w-6 text-right">{data.userRank.rank}</span>
                 <div className="flex-1">
                   <p className="text-[var(--text-primary)] text-sm font-medium">{t('leaderboard.you')}</p>
                 </div>
-                <span className="text-[var(--text-secondary)] text-sm font-medium">
-                  {data.userRank.checkInCount}
-                </span>
+                <span className="text-[var(--text-secondary)] text-sm font-medium">{data.userRank.checkInCount}</span>
               </div>
             </>
           )}
         </div>
       ) : (
-        <p className="text-[var(--text-muted)] text-sm text-center py-8">
-          {t('leaderboard.noData')}
-        </p>
+        <p className="text-[var(--text-muted)] text-sm text-center py-8">{t('leaderboard.noData')}</p>
       )}
     </div>
   )

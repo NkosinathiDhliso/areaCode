@@ -43,13 +43,7 @@ function formatDistance(metres: number): string {
   return `${(metres / 1000).toFixed(1)}km`
 }
 
-export function NotificationPrimingSheet({
-  isOpen,
-  onClose,
-  lat,
-  lng,
-  userId,
-}: NotificationPrimingSheetProps) {
+export function NotificationPrimingSheet({ isOpen, onClose, lat, lng, userId }: NotificationPrimingSheetProps) {
   const { t } = useTranslation()
   const [nearbyEvent, setNearbyEvent] = useState<NearbyEvent | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -79,7 +73,9 @@ export function NotificationPrimingSheet({
     }
 
     void fetchNearby()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [isOpen, lat, lng])
 
   function handleEnable() {
@@ -131,9 +127,7 @@ export function NotificationPrimingSheet({
             })}
           </p>
         ) : (
-          <p className="text-[var(--text-primary)] text-base leading-relaxed">
-            {t('notif.priming.generic')}
-          </p>
+          <p className="text-[var(--text-primary)] text-base leading-relaxed">{t('notif.priming.generic')}</p>
         )}
 
         <button

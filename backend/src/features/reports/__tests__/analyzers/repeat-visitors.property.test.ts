@@ -15,25 +15,26 @@ import { analyzeRepeatVisitors } from '../../analyzers/repeat-visitors.js'
 // ─── Custom Arbitraries ─────────────────────────────────────────────────────
 
 /** Generate a 64-char hex string (SHA-256 hash format) */
-const hexTokenArb = fc.uint8Array({ minLength: 32, maxLength: 32 }).map(
-  (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(''),
-)
+const hexTokenArb = fc
+  .uint8Array({ minLength: 32, maxLength: 32 })
+  .map((bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(''))
 
 /** Generate a Set of unique visitor tokens */
-const visitorSetArb = fc.uniqueArray(hexTokenArb, { minLength: 0, maxLength: 50 })
-  .map((tokens) => new Set(tokens))
+const visitorSetArb = fc.uniqueArray(hexTokenArb, { minLength: 0, maxLength: 50 }).map((tokens) => new Set(tokens))
 
 /** Generate two visitor sets with controlled overlap */
 function visitorPairArb() {
-  return fc.tuple(
-    fc.uniqueArray(hexTokenArb, { minLength: 0, maxLength: 30 }),
-    fc.uniqueArray(hexTokenArb, { minLength: 0, maxLength: 30 }),
-    fc.uniqueArray(hexTokenArb, { minLength: 0, maxLength: 20 }),
-  ).map(([currentOnly, previousOnly, shared]) => {
-    const currentSet = new Set([...currentOnly, ...shared])
-    const previousSet = new Set([...previousOnly, ...shared])
-    return { currentSet, previousSet }
-  })
+  return fc
+    .tuple(
+      fc.uniqueArray(hexTokenArb, { minLength: 0, maxLength: 30 }),
+      fc.uniqueArray(hexTokenArb, { minLength: 0, maxLength: 30 }),
+      fc.uniqueArray(hexTokenArb, { minLength: 0, maxLength: 20 }),
+    )
+    .map(([currentOnly, previousOnly, shared]) => {
+      const currentSet = new Set([...currentOnly, ...shared])
+      const previousSet = new Set([...previousOnly, ...shared])
+      return { currentSet, previousSet }
+    })
 }
 
 // ─── Property 7: Repeat Visitor Rate Computation ────────────────────────────

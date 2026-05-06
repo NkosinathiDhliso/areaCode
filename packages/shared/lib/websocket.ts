@@ -222,18 +222,19 @@ export function getWebSocket(
   // callers (e.g. App.tsx adds businessId; panels omit it).  Comparing only the
   // origin+path and token prevents tearing down an in-flight connection, which
   // causes the "WebSocket closed before connection established" browser warning.
-  const isSameConnection = wsManager != null && (() => {
-    try {
-      const a = new URL(wsManager.url)
-      const b = new URL(url)
-      return (
-        a.origin + a.pathname === b.origin + b.pathname &&
-        a.searchParams.get('token') === b.searchParams.get('token')
-      )
-    } catch {
-      return wsManager.url === url
-    }
-  })()
+  const isSameConnection =
+    wsManager != null &&
+    (() => {
+      try {
+        const a = new URL(wsManager.url)
+        const b = new URL(url)
+        return (
+          a.origin + a.pathname === b.origin + b.pathname && a.searchParams.get('token') === b.searchParams.get('token')
+        )
+      } catch {
+        return wsManager.url === url
+      }
+    })()
 
   if (!isSameConnection) {
     if (wsManager) wsManager.disconnect()

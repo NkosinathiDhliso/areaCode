@@ -25,7 +25,7 @@ export async function blockUser(blockerId: string, blockedId: string): Promise<v
         createdAt: new Date().toISOString(),
       },
       ConditionExpression: 'attribute_not_exists(pk)',
-    })
+    }),
   )
 }
 
@@ -34,7 +34,7 @@ export async function unblockUser(blockerId: string, blockedId: string): Promise
     new DeleteCommand({
       TableName: TableNames.appData,
       Key: { pk: `BLOCK#${blockerId}`, sk: `BLOCKED#${blockedId}` },
-    })
+    }),
   )
 }
 
@@ -43,7 +43,7 @@ export async function isBlocked(blockerId: string, blockedId: string): Promise<b
     new GetCommand({
       TableName: TableNames.appData,
       Key: { pk: `BLOCK#${blockerId}`, sk: `BLOCKED#${blockedId}` },
-    })
+    }),
   )
   return !!result.Item
 }
@@ -54,7 +54,7 @@ export async function getBlockedUsers(blockerId: string): Promise<Array<{ blocke
       TableName: TableNames.appData,
       KeyConditionExpression: 'pk = :pk',
       ExpressionAttributeValues: { ':pk': `BLOCK#${blockerId}` },
-    })
+    }),
   )
   return (result.Items || []).map((item) => ({
     blockedId: item['blockedId'] as string,
@@ -69,7 +69,7 @@ export async function getBlockedByUsers(blockedId: string): Promise<Array<{ bloc
       IndexName: 'GSI1',
       KeyConditionExpression: 'gsi1pk = :pk',
       ExpressionAttributeValues: { ':pk': `BLOCKED_BY#${blockedId}` },
-    })
+    }),
   )
   return (result.Items || []).map((item) => ({
     blockerId: item['blockerId'] as string,

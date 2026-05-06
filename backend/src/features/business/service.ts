@@ -4,14 +4,9 @@ import * as repo from './repository.js'
 import { BUSINESS_PLANS, BOOST_PRICING, type BoostDuration } from './types.js'
 import { activateNodeBoost } from '../nodes/service.js'
 
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
-
 // ─── Business Profile ───────────────────────────────────────────────────────
 
 export async function getBusinessProfile(cognitoSub: string) {
-  if (DEV_MODE) {
-    return { id: 'dev-biz-1', businessName: 'Dev Business', email: 'dev@areacode.co.za', tier: 'growth', cognitoSub }
-  }
   const biz = await repo.findBusinessByCognitoSub(cognitoSub)
   if (!biz) throw AppError.notFound('Business account not found')
   return biz
@@ -112,15 +107,6 @@ async function createYocoCheckout(
 }
 
 export async function createCheckoutSession(businessId: string, plan: 'growth' | 'pro' | 'payg', interval?: string) {
-  if (DEV_MODE) {
-    const amountCents = plan === 'payg' ? 2900 : 14900
-    return {
-      checkoutUrl: '#dev-checkout',
-      amountCents,
-      currency: 'ZAR',
-      metadata: { businessId, plan, interval },
-    }
-  }
   const biz = await repo.findBusinessById(businessId)
   if (!biz) throw AppError.notFound('Business not found')
 
@@ -148,15 +134,6 @@ export async function createCheckoutSession(businessId: string, plan: 'growth' |
 // ─── Boost ──────────────────────────────────────────────────────────────────
 
 export async function purchaseBoost(businessId: string, nodeId: string, duration: BoostDuration) {
-  if (DEV_MODE) {
-    const amountCents = BOOST_PRICING[duration]
-    return {
-      checkoutUrl: '#dev-boost',
-      amountCents,
-      currency: 'ZAR',
-      metadata: { businessId, nodeId, duration, type: 'boost' },
-    }
-  }
   const node = await repo.getNodeForBusiness(nodeId, businessId)
   if (!node) throw AppError.forbidden('You do not own this node')
 
@@ -182,8 +159,6 @@ export async function processYocoWebhook(
   signature: string,
   rawBody?: string,
 ) {
-  if (DEV_MODE) return { duplicate: false }
-
   // Verify signature using raw body bytes for accuracy
   const secret = process.env['YOCO_WEBHOOK_SECRET'] ?? process.env['YOCO_DEV_SECRET_KEY'] ?? ''
   const bodyToSign = rawBody ?? JSON.stringify(payload)
@@ -260,9 +235,6 @@ const STAFF_LIMITS: Record<string, number | null> = {
 }
 
 export async function inviteStaff(businessId: string, phone?: string, email?: string) {
-  if (DEV_MODE) {
-    return { id: `dev-invite-${Date.now()}`, businessId, phone, email, inviteToken: 'dev-token', accepted: false }
-  }
   const biz = await repo.findBusinessById(businessId)
   if (!biz) throw AppError.notFound('Business not found')
 
@@ -278,18 +250,14 @@ export async function inviteStaff(businessId: string, phone?: string, email?: st
 }
 
 export async function listStaffInvites(businessId: string) {
-  if (DEV_MODE) return []
   return repo.listStaffInvites(businessId)
 }
 
 export async function listStaff(businessId: string) {
-  if (DEV_MODE) return []
   return repo.listStaffAccounts(businessId)
 }
 
 export async function removeStaff(staffId: string, businessId: string) {
-  if (DEV_MODE) return
-
   // Soft-delete in DynamoDB
   const result = await repo.removeStaffAccount(staffId, businessId)
   if (result.count === 0) throw AppError.notFound('Staff member not found')
@@ -327,10 +295,6 @@ export function validateQrToken(nodeId: string, token: string): boolean {
 }
 
 export async function getQrData(nodeId: string, businessId: string) {
-  if (DEV_MODE) {
-    const token = generateQrToken(nodeId)
-    return { url: `https://areacode.co.za/qr/${nodeId}/${token}`, token, nodeId }
-  }
   const node = await repo.getNodeForBusiness(nodeId, businessId)
   if (!node) throw AppError.forbidden('You do not own this node')
 
@@ -345,7 +309,6 @@ export async function getQrData(nodeId: string, businessId: string) {
 // ─── Trial Management ───────────────────────────────────────────────────────
 
 export async function startTrial(businessId: string, plan: 'growth' | 'pro') {
-  if (DEV_MODE) return { id: businessId, tier: plan, trialEndsAt: new Date(Date.now() + 14 * 86400000).toISOString() }
   const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
   return repo.updateBusinessTier(businessId, plan, trialEndsAt)
 }
@@ -353,18 +316,12 @@ export async function startTrial(businessId: string, plan: 'growth' | 'pro') {
 // ─── Live Stats ─────────────────────────────────────────────────────────────
 
 export async function getLiveStats(businessId: string) {
-  if (DEV_MODE) {
-    return { checkInsToday: 34, rewardsClaimed: 12, pulseScore: 45, totalCheckIns: 1247 }
-  }
   return repo.getLiveStats(businessId)
 }
 
 // ─── Business Nodes ─────────────────────────────────────────────────────────
 
 export async function getBusinessNodes(businessId: string) {
-  if (DEV_MODE) {
-    return { items: [] }
-  }
   const items = await repo.getNodesForBusiness(businessId)
   return { items }
 }
@@ -372,46 +329,24 @@ export async function getBusinessNodes(businessId: string) {
 // ─── Audience Analytics ─────────────────────────────────────────────────────
 
 export async function getAudienceAnalytics(businessId: string) {
-  if (DEV_MODE) {
-    return {
-      tierDistribution: { local: 40, regular: 30, fixture: 20, institution: 8, legend: 2 },
-      repeatVsNew: { repeat: 180, new: 67 },
-      totalUniqueVisitors: 247,
-      peakHours: ['12:00-14:00', '18:00-21:00'],
-    }
-  }
   return repo.getAudienceAnalytics(businessId)
 }
 
 // ─── Music Audience ─────────────────────────────────────────────────────────
 
 export async function getMusicAudience(businessId: string) {
-  if (DEV_MODE) {
-    return {
-      totalWithMusicPrefs: 0,
-      genreDistribution: {},
-      archetypeBreakdown: {},
-      peakArchetypeByTime: [],
-    }
-  }
   return repo.getMusicAudience(businessId)
 }
 
 // ─── Recent Redemptions ─────────────────────────────────────────────────────
 
 export async function getRecentRedemptions(businessId: string) {
-  if (DEV_MODE) {
-    return []
-  }
   return repo.getRecentRedemptions(businessId)
 }
 
 // ─── Business Rewards (list) ────────────────────────────────────────────────
 
 export async function getBusinessRewards(businessId: string) {
-  if (DEV_MODE) {
-    return { items: [] }
-  }
   const items = await repo.getRewardsForBusiness(businessId)
   return { items }
 }
@@ -419,85 +354,22 @@ export async function getBusinessRewards(businessId: string) {
 // ─── Check-In Details ───────────────────────────────────────────────────────
 
 export async function getCheckInDetails(businessId: string, date?: string, cursor?: string) {
-  if (DEV_MODE) {
-    return {
-      items: [
-        {
-          displayName: 'Thabo M.',
-          tier: 'regular',
-          visitCount: 12,
-          timestamp: new Date(Date.now() - 600000).toISOString(),
-        },
-        {
-          displayName: 'Naledi K.',
-          tier: 'fixture',
-          visitCount: 3,
-          timestamp: new Date(Date.now() - 1800000).toISOString(),
-        },
-        {
-          displayName: 'Sipho D.',
-          tier: 'local',
-          visitCount: 1,
-          timestamp: new Date(Date.now() - 3600000).toISOString(),
-        },
-      ],
-      nextCursor: null,
-    }
-  }
   return repo.getCheckInDetails(businessId, date, cursor)
 }
 
 // ─── Reward Metrics ─────────────────────────────────────────────────────────
 
 export async function getRewardMetrics(rewardId: string, businessId: string) {
-  if (DEV_MODE) {
-    return { claimRate: 0.65, timeToClaimMinutes: 42, redemptionRate: 0.38 }
-  }
   return repo.getRewardMetrics(rewardId, businessId)
 }
 
 export async function getRewardsSummary(businessId: string) {
-  if (DEV_MODE) {
-    return {
-      items: [
-        {
-          rewardId: 'rew-1',
-          title: 'Free Coffee',
-          claimRate: 0.65,
-          timeToClaimMinutes: 42,
-          redemptionRate: 0.38,
-          isLowPerformance: false,
-        },
-        {
-          rewardId: 'rew-2',
-          title: '20% Off Cocktails',
-          claimRate: 0.22,
-          timeToClaimMinutes: 120,
-          redemptionRate: 0.1,
-          isLowPerformance: false,
-        },
-        {
-          rewardId: 'rew-3',
-          title: 'Free Starter',
-          claimRate: 0,
-          timeToClaimMinutes: 0,
-          redemptionRate: 0,
-          isLowPerformance: true,
-        },
-      ],
-    }
-  }
   return repo.getRewardsSummary(businessId)
 }
 
 // ─── Current Node QR (convenience) ──────────────────────────────────────────
 
 export async function getCurrentNodeQr(businessId: string) {
-  if (DEV_MODE) {
-    const nodeId = 'dev-node-1'
-    const token = generateQrToken(nodeId)
-    return { url: `https://areacode.co.za/qr/${nodeId}/${token}`, token, nodeId }
-  }
   const nodes = await repo.getNodesForBusiness(businessId)
   if (!nodes.length) throw AppError.notFound('No nodes found')
   const nodeId = nodes[0]!.id

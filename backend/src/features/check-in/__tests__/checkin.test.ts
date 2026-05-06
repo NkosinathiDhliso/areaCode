@@ -10,7 +10,7 @@ describe('check-in cooldown enforcement', () => {
   const REWARD_COOLDOWN_MS = 4 * 60 * 60 * 1000 // 4 hours
 
   function isCooldownActive(lastCheckInTime: number, now: number): boolean {
-    return (now - lastCheckInTime) < REWARD_COOLDOWN_MS
+    return now - lastCheckInTime < REWARD_COOLDOWN_MS
   }
 
   it('blocks reward check-in within 4 hours', () => {

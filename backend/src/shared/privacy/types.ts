@@ -13,9 +13,9 @@ export const DEFAULT_PRIVACY_LEVEL: PrivacyLevel = 'friends_only'
  * Determines what data about this user can be shown to the viewer.
  */
 export type PrivacyVisibility =
-  | 'full'      // Viewer can see all identity fields (own data, or mutual follow with public/friends_only)
+  | 'full' // Viewer can see all identity fields (own data, or mutual follow with public/friends_only)
   | 'anonymous' // Viewer can see tier and aggregate data but not identity
-  | 'excluded'  // User is completely hidden from viewer (blocked or private)
+  | 'excluded' // User is completely hidden from viewer (blocked or private)
 
 export interface PrivacyCheckResult {
   visibility: PrivacyVisibility

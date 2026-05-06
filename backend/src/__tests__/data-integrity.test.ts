@@ -4,15 +4,9 @@ import { z } from 'zod'
 
 // ─── Import all Zod schemas (source of truth for validation) ────────────────
 import { checkInBodySchema } from '../features/check-in/types'
-import {
-  consumerSignupBodySchema, verifyOtpBodySchema,
-  consentBodySchema,
-} from '../features/auth/types'
+import { consumerSignupBodySchema, verifyOtpBodySchema, consentBodySchema } from '../features/auth/types'
 import { createRewardBodySchema, redeemBodySchema } from '../features/rewards/types'
-import {
-  createNodeBodySchema, reportNodeBodySchema,
-  claimNodeBodySchema,
-} from '../features/nodes/types'
+import { createNodeBodySchema, reportNodeBodySchema, claimNodeBodySchema } from '../features/nodes/types'
 import { boostBodySchema } from '../features/business/types'
 import { reportActionBodySchema } from '../features/admin/types'
 import { notificationPrefsSchema } from '../features/notifications/types'
@@ -56,7 +50,10 @@ describe('Schema validation: invalid data is always rejected', () => {
         fc.string({ minLength: 1, maxLength: 20 }).filter((s) => !/^\+\d{10,15}$/.test(s)),
         (phone) => {
           const result = consumerSignupBodySchema.safeParse({
-            phone, username: 'test', displayName: 'Test', citySlug: 'jhb',
+            phone,
+            username: 'test',
+            displayName: 'Test',
+            citySlug: 'jhb',
           })
           expect(result.success).toBe(false)
         },
@@ -81,9 +78,9 @@ describe('Schema validation: invalid data is always rejected', () => {
   it('reward creation rejects invalid reward types', () => {
     fc.assert(
       fc.property(
-        fc.string({ minLength: 1, maxLength: 20 }).filter(
-          (s) => !['nth_checkin', 'daily_first', 'streak', 'milestone'].includes(s),
-        ),
+        fc
+          .string({ minLength: 1, maxLength: 20 })
+          .filter((s) => !['nth_checkin', 'daily_first', 'streak', 'milestone'].includes(s)),
         (type) => {
           const result = createRewardBodySchema.safeParse({
             nodeId: '00000000-0000-0000-0000-000000000001',
@@ -100,12 +97,16 @@ describe('Schema validation: invalid data is always rejected', () => {
   it('node creation rejects invalid categories', () => {
     fc.assert(
       fc.property(
-        fc.string({ minLength: 1, maxLength: 20 }).filter(
-          (s) => !['food', 'coffee', 'nightlife', 'retail', 'fitness', 'arts'].includes(s),
-        ),
+        fc
+          .string({ minLength: 1, maxLength: 20 })
+          .filter((s) => !['food', 'coffee', 'nightlife', 'retail', 'fitness', 'arts'].includes(s)),
         (category) => {
           const result = createNodeBodySchema.safeParse({
-            name: 'Test', category, lat: -26.2, lng: 28.0, citySlug: 'jhb',
+            name: 'Test',
+            category,
+            lat: -26.2,
+            lng: 28.0,
+            citySlug: 'jhb',
           })
           expect(result.success).toBe(false)
         },
@@ -121,7 +122,11 @@ describe('Schema validation: invalid data is always rejected', () => {
         fc.double({ min: 181, max: 1000, noNaN: true }),
         (lat, lng) => {
           const result = createNodeBodySchema.safeParse({
-            name: 'Test', category: 'food', lat, lng, citySlug: 'jhb',
+            name: 'Test',
+            category: 'food',
+            lat,
+            lng,
+            citySlug: 'jhb',
           })
           expect(result.success).toBe(false)
         },
@@ -162,9 +167,7 @@ describe('Schema validation: invalid data is always rejected', () => {
   it('report action must be reviewed, dismissed, or actioned', () => {
     fc.assert(
       fc.property(
-        fc.string({ minLength: 1, maxLength: 20 }).filter(
-          (s) => !['reviewed', 'dismissed', 'actioned'].includes(s),
-        ),
+        fc.string({ minLength: 1, maxLength: 20 }).filter((s) => !['reviewed', 'dismissed', 'actioned'].includes(s)),
         (action) => {
           const result = reportActionBodySchema.safeParse({ action })
           expect(result.success).toBe(false)
@@ -208,23 +211,18 @@ describe('Schema validation: invalid data is always rejected', () => {
 // ─── 2. Schema Validation: Accept valid data ───────────────────────────────
 
 describe('Schema validation: valid data is always accepted', () => {
-  const e164PhoneArb = fc.array(
-    fc.constantFrom('0', '1', '2', '3', '4', '5', '6', '7', '8', '9'),
-    { minLength: 10, maxLength: 15 },
-  ).map((digits) => `+${digits.join('')}`)
+  const e164PhoneArb = fc
+    .array(fc.constantFrom('0', '1', '2', '3', '4', '5', '6', '7', '8', '9'), { minLength: 10, maxLength: 15 })
+    .map((digits) => `+${digits.join('')}`)
 
   const uuidArb = fc.uuid()
 
   it('valid check-in bodies always pass', () => {
     fc.assert(
-      fc.property(
-        fc.string({ minLength: 1, maxLength: 50 }),
-        fc.constantFrom('reward', 'presence'),
-        (nodeId, type) => {
-          const result = checkInBodySchema.safeParse({ nodeId, type })
-          expect(result.success).toBe(true)
-        },
-      ),
+      fc.property(fc.string({ minLength: 1, maxLength: 50 }), fc.constantFrom('reward', 'presence'), (nodeId, type) => {
+        const result = checkInBodySchema.safeParse({ nodeId, type })
+        expect(result.success).toBe(true)
+      }),
       { numRuns: 200 },
     )
   })
@@ -240,7 +238,10 @@ describe('Schema validation: valid data is always accepted', () => {
         citySlugArb,
         (phone, username, displayName, citySlug) => {
           const result = consumerSignupBodySchema.safeParse({
-            phone, username, displayName, citySlug,
+            phone,
+            username,
+            displayName,
+            citySlug,
           })
           expect(result.success).toBe(true)
         },
@@ -327,14 +328,10 @@ describe('Business logic invariants', () => {
 
   it('pulse score formula: (dailyCount × 5) + (uniqueUsers × 2) is always non-negative', () => {
     fc.assert(
-      fc.property(
-        fc.integer({ min: 0, max: 10000 }),
-        fc.integer({ min: 0, max: 10000 }),
-        (dailyCount, uniqueUsers) => {
-          const pulse = (dailyCount * 5) + (uniqueUsers * 2)
-          expect(pulse).toBeGreaterThanOrEqual(0)
-        },
-      ),
+      fc.property(fc.integer({ min: 0, max: 10000 }), fc.integer({ min: 0, max: 10000 }), (dailyCount, uniqueUsers) => {
+        const pulse = dailyCount * 5 + uniqueUsers * 2
+        expect(pulse).toBeGreaterThanOrEqual(0)
+      }),
       { numRuns: 300 },
     )
   })
@@ -343,7 +340,7 @@ describe('Business logic invariants', () => {
     fc.assert(
       fc.property(
         fc.integer({ min: 0, max: 10000 }),
-        fc.constantFrom(0.90, 0.95),
+        fc.constantFrom(0.9, 0.95),
         fc.integer({ min: 1, max: 100 }),
         (initialScore, decayFactor, iterations) => {
           let score = initialScore
@@ -360,17 +357,13 @@ describe('Business logic invariants', () => {
   it('tier assignment is monotonically increasing with check-in count', () => {
     const tierOrder = ['local', 'regular', 'fixture', 'institution', 'legend']
     fc.assert(
-      fc.property(
-        fc.integer({ min: 0, max: 1000 }),
-        fc.integer({ min: 0, max: 1000 }),
-        (a, b) => {
-          if (a <= b) {
-            const tierA = tierOrder.indexOf(getTier(a))
-            const tierB = tierOrder.indexOf(getTier(b))
-            expect(tierA).toBeLessThanOrEqual(tierB)
-          }
-        },
-      ),
+      fc.property(fc.integer({ min: 0, max: 1000 }), fc.integer({ min: 0, max: 1000 }), (a, b) => {
+        if (a <= b) {
+          const tierA = tierOrder.indexOf(getTier(a))
+          const tierB = tierOrder.indexOf(getTier(b))
+          expect(tierA).toBeLessThanOrEqual(tierB)
+        }
+      }),
       { numRuns: 500 },
     )
   })
@@ -386,17 +379,13 @@ describe('Business logic invariants', () => {
 
   it('reward slot enforcement: claimedCount never exceeds totalSlots', () => {
     fc.assert(
-      fc.property(
-        fc.integer({ min: 1, max: 1000 }),
-        fc.integer({ min: 1, max: 2000 }),
-        (totalSlots, attempts) => {
-          let claimed = 0
-          for (let i = 0; i < attempts; i++) {
-            if (claimed < totalSlots) claimed++
-          }
-          expect(claimed).toBeLessThanOrEqual(totalSlots)
-        },
-      ),
+      fc.property(fc.integer({ min: 1, max: 1000 }), fc.integer({ min: 1, max: 2000 }), (totalSlots, attempts) => {
+        let claimed = 0
+        for (let i = 0; i < attempts; i++) {
+          if (claimed < totalSlots) claimed++
+        }
+        expect(claimed).toBeLessThanOrEqual(totalSlots)
+      }),
       { numRuns: 300 },
     )
   })
@@ -435,27 +424,21 @@ describe('Business logic invariants', () => {
 
   it('leaderboard reset: top 50 cap is always respected', () => {
     fc.assert(
-      fc.property(
-        fc.array(fc.integer({ min: 0, max: 10000 }), { minLength: 0, maxLength: 200 }),
-        (scores) => {
-          const top50 = [...scores].sort((a, b) => b - a).slice(0, 50)
-          expect(top50.length).toBeLessThanOrEqual(50)
-        },
-      ),
+      fc.property(fc.array(fc.integer({ min: 0, max: 10000 }), { minLength: 0, maxLength: 200 }), (scores) => {
+        const top50 = [...scores].sort((a, b) => b - a).slice(0, 50)
+        expect(top50.length).toBeLessThanOrEqual(50)
+      }),
       { numRuns: 200 },
     )
   })
 
   it('abuse detection: device velocity threshold is 3 nodes in 30 min', () => {
     fc.assert(
-      fc.property(
-        fc.integer({ min: 1, max: 20 }),
-        (nodeCount) => {
-          const flagged = nodeCount > 3
-          if (nodeCount <= 3) expect(flagged).toBe(false)
-          else expect(flagged).toBe(true)
-        },
-      ),
+      fc.property(fc.integer({ min: 1, max: 20 }), (nodeCount) => {
+        const flagged = nodeCount > 3
+        if (nodeCount <= 3) expect(flagged).toBe(false)
+        else expect(flagged).toBe(true)
+      }),
       { numRuns: 100 },
     )
   })
@@ -555,9 +538,7 @@ describe('Data flow consistency', () => {
       fc.property(fc.integer({ min: 1, max: 1000 }), () => {
         // Simulate the code generation from reward-evaluator
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-        const code = Array.from({ length: 6 }, () =>
-          chars[Math.floor(Math.random() * chars.length)],
-        ).join('')
+        const code = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
         expect(code).toHaveLength(6)
         expect(/^[A-Z0-9]{6}$/.test(code)).toBe(true)
       }),
@@ -567,7 +548,12 @@ describe('Data flow consistency', () => {
 
   it('toast queue priority ordering: surge (1) < reward_pressure (2) < checkin (3) < streak (4)', () => {
     const priorities: Record<string, number> = {
-      surge: 1, reward_pressure: 2, checkin: 3, reward_new: 3, streak: 4, leaderboard: 4,
+      surge: 1,
+      reward_pressure: 2,
+      checkin: 3,
+      reward_new: 3,
+      streak: 4,
+      leaderboard: 4,
     }
 
     expect(priorities['surge']).toBeLessThan(priorities['reward_pressure']!)
@@ -583,19 +569,15 @@ describe('Cross-feature constraint validation', () => {
     const stateOrder = ['dormant', 'quiet', 'active', 'buzzing', 'popping']
 
     fc.assert(
-      fc.property(
-        fc.constantFrom(...stateOrder),
-        fc.constantFrom(...stateOrder),
-        (prevState, currentState) => {
-          const prevIdx = stateOrder.indexOf(prevState)
-          const currIdx = stateOrder.indexOf(currentState)
-          const isSurge = currIdx > prevIdx
+      fc.property(fc.constantFrom(...stateOrder), fc.constantFrom(...stateOrder), (prevState, currentState) => {
+        const prevIdx = stateOrder.indexOf(prevState)
+        const currIdx = stateOrder.indexOf(currentState)
+        const isSurge = currIdx > prevIdx
 
-          if (isSurge) {
-            expect(currIdx).toBeGreaterThan(prevIdx)
-          }
-        },
-      ),
+        if (isSurge) {
+          expect(currIdx).toBeGreaterThan(prevIdx)
+        }
+      }),
       { numRuns: 200 },
     )
   })
@@ -604,11 +586,11 @@ describe('Cross-feature constraint validation', () => {
     fc.assert(
       fc.property(fc.integer({ min: 0, max: 23 }), (hour) => {
         const isPeak = hour >= 18 && hour <= 23
-        const decayFactor = isPeak ? 0.95 : 0.90
+        const decayFactor = isPeak ? 0.95 : 0.9
         expect(decayFactor).toBeGreaterThan(0)
         expect(decayFactor).toBeLessThan(1)
         if (isPeak) expect(decayFactor).toBe(0.95)
-        else expect(decayFactor).toBe(0.90)
+        else expect(decayFactor).toBe(0.9)
       }),
       { numRuns: 24 },
     )
@@ -632,8 +614,18 @@ describe('Cross-feature constraint validation', () => {
 
   it('genre weight matrix: all 12 genres have all 5 dimensions', () => {
     const genres = [
-      'amapiano', 'deep_house', 'afrobeats', 'hip_hop', 'rnb',
-      'kwaito', 'gqom', 'jazz', 'rock', 'pop', 'gospel', 'maskandi',
+      'amapiano',
+      'deep_house',
+      'afrobeats',
+      'hip_hop',
+      'rnb',
+      'kwaito',
+      'gqom',
+      'jazz',
+      'rock',
+      'pop',
+      'gospel',
+      'maskandi',
     ]
     const dimensions = ['energy', 'cultural_rootedness', 'sophistication', 'edge', 'spirituality']
 

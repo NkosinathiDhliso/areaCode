@@ -1,11 +1,20 @@
 // Shared type aliases used by the music service , avoids cross-package imports at runtime
 
 export type MusicGenre =
-  | 'amapiano' | 'deep_house' | 'afrobeats' | 'hip_hop' | 'rnb'
-  | 'kwaito' | 'gqom' | 'jazz' | 'rock' | 'pop' | 'gospel' | 'maskandi'
+  | 'amapiano'
+  | 'deep_house'
+  | 'afrobeats'
+  | 'hip_hop'
+  | 'rnb'
+  | 'kwaito'
+  | 'gqom'
+  | 'jazz'
+  | 'rock'
+  | 'pop'
+  | 'gospel'
+  | 'maskandi'
 
-export type PersonalityDimension =
-  | 'energy' | 'cultural_rootedness' | 'sophistication' | 'edge' | 'spirituality'
+export type PersonalityDimension = 'energy' | 'cultural_rootedness' | 'sophistication' | 'edge' | 'spirituality'
 
 export type DimensionScoreVector = Record<PersonalityDimension, number>
 

@@ -7,12 +7,7 @@ interface ErrorToastProps {
   autoDismissMs?: number
 }
 
-export function ErrorToast({
-  message,
-  onRetry,
-  onDismiss,
-  autoDismissMs = 5000,
-}: ErrorToastProps) {
+export function ErrorToast({ message, onRetry, onDismiss, autoDismissMs = 5000 }: ErrorToastProps) {
   const [visible, setVisible] = useState(true)
 
   const dismiss = useCallback(() => {

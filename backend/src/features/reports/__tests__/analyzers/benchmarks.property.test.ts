@@ -32,12 +32,7 @@ const positiveMetricsArb: fc.Arbitrary<ReportMetrics> = fc.record({
   pulseScore: fc.double({ min: 0.01, max: 100, noNaN: true }),
 })
 
-const BENCHMARK_METRICS = [
-  'totalCheckIns',
-  'uniqueVisitors',
-  'repeatVisitorRate',
-  'pulseScore',
-] as const
+const BENCHMARK_METRICS = ['totalCheckIns', 'uniqueVisitors', 'repeatVisitorRate', 'pulseScore'] as const
 
 // ─── Property 9: Benchmark Computation Correctness ──────────────────────────
 

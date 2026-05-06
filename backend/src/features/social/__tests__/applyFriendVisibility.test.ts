@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { applyFriendVisibility } from '../service.js'
 
-function makeEntry(userId: string, displayName = 'Name', username = 'user', avatarUrl: string | null = 'https://img.test/a.png') {
+function makeEntry(
+  userId: string,
+  displayName = 'Name',
+  username = 'user',
+  avatarUrl: string | null = 'https://img.test/a.png',
+) {
   return { userId, displayName, username, avatarUrl, tier: 'local' as const }
 }
 

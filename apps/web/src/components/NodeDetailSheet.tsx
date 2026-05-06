@@ -1,4 +1,4 @@
-import { useState, memo } from 'react'
+import { useState, memo, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BottomSheet } from '@area-code/shared/components/BottomSheet'
 import { api } from '@area-code/shared/lib/api'
@@ -9,6 +9,7 @@ import type { GeoStatus } from '@area-code/shared/stores/locationStore'
 import { useCooldownTimer } from '@area-code/shared/hooks/useCooldownTimer'
 import { CrowdVibeSection } from './CrowdVibeSection'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
+import { analytics } from '@area-code/shared/analytics/client'
 
 // ─── Directions Helper ──────────────────────────────────────────────────────
 
@@ -93,6 +94,19 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
 
   const isDormant = state === 'dormant' && rewards.length === 0
   const activeRewards = rewards.filter((r) => r.isActive)
+
+  useEffect(() => {
+    if (isOpen && activeRewards.length > 0) {
+      activeRewards.forEach((reward) => {
+        analytics.track('reward_viewed', {
+          rewardId: reward.id,
+          nodeId: node.id,
+        })
+      })
+    }
+    // Intentionally excluding activeRewards to prevent re-firing unless the sheet toggles
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, node.id])
 
   function handleCheckIn() {
     if (!isAuthenticated) {
