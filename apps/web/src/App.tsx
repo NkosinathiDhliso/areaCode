@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import ReactDOM from 'react-dom'
 
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useNavigationStore } from '@area-code/shared/stores/navigationStore'
@@ -68,12 +69,8 @@ function pathToRoute(path: string): AppRoute {
 
 export function App() {
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       import('@axe-core/react').then((axe) => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const React = require('react')
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const ReactDOM = require('react-dom')
         axe.default(React, ReactDOM, 1000)
       })
     }

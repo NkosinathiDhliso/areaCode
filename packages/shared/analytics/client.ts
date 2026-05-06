@@ -40,7 +40,7 @@ class AnalyticsClient {
   private userId: string | null = null
 
   private constructor() {
-    this.enabled = process.env['AREA_CODE_ENV'] === 'prod'
+    this.enabled = typeof process !== 'undefined' && process.env?.['AREA_CODE_ENV'] === 'prod'
   }
 
   public static getInstance(): AnalyticsClient {
