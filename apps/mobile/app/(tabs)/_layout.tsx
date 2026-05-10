@@ -2,25 +2,26 @@ import { Tabs } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 import { ConnectivityBanner } from '../../src/components/ConnectivityBanner'
 import { View } from 'react-native'
+import { colors } from '../../src/theme'
 
 export default function TabsLayout() {
   const { t } = useTranslation()
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0a0a0f' }}>
+    <View style={{ flex: 1, backgroundColor: colors.bgBase }}>
       <ConnectivityBanner />
       <Tabs
         screenOptions={{
           headerShown: false,
           tabBarStyle: {
-            backgroundColor: 'rgba(18, 18, 24, 0.85)',
-            borderTopColor: 'rgba(255,255,255,0.06)',
+            backgroundColor: colors.bgTabBar,
+            borderTopColor: colors.border,
             borderTopWidth: 1,
             height: 56,
             paddingBottom: 4,
           },
-          tabBarActiveTintColor: '#778CA9',
-          tabBarInactiveTintColor: '#6b7280',
+          tabBarActiveTintColor: colors.accent,
+          tabBarInactiveTintColor: colors.textMuted,
           tabBarLabelStyle: { fontSize: 10, marginTop: -2 },
         }}
       >

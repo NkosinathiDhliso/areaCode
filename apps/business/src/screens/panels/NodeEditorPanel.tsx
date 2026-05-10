@@ -39,6 +39,12 @@ export function NodeEditorPanel() {
   const photoInputRef = useRef<HTMLInputElement>(null)
   const [photoUploading, setPhotoUploading] = useState(false)
   const [photoMessage, setPhotoMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [headerImageUrl, setHeaderImageUrl] = useState<string | null>(null)
+
+  // Instagram handle state
+  const [instagramHandle, setInstagramHandle] = useState('')
+  const [instagramSaving, setInstagramSaving] = useState(false)
+  const [instagramMessage, setInstagramMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
     if (!addVenueOpen) return
@@ -48,18 +54,15 @@ export function NodeEditorPanel() {
       return
     }
     setMapsUnavailable(false)
+    let cancelled = false
 
     function attachAutocomplete() {
-      if (!addressInputRef.current) return
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const autocomplete = new (window as any).google.maps.places.Autocomplete(addressInputRef.current, {
+      if (!addressInputRef.current || cancelled) return
+      const autocomplete = new window.google!.maps.places.Autocomplete(addressInputRef.current, {
         componentRestrictions: { country: 'za' },
       })
       autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace() as {
-          formatted_address?: string
-          geometry?: { location: { lat: () => number; lng: () => number } }
-        }
+        const place = autocomplete.getPlace()
         if (place.formatted_address) setAddVenueAddress(place.formatted_address)
         if (place.geometry?.location) {
           setAddVenueLat(place.geometry.location.lat())
@@ -70,8 +73,8 @@ export function NodeEditorPanel() {
 
     // Poll until google.maps.places is ready (handles both fresh load and cached script)
     function waitForGoogle(attempts = 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if ((window as any).google?.maps?.places) {
+      if (cancelled) return
+      if (window.google?.maps?.places) {
         attachAutocomplete()
         return
       }
@@ -93,6 +96,8 @@ export function NodeEditorPanel() {
     } else {
       waitForGoogle()
     }
+
+    return () => { cancelled = true }
   }, [addVenueOpen])
 
   useEffect(() => {
@@ -150,20 +155,17 @@ export function NodeEditorPanel() {
     if (!selected) return
     const apiKey = import.meta.env['VITE_GOOGLE_MAPS_API_KEY'] as string | undefined
     if (!apiKey) return
+    let cancelled = false
 
     function attach() {
-      if (!editAddressInputRef.current) return
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const g = (window as any).google
+      if (!editAddressInputRef.current || cancelled) return
+      const g = window.google
       if (!g?.maps?.places) return
       const ac = new g.maps.places.Autocomplete(editAddressInputRef.current, {
         componentRestrictions: { country: 'za' },
       })
       ac.addListener('place_changed', () => {
-        const place = ac.getPlace() as {
-          formatted_address?: string
-          geometry?: { location: { lat: () => number; lng: () => number } }
-        }
+        const place = ac.getPlace()
         if (place.formatted_address) setEditAddress(place.formatted_address)
         if (place.geometry?.location) {
           setEditLat(place.geometry.location.lat())
@@ -173,8 +175,8 @@ export function NodeEditorPanel() {
     }
 
     function wait(attempts = 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if ((window as any).google?.maps?.places) {
+      if (cancelled) return
+      if (window.google?.maps?.places) {
         attach()
         return
       }
@@ -192,6 +194,8 @@ export function NodeEditorPanel() {
     } else {
       wait()
     }
+
+    return () => { cancelled = true }
   }, [selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleAddVenue() {
@@ -267,39 +271,72 @@ export function NodeEditorPanel() {
     e.target.value = '' // reset so same file can be re-picked
     if (!file || !selected) return
 
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setPhotoMessage({ type: 'error', text: 'Only JPG, PNG or WebP allowed.' })
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      setPhotoMessage({ type: 'error', text: 'Only JPG or PNG allowed (max 2MB).' })
       return
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setPhotoMessage({ type: 'error', text: 'Image must be under 5MB.' })
+    if (file.size > 2 * 1024 * 1024) {
+      setPhotoMessage({ type: 'error', text: 'Image must be under 2MB.' })
       return
     }
 
     setPhotoUploading(true)
     setPhotoMessage(null)
     try {
-      // 1. Get presigned URL
-      const presigned = await api.post<{ uploadUrl: string; s3Key: string }>('/v1/upload/presigned', {
-        fileType: 'node_image',
-        contentType: file.type,
-      })
+      // 1. Get presigned URL scoped to nodeId
+      const presigned = await api.post<{ uploadUrl: string; objectKey: string }>(
+        `/v1/business/nodes/${selected.id}/image/upload-url`,
+        { contentType: file.type },
+      )
       // 2. PUT file directly to S3
-      // No Content-Type header — the presigned URL signs only 'host',
-      // adding extra headers causes a SignatureDoesNotMatch 403.
       const putRes = await fetch(presigned.uploadUrl, {
         method: 'PUT',
         body: file,
       })
       if (!putRes.ok) throw new Error(`S3 upload failed (${putRes.status})`)
-      // 3. Register the image against the node
-      await api.post(`/v1/nodes/${selected.id}/images`, { s3Key: presigned.s3Key, displayOrder: 0 })
-      setPhotoMessage({ type: 'success', text: 'Photo uploaded.' })
+      setHeaderImageUrl(presigned.objectKey)
+      setPhotoMessage({ type: 'success', text: 'Header image uploaded.' })
       setTimeout(() => setPhotoMessage(null), 3000)
     } catch (err: unknown) {
       setPhotoMessage({ type: 'error', text: (err as { message?: string })?.message || 'Upload failed.' })
     } finally {
       setPhotoUploading(false)
+    }
+  }
+
+  async function handleDeletePhoto() {
+    if (!selected) return
+    setPhotoUploading(true)
+    try {
+      await api.delete(`/v1/business/nodes/${selected.id}/image`)
+      setHeaderImageUrl(null)
+      setPhotoMessage({ type: 'success', text: 'Header image removed.' })
+      setTimeout(() => setPhotoMessage(null), 3000)
+    } catch (err: unknown) {
+      setPhotoMessage({ type: 'error', text: (err as { message?: string })?.message || 'Failed to remove image.' })
+    } finally {
+      setPhotoUploading(false)
+    }
+  }
+
+  async function handleSaveInstagram() {
+    if (!selected) return
+    const handle = instagramHandle.replace(/^@/, '').trim()
+    // Validate: alphanumeric + underscores + periods, max 30 chars
+    if (handle && !/^[a-zA-Z0-9_.]{1,30}$/.test(handle)) {
+      setInstagramMessage({ type: 'error', text: 'Invalid handle. Use letters, numbers, underscores, and periods (max 30 chars).' })
+      return
+    }
+    setInstagramSaving(true)
+    setInstagramMessage(null)
+    try {
+      await api.put(`/v1/business/nodes/${selected.id}/instagram`, { handle: handle || null })
+      setInstagramMessage({ type: 'success', text: handle ? 'Instagram handle saved.' : 'Instagram handle removed.' })
+      setTimeout(() => setInstagramMessage(null), 3000)
+    } catch (err: unknown) {
+      setInstagramMessage({ type: 'error', text: (err as { message?: string })?.message || 'Failed to save.' })
+    } finally {
+      setInstagramSaving(false)
     }
   }
 
@@ -398,21 +435,38 @@ export function NodeEditorPanel() {
                 </span>
               </div>
 
-              <div className="flex flex-row gap-2">
+              <div className="flex flex-col gap-2">
+                <label className="text-[var(--text-secondary)] text-xs font-medium">Header Image</label>
+                {headerImageUrl && (
+                  <div className="relative rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
+                    <img src={`${(import.meta.env['VITE_CDN_URL'] as string | undefined) ?? ''}/nodes/${headerImageUrl}`} alt="Header" className="w-full h-full object-cover" />
+                  </div>
+                )}
                 <input
                   ref={photoInputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/jpeg,image/png"
                   onChange={(e) => void handlePhotoSelected(e)}
                   className="hidden"
                 />
-                <button
-                  onClick={() => photoInputRef.current?.click()}
-                  disabled={photoUploading}
-                  className="flex-1 border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm disabled:opacity-50"
-                >
-                  {photoUploading ? 'Uploading...' : 'Add Photo'}
-                </button>
+                <div className="flex flex-row gap-2">
+                  <button
+                    onClick={() => photoInputRef.current?.click()}
+                    disabled={photoUploading}
+                    className="flex-1 border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm disabled:opacity-50"
+                  >
+                    {photoUploading ? 'Uploading...' : headerImageUrl ? 'Replace Image' : 'Add Header Image'}
+                  </button>
+                  {headerImageUrl && (
+                    <button
+                      onClick={() => void handleDeletePhoto()}
+                      disabled={photoUploading}
+                      className="border border-[var(--danger)] text-[var(--danger)] rounded-xl px-4 py-2.5 text-sm disabled:opacity-50"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
               </div>
               {photoMessage && (
                 <p
@@ -423,6 +477,37 @@ export function NodeEditorPanel() {
                   {photoMessage.text}
                 </p>
               )}
+
+              {/* Instagram Handle */}
+              <div className="flex flex-col gap-2">
+                <label className="text-[var(--text-secondary)] text-xs font-medium">Instagram Handle</label>
+                <div className="flex flex-row gap-2">
+                  <div className="flex-1 relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] text-sm">@</span>
+                    <input
+                      type="text"
+                      value={instagramHandle}
+                      onChange={(e) => setInstagramHandle(e.target.value.replace(/^@/, ''))}
+                      placeholder="yourhandle"
+                      maxLength={30}
+                      className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl pl-8 pr-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    onClick={() => void handleSaveInstagram()}
+                    disabled={instagramSaving}
+                    className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-4 py-2.5 text-sm disabled:opacity-50"
+                  >
+                    {instagramSaving ? '...' : 'Save'}
+                  </button>
+                </div>
+                {instagramMessage && (
+                  <p className={`text-xs ${instagramMessage.type === 'success' ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
+                    {instagramMessage.text}
+                  </p>
+                )}
+              </div>
+
               <button
                 onClick={() => void handleSave()}
                 disabled={saving || !name.trim()}

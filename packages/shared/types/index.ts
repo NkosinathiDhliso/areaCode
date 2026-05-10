@@ -11,7 +11,7 @@ export type Tier = 'local' | 'regular' | 'fixture' | 'institution' | 'legend'
 export type PrivacyLevel = 'public' | 'friends_only' | 'private'
 
 // Business tiers
-export type BusinessTier = 'free' | 'starter' | 'growth' | 'pro' | 'payg'
+export type BusinessTier = 'free' | 'starter' | 'growth' | 'pro' | 'payg' | 'flex_daily'
 
 // Check-in types
 export type CheckInType = 'reward' | 'presence'
@@ -346,6 +346,7 @@ export interface ServerToClientEvents {
   'reward:slots_update': (payload: { rewardId: string; slotsRemaining: number }) => void
   'leaderboard:update': (payload: { userId: string; rank: number; delta: number }) => void
   'business:checkin': (payload: BusinessCheckinPayload) => void
+  'business:checkin_detail': (payload: { nodeId: string; consumerName: string; tier: string; timestamp: string }) => void
   'business:reward_claimed': (payload: BusinessRewardClaimedPayload) => void
   'toast:friend_checkin': (payload: { type: 'checkin'; message: string; nodeId?: string; avatarUrl?: string }) => void
 }

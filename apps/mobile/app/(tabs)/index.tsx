@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  primaryButtonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  primaryButtonText: { color: colors.textOnAccent, fontWeight: '600', fontSize: 16 },
   secondaryButton: {
     width: '100%',
     backgroundColor: colors.bgRaised,

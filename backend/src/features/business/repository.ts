@@ -1,5 +1,5 @@
 // DynamoDB-backed Business Repository (replaces Prisma)
-import { GetCommand, PutCommand, QueryCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
 import { randomBytes } from 'node:crypto'
@@ -125,6 +125,112 @@ export async function createWebhookEvent(eventId: string, eventType: string) {
   return item
 }
 
+// ─── Payment Records (Dual-Key Pattern) ─────────────────────────────────────
+
+export interface CreatePaymentRecordInput {
+  paymentId: string
+  businessId: string
+  amount: number
+  type: 'subscription' | 'boost'
+  planTier: string
+  nodeId: string | null
+  status: 'succeeded' | 'failed' | 'refunded' | 'pending'
+  description: string
+  createdAt: string
+}
+
+/**
+ * Compute the SAST (Africa/Johannesburg, UTC+2) YYYY-MM partition key for a given ISO timestamp.
+ */
+function getRevenuePartitionMonth(isoTimestamp: string): string {
+  const date = new Date(isoTimestamp)
+  // Convert to SAST (UTC+2)
+  const sastOffset = 2 * 60 * 60 * 1000
+  const sastDate = new Date(date.getTime() + sastOffset)
+  const year = sastDate.getUTCFullYear()
+  const month = String(sastDate.getUTCMonth() + 1).padStart(2, '0')
+  return `${year}-${month}`
+}
+
+/**
+ * Store a payment record with dual-key pattern:
+ * - pk=PAYMENT#<businessId>, sk=<timestamp>#<paymentId> for per-business billing queries
+ * - gsi1pk=REVENUE#<YYYY-MM>, gsi1sk=<timestamp>#<paymentId> for admin revenue aggregation
+ *
+ * Uses ConditionExpression for idempotency — duplicate paymentId writes are no-ops.
+ */
+export async function createPaymentRecord(input: CreatePaymentRecordInput): Promise<{ duplicate: boolean }> {
+  const { paymentId, businessId, amount, type, planTier, nodeId, status, description, createdAt } = input
+  const revenueMonth = getRevenuePartitionMonth(createdAt)
+  const sk = `${createdAt}#${paymentId}`
+
+  const item = {
+    pk: `PAYMENT#${businessId}`,
+    sk,
+    gsi1pk: `REVENUE#${revenueMonth}`,
+    gsi1sk: sk,
+    paymentId,
+    businessId,
+    amount,
+    type,
+    planTier,
+    nodeId,
+    status,
+    paymentProvider: 'yoco',
+    currency: 'ZAR',
+    description,
+    createdAt,
+  }
+
+  try {
+    await documentClient.send(
+      new PutCommand({
+        TableName: TableNames.appData,
+        Item: item,
+        ConditionExpression: 'attribute_not_exists(pk) AND attribute_not_exists(sk)',
+      }),
+    )
+    return { duplicate: false }
+  } catch (err: unknown) {
+    if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
+      return { duplicate: true }
+    }
+    throw err
+  }
+}
+
+/**
+ * Mark an existing payment record as refunded by updating its status.
+ * Searches for the payment by businessId and paymentId suffix in the sort key.
+ */
+export async function markPaymentRefunded(businessId: string, originalPaymentId: string): Promise<void> {
+  // Query to find the original payment record by paymentId
+  const result = await documentClient.send(
+    new QueryCommand({
+      TableName: TableNames.appData,
+      KeyConditionExpression: 'pk = :pk',
+      FilterExpression: 'paymentId = :pid',
+      ExpressionAttributeValues: {
+        ':pk': `PAYMENT#${businessId}`,
+        ':pid': originalPaymentId,
+      },
+    }),
+  )
+
+  const item = result.Items?.[0]
+  if (!item) return
+
+  await documentClient.send(
+    new UpdateCommand({
+      TableName: TableNames.appData,
+      Key: { pk: item['pk'], sk: item['sk'] },
+      UpdateExpression: 'SET #status = :refunded',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: { ':refunded': 'refunded' },
+    }),
+  )
+}
+
 // QR token helpers
 export async function getNodeForBusiness(nodeId: string, businessId: string) {
   const result = await documentClient.send(new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } }))
@@ -147,9 +253,11 @@ export async function deactivateBusinessRewards(businessId: string) {
   let count = 0
   for (const nid of nodeIds) {
     const rewards = await documentClient.send(
-      new ScanCommand({
+      new QueryCommand({
         TableName: TableNames.rewards,
-        FilterExpression: 'nodeId = :nid AND isActive = :active',
+        IndexName: 'NodeIndex',
+        KeyConditionExpression: 'nodeId = :nid',
+        FilterExpression: 'isActive = :active',
         ExpressionAttributeValues: { ':nid': nid, ':active': true },
       }),
     )
@@ -248,15 +356,18 @@ export async function getMusicAudience(_businessId: string) {
 // ─── Recent Redemptions ─────────────────────────────────────────────────────
 
 export async function getRecentRedemptions(businessId: string) {
-  // Simplified , scan redemptions from appData
+  // Query redemptions for business using GSI1
   const result = await documentClient.send(
-    new ScanCommand({
+    new QueryCommand({
       TableName: TableNames.appData,
-      FilterExpression: 'begins_with(pk, :prefix) AND attribute_exists(redeemedAt)',
-      ExpressionAttributeValues: { ':prefix': 'REDEMPTION#' },
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'gsi1pk = :pk',
+      ExpressionAttributeValues: { ':pk': `BIZ_REDEMPTIONS#${businessId}` },
+      ScanIndexForward: false,
+      Limit: 20,
     }),
   )
-  return (result.Items || []).slice(0, 20)
+  return result.Items || []
 }
 
 // ─── Check-In Details ────────────────────────────────────────────────────────
@@ -365,9 +476,10 @@ export async function getRewardsForBusiness(businessId: string) {
   const allRewards = []
   for (const nid of nodeIds) {
     const result = await documentClient.send(
-      new ScanCommand({
+      new QueryCommand({
         TableName: TableNames.rewards,
-        FilterExpression: 'nodeId = :nid',
+        IndexName: 'NodeIndex',
+        KeyConditionExpression: 'nodeId = :nid',
         ExpressionAttributeValues: { ':nid': nid },
       }),
     )

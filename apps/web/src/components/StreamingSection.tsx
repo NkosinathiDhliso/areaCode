@@ -327,7 +327,7 @@ export function StreamingSection() {
               <button
                 onClick={() => handleConnect(showConsent)}
                 disabled={loading}
-                className="flex-1 bg-[#1DB954] text-white rounded-xl py-2 text-sm font-medium disabled:opacity-50"
+                className="flex-1 bg-[var(--color-spotify)] text-white rounded-xl py-2 text-sm font-medium disabled:opacity-50"
               >
                 Connect Spotify
               </button>

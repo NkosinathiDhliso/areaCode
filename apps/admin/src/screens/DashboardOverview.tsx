@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@area-code/shared/lib/api'
+import { SystemHealth } from '../components/SystemHealth'
 
 interface DashboardMetrics {
   totalConsumers: number
@@ -97,6 +98,10 @@ export function DashboardOverview() {
       <h2 className="text-[var(--text-primary)] font-bold text-xl mb-4 font-[Syne]">
         {t('admin.dashboard.title', 'Dashboard Overview')}
       </h2>
+
+      <div className="mb-6">
+        <SystemHealth />
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {cards.map((card) => (

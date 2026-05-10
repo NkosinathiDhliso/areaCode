@@ -19,7 +19,9 @@ import { socialRoutes } from './features/social/handler.js'
 import { isFollowing } from './features/social/repository.js'
 import { staffRoutes } from './features/staff/handler.js'
 import { AppError } from './shared/errors/AppError.js'
+import { globalRateLimitHook } from './shared/middleware/rate-limit.js'
 import { initSentry, captureError } from './shared/monitoring/sentry.js'
+import { createRequestLogger, logger } from './shared/monitoring/logger.js'
 import { initPrivacyGuard } from './shared/privacy/privacy-guard.js'
 
 export async function buildApp() {
@@ -127,16 +129,48 @@ export async function buildApp() {
     }
   })
 
+  // ─── Structured Logger per Request ──────────────────────────────────────────────
+  app.addHook('onRequest', async (request) => {
+    const requestId = (request.headers['x-amzn-requestid'] as string) ?? request.id ?? ''
+    const correlationId = (request.headers['x-correlation-id'] as string) ?? requestId
+    ;(request as unknown as { log: ReturnType<typeof createRequestLogger> }).log = createRequestLogger({
+      service: 'api',
+      requestId,
+      correlationId,
+    })
+  })
+
+  // ─── Global Rate Limiting ─────────────────────────────────────────────────────
+  app.addHook('preHandler', globalRateLimitHook())
+
   // Global error handler
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
+    const requestId = (request.headers['x-amzn-requestid'] as string) ?? request.id ?? ''
+    const reqLogger = (request as unknown as { log?: ReturnType<typeof createRequestLogger> }).log ?? logger
+
     if (error instanceof AppError) {
+      // Log warnings for client errors (rate limits, auth failures, validation)
+      if (error.statusCode === 429) {
+        reqLogger.warn('Rate limit exceeded', { error: error.error, path: request.url })
+      } else if (error.statusCode === 401 || error.statusCode === 403) {
+        reqLogger.warn('Authorization failure', { error: error.error, path: request.url, statusCode: error.statusCode })
+      } else if (error.statusCode === 400) {
+        reqLogger.warn('Validation failure', { error: error.error, path: request.url })
+      } else if (error.statusCode >= 500) {
+        reqLogger.error('Server error', { error: error.error, path: request.url, statusCode: error.statusCode })
+      }
+
       const body: Record<string, unknown> = {
         error: error.error,
         message: error.message,
         statusCode: error.statusCode,
+        requestId,
       }
       if ('cooldownUntil' in error) {
         body['cooldownUntil'] = (error as AppError & { cooldownUntil: string }).cooldownUntil
+      }
+      if ('fields' in error) {
+        body['fields'] = (error as AppError & { fields: unknown }).fields
       }
       return reply.status(error.statusCode).send(body)
     }
@@ -151,35 +185,51 @@ export async function buildApp() {
     }
 
     if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
+      if (err.statusCode === 429) {
+        reqLogger.warn('Rate limit exceeded', { path: request.url })
+      } else {
+        reqLogger.warn('Client error', { path: request.url, statusCode: err.statusCode, message: err.message })
+      }
       return reply.status(err.statusCode).send({
         error: 'bad_request',
         message: err.message ?? 'Invalid request',
         statusCode: err.statusCode,
+        requestId,
       })
     }
 
     if (err.name === 'ZodError') {
+      reqLogger.warn('Validation failure', { path: request.url, error: 'ZodError' })
       return reply.status(400).send({
         error: 'validation_error',
         message: 'Invalid request data',
         statusCode: 400,
+        requestId,
       })
     }
 
     if (err.validation) {
+      reqLogger.warn('Validation failure', { path: request.url })
       return reply.status(400).send({
         error: 'validation_error',
         message: err.message ?? 'Validation failed',
         statusCode: 400,
+        requestId,
       })
     }
 
-    app.log.error(error)
+    // Unhandled exception — log at error level
+    reqLogger.error('Unhandled exception', {
+      path: request.url,
+      errorName: err.name,
+      errorMessage: err.message,
+    })
     captureError(error)
     return reply.status(500).send({
       error: 'internal_error',
       message: 'Internal server error',
       statusCode: 500,
+      requestId,
     })
   })
 
@@ -191,6 +241,13 @@ export async function buildApp() {
       version: '0.0.1',
       timestamp: new Date().toISOString(),
     })
+  })
+
+  // WebSocket health endpoint — returns active connection count, connections by room type, and uptime
+  app.get('/v1/health/websocket', async (_request, reply) => {
+    const { getWebSocketHealth } = await import('./features/admin/websocket-health-service.js')
+    const health = await getWebSocketHealth()
+    return reply.send(health)
   })
 
   // Register all feature routes , await to catch registration errors

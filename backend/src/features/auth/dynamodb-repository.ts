@@ -12,6 +12,8 @@ import {
 } from '../../shared/db/adapters.js'
 import type { User, BusinessAccount, StaffAccount } from './types.js'
 
+import { AppError } from '../../shared/errors/AppError.js'
+
 // ============================================================================
 // USER OPERATIONS
 // ============================================================================
@@ -193,7 +195,7 @@ export async function createStaff(
   data: Omit<StaffAccount, 'staffId' | 'createdAt'>,
 ): Promise<StaffAccount> {
   if (!data.cognitoSub && !data.phone) {
-    throw new Error('createStaff requires cognitoSub or phone')
+    throw AppError.badRequest('createStaff requires cognitoSub or phone')
   }
   const row = await prisma.staffAccount.create({
     data: {

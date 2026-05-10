@@ -12,11 +12,13 @@ import { AuditTrailViewer } from './AuditTrailViewer'
 import { ArchetypeManagement } from '../components/ArchetypeManagement'
 import { GenreWeightEditor } from '../components/GenreWeightEditor'
 import { AdminIAM } from './AdminIAM'
+import { RevenueDashboard } from './RevenueDashboard'
 
-type Tab = 'dashboard' | 'consumers' | 'businesses' | 'reports' | 'abuse-flags' | 'audit-trail' | 'consent' | 'archetypes' | 'genre-weights' | 'iam'
+type Tab = 'dashboard' | 'revenue' | 'consumers' | 'businesses' | 'reports' | 'abuse-flags' | 'audit-trail' | 'consent' | 'archetypes' | 'genre-weights' | 'iam'
 
 const TAB_LABELS: Record<Tab, string> = {
   dashboard: 'admin.nav.dashboard',
+  revenue: 'admin.nav.revenue',
   consumers: 'admin.nav.consumers',
   businesses: 'admin.nav.businesses',
   reports: 'admin.nav.reports',
@@ -31,9 +33,9 @@ const TAB_LABELS: Record<Tab, string> = {
 function getVisibleTabs(role: string | null): Tab[] {
   switch (role) {
     case 'super_admin':
-      return ['dashboard', 'consumers', 'businesses', 'reports', 'abuse-flags', 'audit-trail', 'consent', 'archetypes', 'genre-weights', 'iam']
+      return ['dashboard', 'revenue', 'consumers', 'businesses', 'reports', 'abuse-flags', 'audit-trail', 'consent', 'archetypes', 'genre-weights', 'iam']
     case 'support_agent':
-      return ['consumers', 'businesses']
+      return ['dashboard', 'revenue', 'consumers', 'businesses']
     case 'content_moderator':
       return ['reports', 'abuse-flags']
     default:
@@ -79,6 +81,7 @@ export function AdminDashboard() {
 
       <main className="flex-1 overflow-y-auto">
         {activeTab === 'dashboard' && <DashboardOverview />}
+        {activeTab === 'revenue' && <RevenueDashboard />}
         {activeTab === 'consumers' && <ConsumerManagement />}
         {activeTab === 'businesses' && <BusinessManagement />}
         {activeTab === 'reports' && <ReportQueue />}

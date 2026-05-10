@@ -15,7 +15,7 @@ import { CategoryFilterBar } from '../components/CategoryFilterBar'
 import { ToastOverlay } from '../components/ToastOverlay'
 import { NodeDetailSheet } from '../components/NodeDetailSheet'
 import { SignupSheet } from '../components/SignupSheet'
-import { SearchSheet, type SearchResult } from '../components/SearchSheet'
+import { SearchSheet } from '../components/SearchSheet'
 import { NotificationPrimingSheet, isDeferredRecently } from '../components/NotificationPrimingSheet'
 import type { AppRoute } from '../types'
 
@@ -421,30 +421,15 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       <SearchSheet
         isOpen={searchOpen}
         onClose={() => setSearchOpen(false)}
-        onSelectNode={(result: SearchResult) => {
+        nodes={(nodeList ?? []).map((n) => ({ id: n.id, name: n.name, category: n.category, lat: n.lat, lng: n.lng, state: getNodeState(pulseScores[n.id] ?? 0), pulseScore: pulseScores[n.id] ?? 0, boostUntil: null }))}
+        onSelectNode={(nodeId: string) => {
           setSearchOpen(false)
-          const node: Node = {
-            id: result.id,
-            name: result.name,
-            slug: result.slug,
-            category: result.category as Node['category'],
-            lat: result.lat,
-            lng: result.lng,
-            cityId: '',
-            businessId: null,
-            submittedBy: null,
-            claimStatus: 'unclaimed',
-            claimCipcStatus: null,
-            nodeColour: 'default',
-            nodeIcon: null,
-            qrCheckinEnabled: false,
-            isVerified: false,
-            isActive: true,
-            createdAt: '',
+          const found = nodeList?.find((n) => n.id === nodeId)
+          if (found) {
+            setSelectedNode(found)
+            setSheetOpen(true)
+            mapRef.current?.flyTo({ center: [found.lng, found.lat], zoom: 16 })
           }
-          setSelectedNode(node)
-          setSheetOpen(true)
-          mapRef.current?.flyTo({ center: [node.lng, node.lat], zoom: 16 })
         }}
       />
 

@@ -11,6 +11,7 @@
 //   - In dev, `query` and `warn` events log to console.
 //   - In prod, only `error` to keep logs clean.
 import { PrismaClient } from '@prisma/client'
+import { AppError } from '../errors/AppError.js'
 
 declare global {
   // eslint-disable-next-line no-var
@@ -20,7 +21,7 @@ declare global {
 function buildClient(): PrismaClient {
   const url = process.env['AREA_CODE_DB_URL']
   if (!url) {
-    throw new Error('AREA_CODE_DB_URL is not set — set it to the RDS Proxy endpoint URL')
+    throw AppError.internal('AREA_CODE_DB_URL is not set — set it to the RDS Proxy endpoint URL')
   }
 
   const isDev = process.env['NODE_ENV'] !== 'production' && process.env['AREA_CODE_ENV'] !== 'prod'

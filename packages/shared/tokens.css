@@ -1,6 +1,48 @@
 /* Area Code Tokens — Glacier/Slate accent, zero purple */
 :root {
   color-scheme: dark light;
+
+  /* Typography Scale */
+  --font-xs: 0.75rem;
+  --font-xs-lh: 1rem;
+  --font-xs-ls: 0.02em;
+  --font-sm: 0.875rem;
+  --font-sm-lh: 1.25rem;
+  --font-sm-ls: 0.01em;
+  --font-base: 1rem;
+  --font-base-lh: 1.5rem;
+  --font-base-ls: 0em;
+  --font-lg: 1.125rem;
+  --font-lg-lh: 1.75rem;
+  --font-lg-ls: -0.01em;
+  --font-xl: 1.375rem;
+  --font-xl-lh: 1.75rem;
+  --font-xl-ls: -0.02em;
+  --font-2xl: 1.75rem;
+  --font-2xl-lh: 2.25rem;
+  --font-2xl-ls: -0.02em;
+  --font-3xl: 2.125rem;
+  --font-3xl-lh: 2.5rem;
+  --font-3xl-ls: -0.03em;
+
+  /* Spacing Scale (4px grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-9: 36px;
+  --space-10: 40px;
+  --space-11: 44px;
+  --space-12: 48px;
+
+  /* Gradient Tokens */
+  --gradient-primary: linear-gradient(135deg, #5a6f8a 0%, #778ca9 50%, #a9cbe0 100%);
+  --gradient-surface: linear-gradient(145deg, rgba(18, 26, 38, 0.4) 0%, rgba(26, 36, 52, 0.3) 100%);
+  --gradient-pulse: linear-gradient(135deg, rgba(34, 211, 160, 0.2) 0%, rgba(56, 189, 248, 0.2) 50%, rgba(119, 140, 169, 0.2) 100%);
   --bg-map: #080a0e;
   --bg-gradient: linear-gradient(145deg, #0b1018 0%, #111827 50%, #1a2030 100%);
   --bg-base: #0c1018;
@@ -49,6 +91,9 @@
   --tier-fixture: #c0c0c0;
   --tier-institution: #ffd700;
   --tier-legend: linear-gradient(135deg, #a9cbe0, #ff6b6b, #ffb830);
+  --color-boost-gold: #FFD166;
+  --color-boost-glow: rgba(255, 209, 102, 0.25);
+  --color-spotify: #1DB954;
   --border: rgba(255, 255, 255, 0.06);
   --border-strong: rgba(255, 255, 255, 0.12);
 
@@ -62,12 +107,22 @@
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
   --shadow-glow: 0 0 20px rgba(169, 203, 224, 0.12);
+  --chart-1: #6366f1;
+  --chart-2: #f59e0b;
+  --chart-3: #10b981;
+  --chart-4: #ef4444;
+  --chart-5: #8b5cf6;
+  --chart-6: #ec4899;
   --noise-opacity: 0.03;
   --nav-height: 56px;
   --bottom-sheet-radius: 20px;
+  --color-focus-ring: var(--accent);
+  --transition-spring: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 :root[data-theme='light'] {
+  --gradient-surface: linear-gradient(145deg, rgba(255, 255, 255, 0.4) 0%, rgba(240, 236, 230, 0.3) 100%);
+  --gradient-pulse: linear-gradient(135deg, rgba(24, 184, 136, 0.15) 0%, rgba(42, 150, 208, 0.15) 50%, rgba(90, 111, 138, 0.15) 100%);
   --bg-map: #e4e8ec;
   --bg-gradient: linear-gradient(145deg, #f0ece6 0%, #e8e4de 50%, #dfe6ec 100%);
   --bg-base: #f0ece6;
@@ -116,6 +171,9 @@
   --tier-fixture: #8a8a96;
   --tier-institution: #c8a800;
   --tier-legend: linear-gradient(135deg, #778ca9, #e85555, #e08830);
+  --color-boost-gold: #E6B800;
+  --color-boost-glow: rgba(230, 184, 0, 0.2);
+  --color-spotify: #1DB954;
   --border: rgba(0, 0, 0, 0.06);
   --border-strong: rgba(0, 0, 0, 0.12);
   --border-gradient: linear-gradient(
@@ -227,6 +285,30 @@
     transform: scale(1.15);
   }
 }
+@keyframes markerBreathe {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.15);
+  }
+}
+@keyframes markerPulse {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+.animate-marker-breathe {
+  animation: markerBreathe 2s ease-in-out infinite;
+}
+.animate-marker-pulse {
+  animation: markerPulse 1.5s ease-in-out infinite;
+}
 @keyframes ripple {
   0% {
     transform: scale(1);
@@ -279,6 +361,55 @@
     background-position: 0% 0%;
   }
 }
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toastSlideIn {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-fade-slide-up {
+  animation: fadeSlideUp 250ms ease-out both;
+}
+
+.animate-toast-slide-in {
+  animation: toastSlideIn 300ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+.card-lift {
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.card-lift:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Stagger animation delays for list items */
+.stagger-1 { animation-delay: 50ms; }
+.stagger-2 { animation-delay: 100ms; }
+.stagger-3 { animation-delay: 150ms; }
+.stagger-4 { animation-delay: 200ms; }
+.stagger-5 { animation-delay: 250ms; }
 
 /* Accessibility: disable animations for users who prefer reduced motion */
 @media (prefers-reduced-motion: reduce) {

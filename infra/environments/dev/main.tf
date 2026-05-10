@@ -833,7 +833,7 @@ module "sqs_report_generation" {
   env                 = local.env
   queue_name          = "report-generation"
   visibility_timeout  = 150
-  max_receive_count   = 2
+  max_receive_count   = 3
   lambda_function_arn = module.lambda_report_generator.function_arn
 }
 
@@ -959,6 +959,190 @@ resource "aws_budgets_budget" "monthly" {
     notification_type          = "ACTUAL"
     subscriber_email_addresses = ["alerts@areacode.co.za"]
   }
+}
+
+# =============================================================================
+# SNS Topic for Alarms
+# =============================================================================
+
+resource "aws_sns_topic" "alarms" {
+  name = "area-code-${local.env}-alarms"
+  tags = { Environment = local.env }
+}
+
+resource "aws_sns_topic_subscription" "alarms_email" {
+  topic_arn = aws_sns_topic.alarms.arn
+  protocol  = "email"
+  endpoint  = "alerts@areacode.co.za"
+}
+
+# =============================================================================
+# CloudWatch Alarms — Observability
+# =============================================================================
+
+# Lambda API error rate > 5% over 5 minutes
+resource "aws_cloudwatch_metric_alarm" "lambda_api_error_rate" {
+  alarm_name          = "area-code-${local.env}-lambda-api-error-rate"
+  alarm_description   = "Lambda API error rate exceeds 5% over 5 minutes"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  threshold           = 5
+  treat_missing_data  = "notBreaching"
+
+  metric_query {
+    id          = "error_rate"
+    expression  = "(errors / invocations) * 100"
+    label       = "Error Rate (%)"
+    return_data = true
+  }
+
+  metric_query {
+    id = "errors"
+    metric {
+      metric_name = "Errors"
+      namespace   = "AWS/Lambda"
+      period      = 300
+      stat        = "Sum"
+      dimensions = {
+        FunctionName = module.lambda_api.function_name
+      }
+    }
+  }
+
+  metric_query {
+    id = "invocations"
+    metric {
+      metric_name = "Invocations"
+      namespace   = "AWS/Lambda"
+      period      = 300
+      stat        = "Sum"
+      dimensions = {
+        FunctionName = module.lambda_api.function_name
+      }
+    }
+  }
+
+  alarm_actions = [aws_sns_topic.alarms.arn]
+  ok_actions    = [aws_sns_topic.alarms.arn]
+
+  tags = { Environment = local.env }
+}
+
+# DLQ depth > 0 for reward-eval queue
+resource "aws_cloudwatch_metric_alarm" "dlq_reward_eval" {
+  alarm_name          = "area-code-${local.env}-dlq-reward-eval-depth"
+  alarm_description   = "Reward eval DLQ has messages (processing failures)"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  period              = 60
+  threshold           = 0
+  statistic           = "Sum"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    QueueName = "area-code-${local.env}-reward-eval-dlq"
+  }
+
+  alarm_actions = [aws_sns_topic.alarms.arn]
+  ok_actions    = [aws_sns_topic.alarms.arn]
+
+  tags = { Environment = local.env }
+}
+
+# DLQ depth > 0 for push-sender queue
+resource "aws_cloudwatch_metric_alarm" "dlq_push_sender" {
+  alarm_name          = "area-code-${local.env}-dlq-push-sender-depth"
+  alarm_description   = "Push sender DLQ has messages (processing failures)"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  period              = 60
+  threshold           = 0
+  statistic           = "Sum"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    QueueName = "area-code-${local.env}-push-sender-dlq"
+  }
+
+  alarm_actions = [aws_sns_topic.alarms.arn]
+  ok_actions    = [aws_sns_topic.alarms.arn]
+
+  tags = { Environment = local.env }
+}
+
+# DLQ depth > 0 for report-generation queue
+resource "aws_cloudwatch_metric_alarm" "dlq_report_generation" {
+  alarm_name          = "area-code-${local.env}-dlq-report-generation-depth"
+  alarm_description   = "Report generation DLQ has messages (processing failures)"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  period              = 60
+  threshold           = 0
+  statistic           = "Sum"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    QueueName = "area-code-${local.env}-report-generation-dlq"
+  }
+
+  alarm_actions = [aws_sns_topic.alarms.arn]
+  ok_actions    = [aws_sns_topic.alarms.arn]
+
+  tags = { Environment = local.env }
+}
+
+# Yoco webhook error rate > 1% over 15 minutes
+resource "aws_cloudwatch_metric_alarm" "yoco_webhook_error_rate" {
+  alarm_name          = "area-code-${local.env}-yoco-webhook-error-rate"
+  alarm_description   = "Yoco webhook Lambda error rate exceeds 1% over 15 minutes"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  threshold           = 1
+  treat_missing_data  = "notBreaching"
+
+  metric_query {
+    id          = "error_rate"
+    expression  = "(errors / invocations) * 100"
+    label       = "Error Rate (%)"
+    return_data = true
+  }
+
+  metric_query {
+    id = "errors"
+    metric {
+      metric_name = "Errors"
+      namespace   = "AWS/Lambda"
+      period      = 900
+      stat        = "Sum"
+      dimensions = {
+        FunctionName = module.lambda_yoco_webhook.function_name
+      }
+    }
+  }
+
+  metric_query {
+    id = "invocations"
+    metric {
+      metric_name = "Invocations"
+      namespace   = "AWS/Lambda"
+      period      = 900
+      stat        = "Sum"
+      dimensions = {
+        FunctionName = module.lambda_yoco_webhook.function_name
+      }
+    }
+  }
+
+  alarm_actions = [aws_sns_topic.alarms.arn]
+  ok_actions    = [aws_sns_topic.alarms.arn]
+
+  tags = { Environment = local.env }
 }
 
 # =============================================================================

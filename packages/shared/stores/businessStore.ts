@@ -4,6 +4,7 @@ import { immer } from 'zustand/middleware/immer'
 import type { BusinessAccount, Node } from '../types'
 
 type DashboardPanel =
+  | 'overview'
   | 'live'
   | 'rewards'
   | 'audience'
@@ -14,6 +15,7 @@ type DashboardPanel =
   | 'reward-metrics'
   | 'staff-redemptions'
   | 'reports'
+  | 'billing'
 
 interface BusinessState {
   business: BusinessAccount | null
@@ -29,7 +31,7 @@ export const useBusinessStore = create<BusinessState>()(
   immer((set) => ({
     business: null,
     nodes: [],
-    currentPanel: 'live',
+    currentPanel: 'overview',
     setBusiness: (business) =>
       set((state) => {
         state.business = business
@@ -46,7 +48,7 @@ export const useBusinessStore = create<BusinessState>()(
       set((state) => {
         state.business = null
         state.nodes = []
-        state.currentPanel = 'live'
+        state.currentPanel = 'overview'
       }),
   })),
 )

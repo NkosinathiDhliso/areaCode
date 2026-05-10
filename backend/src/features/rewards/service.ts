@@ -163,7 +163,7 @@ export async function getRewardsNearMe(lat: number, lng: number) {
     nodeName: r.node_name,
     nodeSlug: r.node_slug,
     distance: Math.round(r.distance),
-    expiresAt: r.expires_at?.toISOString() ?? null,
+    expiresAt: r.expires_at ? String(r.expires_at) : null,
   }))
 }
 

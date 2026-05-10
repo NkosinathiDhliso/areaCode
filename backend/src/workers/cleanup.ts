@@ -1,5 +1,5 @@
 // DynamoDB-backed cleanup worker (replaces Prisma)
-import { ScanCommand, DeleteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+import { QueryCommand, DeleteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 import { deleteUser } from '../features/auth/dynamodb-repository.js'
 
@@ -16,11 +16,13 @@ export async function handler() {
 
   // ─── Process erasure requests older than 30 days ──────────────────────
   const erasureResult = await documentClient.send(
-    new ScanCommand({
+    new QueryCommand({
       TableName: TableNames.appData,
-      FilterExpression: 'begins_with(pk, :prefix) AND #status = :pending AND requestedAt < :cutoff',
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'gsi1pk = :pk',
+      FilterExpression: '#status = :pending AND requestedAt < :cutoff',
       ExpressionAttributeNames: { '#status': 'status' },
-      ExpressionAttributeValues: { ':prefix': 'ERASURE#', ':pending': 'pending', ':cutoff': thirtyDaysAgo },
+      ExpressionAttributeValues: { ':pk': 'ERASURE_QUEUE', ':pending': 'pending', ':cutoff': thirtyDaysAgo },
     }),
   )
 
@@ -31,21 +33,24 @@ export async function handler() {
       // Delete user from users table
       if (userId) await deleteUser(userId)
 
-      // Delete related app_data items (follows, tokens, prefs, etc.)
-      const userItems = await documentClient.send(
-        new ScanCommand({
-          TableName: TableNames.appData,
-          FilterExpression: 'contains(pk, :uid) OR contains(sk, :uid)',
-          ExpressionAttributeValues: { ':uid': userId },
-        }),
-      )
-      for (const item of userItems.Items || []) {
-        await documentClient.send(
-          new DeleteCommand({
+      // Delete related app_data items using known key patterns for the user
+      const userPrefixes = [`CONSENT#${userId}`, `FOLLOW#${userId}`, `NOTIF#${userId}`]
+      for (const prefix of userPrefixes) {
+        const userItems = await documentClient.send(
+          new QueryCommand({
             TableName: TableNames.appData,
-            Key: { pk: item['pk'] as string, sk: item['sk'] as string },
+            KeyConditionExpression: 'pk = :pk',
+            ExpressionAttributeValues: { ':pk': prefix },
           }),
         )
+        for (const item of userItems.Items || []) {
+          await documentClient.send(
+            new DeleteCommand({
+              TableName: TableNames.appData,
+              Key: { pk: item['pk'] as string, sk: item['sk'] as string },
+            }),
+          )
+        }
       }
 
       // Mark erasure as completed

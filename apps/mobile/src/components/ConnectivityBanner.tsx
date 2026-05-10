@@ -25,8 +25,8 @@ export function ConnectivityBanner() {
 
 const styles = StyleSheet.create({
   banner: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 8 },
-  offline: { backgroundColor: 'rgba(239,68,68,0.2)' },
-  apiOnly: { backgroundColor: 'rgba(245,158,11,0.2)' },
+  offline: { backgroundColor: colors.dangerSubtle },
+  apiOnly: { backgroundColor: colors.warningSubtle },
   text: { fontSize: 12, fontWeight: '500' },
   offlineText: { color: colors.danger },
   apiOnlyText: { color: colors.warning },

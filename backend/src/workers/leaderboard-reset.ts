@@ -1,15 +1,16 @@
 // DynamoDB-backed leaderboard reset worker (replaces Redis + Prisma)
-import { QueryCommand, PutCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
+import { QueryCommand, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 import { generateId } from '../shared/db/entities.js'
 import { getNotificationPreferences } from '../features/notifications/repository.js'
 
 async function getCities() {
   const result = await documentClient.send(
-    new ScanCommand({
+    new QueryCommand({
       TableName: TableNames.appData,
-      FilterExpression: 'begins_with(pk, :prefix) AND sk = pk',
-      ExpressionAttributeValues: { ':prefix': 'CITY#' },
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'gsi1pk = :pk',
+      ExpressionAttributeValues: { ':pk': 'CITIES' },
     }),
   )
   return (result.Items || []).map((c) => ({ id: (c['cityId'] ?? c['pk']) as string, slug: c['slug'] as string }))

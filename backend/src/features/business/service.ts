@@ -1,8 +1,12 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import { createHmac } from 'node:crypto'
 import { AppError } from '../../shared/errors/AppError.js'
 import * as repo from './repository.js'
 import { BUSINESS_PLANS, BOOST_PRICING, type BoostDuration } from './types.js'
 import { activateNodeBoost } from '../nodes/service.js'
+import { verifyWebhookSignature, isWebhookTimestampValid } from './webhook-verification.js'
+
+// Re-export for backward compatibility and testing
+export { verifyWebhookSignature, isWebhookTimestampValid } from './webhook-verification.js'
 
 // ─── Business Profile ───────────────────────────────────────────────────────
 
@@ -159,20 +163,18 @@ export async function processYocoWebhook(
   signature: string,
   rawBody?: string,
 ) {
-  // Verify signature using raw body bytes for accuracy
   const secret = process.env['YOCO_WEBHOOK_SECRET'] ?? process.env['YOCO_DEV_SECRET_KEY'] ?? ''
   const bodyToSign = rawBody ?? JSON.stringify(payload)
-  const expected = createHmac('sha256', secret).update(bodyToSign).digest('hex')
 
-  if (!signature || !expected) {
+  // Verify HMAC signature
+  if (!verifyWebhookSignature(bodyToSign, signature, secret)) {
     throw AppError.unauthorized('Invalid webhook signature')
   }
 
-  // Use timing-safe comparison to prevent timing attacks
-  const sigBuffer = Buffer.from(signature, 'utf-8')
-  const expectedBuffer = Buffer.from(expected, 'utf-8')
-  if (sigBuffer.length !== expectedBuffer.length || !timingSafeEqual(sigBuffer, expectedBuffer)) {
-    throw AppError.unauthorized('Invalid webhook signature')
+  // Enforce 5-minute timestamp tolerance to prevent replay attacks
+  const createdDate = payload['createdDate'] as string | undefined
+  if (!isWebhookTimestampValid(createdDate)) {
+    throw AppError.unauthorized('Webhook event timestamp is stale or missing')
   }
 
   // Idempotency check
@@ -185,6 +187,8 @@ export async function processYocoWebhook(
     await handlePaymentSucceeded(payload)
   } else if (eventType === 'payment.failed') {
     await handlePaymentFailed(payload)
+  } else if (eventType === 'refund.succeeded') {
+    await handleRefundSucceeded(payload)
   }
 
   return { duplicate: false }
@@ -196,6 +200,22 @@ async function handlePaymentSucceeded(payload: Record<string, unknown>) {
 
   const businessId = metadata['businessId']
   const paymentType = metadata['type']
+  const amount = (payload['amount'] as number) ?? (metadata['amount'] ? parseInt(metadata['amount'], 10) : 0)
+  const paymentId = (payload['id'] as string) ?? ''
+  const createdAt = (payload['createdDate'] as string) ?? new Date().toISOString()
+
+  // Record payment in payment history for billing visibility
+  await repo.createPaymentRecord({
+    paymentId,
+    businessId,
+    amount,
+    type: paymentType === 'boost' ? 'boost' : 'subscription',
+    planTier: metadata['plan'] ?? 'starter',
+    nodeId: metadata['nodeId'] ?? null,
+    status: 'succeeded',
+    description: paymentType === 'boost' ? `Boost (${metadata['duration'] ?? ''})` : `${metadata['plan'] ?? ''} subscription`,
+    createdAt,
+  })
 
   if (paymentType === 'boost') {
     const nodeId = metadata['nodeId']
@@ -219,9 +239,58 @@ async function handlePaymentFailed(payload: Record<string, unknown>) {
   if (!metadata?.['businessId']) return
 
   const businessId = metadata['businessId']
-  const graceUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-  await repo.setPaymentGrace(businessId, graceUntil)
-  // Email notifications on day 1, 4, 7 handled by SES worker
+  const paymentType = metadata['type']
+  const amount = (payload['amount'] as number) ?? (metadata['amount'] ? parseInt(metadata['amount'], 10) : 0)
+  const paymentId = (payload['id'] as string) ?? ''
+  const createdAt = (payload['createdDate'] as string) ?? new Date().toISOString()
+
+  // Record failed payment in payment history (for billing display) — NOT counted toward revenue
+  await repo.createPaymentRecord({
+    paymentId,
+    businessId,
+    amount,
+    type: paymentType === 'boost' ? 'boost' : 'subscription',
+    planTier: metadata['plan'] ?? 'starter',
+    nodeId: metadata['nodeId'] ?? null,
+    status: 'failed',
+    description: paymentType === 'boost' ? `Boost (${metadata['duration'] ?? ''}) — failed` : `${metadata['plan'] ?? ''} subscription — failed`,
+    createdAt,
+  })
+
+  // For subscription failures: set 7-day grace period
+  if (paymentType !== 'boost') {
+    const graceUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    await repo.setPaymentGrace(businessId, graceUntil)
+  }
+}
+
+async function handleRefundSucceeded(payload: Record<string, unknown>) {
+  const metadata = payload['metadata'] as Record<string, string> | undefined
+  if (!metadata?.['businessId']) return
+
+  const businessId = metadata['businessId']
+  const amount = (payload['amount'] as number) ?? (metadata['amount'] ? parseInt(metadata['amount'], 10) : 0)
+  const originalPaymentId = metadata['originalPaymentId'] ?? (payload['paymentId'] as string) ?? ''
+  const paymentId = (payload['id'] as string) ?? ''
+  const createdAt = (payload['createdDate'] as string) ?? new Date().toISOString()
+
+  // Record refund in payment history
+  await repo.createPaymentRecord({
+    paymentId,
+    businessId,
+    amount,
+    type: metadata['type'] === 'boost' ? 'boost' : 'subscription',
+    planTier: metadata['plan'] ?? 'starter',
+    nodeId: metadata['nodeId'] ?? null,
+    status: 'refunded',
+    description: `Refund — ${metadata['plan'] ?? 'payment'}`,
+    createdAt,
+  })
+
+  // Mark the original payment record as refunded (if we can find it)
+  if (originalPaymentId) {
+    await repo.markPaymentRefunded(businessId, originalPaymentId)
+  }
 }
 
 // ─── Staff Management ───────────────────────────────────────────────────────

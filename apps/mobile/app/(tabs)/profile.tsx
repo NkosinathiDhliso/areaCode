@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 32,
   },
-  primaryButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  primaryButtonText: { color: colors.textOnAccent, fontWeight: '600', fontSize: 14 },
   tierProgressContainer: {
     backgroundColor: colors.bgSurface,
     borderColor: colors.border,

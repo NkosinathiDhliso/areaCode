@@ -1,5 +1,5 @@
 // DynamoDB Repository for Rewards Feature
-import { GetCommand, QueryCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
+import { GetCommand, QueryCommand, PutCommand, UpdateCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
 import type { Reward, RewardRedemption } from './types.js'
@@ -232,11 +232,13 @@ export async function markRedemptionAsRedeemed(
 // ============================================================================
 
 export async function getRewardsNeedingEvaluation(): Promise<Reward[]> {
-  // Get rewards with triggerValue set and not locked
+  // Query rewards needing evaluation using EvaluationIndex GSI
   const result = await documentClient.send(
-    new ScanCommand({
+    new QueryCommand({
       TableName: TableNames.rewards,
-      FilterExpression: 'attribute_exists(triggerValue) AND slotsLocked = :locked AND isActive = :active',
+      IndexName: 'EvaluationIndex',
+      KeyConditionExpression: 'slotsLocked = :locked',
+      FilterExpression: 'attribute_exists(triggerValue) AND isActive = :active',
       ExpressionAttributeValues: {
         ':locked': false,
         ':active': true,

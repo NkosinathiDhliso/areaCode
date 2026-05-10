@@ -3,21 +3,36 @@
 
 import type { ClientToServerEvents, ServerToClientEvents } from '../types'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type EventCallback = (payload: any) => void
 
 // Connection lifecycle events (Socket.io compatibility)
 type LifecycleEvent = 'connect' | 'disconnect' | 'connect_error'
 type AnyEventKey = keyof ServerToClientEvents | LifecycleEvent
 
+/**
+ * Calculate exponential backoff delay with jitter for WebSocket reconnection.
+ * Formula: min(1000 * 2^N + jitter, 30000) where jitter is random [0, 1000)
+ * Delay never exceeds 30s and is always >= 1s.
+ */
+export function calculateBackoffDelay(attempt: number, jitter?: number): number {
+  const BASE_DELAY = 1000
+  const MAX_DELAY = 30000
+  const MAX_JITTER = 1000
+  const randomJitter = jitter !== undefined ? jitter : Math.random() * MAX_JITTER
+  const delay = Math.min(BASE_DELAY * Math.pow(2, attempt) + randomJitter, MAX_DELAY)
+  return delay
+}
+
 class WebSocketManager {
   private ws: WebSocket | null = null
   readonly url: string
   private reconnectAttempts = 0
-  private maxReconnectAttempts = 5
-  private reconnectDelay = 1000
+  private maxReconnectAttempts = 20
   private listeners: Map<AnyEventKey, Set<EventCallback>> = new Map()
   private isConnecting = false
   private pendingQueue: Array<{ action: string; payload: unknown }> = []
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(url: string) {
     this.url = url
@@ -82,17 +97,18 @@ class WebSocketManager {
       return
     }
 
+    const delay = calculateBackoffDelay(this.reconnectAttempts)
     this.reconnectAttempts++
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1)
 
     console.log(`Reconnecting in ${delay}ms... (attempt ${this.reconnectAttempts})`)
 
-    setTimeout(() => {
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
       this.connect()
     }, delay)
   }
 
-  private emitLifecycle(event: LifecycleEvent, payload?: any): void {
+  private emitLifecycle(event: LifecycleEvent, payload?: unknown): void {
     const callbacks = this.listeners.get(event)
     if (callbacks) {
       callbacks.forEach((cb) => {
@@ -105,7 +121,7 @@ class WebSocketManager {
     }
   }
 
-  private handleMessage(message: { type: keyof ServerToClientEvents; payload: any }): void {
+  private handleMessage(message: { type: keyof ServerToClientEvents; payload: unknown }): void {
     const { type, payload } = message
     const callbacks = this.listeners.get(type)
 
@@ -154,6 +170,10 @@ class WebSocketManager {
   }
 
   disconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
     if (this.ws) {
       this.ws.close()
       this.ws = null

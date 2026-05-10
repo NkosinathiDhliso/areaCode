@@ -1,5 +1,5 @@
 // DynamoDB-backed Rewards Repository (replaces Prisma)
-import { GetCommand, ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
+import { GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import * as dynamo from './dynamodb-repository.js'
 import { getNodeById } from '../nodes/dynamodb-repository.js'
@@ -57,40 +57,51 @@ export async function countActiveRewardsForBusiness(businessId: string) {
 }
 
 export async function getRewardsNearMe(lat: number, lng: number) {
-  // Scan active rewards, join with nodes, filter by distance (5km)
-  const rewardsResult = await documentClient.send(
-    new ScanCommand({
-      TableName: TableNames.rewards,
-      FilterExpression: 'isActive = :active',
-      ExpressionAttributeValues: { ':active': true },
-    }),
-  )
-  const rewards = rewardsResult.Items || []
+  // Query active rewards using NodeIndex on rewards table, then filter by distance
+  // First get all nodes near the location, then get their rewards
+  const { neighbourCells } = await import('../../shared/db/geohash.js')
+  const { haversineMetres } = await import('../../shared/db/geohash.js')
+  const cells = neighbourCells(lat, lng, 5) // ~5km cells
 
   const results = []
-  for (const r of rewards) {
-    const node = await getNodeById(r['nodeId'] as string)
-    if (!node || !node.isActive) continue
-    const R = 6371000
-    const dLat = ((node.lat - lat) * Math.PI) / 180
-    const dLng = ((node.lng - lng) * Math.PI) / 180
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos((lat * Math.PI) / 180) * Math.cos((node.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
-    const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-    if (distance <= 5000) {
-      results.push({
-        id: r['rewardId'] ?? r['id'],
-        title: r['title'],
-        type: r['type'],
-        total_slots: r['totalSlots'] ?? null,
-        claimed_count: r['claimedCount'] ?? 0,
-        node_id: node.nodeId,
-        node_name: node.name,
-        node_slug: node.slug,
-        distance,
-        expires_at: r['expiresAt'] ?? null,
-      })
+  const seenRewards = new Set<string>()
+
+  for (const cell of cells) {
+    const nodesResult = await documentClient.send(
+      new QueryCommand({
+        TableName: TableNames.nodes,
+        IndexName: 'Geohash5Index',
+        KeyConditionExpression: 'geohash5 = :cell',
+        FilterExpression: 'isActive = :active',
+        ExpressionAttributeValues: { ':cell': cell, ':active': true },
+      }),
+    )
+
+    for (const node of nodesResult.Items || []) {
+      const nodeId = (node['nodeId'] ?? node['id']) as string
+      const nodeLat = node['lat'] as number
+      const nodeLng = node['lng'] as number
+      const distance = haversineMetres(lat, lng, nodeLat, nodeLng)
+      if (distance > 5000) continue
+
+      const rewards = await dynamo.getActiveRewardsByNodeId(nodeId)
+      for (const r of rewards) {
+        const rewardId = r.rewardId ?? (r as unknown as Record<string, unknown>)['id']
+        if (seenRewards.has(rewardId as string)) continue
+        seenRewards.add(rewardId as string)
+        results.push({
+          id: rewardId,
+          title: r.title,
+          type: r.type,
+          total_slots: r.totalSlots ?? null,
+          claimed_count: r.claimedCount ?? 0,
+          node_id: nodeId,
+          node_name: node['name'] as string,
+          node_slug: node['slug'] as string,
+          distance,
+          expires_at: r.expiresAt ?? null,
+        })
+      }
     }
   }
   return results.sort((a, b) => a.distance - b.distance).slice(0, 50)
@@ -117,12 +128,14 @@ export async function getUnclaimedRewards(userId: string) {
 }
 
 export async function findRedemptionByCode(code: string) {
-  // Scan redemptions for code match
+  // Query redemptions using GSI that indexes by redemption code
   const result = await documentClient.send(
-    new ScanCommand({
+    new QueryCommand({
       TableName: TableNames.appData,
-      FilterExpression: 'redemptionCode = :code',
+      IndexName: 'RedemptionCodeIndex',
+      KeyConditionExpression: 'redemptionCode = :code',
       ExpressionAttributeValues: { ':code': code },
+      Limit: 1,
     }),
   )
   if (!result.Items?.[0]) return null
@@ -144,31 +157,21 @@ export async function markRedeemed(redemptionId: string, staffId?: string, staff
 }
 
 export async function getRecentRedemptions(businessId: string, limit = 20) {
-  // Get all nodes for business → get redemptions from appData
-  const nodesResult = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.nodes,
-      IndexName: 'BusinessIndex',
-      KeyConditionExpression: 'businessId = :bid',
-      ExpressionAttributeValues: { ':bid': businessId },
-    }),
-  )
-  const nodeIds = new Set((nodesResult.Items || []).map((n) => (n['nodeId'] ?? n['id']) as string))
-  // Scan redemptions and filter
+  // Get all nodes for business → query redemptions from appData using business redemptions index
   const result = await documentClient.send(
-    new ScanCommand({
+    new QueryCommand({
       TableName: TableNames.appData,
-      FilterExpression: 'begins_with(pk, :prefix) AND attribute_exists(redeemedAt)',
-      ExpressionAttributeValues: { ':prefix': 'REDEMPTION#' },
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'gsi1pk = :pk',
+      ExpressionAttributeValues: { ':pk': `BIZ_REDEMPTIONS#${businessId}` },
+      ScanIndexForward: false,
+      Limit: limit,
     }),
   )
-  const items = (result.Items || [])
-    .filter((i) => {
-      const rewardId = i['rewardId'] as string
-      return !!rewardId // we'd need to check node ownership - simplified
-    })
-    .slice(0, limit)
-    .map((i) => ({ redemptionCode: i['redemptionCode'], redeemedAt: i['redeemedAt'] }))
+  const items = (result.Items || []).map((i) => ({
+    redemptionCode: i['redemptionCode'],
+    redeemedAt: i['redeemedAt'],
+  }))
   return items
 }
 
@@ -179,15 +182,18 @@ export async function getStaffRecentRedemptions(staffId: string, limit = 20) {
 }
 
 export async function getRedemptionsByStaffId(staffId: string, businessId: string, limit = 50) {
-  // Scan redemptions from appData filtered by staffId
+  // Query redemptions by staff using StaffIndex
   const result = await documentClient.send(
-    new ScanCommand({
+    new QueryCommand({
       TableName: TableNames.appData,
-      FilterExpression: 'begins_with(pk, :prefix) AND staffId = :staffId',
-      ExpressionAttributeValues: { ':prefix': 'REDEMPTION#', ':staffId': staffId },
+      IndexName: 'StaffRedemptionIndex',
+      KeyConditionExpression: 'staffId = :staffId',
+      ExpressionAttributeValues: { ':staffId': staffId },
+      ScanIndexForward: false,
+      Limit: limit,
     }),
   )
-  const items = (result.Items || []).slice(0, limit)
+  const items = result.Items || []
   const enriched = []
   for (const rdm of items) {
     const reward = rdm['rewardId'] ? await dynamo.getRewardById(rdm['rewardId'] as string) : null

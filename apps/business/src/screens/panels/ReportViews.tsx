@@ -1,0 +1,261 @@
+// Report sub-components — charts, views, and helpers extracted from ReportsPanel
+import { useMemo } from 'react'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+} from 'recharts'
+
+import type {
+  ReportSummary,
+  PeakHoursResult,
+  CrowdCompositionResult,
+  MusicProfileResult,
+  TeaserReport,
+  FullReport,
+} from './ReportsPanel'
+
+const DONUT_COLORS = [
+  'var(--chart-1, #6366f1)',
+  'var(--chart-2, #f59e0b)',
+  'var(--chart-3, #10b981)',
+  'var(--chart-4, #ef4444)',
+  'var(--chart-5, #8b5cf6)',
+  'var(--chart-6, #ec4899)',
+]
+
+export function directionIcon(dir: 'up' | 'down' | 'flat') {
+  if (dir === 'up') return '↑'
+  if (dir === 'down') return '↓'
+  return '-'
+}
+
+export function directionColor(dir: 'up' | 'down' | 'flat') {
+  if (dir === 'up') return 'var(--success)'
+  if (dir === 'down') return 'var(--danger)'
+  return 'var(--text-muted)'
+}
+
+export function PeakHoursChart({ data }: { data: PeakHoursResult }) {
+  const chartData = useMemo(() => {
+    return Array.from({ length: 24 }, (_, h) => ({
+      hour: `${String(h).padStart(2, '0')}:00`,
+      count: data.hourlyDistribution[String(h)] ?? data.hourlyDistribution[h] ?? 0,
+    }))
+  }, [data.hourlyDistribution])
+
+  return (
+    <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
+      <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">Peak Hours</h3>
+      <ResponsiveContainer width="100%" height={200}>
+        <BarChart data={chartData}>
+          <XAxis dataKey="hour" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} interval={3} />
+          <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} width={30} />
+          <Tooltip
+            contentStyle={{
+              background: 'var(--bg-raised)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              fontSize: 12,
+            }}
+          />
+          <Bar dataKey="count" fill="var(--accent)" radius={[2, 2, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+      <p className="text-[var(--text-muted)] text-xs mt-2">
+        Peak day: <span className="text-[var(--text-primary)] font-medium">{data.peakDay}</span>
+      </p>
+    </div>
+  )
+}
+
+export function CrowdCompositionChart({ data }: { data: CrowdCompositionResult }) {
+  const chartData = useMemo(() => {
+    return Object.entries(data.tierPercentages).map(([tier, pct]) => ({
+      name: tier.charAt(0).toUpperCase() + tier.slice(1),
+      value: Math.round(pct * 10) / 10,
+    }))
+  }, [data.tierPercentages])
+
+  return (
+    <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
+      <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">Crowd Composition</h3>
+      <ResponsiveContainer width="100%" height={200}>
+        <PieChart>
+          <Pie
+            data={chartData}
+            cx="50%"
+            cy="50%"
+            innerRadius={50}
+            outerRadius={80}
+            dataKey="value"
+            nameKey="name"
+            label={({ name, value }) => `${name} ${value}%`}
+            labelLine={false}
+          >
+            {chartData.map((_, i) => (
+              <Cell key={i} fill={DONUT_COLORS[i % DONUT_COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip
+            contentStyle={{
+              background: 'var(--bg-raised)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              fontSize: 12,
+            }}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+      <p className="text-[var(--text-muted)] text-xs mt-2">
+        Total unique visitors:{' '}
+        <span className="text-[var(--text-primary)] font-medium">{data.totalUniqueVisitors}</span>
+      </p>
+    </div>
+  )
+}
+
+export function MusicProfileChart({ data }: { data: MusicProfileResult }) {
+  const chartData = useMemo(() => {
+    return Object.entries(data.archetypeDimensions).map(([dim, score]) => ({
+      dimension: dim.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+      score: Math.round(score * 100) / 100,
+    }))
+  }, [data.archetypeDimensions])
+
+  return (
+    <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
+      <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">Music Profile</h3>
+      <ResponsiveContainer width="100%" height={250}>
+        <RadarChart data={chartData}>
+          <PolarGrid stroke="var(--border)" />
+          <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 10, fill: 'var(--text-secondary)' }} />
+          <PolarRadiusAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} />
+          <Radar dataKey="score" stroke="var(--accent)" fill="var(--accent)" fillOpacity={0.25} />
+          <Tooltip
+            contentStyle={{
+              background: 'var(--bg-raised)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              fontSize: 12,
+            }}
+          />
+        </RadarChart>
+      </ResponsiveContainer>
+      {data.topGenres.length > 0 && (
+        <div className="mt-3">
+          <p className="text-[var(--text-muted)] text-xs mb-1">Top genres:</p>
+          <div className="flex flex-wrap gap-1">
+            {data.topGenres.map((g) => (
+              <span
+                key={g.genre}
+                className="px-2 py-0.5 rounded-full bg-[var(--bg-raised)] text-[var(--text-secondary)] text-xs"
+              >
+                {g.genre} ({g.visitorCount})
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function SummaryCards({ summary }: { summary: ReportSummary }) {
+  return (
+    <div className="grid grid-cols-3 gap-3">
+      <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-3 flex flex-col items-center gap-1">
+        <span className="text-[var(--text-primary)] text-2xl font-bold font-[Syne]">{summary.totalCheckIns}</span>
+        <span className="text-[var(--text-muted)] text-xs">Check-ins</span>
+      </div>
+      <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-3 flex flex-col items-center gap-1">
+        <span className="text-[var(--text-primary)] text-lg font-semibold capitalize">{summary.pulseState}</span>
+        <span className="text-[var(--text-muted)] text-xs">Pulse</span>
+      </div>
+      <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-3 flex flex-col items-center gap-1">
+        <span className="text-[var(--text-primary)] text-sm font-medium truncate w-full text-center">
+          {summary.topGenre ?? '-'}
+        </span>
+        <span className="text-[var(--text-muted)] text-xs">Top Genre</span>
+      </div>
+    </div>
+  )
+}
+
+export function TeaserView({ report }: { report: TeaserReport }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <SummaryCards summary={report.summary} />
+      <div className="relative">
+        <div className="flex flex-col gap-4 filter blur-sm pointer-events-none select-none" aria-hidden="true">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 h-48" />
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 h-48" />
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 h-32" />
+        </div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--bg-base)]/60 rounded-2xl">
+          <span className="text-[var(--text-primary)] font-semibold text-center px-6">{report.upgradeMessage}</span>
+          <span className="text-[var(--accent)] text-sm font-medium">Upgrade to Growth →</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function FullReportView({ report }: { report: FullReport }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <SummaryCards summary={report.summary} />
+
+      {report.trends.hasPriorData && (
+        <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
+          <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">Trends</h3>
+          <div className="flex flex-col gap-2">
+            {Object.entries(report.trends.metrics).map(([key, delta]) => (
+              <div key={key} className="flex flex-row items-center justify-between">
+                <span className="text-[var(--text-primary)] text-sm capitalize">
+                  {key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim()}
+                </span>
+                <span className="text-sm font-medium" style={{ color: directionColor(delta.direction) }}>
+                  {directionIcon(delta.direction)} {Math.abs(Math.round(delta.percentChange))}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {report.peakHours && <PeakHoursChart data={report.peakHours} />}
+      {report.crowdComposition && <CrowdCompositionChart data={report.crowdComposition} />}
+      {report.musicProfile && !report.musicProfile.hasInsufficientData && (
+        <MusicProfileChart data={report.musicProfile} />
+      )}
+
+      {report.recommendations.recommendations.length > 0 && (
+        <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
+          <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">Recommendations</h3>
+          <ol className="flex flex-col gap-2">
+            {report.recommendations.recommendations.map((rec, i) => (
+              <li key={i} className="flex flex-row items-start gap-2">
+                <span className="w-5 h-5 rounded-full bg-[var(--bg-raised)] flex items-center justify-center text-xs text-[var(--text-secondary)] flex-shrink-0 mt-0.5">
+                  {i + 1}
+                </span>
+                <span className="text-[var(--text-primary)] text-sm">{rec.text}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+    </div>
+  )
+}

@@ -76,10 +76,9 @@ export function CheckInDetailPanel() {
         setEntries((prev) => [payload, ...prev])
       }
     }
-    // business:checkin_detail is a dynamic event not in the static type map
-    ;(socket as any).on('business:checkin_detail', handler)
+    socket.on('business:checkin_detail', handler)
     return () => {
-      ;(socket as any).off('business:checkin_detail', handler)
+      socket.off('business:checkin_detail', handler)
     }
   }, [businessId, accessToken, date])
 

@@ -36,6 +36,7 @@ export function BusinessManagement() {
   const [staffList, setStaffList] = useState<{ id: string; phone?: string; email?: string; isActive?: boolean }[]>([])
   const [staffLoading, setStaffLoading] = useState(false)
   const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null)
+  const [actionLoading, setActionLoading] = useState(false)
 
   async function handleSearch() {
     if (!query.trim()) return
@@ -53,11 +54,14 @@ export function BusinessManagement() {
 
   async function handleAction(action: string, businessId: string) {
     setActionError(null)
+    setActionLoading(true)
     try {
       await api.post(`/v1/admin/businesses/${businessId}/${action}`)
       void handleSearch()
     } catch {
       setActionError('Action failed. Please try again.')
+    } finally {
+      setActionLoading(false)
     }
   }
 
@@ -66,6 +70,7 @@ export function BusinessManagement() {
     const days = parseInt(extendDays, 10)
     if (!days || days < 1 || days > 30) return
     setExtendTrialError(null)
+    setActionLoading(true)
     try {
       await api.post(`/v1/admin/businesses/${extendTrialId}/extend-trial`, { days })
       setExtendTrialId(null)
@@ -73,11 +78,14 @@ export function BusinessManagement() {
       void handleSearch()
     } catch {
       setExtendTrialError('Failed to extend trial. Please try again.')
+    } finally {
+      setActionLoading(false)
     }
   }
 
   async function handleDisableBusiness(businessId: string) {
     setActionError(null)
+    setActionLoading(true)
     try {
       await api.post(`/v1/admin/businesses/${businessId}/disable`)
       setConfirmDisable(null)
@@ -85,6 +93,8 @@ export function BusinessManagement() {
     } catch {
       setActionError('Failed to disable business. Please try again.')
       setConfirmDisable(null)
+    } finally {
+      setActionLoading(false)
     }
   }
 
@@ -107,6 +117,7 @@ export function BusinessManagement() {
 
   async function handleRevokeStaff(businessId: string, staffId: string) {
     setRevokeError(null)
+    setActionLoading(true)
     try {
       await api.post(`/v1/admin/businesses/${businessId}/staff/${staffId}/revoke`)
       setStaffList((prev) => prev.filter((s) => s.id !== staffId))
@@ -114,6 +125,8 @@ export function BusinessManagement() {
     } catch {
       setRevokeError('Failed to revoke staff access. Please try again.')
       setConfirmRevokeId(null)
+    } finally {
+      setActionLoading(false)
     }
   }
 
@@ -227,7 +240,8 @@ export function BusinessManagement() {
                     e.stopPropagation()
                     void handleAction('deactivate-rewards', biz.id)
                   }}
-                  className="border border-[var(--danger)] text-[var(--danger)] rounded-xl px-3 py-1.5 text-xs"
+                  disabled={actionLoading}
+                  className="border border-[var(--danger)] text-[var(--danger)] rounded-xl px-3 py-1.5 text-xs disabled:opacity-50"
                 >
                   {t('admin.businesses.deactivateRewards')}
                 </button>
@@ -236,7 +250,8 @@ export function BusinessManagement() {
                     e.stopPropagation()
                     void handleAction('override-cipc', biz.id)
                   }}
-                  className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs"
+                  disabled={actionLoading}
+                  className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs disabled:opacity-50"
                 >
                   {t('admin.businesses.overrideCipc')}
                 </button>
@@ -290,7 +305,8 @@ export function BusinessManagement() {
               </button>
               <button
                 onClick={() => void handleExtendTrial()}
-                className="flex-1 bg-[var(--accent)] text-white rounded-xl py-2.5 text-sm font-medium"
+                disabled={actionLoading}
+                className="flex-1 bg-[var(--accent)] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
               >
                 Extend
               </button>
@@ -317,7 +333,8 @@ export function BusinessManagement() {
               </button>
               <button
                 onClick={() => void handleDisableBusiness(confirmDisable)}
-                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium"
+                disabled={actionLoading}
+                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
               >
                 Disable
               </button>
@@ -395,7 +412,8 @@ export function BusinessManagement() {
               </button>
               <button
                 onClick={() => void handleRevokeStaff(staffBizId, confirmRevokeId)}
-                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium"
+                disabled={actionLoading}
+                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
               >
                 Revoke
               </button>

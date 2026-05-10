@@ -1,5 +1,5 @@
 // DynamoDB-backed node state evaluator (replaces Redis + Prisma)
-import { ScanCommand } from '@aws-sdk/lib-dynamodb'
+import { QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 import { kvGet, kvSet } from '../shared/kv/dynamodb-kv.js'
 import { emitStateSurge, emitToast } from '../shared/socket/events.js'
@@ -36,11 +36,13 @@ async function setPreviousState(nodeId: string, state: NodeState): Promise<void>
 }
 
 export async function evaluateCityNodes(cityId: string, citySlug: string) {
-  // Get all nodes for this city via pulse KV keys (scan nodes table)
+  // Query nodes for this city using CityIndex GSI
   const nodesResult = await documentClient.send(
-    new ScanCommand({
+    new QueryCommand({
       TableName: TableNames.nodes,
-      FilterExpression: 'cityId = :cityId AND isActive = :active',
+      IndexName: 'CityIndex',
+      KeyConditionExpression: 'cityId = :cityId',
+      FilterExpression: 'isActive = :active',
       ExpressionAttributeValues: { ':cityId': cityId, ':active': true },
     }),
   )
@@ -78,10 +80,11 @@ export async function evaluateCityNodes(cityId: string, citySlug: string) {
 
 async function getCities() {
   const result = await documentClient.send(
-    new ScanCommand({
+    new QueryCommand({
       TableName: TableNames.appData,
-      FilterExpression: 'begins_with(pk, :prefix) AND sk = pk',
-      ExpressionAttributeValues: { ':prefix': 'CITY#' },
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'gsi1pk = :pk',
+      ExpressionAttributeValues: { ':pk': 'CITIES' },
     }),
   )
   return (result.Items || []).map((c) => ({ id: (c['cityId'] ?? c['pk']) as string, slug: c['slug'] as string }))

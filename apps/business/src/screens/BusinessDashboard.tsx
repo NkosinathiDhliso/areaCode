@@ -22,8 +22,12 @@ const StaffRedemptionPanel = lazy(() =>
   import('./panels/StaffRedemptionPanel').then((m) => ({ default: m.StaffRedemptionPanel })),
 )
 const ReportsPanel = lazy(() => import('./panels/ReportsPanel').then((m) => ({ default: m.ReportsPanel })))
+const BillingPanel = lazy(() => import('./panels/BillingPanel').then((m) => ({ default: m.BillingPanel })))
+const OverviewPanel = lazy(() => import('./panels/OverviewPanel').then((m) => ({ default: m.OverviewPanel })))
+const BoostROIPanel = lazy(() => import('./panels/BoostROIPanel').then((m) => ({ default: m.BoostROIPanel })))
 
 const PANELS: DashboardPanel[] = [
+  'overview',
   'live',
   'check-ins',
   'rewards',
@@ -32,11 +36,13 @@ const PANELS: DashboardPanel[] = [
   'boost',
   'staff-redemptions',
   'reports',
+  'billing',
   'plans',
   'settings',
 ]
 
 const PANEL_LABELS: Record<DashboardPanel, string> = {
+  overview: 'biz.panel.overview',
   live: 'biz.panel.live',
   'check-ins': 'biz.panel.checkIns',
   rewards: 'biz.panel.rewards',
@@ -45,9 +51,18 @@ const PANEL_LABELS: Record<DashboardPanel, string> = {
   boost: 'biz.panel.boost',
   'staff-redemptions': 'biz.panel.staffRedemptions',
   reports: 'biz.panel.reports',
+  billing: 'biz.panel.billing',
   plans: 'biz.panel.plans',
   settings: 'biz.panel.settings',
 }
+
+/** Navigation sections for organized dashboard */
+const NAV_SECTIONS: { label: string; panels: DashboardPanel[] }[] = [
+  { label: 'Live', panels: ['overview', 'live', 'check-ins'] },
+  { label: 'Growth', panels: ['audience', 'reports', 'boost', 'rewards', 'reward-metrics'] },
+  { label: 'Team', panels: ['staff-redemptions'] },
+  { label: 'Account', panels: ['billing', 'plans', 'settings'] },
+]
 
 function PanelFallback() {
   return (
@@ -85,6 +100,8 @@ export function BusinessDashboard() {
 
   function renderPanel() {
     switch (currentPanel) {
+      case 'overview':
+        return <OverviewPanel />
       case 'live':
         return <LivePanel />
       case 'check-ins':
@@ -101,12 +118,14 @@ export function BusinessDashboard() {
         return <StaffRedemptionPanel />
       case 'reports':
         return <ReportsPanel />
+      case 'billing':
+        return <BillingPanel />
       case 'plans':
         return <PlansPanel />
       case 'settings':
         return <SettingsPanel />
       default:
-        return <LivePanel />
+        return <OverviewPanel />
     }
   }
 
@@ -120,24 +139,29 @@ export function BusinessDashboard() {
         </button>
       </header>
 
-      {/* Scrollable tab nav (Issue #3 — replaces 10 dots with scrollable pills) */}
+      {/* Scrollable tab nav with sections */}
       <nav
         ref={navRef}
         className="flex flex-row items-center gap-1 px-4 py-2.5 border-b border-[var(--border)] overflow-x-auto no-scrollbar"
       >
-        {PANELS.map((panel) => (
-          <button
-            key={panel}
-            onClick={() => setPanel(panel)}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-150 whitespace-nowrap ${
-              panel === currentPanel
-                ? 'bg-[var(--accent)] text-white'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-            aria-label={t(PANEL_LABELS[panel])}
-          >
-            {t(PANEL_LABELS[panel])}
-          </button>
+        {NAV_SECTIONS.map((section, sIdx) => (
+          <div key={section.label} className="flex items-center gap-1 flex-shrink-0">
+            {sIdx > 0 && <span className="w-px h-4 bg-[var(--border)] mx-1 flex-shrink-0" />}
+            {section.panels.map((panel) => (
+              <button
+                key={panel}
+                onClick={() => setPanel(panel)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-150 whitespace-nowrap ${
+                  panel === currentPanel
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+                aria-label={t(PANEL_LABELS[panel])}
+              >
+                {t(PANEL_LABELS[panel])}
+              </button>
+            ))}
+          </div>
         ))}
       </nav>
 

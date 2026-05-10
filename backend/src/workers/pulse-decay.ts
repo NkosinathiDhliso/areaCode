@@ -1,5 +1,5 @@
 // DynamoDB-backed pulse decay worker (replaces Redis + Prisma)
-import { ScanCommand } from '@aws-sdk/lib-dynamodb'
+import { QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 import { kvGet, kvSet, kvDel } from '../shared/kv/dynamodb-kv.js'
 import { emitStateChange } from '../shared/socket/events.js'
@@ -36,10 +36,11 @@ function isPeakHour(): boolean {
 
 async function getCities() {
   const result = await documentClient.send(
-    new ScanCommand({
+    new QueryCommand({
       TableName: TableNames.appData,
-      FilterExpression: 'begins_with(pk, :prefix) AND sk = pk',
-      ExpressionAttributeValues: { ':prefix': 'CITY#' },
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'gsi1pk = :pk',
+      ExpressionAttributeValues: { ':pk': 'CITIES' },
     }),
   )
   return (result.Items || []).map((c) => ({ id: (c['cityId'] ?? c['pk']) as string, slug: c['slug'] as string }))
@@ -53,11 +54,13 @@ export async function handler() {
   let totalProcessed = 0
 
   for (const city of cities) {
-    // Get all active nodes for this city
+    // Get all active nodes for this city using CityIndex GSI
     const nodesResult = await documentClient.send(
-      new ScanCommand({
+      new QueryCommand({
         TableName: TableNames.nodes,
-        FilterExpression: 'cityId = :cityId AND isActive = :active',
+        IndexName: 'CityIndex',
+        KeyConditionExpression: 'cityId = :cityId',
+        FilterExpression: 'isActive = :active',
         ExpressionAttributeValues: { ':cityId': city.id, ':active': true },
       }),
     )

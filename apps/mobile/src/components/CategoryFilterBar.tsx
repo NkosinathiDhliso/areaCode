@@ -43,12 +43,12 @@ export function CategoryFilterBar({ onFilter }: CategoryFilterBarProps) {
 const styles = StyleSheet.create({
   container: { paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
   chip: {
-    backgroundColor: 'rgba(18,18,24,0.85)',
+    backgroundColor: colors.bgChip,
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
   chipActive: { backgroundColor: colors.accent },
   chipText: { color: colors.textSecondary, fontSize: 12, fontWeight: '500' },
-  chipTextActive: { color: '#fff' },
+  chipTextActive: { color: colors.textOnAccent },
 })

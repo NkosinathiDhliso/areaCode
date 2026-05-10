@@ -196,5 +196,22 @@
   "privacy.block.yes": "Block",
   "privacy.block.cancel": "Cancel",
   "privacy.block.blocking": "Blocking…",
-  "privacy.block.unblocking": "Unblocking…"
+  "privacy.block.unblocking": "Unblocking…",
+  "onboarding.location.title": "Find what's happening near you",
+  "onboarding.location.description": "Area Code uses your location to show nearby venues, check you in, and alert you when spots are buzzing.",
+  "onboarding.location.grant": "Grant Access",
+  "onboarding.location.skip": "Skip for now",
+  "onboarding.notifications.title": "Never miss a moment",
+  "onboarding.notifications.description": "Get notified when your favourite spots are buzzing, when friends check in nearby, and when you unlock rewards.",
+  "onboarding.notifications.enable": "Enable",
+  "onboarding.notifications.skip": "Skip",
+  "onboarding.music.title": "Your music, your vibe",
+  "onboarding.music.description": "Connect your streaming service to see the crowd vibe at venues and find spots that match your taste.",
+  "onboarding.music.connect": "Connect",
+  "onboarding.music.skip": "Skip",
+  "onboarding.tutorial.title": "You're ready to explore",
+  "onboarding.tutorial.step1": "Tap any glowing dot on the map to see what's happening at a venue.",
+  "onboarding.tutorial.step2": "Check in when you arrive to earn rewards and climb the ranks.",
+  "onboarding.tutorial.step3": "The more you explore, the bigger your dots grow.",
+  "onboarding.tutorial.gotIt": "Got it"
 }

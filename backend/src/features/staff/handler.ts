@@ -1,11 +1,12 @@
 import type { FastifyInstance } from 'fastify'
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { validate } from '../../shared/middleware/validation.js'
+import { verifyStaffBusinessLinkage } from '../../shared/middleware/ownership.js'
 import { getStaffRecentRedemptions, redeemReward } from '../rewards/service.js'
 import { findRedemptionByCode, getRewardById } from '../rewards/repository.js'
 import { z } from 'zod'
 import { AppError } from '../../shared/errors/AppError.js'
-import { getUserById } from '../auth/dynamodb-repository.js'
+import { getUserById, getStaffById } from '../auth/dynamodb-repository.js'
 
 const codeParamsSchema = z.object({ code: z.string().min(1) })
 
@@ -23,6 +24,7 @@ export async function staffRoutes(app: FastifyInstance) {
       preHandler: [requireAuth('staff'), validate({ params: codeParamsSchema })],
     },
     async (request) => {
+      const auth = getAuth(request)
       const params = request.params as z.infer<typeof codeParamsSchema>
       const redemption = await findRedemptionByCode(params.code)
       if (!redemption) throw AppError.badRequest('invalid_code')
@@ -31,8 +33,14 @@ export async function staffRoutes(app: FastifyInstance) {
         throw AppError.badRequest('expired_code')
       }
 
-      // Get reward details
+      // Staff-to-business linkage verification: staff's businessId must match the node's businessId
       const reward = redemption.rewardId ? await getRewardById(redemption.rewardId) : null
+      if (reward?.node?.businessId) {
+        const staff = await getStaffById(auth.userId)
+        if (staff?.businessId) {
+          verifyStaffBusinessLinkage(staff.businessId, reward.node.businessId)
+        }
+      }
 
       // Get consumer display info (privacy-safe)
       let consumerDisplayName = 'Unknown'
@@ -64,6 +72,19 @@ export async function staffRoutes(app: FastifyInstance) {
     async (request) => {
       const auth = getAuth(request)
       const params = request.params as z.infer<typeof codeParamsSchema>
+
+      // Staff-to-business linkage verification before confirming redemption
+      const redemption = await findRedemptionByCode(params.code)
+      if (redemption?.rewardId) {
+        const reward = await getRewardById(redemption.rewardId)
+        if (reward?.node?.businessId) {
+          const staff = await getStaffById(auth.userId)
+          if (staff?.businessId) {
+            verifyStaffBusinessLinkage(staff.businessId, reward.node.businessId)
+          }
+        }
+      }
+
       return redeemReward(params.code, auth.userId)
     },
   )

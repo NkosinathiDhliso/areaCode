@@ -1,7 +1,44 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 import { api, type ApiError } from '../../shared/lib/api'
 import { Box, Text } from '../../shared/components/primitives'
+
+/** Minimal type for the BarcodeDetector Web API (not yet in all TS libs) */
+interface BarcodeDetectorConstructor {
+  new (options: { formats: string[] }): {
+    detect(source: HTMLVideoElement): Promise<Array<{ rawValue: string }>>
+  }
+}
+
+/** Trigger haptic feedback if available */
+function triggerHaptic(type: 'success' | 'error') {
+  if ('vibrate' in navigator) {
+    navigator.vibrate(type === 'success' ? [50] : [30, 50, 30])
+  }
+}
+
+/** Play a short feedback sound */
+function playSound(type: 'success' | 'error') {
+  try {
+    const ctx = new AudioContext()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    gain.gain.value = 0.15
+    if (type === 'success') {
+      osc.frequency.value = 880
+      osc.type = 'sine'
+    } else {
+      osc.frequency.value = 220
+      osc.type = 'square'
+    }
+    osc.start()
+    osc.stop(ctx.currentTime + 0.15)
+  } catch {
+    // Audio not available
+  }
+}
 
 type FlowState = 'idle' | 'preview' | 'confirming' | 'result'
 
@@ -39,6 +76,18 @@ export function StaffValidator() {
       inputRef.current?.focus()
     }
   }, [flowState])
+
+  // Trigger haptics and sound on result
+  useEffect(() => {
+    if (flowState !== 'result' || !result) return
+    if (result.success) {
+      triggerHaptic('success')
+      playSound('success')
+    } else {
+      triggerHaptic('error')
+      playSound('error')
+    }
+  }, [flowState, result])
 
   // Auto-return to idle after result
   useEffect(() => {
@@ -96,7 +145,7 @@ export function StaffValidator() {
 
   function startScanning() {
     // Use BarcodeDetector API if available (Chrome/Edge)
-    const BarcodeDetectorAPI = (window as any).BarcodeDetector
+    const BarcodeDetectorAPI = (window as { BarcodeDetector?: BarcodeDetectorConstructor }).BarcodeDetector
     if (BarcodeDetectorAPI) {
       const detector = new BarcodeDetectorAPI({ formats: ['qr_code'] })
       scanIntervalRef.current = setInterval(async () => {
@@ -104,7 +153,7 @@ export function StaffValidator() {
         try {
           const barcodes = await detector.detect(videoRef.current)
           if (barcodes.length > 0) {
-            const value = barcodes[0].rawValue
+            const value = barcodes[0]?.rawValue
             if (value) {
               stopCamera()
               handleCodeScanned(value)
@@ -319,14 +368,14 @@ export function StaffValidator() {
       <input
         ref={inputRef}
         type="text"
-        inputMode="numeric"
-        maxLength={6}
+        inputMode="text"
+        maxLength={32}
         value={code}
-        onChange={(e) => setCode(e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())}
+        onChange={(e) => setCode(e.target.value.replace(/[^a-fA-F0-9]/g, '').toLowerCase())}
         onKeyDown={handleKeyDown}
-        placeholder="------"
-        aria-label="Redemption code"
-        className="w-full max-w-xs bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-6 text-center text-3xl tracking-[0.4em] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+        placeholder="Enter 32-char hex code"
+        aria-label="Redemption code (32-character hexadecimal)"
+        className="w-full max-w-xs bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-5 text-center text-sm font-mono tracking-[0.1em] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
       />
 
       <button

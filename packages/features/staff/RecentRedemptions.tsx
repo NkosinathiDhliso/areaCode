@@ -1,62 +1,96 @@
-import { useEffect, useState } from 'react'
+/**
+ * Recent Redemptions list — last 50, filterable by status.
+ * Shows code, reward title, timestamp, and status.
+ *
+ * Requirements: 5.6
+ */
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
-import { api } from '../../shared/lib/api'
+import { Badge } from '../../shared/components/Badge'
+import { useStaffStore } from '../../shared/stores/staffStore'
 import { formatRelativeTime } from '../../shared/lib/formatters'
-import { Box, Row, Text } from '../../shared/components/primitives'
+import type { StaffRedemptionRecord } from '../../shared/stores/staffStore'
 
-interface Redemption {
-  code: string
-  redeemedAt: string
-}
+type StatusFilter = 'all' | 'success' | 'failed'
 
 export function RecentRedemptions() {
-  const [redemptions, setRedemptions] = useState<Redemption[]>([])
+  const { t } = useTranslation()
+  const [filter, setFilter] = useState<StatusFilter>('all')
+  const recentRedemptions = useStaffStore((s) => s.recentRedemptions)
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetch() {
-      try {
-        const res = await api.get<{ items: Redemption[] }>('/v1/staff/recent-redemptions')
-        if (!cancelled) setRedemptions(res.items)
-      } catch {
-        // Fail silently , non-critical
-      }
-    }
-
-    fetch()
-    const interval = setInterval(fetch, 30_000)
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-    }
-  }, [])
+  const filtered: StaffRedemptionRecord[] =
+    filter === 'all'
+      ? recentRedemptions
+      : recentRedemptions.filter((r) => r.status === filter)
 
   return (
-    <Box className="flex-1 overflow-y-auto px-5 pt-4">
-      <Text className="text-[var(--text-secondary)] text-xs font-medium uppercase tracking-wider mb-3 block">
-        Recent Redemptions
-      </Text>
+    <div className="flex-1 overflow-y-auto px-5 pt-4">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[var(--text-secondary)] text-xs font-medium uppercase tracking-wider">
+          {t('staff.recentRedemptions', 'Recent Redemptions')}
+        </span>
+        <span className="text-[var(--text-muted)] text-xs">
+          {filtered.length} / {recentRedemptions.length}
+        </span>
+      </div>
 
-      {redemptions.length === 0 ? (
-        <Text className="text-[var(--text-muted)] text-sm">No redemptions yet</Text>
+      {/* Status filter tabs */}
+      <div className="flex gap-2 mb-3">
+        {(['all', 'success', 'failed'] as StatusFilter[]).map((status) => (
+          <button
+            key={status}
+            onClick={() => setFilter(status)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 active:scale-95 ${
+              filter === status
+                ? 'bg-[var(--accent)] text-white'
+                : 'bg-[var(--bg-raised)] text-[var(--text-secondary)]'
+            }`}
+            aria-label={`Filter by ${status}`}
+          >
+            {status === 'all'
+              ? t('staff.filterAll', 'All')
+              : status === 'success'
+                ? t('staff.filterSuccess', 'Success')
+                : t('staff.filterFailed', 'Failed')}
+          </button>
+        ))}
+      </div>
+
+      {/* Redemption list */}
+      {filtered.length === 0 ? (
+        <p className="text-[var(--text-muted)] text-sm py-4">
+          {t('staff.noRedemptions', 'No redemptions yet')}
+        </p>
       ) : (
-        <Box className="flex flex-col gap-2">
-          {redemptions.map((r: Redemption) => (
-            <Row
-              key={r.code + r.redeemedAt}
-              className="items-center justify-between bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3"
+        <div className="flex flex-col gap-2">
+          {filtered.map((r) => (
+            <div
+              key={r.id}
+              className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3 flex items-center justify-between"
             >
-              <Text className="text-[var(--text-primary)] font-mono text-sm tracking-wider">
-                {r.code}
-              </Text>
-              <Text className="text-[var(--text-muted)] text-xs">
-                {formatRelativeTime(r.redeemedAt)}
-              </Text>
-            </Row>
+              <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                <span className="text-[var(--text-primary)] text-sm font-medium truncate">
+                  {r.rewardTitle}
+                </span>
+                <span className="text-[var(--text-muted)] font-mono text-xs truncate">
+                  {r.code.slice(0, 8)}...{r.code.slice(-4)}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                <Badge
+                  variant="status"
+                  label={r.status === 'success' ? 'Success' : 'Failed'}
+                  status={r.status === 'success' ? 'success' : 'error'}
+                />
+                <span className="text-[var(--text-muted)] text-xs whitespace-nowrap">
+                  {formatRelativeTime(r.timestamp)}
+                </span>
+              </div>
+            </div>
           ))}
-        </Box>
+        </div>
       )}
-    </Box>
+    </div>
   )
 }

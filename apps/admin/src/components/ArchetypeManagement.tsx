@@ -68,6 +68,7 @@ export function ArchetypeManagement() {
   const [showAdd, setShowAdd] = useState(false)
   const [loadError, setLoadError] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     api
@@ -109,6 +110,7 @@ export function ArchetypeManagement() {
 
   async function handleSave() {
     setSaveError(null)
+    setSaving(true)
     const payload = {
       name: form.name,
       iconId: form.iconId,
@@ -130,6 +132,8 @@ export function ArchetypeManagement() {
     } catch (err: unknown) {
       const e = err as { message?: string }
       setSaveError(e.message ?? 'Failed to save archetype.')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -194,7 +198,7 @@ export function ArchetypeManagement() {
             <span className="text-[var(--text-primary)] text-sm font-medium flex-1">{a.name}</span>
             <button
               onClick={() => void toggleActive(a)}
-              className={`text-xs px-2 py-1 rounded-lg ${a.isActive ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}
+              className={`text-xs px-2 py-1 rounded-lg ${a.isActive ? 'bg-[var(--success)]/20 text-[var(--success)]' : 'bg-[var(--danger)]/20 text-[var(--danger)]'}`}
             >
               {a.isActive ? t('admin.archetypes.active') : 'Inactive'}
             </button>
@@ -300,7 +304,8 @@ export function ArchetypeManagement() {
             </button>
             <button
               onClick={() => void handleSave()}
-              className="flex-1 bg-[var(--accent)] text-white rounded-xl py-2 text-sm"
+              disabled={saving}
+              className="flex-1 bg-[var(--accent)] text-white rounded-xl py-2 text-sm disabled:opacity-50"
             >
               Save
             </button>

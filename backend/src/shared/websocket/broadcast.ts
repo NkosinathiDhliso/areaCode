@@ -4,6 +4,7 @@
 import { ApiGatewayManagementApiClient, PostToConnectionCommand } from '@aws-sdk/client-apigatewaymanagementapi'
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb'
 import { unmarshall } from '@aws-sdk/util-dynamodb'
+import { AppError } from '../errors/AppError.js'
 
 const ddbClient = new DynamoDBClient({ region: process.env['AWS_REGION'] || 'us-east-1' })
 
@@ -19,7 +20,7 @@ interface BroadcastMessage {
 async function getApiClient(): Promise<ApiGatewayManagementApiClient> {
   const endpoint = WEBSOCKET_ENDPOINT
   if (!endpoint) {
-    throw new Error('WEBSOCKET_ENDPOINT environment variable not set')
+    throw AppError.internal('WEBSOCKET_ENDPOINT environment variable not set')
   }
 
   return new ApiGatewayManagementApiClient({

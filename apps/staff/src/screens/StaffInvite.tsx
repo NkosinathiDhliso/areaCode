@@ -185,21 +185,21 @@ export function StaffInvite({ token }: StaffInviteProps) {
       {status === 'loading' && (
         <div className="flex flex-col items-center gap-3">
           <Spinner size="lg" />
-          <p className="text-[var(--text-secondary)]">Setting up your account...</p>
+          <p className="text-[var(--text-secondary)]">{t('staff.invite.settingUp', 'Setting up your account...')}</p>
         </div>
       )}
 
       {status === 'success' && (
         <div className="flex flex-col items-center gap-4 max-w-xs text-center">
-          <p className="text-[var(--success)] font-medium text-lg">Account created</p>
+          <p className="text-[var(--success)] font-medium text-lg">{t('staff.invite.created', 'Account created')}</p>
           <p className="text-[var(--text-secondary)] text-sm">
-            Your staff account is ready. You can validate redemptions now.
+            {t('staff.invite.ready', 'Your staff account is ready. You can validate redemptions now.')}
           </p>
           <a
             href="/"
             className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3 px-8 text-sm transition-all active:scale-95"
           >
-            Go to Sign In
+            {t('staff.invite.goToSignIn', 'Go to Sign In')}
           </a>
         </div>
       )}

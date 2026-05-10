@@ -82,11 +82,11 @@ export function NodeDetailSheet({ node, pulseScore, isOpen, onClose, onCheckIn }
 
 function stateColor(state: string): string {
   switch (state) {
-    case 'popping': return '#ef4444'
-    case 'buzzing': return '#f59e0b'
-    case 'active': return '#10b981'
-    case 'quiet': return '#6b7280'
-    default: return '#374151'
+    case 'popping': return colors.danger
+    case 'buzzing': return colors.warning
+    case 'active': return colors.success
+    case 'quiet': return colors.textMuted
+    default: return colors.textMuted
   }
 }
 
@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
-  checkInText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  checkInText: { color: colors.textOnAccent, fontWeight: '600', fontSize: 16 },
   directionsButton: {
     borderWidth: 1,
     borderColor: colors.border,

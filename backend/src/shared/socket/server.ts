@@ -1,6 +1,7 @@
 import { Server as HttpServer } from 'node:http'
 import { Server } from 'socket.io'
 import type { ServerToClientEvents, ClientToServerEvents } from './types.js'
+import { AppError } from '../errors/AppError.js'
 
 export type TypedServer = Server<ClientToServerEvents, ServerToClientEvents>
 
@@ -117,7 +118,7 @@ export function initSocketServer(httpServer: HttpServer): TypedServer {
 
 export function getIO(): TypedServer {
   if (!io) {
-    throw new Error('Socket.io server not initialised. Call initSocketServer first.')
+    throw AppError.internal('Socket.io server not initialised. Call initSocketServer first.')
   }
   return io
 }

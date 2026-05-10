@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   tab: { flex: 1, paddingVertical: 8, borderRadius: 12, alignItems: 'center' },
   tabActive: { backgroundColor: colors.accent },
   tabText: { color: colors.textSecondary, fontSize: 12, fontWeight: '500' },
-  tabTextActive: { color: '#fff' },
+  tabTextActive: { color: colors.textOnAccent },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
   name: { color: colors.textPrimary, fontSize: 14, fontWeight: '500' },
   handle: { color: colors.textMuted, fontSize: 12 },
   mutualBadge: {
-    backgroundColor: 'rgba(16,185,129,0.1)',
+    backgroundColor: colors.successSubtle,
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -274,9 +274,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  accentBtnText: { color: '#fff', fontSize: 12 },
+  accentBtnText: { color: colors.textOnAccent, fontSize: 12 },
   dangerBtn: {
-    borderColor: 'rgba(239,68,68,0.3)',
+    borderColor: colors.dangerBorder,
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 12,

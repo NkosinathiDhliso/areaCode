@@ -24,6 +24,8 @@
  *     - Note your Team ID and Key ID
  */
 
+import { AppError } from '../../shared/errors/AppError.js'
+
 // ─── Spotify ────────────────────────────────────────────────────────────────
 
 const SPOTIFY_CLIENT_ID = process.env['SPOTIFY_CLIENT_ID'] ?? ''
@@ -101,7 +103,7 @@ export async function exchangeSpotifyCode(code: string): Promise<SpotifyTokenRes
 
   if (!res.ok) {
     const err = await res.text()
-    throw new Error(`Spotify token exchange failed: ${res.status} ${err}`)
+    throw AppError.badGateway(`Spotify token exchange failed: ${res.status} ${err}`)
   }
 
   return res.json() as Promise<SpotifyTokenResponse>
@@ -122,7 +124,7 @@ export async function fetchSpotifyTopGenres(accessToken: string): Promise<string
   })
 
   if (!res.ok) {
-    throw new Error(`Spotify top artists failed: ${res.status}`)
+    throw AppError.badGateway(`Spotify top artists failed: ${res.status}`)
   }
 
   const data = (await res.json()) as SpotifyTopArtistsResponse
@@ -173,7 +175,7 @@ const APPLE_PRIVATE_KEY = process.env['APPLE_MUSIC_PRIVATE_KEY'] ?? '' // PEM-en
  */
 export async function generateAppleDeveloperToken(): Promise<string> {
   if (!APPLE_TEAM_ID || !APPLE_KEY_ID || !APPLE_PRIVATE_KEY) {
-    throw new Error('Apple Music credentials not configured')
+    throw AppError.internal('Apple Music credentials not configured')
   }
 
   // Dynamic import jose for JWT signing
@@ -234,7 +236,7 @@ export async function fetchAppleMusicTopGenres(developerToken: string, userToken
   })
 
   if (!res.ok) {
-    throw new Error(`Apple Music library fetch failed: ${res.status}`)
+    throw AppError.badGateway(`Apple Music library fetch failed: ${res.status}`)
   }
 
   const data = (await res.json()) as AppleMusicLibraryResponse

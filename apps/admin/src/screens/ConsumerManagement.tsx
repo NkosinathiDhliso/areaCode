@@ -22,6 +22,7 @@ export function ConsumerManagement() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionNote, setActionNote] = useState('')
   const [confirmDisable, setConfirmDisable] = useState<string | null>(null)
+  const [actionLoading, setActionLoading] = useState(false)
 
   async function handleSearch() {
     if (!query.trim()) return
@@ -39,6 +40,7 @@ export function ConsumerManagement() {
 
   async function handleAction(action: string, userId: string) {
     setActionError(null)
+    setActionLoading(true)
     try {
       await api.post(`/v1/admin/consumers/${userId}/${action}`, {
         note: actionNote || undefined,
@@ -49,11 +51,14 @@ export function ConsumerManagement() {
     } catch (err: unknown) {
       const e = err as { message?: string }
       setActionError(e.message ?? 'Action failed. Please try again.')
+    } finally {
+      setActionLoading(false)
     }
   }
 
   async function handleDisableUser(userId: string) {
     setActionError(null)
+    setActionLoading(true)
     try {
       await api.post(`/v1/admin/users/${userId}/disable`)
       setConfirmDisable(null)
@@ -61,6 +66,8 @@ export function ConsumerManagement() {
     } catch {
       setActionError('Failed to disable user. Please try again.')
       setConfirmDisable(null)
+    } finally {
+      setActionLoading(false)
     }
   }
 
@@ -135,36 +142,43 @@ export function ConsumerManagement() {
                       label={t('admin.consumers.disable', 'Disable Account')}
                       onClick={() => setConfirmDisable(user.id)}
                       danger
+                      disabled={actionLoading}
                     />
                   )}
                   {user.isDisabled && (
                     <ActionButton
                       label={t('admin.consumers.enable', 'Enable Account')}
                       onClick={() => void handleAction('enable', user.id)}
+                      disabled={actionLoading}
                     />
                   )}
                   <ActionButton
                     label={t('admin.consumers.resetFlags')}
                     onClick={() => void handleAction('reset-flags', user.id)}
+                    disabled={actionLoading}
                   />
                   <ActionButton
                     label={t('admin.consumers.recalcTier')}
                     onClick={() => void handleAction('recalc-tier', user.id)}
+                    disabled={actionLoading}
                   />
                   <ActionButton
                     label={t('admin.consumers.overrideStreak')}
                     onClick={() => void handleAction('override-streak', user.id)}
+                    disabled={actionLoading}
                   />
                   {role === 'super_admin' && (
                     <ActionButton
                       label={t('admin.consumers.processErasure')}
                       onClick={() => void handleAction('process-erasure', user.id)}
                       danger
+                      disabled={actionLoading}
                     />
                   )}
                   <ActionButton
                     label={t('admin.consumers.sendMessage')}
                     onClick={() => void handleAction('send-message', user.id)}
+                    disabled={actionLoading}
                   />
                 </div>
               </div>
@@ -191,7 +205,8 @@ export function ConsumerManagement() {
               </button>
               <button
                 onClick={() => void handleDisableUser(confirmDisable)}
-                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium"
+                disabled={actionLoading}
+                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
               >
                 Disable
               </button>
@@ -207,14 +222,15 @@ function TierLabel({ tier }: { tier: Tier }) {
   return <span className="text-[var(--text-muted)] text-xs capitalize">{tier}</span>
 }
 
-function ActionButton({ label, onClick, danger = false }: { label: string; onClick: () => void; danger?: boolean }) {
+function ActionButton({ label, onClick, danger = false, disabled = false }: { label: string; onClick: () => void; danger?: boolean; disabled?: boolean }) {
   return (
     <button
       onClick={(e) => {
         e.stopPropagation()
         onClick()
       }}
-      className={`border rounded-xl px-3 py-1.5 text-xs transition-all duration-150 active:scale-95 ${
+      disabled={disabled}
+      className={`border rounded-xl px-3 py-1.5 text-xs transition-all duration-150 active:scale-95 disabled:opacity-50 ${
         danger
           ? 'border-[var(--danger)] text-[var(--danger)]'
           : 'border-[var(--border-strong)] text-[var(--text-primary)]'

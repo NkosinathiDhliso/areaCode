@@ -38,6 +38,8 @@ export function SettingsPanel() {
   const [inviteError, setInviteError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [confirmRemoveStaffId, setConfirmRemoveStaffId] = useState<string | null>(null)
+  const [removingStaff, setRemovingStaff] = useState(false)
+  const [generatingQr, setGeneratingQr] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -107,6 +109,7 @@ export function SettingsPanel() {
 
   async function handleGenerateQr() {
     setQrError(null)
+    setGeneratingQr(true)
     try {
       const res = await api.get<{ url: string }>('/v1/business/nodes/current/qr')
       setQrCheckinUrl(res.url)
@@ -117,6 +120,8 @@ export function SettingsPanel() {
       } else {
         setQrError('Failed to generate QR. Please try again.')
       }
+    } finally {
+      setGeneratingQr(false)
     }
   }
 
@@ -128,12 +133,15 @@ export function SettingsPanel() {
     if (!confirmRemoveStaffId) return
     const staffId = confirmRemoveStaffId
     setConfirmRemoveStaffId(null)
+    setRemovingStaff(true)
     void (async () => {
       try {
         await api.delete(`/v1/business/staff/${staffId}`)
         setStaff((prev) => prev.filter((s) => s.id !== staffId))
       } catch {
         /* Fail silently */
+      } finally {
+        setRemovingStaff(false)
       }
     })()
   }
@@ -264,7 +272,7 @@ export function SettingsPanel() {
                   {s.phone && <span className="text-[var(--text-muted)] text-xs">{s.phone}</span>}
                   {!s.cognitoSub && <span className="text-[var(--warning)] text-xs">Invite pending acceptance</span>}
                 </div>
-                <button onClick={() => handleRemoveStaff(s.id)} className="text-[var(--danger)] text-xs">
+                <button onClick={() => handleRemoveStaff(s.id)} disabled={removingStaff} className="text-[var(--danger)] text-xs disabled:opacity-50">
                   Remove
                 </button>
               </div>
@@ -278,7 +286,8 @@ export function SettingsPanel() {
         <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">{t('biz.settings.qr')}</h3>
         <button
           onClick={() => void handleGenerateQr()}
-          className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-4 py-2 text-sm"
+          disabled={generatingQr}
+          className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-4 py-2 text-sm disabled:opacity-50"
         >
           Generate QR Code
         </button>

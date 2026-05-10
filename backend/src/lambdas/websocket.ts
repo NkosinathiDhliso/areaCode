@@ -59,6 +59,8 @@ export async function handler(event: WebSocketEvent, context: WebSocketContext):
         return await handlePresenceJoin(connectionId, event)
       case 'presenceleave':
         return await handlePresenceLeave(connectionId, event)
+      case 'heartbeat':
+        return await handleHeartbeat(connectionId)
       case '$default':
         return await handleDefault(connectionId, event)
       default:
@@ -79,13 +81,15 @@ async function handleConnect(connectionId: string, event: WebSocketEvent): Promi
   const queryString = event.requestContext?.stage
   // Store connection with TTL (1 day)
   const ttl = Math.floor(Date.now() / 1000) + 86400
+  const now = new Date().toISOString()
 
   await ddbClient.send(
     new PutItemCommand({
       TableName: CONNECTIONS_TABLE,
       Item: marshall({
         connectionId,
-        connectedAt: new Date().toISOString(),
+        connectedAt: now,
+        lastHeartbeat: now,
         ttl,
       }),
     }),
@@ -112,8 +116,13 @@ async function handleDisconnect(connectionId: string): Promise<any> {
 async function handleJoinRoom(connectionId: string, event: WebSocketEvent): Promise<any> {
   if (!event.body) return { statusCode: 400, body: 'Missing body' }
 
-  const data = JSON.parse(event.body)
-  const { room, userId, citySlug } = data.payload || {}
+  let data: Record<string, unknown>
+  try {
+    data = JSON.parse(event.body)
+  } catch {
+    return { statusCode: 400, body: 'Invalid JSON' }
+  }
+  const { room, userId, citySlug } = (data.payload as Record<string, unknown>) || {}
 
   if (!room) return { statusCode: 400, body: 'Missing room' }
 
@@ -146,8 +155,13 @@ async function handleJoinRoom(connectionId: string, event: WebSocketEvent): Prom
 async function handleLeaveRoom(connectionId: string, event: WebSocketEvent): Promise<any> {
   if (!event.body) return { statusCode: 400, body: 'Missing body' }
 
-  const data = JSON.parse(event.body)
-  const { room } = data.payload || {}
+  let data: Record<string, unknown>
+  try {
+    data = JSON.parse(event.body)
+  } catch {
+    return { statusCode: 400, body: 'Invalid JSON' }
+  }
+  const { room } = (data.payload as Record<string, unknown>) || {}
 
   // Remove room from connection
   await ddbClient.send(
@@ -176,8 +190,13 @@ async function handleLeaveRoom(connectionId: string, event: WebSocketEvent): Pro
 async function handlePresenceJoin(connectionId: string, event: WebSocketEvent): Promise<any> {
   if (!event.body) return { statusCode: 400, body: 'Missing body' }
 
-  const data = JSON.parse(event.body)
-  const { nodeId } = data.payload || {}
+  let data: Record<string, unknown>
+  try {
+    data = JSON.parse(event.body)
+  } catch {
+    return { statusCode: 400, body: 'Invalid JSON' }
+  }
+  const { nodeId } = (data.payload as Record<string, unknown>) || {}
 
   // Update connection with presence info
   await ddbClient.send(
@@ -207,6 +226,72 @@ async function handlePresenceLeave(connectionId: string, event: WebSocketEvent):
   )
 
   return { statusCode: 200, body: 'Presence left' }
+}
+
+// ============================================================================
+// HEARTBEAT
+// ============================================================================
+
+async function handleHeartbeat(connectionId: string): Promise<any> {
+  const now = new Date().toISOString()
+  const ttl = Math.floor(Date.now() / 1000) + 86400
+
+  await ddbClient.send(
+    new PutItemCommand({
+      TableName: CONNECTIONS_TABLE,
+      Item: marshall({
+        connectionId,
+        lastHeartbeat: now,
+        ttl,
+      }),
+    }),
+  )
+
+  return { statusCode: 200, body: 'Heartbeat received' }
+}
+
+// ============================================================================
+// STALE CONNECTION CLEANUP
+// ============================================================================
+
+/**
+ * Detect and remove connections that have not sent a heartbeat within 60 seconds.
+ * Called by a scheduled EventBridge rule (e.g., every 60 seconds).
+ */
+export async function cleanupStaleConnections(): Promise<{ removed: number }> {
+  const HEARTBEAT_TIMEOUT_MS = 60_000
+  const cutoff = new Date(Date.now() - HEARTBEAT_TIMEOUT_MS).toISOString()
+
+  // Scan connections table for stale connections
+  // Note: For the ws-connections table (small, ephemeral), scan is acceptable
+  // since it only holds active connections (typically < 1000 items)
+  const result = await ddbClient.send(
+    new ScanCommand({
+      TableName: CONNECTIONS_TABLE,
+      FilterExpression: 'lastHeartbeat < :cutoff',
+      ExpressionAttributeValues: marshall({ ':cutoff': cutoff }),
+    }),
+  )
+
+  const staleConnections = result.Items?.map((item) => unmarshall(item)) || []
+  let removed = 0
+
+  for (const conn of staleConnections) {
+    try {
+      await ddbClient.send(
+        new DeleteItemCommand({
+          TableName: CONNECTIONS_TABLE,
+          Key: marshall({ connectionId: conn.connectionId }),
+        }),
+      )
+      removed++
+    } catch {
+      // Connection may already be deleted — skip
+    }
+  }
+
+  console.log(`Cleaned up ${removed} stale connections`)
+  return { removed }
 }
 
 // ============================================================================
@@ -256,7 +341,7 @@ async function sendToConnection(connectionId: string, message: BroadcastMessage)
         }),
       )
     } else {
-      throw error
+      console.error(`Failed to send to connection ${connectionId}:`, error.message ?? error)
     }
   }
 }
@@ -300,16 +385,39 @@ export async function broadcastToUser(userId: string, message: BroadcastMessage)
 }
 
 export async function broadcastToAll(message: BroadcastMessage): Promise<void> {
-  // Scan all connections (use sparingly for small user bases)
-  const result = await ddbClient.send(
-    new ScanCommand({
-      TableName: CONNECTIONS_TABLE,
-    }),
-  )
+  // Query all connections using a GSI that has a fixed partition key for all connections
+  // Fallback: query the RoomIndex with known room prefixes since all connections join a room
+  // For small user bases, this is acceptable. At scale, use SNS fan-out instead.
+  const roomPrefixes = ['city:johannesburg', 'city:cape-town', 'city:durban']
+  const allConnections: Array<Record<string, unknown>> = []
 
-  const connections = result.Items?.map((item) => unmarshall(item)) || []
+  for (const room of roomPrefixes) {
+    try {
+      const result = await ddbClient.send(
+        new QueryCommand({
+          TableName: CONNECTIONS_TABLE,
+          IndexName: 'RoomIndex',
+          KeyConditionExpression: 'roomId = :roomId',
+          ExpressionAttributeValues: marshall({ ':roomId': room }),
+        }),
+      )
+      const connections = result.Items?.map((item) => unmarshall(item)) || []
+      allConnections.push(...connections)
+    } catch {
+      // Skip rooms that fail
+    }
+  }
 
-  await Promise.all(connections.map((conn) => sendToConnection(conn.connectionId, message)))
+  // Deduplicate by connectionId
+  const seen = new Set<string>()
+  const unique = allConnections.filter((conn) => {
+    const id = conn.connectionId as string
+    if (seen.has(id)) return false
+    seen.add(id)
+    return true
+  })
 
-  console.log(`Broadcasted to ${connections.length} total connections`)
+  await Promise.all(unique.map((conn) => sendToConnection(conn.connectionId as string, message)))
+
+  console.log(`Broadcasted to ${unique.length} total connections`)
 }

@@ -1,103 +1,96 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '../lib/api'
-import { Spinner } from './Spinner'
-import type { MusicGenre } from '../types'
+import { LocationStep, NotificationStep, MusicStep, TutorialStep } from './OnboardingSteps'
 
-const GENRES: { id: MusicGenre; label: string }[] = [
-  { id: 'amapiano', label: 'Amapiano' },
-  { id: 'deep_house', label: 'Deep House' },
-  { id: 'afrobeats', label: 'Afrobeats' },
-  { id: 'hip_hop', label: 'Hip Hop' },
-  { id: 'rnb', label: 'R&B' },
-  { id: 'kwaito', label: 'Kwaito' },
-  { id: 'gqom', label: 'Gqom' },
-  { id: 'jazz', label: 'Jazz' },
-  { id: 'rock', label: 'Rock' },
-  { id: 'pop', label: 'Pop' },
-  { id: 'gospel', label: 'Gospel' },
-  { id: 'maskandi', label: 'Maskandi' },
-]
+type OnboardingStepId = 'location' | 'notifications' | 'music' | 'tutorial'
+
+const STEPS: OnboardingStepId[] = ['location', 'notifications', 'music', 'tutorial']
 
 interface OnboardingFlowProps {
   onComplete: () => void
 }
 
+function ProgressDots({ current, total }: { current: number; total: number }) {
+  return (
+    <div className="flex gap-2 justify-center" role="progressbar" aria-valuenow={current + 1} aria-valuemax={total}>
+      {Array.from({ length: total }).map((_, i) => (
+        <div
+          key={i}
+          className={`w-2 h-2 rounded-full transition-all duration-300 ${
+            i === current ? 'w-6 bg-[var(--accent-bright)]' : i < current ? 'bg-[var(--accent)]' : 'bg-[var(--border-strong)]'
+          }`}
+        />
+      ))}
+    </div>
+  )
+}
+
 export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
-  const [selected, setSelected] = useState<MusicGenre[]>([])
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const { t } = useTranslation()
+  const [currentStep, setCurrentStep] = useState(0)
+  const [completing, setCompleting] = useState(false)
 
-  function toggle(genre: MusicGenre) {
-    setSelected((prev) =>
-      prev.includes(genre) ? prev.filter((g) => g !== genre) : prev.length < 5 ? [...prev, genre] : prev,
-    )
-  }
-
-  async function handleContinue() {
-    if (selected.length < 1) {
-      setError('Pick at least 1 genre')
-      return
+  const advance = useCallback(() => {
+    if (currentStep < STEPS.length - 1) {
+      setCurrentStep((s) => s + 1)
     }
-    setSaving(true)
-    setError(null)
+  }, [currentStep])
+
+  const handleComplete = useCallback(async () => {
+    setCompleting(true)
     try {
-      await api.patch('/v1/users/me/genres', { musicGenres: selected })
       await api.post('/v1/users/me/onboarding/complete')
       onComplete()
     } catch {
-      setError('Something went wrong. Try again.')
-    } finally {
-      setSaving(false)
+      // Silently complete client-side even if API fails
+      onComplete()
     }
-  }
+  }, [onComplete])
+
+  const handleLocationGrant = useCallback(() => {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(() => advance(), () => advance(), { enableHighAccuracy: true })
+    } else {
+      advance()
+    }
+  }, [advance])
+
+  const handleNotificationEnable = useCallback(async () => {
+    try {
+      if ('Notification' in window) {
+        await Notification.requestPermission()
+      }
+    } catch {
+      // Permission denied — continue
+    }
+    advance()
+  }, [advance])
+
+  const translate = useCallback((key: string, fallback?: string) => t(key, fallback ?? key), [t])
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto"
-      style={{ backgroundColor: 'var(--bg-base)' }}
+      className="fixed inset-0 z-[9999] flex flex-col"
+      style={{ background: 'var(--gradient-primary)' }}
     >
-      <div className="w-full max-w-[380px] mx-4 py-8 px-5 flex flex-col items-center min-h-full justify-center">
-        <h1 className="text-[var(--text-primary)] text-2xl font-extrabold text-center mb-2 font-[Syne]">
-          What do you listen to?
-        </h1>
-        <p className="text-[var(--text-secondary)] text-[13px] text-center mb-6 leading-relaxed">
-          Pick up to 5 genres. This powers the crowd vibe at venues you visit.
-        </p>
-
-        <div className="flex flex-wrap gap-2 justify-center mb-6">
-          {GENRES.map((g) => {
-            const active = selected.includes(g.id)
-            return (
-              <button
-                key={g.id}
-                onClick={() => toggle(g.id)}
-                className={`px-4 py-2 rounded-xl text-[13px] font-medium transition-all duration-150 ${
-                  active
-                    ? 'bg-[var(--accent)] text-white'
-                    : 'bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)]'
-                }`}
-              >
-                {g.label}
-              </button>
-            )
-          })}
+      <div className="flex-1 flex flex-col w-full max-w-[400px] mx-auto py-8 px-5">
+        <div className="pt-4 pb-6">
+          <ProgressDots current={currentStep} total={STEPS.length} />
         </div>
 
-        <p className="text-[var(--text-muted)] text-[11px] text-center mb-4">{selected.length}/5 selected</p>
-
-        {error && <p className="text-[var(--danger)] text-xs text-center mb-3">{error}</p>}
-
-        <button
-          onClick={handleContinue}
-          disabled={saving || selected.length < 1}
-          className={`w-full rounded-xl py-3.5 text-[15px] font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
-            selected.length >= 1
-              ? 'bg-[var(--accent)] text-white'
-              : 'bg-[var(--bg-raised)] text-[var(--text-muted)] cursor-default'
-          } ${saving ? 'opacity-50' : ''}`}
-        >
-          {saving ? <Spinner size="sm" className="border-white border-t-transparent" /> : 'Continue'}
-        </button>
+        {STEPS[currentStep] === 'location' && (
+          <LocationStep onGrant={handleLocationGrant} onSkip={advance} t={translate} />
+        )}
+        {STEPS[currentStep] === 'notifications' && (
+          <NotificationStep onEnable={handleNotificationEnable} onSkip={advance} t={translate} />
+        )}
+        {STEPS[currentStep] === 'music' && (
+          <MusicStep onConnect={advance} onSkip={advance} t={translate} />
+        )}
+        {STEPS[currentStep] === 'tutorial' && (
+          <TutorialStep onGotIt={handleComplete} completing={completing} t={translate} />
+        )}
       </div>
     </div>
   )

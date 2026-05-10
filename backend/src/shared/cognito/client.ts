@@ -13,6 +13,7 @@ import {
 } from '@aws-sdk/client-cognito-identity-provider'
 
 import type { AuthRole } from '../middleware/auth.js'
+import { AppError } from '../errors/AppError.js'
 
 const region = process.env['AWS_REGION'] ?? 'us-east-1'
 const cognitoClient = new CognitoIdentityProviderClient({ region })
@@ -44,7 +45,7 @@ const poolConfigs: Record<AuthRole, () => PoolConfig> = {
 function getPool(role: AuthRole): PoolConfig {
   const config = poolConfigs[role]()
   if (!config.userPoolId || !config.clientId) {
-    throw new Error(`Cognito pool not configured for role: ${role}`)
+    throw AppError.internal(`Cognito pool not configured for role: ${role}`)
   }
   return config
 }
@@ -134,7 +135,7 @@ export async function createEmailPasswordUser(
   )
 
   const user = await getCognitoUser(role, normalizedEmail)
-  if (!user?.sub) throw new Error('Failed to create Cognito email user')
+  if (!user?.sub) throw AppError.internal('Failed to create Cognito email user')
   return user
 }
 
@@ -155,7 +156,7 @@ export async function initiateAuth(role: AuthRole, phone: string) {
   )
 
   if (!result.Session) {
-    throw new Error('Cognito did not return a session for CUSTOM_AUTH challenge')
+    throw AppError.internal('Cognito did not return a session for CUSTOM_AUTH challenge')
   }
 
   return {
@@ -183,7 +184,7 @@ export async function respondToAuthChallenge(role: AuthRole, phone: string, code
   )
 
   if (!result.AuthenticationResult) {
-    throw new Error('Authentication failed')
+    throw AppError.unauthorized('Authentication failed')
   }
 
   return {
@@ -210,7 +211,7 @@ export async function passwordAuth(role: AuthRole, email: string, password: stri
   )
 
   if (!result.AuthenticationResult) {
-    throw new Error('Authentication failed')
+    throw AppError.unauthorized('Authentication failed')
   }
 
   return {
@@ -309,7 +310,7 @@ export async function updateUserAttributesByCognitoSub(
   const pool = getPool(role)
   const row = await listUserAttrsBySub(pool.userPoolId, cognitoSub)
   const username = row?.Username
-  if (!username) throw new Error('Cognito user not found for sub')
+  if (!username) throw AppError.notFound('Cognito user not found for sub')
 
   await cognitoClient.send(
     new AdminUpdateUserAttributesCommand({
@@ -341,7 +342,7 @@ export async function adminPasswordAuth(email: string, password: string) {
   )
 
   if (!result.AuthenticationResult) {
-    throw new Error('Authentication failed')
+    throw AppError.unauthorized('Authentication failed')
   }
 
   return {

@@ -9,6 +9,7 @@ import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore
 import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
 import { api } from '@area-code/shared/lib/api'
 import { getSocket } from '@area-code/shared/lib/socket'
+import { colors } from '../src/theme'
 import '../src/i18n'
 
 const queryClient = new QueryClient({
@@ -48,7 +49,7 @@ export default function RootLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: '#0a0a0f' },
+          contentStyle: { backgroundColor: colors.bgBase },
           animation: 'fade',
         }}
       />

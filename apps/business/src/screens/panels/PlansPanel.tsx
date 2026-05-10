@@ -21,6 +21,7 @@ interface PlansResponse {
   growth: PlanInfo
   pro: PlanInfo
   payg: PlanInfo
+  flex_daily?: PlanInfo
 }
 
 export function PlansPanel() {
@@ -87,9 +88,9 @@ export function PlansPanel() {
   }
 
   function renderPlanCard(key: string, plan: PlanInfo, actionPlan?: 'growth' | 'pro' | 'payg') {
-    const isPAYG = actionPlan === 'payg'
+    const isFlexDaily = actionPlan === 'payg'
     const isCurrent = key === currentTier
-    const priceDisplay = isPAYG
+    const priceDisplay = isFlexDaily
       ? `${formatZAR((plan.dailyPriceCents ?? 0) / 100)}/day`
       : plan.monthlyPriceCents === 0
         ? t('biz.plans.free')
@@ -115,13 +116,16 @@ export function PlansPanel() {
         </div>
 
         <span className="text-[var(--accent)] font-bold text-2xl tracking-[-0.03em]">{priceDisplay}</span>
-        {!isPAYG && plan.yearlyPriceCents !== undefined && plan.yearlyPriceCents > 0 && (
+        {!isFlexDaily && plan.yearlyPriceCents !== undefined && plan.yearlyPriceCents > 0 && (
           <span className="text-[var(--text-muted)] text-xs">
             or {formatZAR(plan.yearlyPriceCents / 100)}/year (save ~17%)
           </span>
         )}
-        {isPAYG && plan.weeklyPriceCents !== undefined && (
+        {isFlexDaily && plan.weeklyPriceCents !== undefined && (
           <span className="text-[var(--text-muted)] text-xs">or {formatZAR(plan.weeklyPriceCents / 100)}/week</span>
+        )}
+        {isFlexDaily && (
+          <span className="text-[var(--text-secondary)] text-xs">Low daily rate, no commitment</span>
         )}
 
         <div className="flex flex-col gap-1 mt-1">
@@ -132,7 +136,7 @@ export function PlansPanel() {
 
         {actionPlan && !isCurrent && (
           <button
-            onClick={() => void handleSelectPlan(actionPlan, isPAYG ? 'daily' : 'monthly', !!plan.trialDays)}
+            onClick={() => void handleSelectPlan(actionPlan, isFlexDaily ? 'daily' : 'monthly', !!plan.trialDays)}
             disabled={loading !== null}
             className={`font-semibold rounded-xl py-3 text-sm transition-all duration-150 active:scale-95 disabled:opacity-50 mt-1 ${
               key === 'growth'
@@ -183,7 +187,7 @@ export function PlansPanel() {
         </div>
       )}
       {checkoutError && (
-        <div className="bg-[var(--danger-subtle,#fee)] border border-[var(--danger)] rounded-xl px-4 py-3 text-[var(--danger)] text-sm">
+        <div className="bg-[var(--danger)]/10 border border-[var(--danger)] rounded-xl px-4 py-3 text-[var(--danger)] text-sm">
           {checkoutError}
         </div>
       )}
@@ -193,7 +197,7 @@ export function PlansPanel() {
           {renderPlanCard('starter', plans.starter)}
           {renderPlanCard('growth', plans.growth, 'growth')}
           {renderPlanCard('pro', plans.pro, 'pro')}
-          {renderPlanCard('payg', plans.payg, 'payg')}
+          {renderPlanCard('payg', getFlexDailyPlan(plans), 'payg')}
         </div>
       )}
     </div>
@@ -207,4 +211,16 @@ function FeatureRow({ label, value }: { label: string; value: string }) {
       <span className="text-[var(--text-primary)] text-xs font-medium">{value}</span>
     </div>
   )
+}
+
+/**
+ * Returns the Flex Daily plan info, supporting both legacy "payg" and new "flex_daily" keys.
+ * Overrides the display name to "Flex Daily" with updated description.
+ */
+function getFlexDailyPlan(plans: PlansResponse): PlanInfo {
+  const base = plans.flex_daily ?? plans.payg
+  return {
+    ...base,
+    name: 'Flex Daily',
+  }
 }

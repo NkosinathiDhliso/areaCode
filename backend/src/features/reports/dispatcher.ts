@@ -1,5 +1,5 @@
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs'
-import { ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
+import { QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 
 // ============================================================================
@@ -118,9 +118,11 @@ async function getAllBusinesses(): Promise<Business[]> {
 
   do {
     const result = await documentClient.send(
-      new ScanCommand({
-        TableName: TableNames.businesses,
-        ProjectionExpression: 'businessId',
+      new QueryCommand({
+        TableName: TableNames.appData,
+        IndexName: 'GSI1',
+        KeyConditionExpression: 'gsi1pk = :pk',
+        ExpressionAttributeValues: { ':pk': 'ALL_BUSINESSES' },
         ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
       }),
     )

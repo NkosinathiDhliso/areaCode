@@ -47,6 +47,7 @@ vi.mock('../shared/middleware/auth.js', () => {
 // ─── Rate Limiter ────────────────────────────────────────────────────────────
 vi.mock('../shared/middleware/rate-limit.js', () => ({
   rateLimitMiddleware: () => async () => {},
+  globalRateLimitHook: () => async () => {},
 }))
 
 // ─── Sentry ──────────────────────────────────────────────────────────────────

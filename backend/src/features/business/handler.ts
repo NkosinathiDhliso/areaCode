@@ -2,10 +2,12 @@ import type { FastifyInstance } from 'fastify'
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { validate } from '../../shared/middleware/validation.js'
 import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
+import { verifyBusinessOwnership } from '../../shared/middleware/ownership.js'
 import * as service from './service.js'
 import { checkoutBodySchema, boostBodySchema, staffInviteBodySchema, staffIdParamsSchema } from './types.js'
 import { z } from 'zod'
 import { getRedemptionsByStaffId } from '../rewards/repository.js'
+import { registerBillingRoutes } from './billing-routes.js'
 
 const nodeIdParamsSchema = z.object({ nodeId: z.string().uuid() })
 const staffRedemptionParamsSchema = z.object({ staffId: z.string().uuid() })
@@ -110,7 +112,7 @@ export async function businessRoutes(app: FastifyInstance) {
       ],
     },
     async (request, reply) => {
-      const signature = (request.headers['x-yoco-signature'] as string) ?? ''
+      const signature = (request.headers['yoco-signature'] as string) ?? ''
       const body = request.body as Record<string, unknown>
       const rawBody = (request as unknown as { rawBody?: string }).rawBody ?? JSON.stringify(body)
       const eventId = (body['id'] as string) ?? ''
@@ -170,6 +172,7 @@ export async function businessRoutes(app: FastifyInstance) {
     async (request) => {
       const auth = getAuth(request)
       const params = request.params as z.infer<typeof nodeIdParamsSchema>
+      // Ownership verification happens inside getQrData (returns null if node doesn't belong to business)
       return service.getQrData(params.nodeId, auth.userId)
     },
   )
@@ -183,6 +186,12 @@ export async function businessRoutes(app: FastifyInstance) {
     async (request) => {
       const auth = getAuth(request)
       const params = request.params as z.infer<typeof staffRedemptionParamsSchema>
+      // Ownership verification: staff member must belong to this business
+      const { getStaffById } = await import('../auth/dynamodb-repository.js')
+      const staff = await getStaffById(params.staffId)
+      if (staff?.businessId) {
+        verifyBusinessOwnership(staff.businessId, auth.userId)
+      }
       const items = await getRedemptionsByStaffId(params.staffId, auth.userId)
       return { items }
     },
@@ -210,6 +219,12 @@ export async function businessRoutes(app: FastifyInstance) {
     async (request) => {
       const auth = getAuth(request)
       const params = request.params as { rewardId: string }
+      // Ownership verification: reward must belong to a node owned by this business
+      const { getRewardById } = await import('../rewards/repository.js')
+      const reward = await getRewardById(params.rewardId)
+      if (reward?.node?.businessId) {
+        verifyBusinessOwnership(reward.node.businessId, auth.userId)
+      }
       return service.getRewardMetrics(params.rewardId, auth.userId)
     },
   )
@@ -219,4 +234,7 @@ export async function businessRoutes(app: FastifyInstance) {
     const auth = getAuth(request)
     return service.getRewardsSummary(auth.userId)
   })
+
+  // Register billing routes
+  await registerBillingRoutes(app)
 }

@@ -112,7 +112,7 @@ export function BoostPanel() {
           )}
 
           {boostStatus?.active && (
-            <div className="bg-[var(--bg-raised)] border border-[#FFD166]/40 rounded-2xl px-4 py-3 flex items-center gap-3">
+            <div className="bg-[var(--bg-raised)] border border-[var(--color-boost-gold)]/40 rounded-2xl px-4 py-3 flex items-center gap-3">
               <span className="text-xl">⚡</span>
               <div>
                 <p className="text-[var(--text-primary)] text-sm font-medium">Boost active</p>

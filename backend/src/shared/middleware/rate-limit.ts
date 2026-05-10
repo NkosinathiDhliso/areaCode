@@ -20,9 +20,7 @@ interface RateLimitOptions {
 export function rateLimitMiddleware(options: RateLimitOptions) {
   const { key, max, windowSeconds, identifierFn } = options
 
-  return async (request: FastifyRequest, _reply: FastifyReply) => {
-    // Skip rate limiting in dev mode
-
+  return async (request: FastifyRequest, reply: FastifyReply) => {
     const identifier = identifierFn ? identifierFn(request) : request.ip
 
     const kvKey = `ratelimit:${key}:${identifier}`
@@ -30,7 +28,36 @@ export function rateLimitMiddleware(options: RateLimitOptions) {
 
     if (current > max) {
       const ttl = await kvTtl(kvKey)
-      throw AppError.tooManyRequests(`Rate limit exceeded. Try again in ${ttl > 0 ? ttl : windowSeconds}s.`)
+      const retryAfter = ttl > 0 ? ttl : windowSeconds
+      reply.header('Retry-After', String(retryAfter))
+      throw AppError.tooManyRequests(`Rate limit exceeded. Try again in ${retryAfter}s.`)
+    }
+  }
+}
+
+/**
+ * Global rate limiter applied to all public API endpoints.
+ * Provides a generous baseline (100 requests per 60s per IP).
+ * Per-route limiters can impose stricter limits on top of this.
+ */
+export function globalRateLimitHook() {
+  const key = 'global'
+  const max = 100
+  const windowSeconds = 60
+
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    // Skip rate limiting for health checks
+    if (request.url === '/health') return
+
+    const identifier = request.ip
+    const kvKey = `ratelimit:${key}:${identifier}`
+    const current = await kvIncr(kvKey, windowSeconds)
+
+    if (current > max) {
+      const ttl = await kvTtl(kvKey)
+      const retryAfter = ttl > 0 ? ttl : windowSeconds
+      reply.header('Retry-After', String(retryAfter))
+      throw AppError.tooManyRequests(`Rate limit exceeded. Try again in ${retryAfter}s.`)
     }
   }
 }

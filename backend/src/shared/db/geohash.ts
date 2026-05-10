@@ -13,6 +13,8 @@
 //     sub-kilometre queries by scanning ONLY cells that intersect the radius.
 //   - Always query the 9-cell neighbourhood of the centre to avoid edge misses.
 
+import { AppError } from '../errors/AppError.js'
+
 const BASE32 = '0123456789bcdefghjkmnpqrstuvwxyz'
 
 export function encodeGeohash(lat: number, lng: number, precision = 7): string {
@@ -65,7 +67,7 @@ function decodeGeohash(hash: string): { lat: number; lng: number; latErr: number
 
   for (const ch of hash) {
     const idx = BASE32.indexOf(ch)
-    if (idx < 0) throw new Error(`Invalid geohash char: ${ch}`)
+    if (idx < 0) throw AppError.badRequest(`Invalid geohash char: ${ch}`)
     for (let b = 4; b >= 0; b--) {
       const bit = (idx >> b) & 1
       if (even) {

@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { AppError } from '../errors/AppError.js'
 
 /**
  * Lambda-compatible migration runner.
@@ -21,7 +22,7 @@ const prismaDir = resolve(__dirname, '../../..', 'prisma')
 export async function runMigrations(): Promise<void> {
   const dbUrl = process.env['AREA_CODE_DB_URL']
   if (!dbUrl) {
-    throw new Error('AREA_CODE_DB_URL environment variable is not set')
+    throw AppError.internal('AREA_CODE_DB_URL environment variable is not set')
   }
 
   try {
@@ -36,6 +37,6 @@ export async function runMigrations(): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown migration error'
     console.error('[migration-runner] Migration failed:', message)
-    throw new Error(`Migration failed: ${message}`)
+    throw AppError.internal(`Migration failed: ${message}`)
   }
 }

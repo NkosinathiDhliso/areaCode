@@ -1,5 +1,5 @@
 // DynamoDB-backed reward evaluator repository (replaces Prisma)
-import { GetCommand, PutCommand, UpdateCommand, ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
+import { GetCommand, PutCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 import { generateId } from '../shared/db/entities.js'
 import { getActiveRewardsByNodeId } from '../features/rewards/dynamodb-repository.js'
