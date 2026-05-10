@@ -1,152 +1,117 @@
-// DynamoDB-backed Nodes Repository (replaces Prisma)
-import { GetCommand, PutCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
-import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
-import { generateId } from '../../shared/db/entities.js'
-import * as dynamo from './dynamodb-repository.js'
-import { getActiveRewardsByNodeId } from '../rewards/dynamodb-repository.js'
-import { getCheckInsByNode } from '../check-in/dynamodb-repository.js'
-import { getUserById } from '../auth/dynamodb-repository.js'
+// Prisma-backed nodes orchestration. Cross-feature joins (rewards-on-node,
+// city-of-node, business-tier-gating, who-is-here) all happen here.
+
+import { prisma } from '../../shared/db/prisma.js'
+import * as data from './dynamodb-repository.js'
+import { rewardFromPrisma, type RewardDto } from '../../shared/db/adapters.js'
+import { batchGetUsers } from '../../shared/db/batch.js'
 
 const PAID_TIERS_SET = new Set(['starter', 'growth', 'pro', 'payg'])
 
+// ─── City lookups ───────────────────────────────────────────────────────────
+
+export async function getCityBySlug(slug: string) {
+  const row = await prisma.city.findUnique({ where: { slug } })
+  return row ? { id: row.id, slug: row.slug, name: row.name } : null
+}
+
+// ─── Node listings ──────────────────────────────────────────────────────────
+
 export async function getNodesByCitySlug(citySlug: string) {
-  // Look up city first
   const city = await getCityBySlug(citySlug)
   if (!city) return []
-  // Scan nodes with cityId filter (no CityIndex GSI)
-  const result = await documentClient.send(
-    new ScanCommand({
-      TableName: TableNames.nodes,
-      FilterExpression: 'cityId = :cityId AND isActive = :active',
-      ExpressionAttributeValues: { ':cityId': city.id, ':active': true },
-    }),
-  )
-  const items = result.Items || []
 
-  // Build a set of business-owned nodes whose business is on a paid tier.
-  // Nodes without a businessId (legacy/unclaimed) are always visible.
-  const businessIds = Array.from(
-    new Set(items.map((n) => n['businessId']).filter((b): b is string => typeof b === 'string' && b.length > 0)),
-  )
-  const paidBusinessIds = new Set<string>()
-  if (businessIds.length > 0) {
-    const { findBusinessById } = await import('../business/repository.js')
-    const businesses = await Promise.all(businessIds.map((id) => findBusinessById(id).catch(() => null)))
-    businesses.forEach((b, i) => {
-      if (b && PAID_TIERS_SET.has(b.tier ?? 'free')) {
-        paidBusinessIds.add(businessIds[i]!)
-      }
-    })
-  }
+  // Fetch active nodes in this city + their owning business tier in one trip.
+  const rows = await prisma.node.findMany({
+    where: { cityId: city.id, isActive: true },
+    include: { business: { select: { tier: true } } },
+  })
 
-  return items
-    .filter((n) => {
-      const bid = n['businessId']
-      // Require an owning business on a paid tier. Orphan/legacy nodes are hidden.
-      if (!bid || typeof bid !== 'string') return false
-      return paidBusinessIds.has(bid)
-    })
+  return rows
+    .filter((n) => n.businessId && PAID_TIERS_SET.has(n.business?.tier ?? 'free'))
     .map((n) => ({
-      id: n['nodeId'] ?? n['id'],
-      name: n['name'],
-      slug: n['slug'],
-      category: n['category'],
-      lat: n['lat'],
-      lng: n['lng'],
-      claimStatus: n['claimStatus'],
-      nodeColour: n['nodeColour'],
-      nodeIcon: n['nodeIcon'],
-      isVerified: n['isVerified'],
-      boostUntil: (n['boostUntil'] as string | null | undefined) ?? null,
+      id: n.id,
+      name: n.name,
+      slug: n.slug,
+      category: n.category,
+      lat: n.lat,
+      lng: n.lng,
+      claimStatus: n.claimStatus,
+      nodeColour: n.nodeColour,
+      nodeIcon: n.nodeIcon,
+      isVerified: n.isVerified,
+      // boostUntil column may not exist in current schema; expose as null.
+      boostUntil: null as string | null,
     }))
 }
 
 export async function getNodeById(nodeId: string) {
-  const node = await dynamo.getNodeById(nodeId)
+  const node = await prisma.node.findUnique({
+    where: { id: nodeId },
+    include: {
+      city: { select: { name: true, slug: true } },
+      rewards: { where: { isActive: true } },
+    },
+  })
   if (!node) return null
-  const rewards = await getActiveRewardsByNodeId(nodeId)
-  // Look up city
-  let city = null
-  if (node.cityId) {
-    const c = await documentClient.send(
-      new GetCommand({ TableName: TableNames.appData, Key: { pk: `CITY#${node.cityId}`, sk: `CITY#${node.cityId}` } }),
-    )
-    city = c.Item ? { name: c.Item['name'], slug: c.Item['slug'] } : null
-  }
+  const rewards: RewardDto[] = node.rewards.map(rewardFromPrisma)
   return {
-    ...node,
-    id: node.nodeId ?? (node as unknown as { id?: string }).id,
+    nodeId: node.id,
+    id: node.id,
+    name: node.name,
+    slug: node.slug,
+    category: node.category,
+    lat: node.lat,
+    lng: node.lng,
+    cityId: node.cityId ?? undefined,
+    businessId: node.businessId ?? undefined,
+    claimStatus: node.claimStatus,
+    nodeColour: node.nodeColour,
+    nodeIcon: node.nodeIcon,
+    qrCheckinEnabled: node.qrCheckinEnabled,
+    isVerified: node.isVerified,
+    isActive: node.isActive,
+    createdAt: node.createdAt.toISOString(),
     rewards: rewards.map((r) => ({
-      id: r.rewardId ?? (r as unknown as { id?: string }).id,
+      id: r.rewardId,
       title: r.title,
       type: r.type,
       totalSlots: r.totalSlots,
       claimedCount: r.claimedCount,
       expiresAt: r.expiresAt,
     })),
-    city,
+    city: node.city ? { name: node.city.name, slug: node.city.slug } : null,
   }
 }
 
 export async function getNodeBySlug(slug: string) {
-  const node = await dynamo.getNodeBySlug(slug)
+  const node = await prisma.node.findUnique({
+    where: { slug },
+    include: {
+      city: { select: { name: true, slug: true } },
+      rewards: { where: { isActive: true }, select: { id: true } },
+    },
+  })
   if (!node) return null
-  const rewards = await getActiveRewardsByNodeId(node.nodeId)
-  let city = null
-  if (node.cityId) {
-    const c = await documentClient.send(
-      new GetCommand({ TableName: TableNames.appData, Key: { pk: `CITY#${node.cityId}`, sk: `CITY#${node.cityId}` } }),
-    )
-    city = c.Item ? { name: c.Item['name'], slug: c.Item['slug'] } : null
-  }
   return {
     name: node.name,
     category: node.category,
     lat: node.lat,
     lng: node.lng,
-    city,
-    rewards: rewards.map((r) => ({ id: r.rewardId ?? (r as unknown as { id?: string }).id })),
+    city: node.city ? { name: node.city.name, slug: node.city.slug } : null,
+    rewards: node.rewards.map((r) => ({ id: r.id })),
   }
 }
 
+// ─── Search (trigram + spatial) ─────────────────────────────────────────────
+
 export async function searchNodes(query: string, lat: number, lng: number) {
-  // Simple text + distance search (replaces PostGIS pg_trgm)
-  const result = await documentClient.send(
-    new ScanCommand({
-      TableName: TableNames.nodes,
-      FilterExpression: 'isActive = :active',
-      ExpressionAttributeValues: { ':active': true },
-    }),
-  )
-  const q = query.toLowerCase()
-  return (result.Items || [])
-    .filter((n) => ((n['name'] as string) || '').toLowerCase().includes(q))
-    .map((n) => {
-      const nLat = n['lat'] as number
-      const nLng = n['lng'] as number
-      const R = 6371000
-      const dLat = ((nLat - lat) * Math.PI) / 180
-      const dLng = ((nLng - lng) * Math.PI) / 180
-      const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos((lat * Math.PI) / 180) * Math.cos((nLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
-      const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-      return {
-        id: n['nodeId'] ?? n['id'],
-        name: n['name'],
-        slug: n['slug'],
-        category: n['category'],
-        lat: nLat,
-        lng: nLng,
-        similarity: 1,
-        distance,
-      }
-    })
-    .sort((a, b) => a.distance - b.distance)
-    .slice(0, 20)
+  return data.searchNodesRaw(query, lat, lng, 20)
 }
 
-export async function createNode(data: {
+// ─── Mutations ──────────────────────────────────────────────────────────────
+
+export async function createNode(input: {
   name: string
   slug: string
   category: string
@@ -157,13 +122,27 @@ export async function createNode(data: {
   businessId?: string
   claimStatus?: string
 }) {
-  return dynamo.createNode(data as unknown as Parameters<typeof dynamo.createNode>[0])
+  return data.createNode({
+    name: input.name,
+    slug: input.slug,
+    category: input.category,
+    lat: input.lat,
+    lng: input.lng,
+    cityId: input.cityId,
+    submittedBy: input.submittedBy,
+    businessId: input.businessId,
+    claimStatus: input.claimStatus ?? 'unclaimed',
+    nodeColour: 'default',
+    qrCheckinEnabled: false,
+    isVerified: false,
+    isActive: true,
+  } as Parameters<typeof data.createNode>[0])
 }
 
 export async function updateNode(
   nodeId: string,
   businessId: string,
-  data: Partial<{
+  patch: Partial<{
     name: string
     category: string
     nodeColour: string
@@ -173,107 +152,111 @@ export async function updateNode(
     lng: number
   }>,
 ) {
-  // Verify node belongs to business
-  const node = await dynamo.getNodeById(nodeId)
+  const node = await prisma.node.findUnique({ where: { id: nodeId }, select: { businessId: true } })
   if (!node || node.businessId !== businessId) return { count: 0 }
-  await dynamo.updateNode(nodeId, data)
+  await data.updateNode(nodeId, patch)
   return { count: 1 }
 }
 
 export async function claimNode(nodeId: string, businessId: string, cipcStatus: string) {
   const claimStatus = cipcStatus === 'validated' ? 'claimed' : 'pending'
-  return dynamo.updateNode(nodeId, { businessId, claimStatus, claimCipcStatus: cipcStatus })
+  return data.updateNode(nodeId, { businessId, claimStatus, claimCipcStatus: cipcStatus })
 }
 
+// ─── Reports against nodes ──────────────────────────────────────────────────
+
 export async function createReport(reporterId: string, nodeId: string, type: string, detail?: string) {
-  const reportId = generateId()
-  await documentClient.send(
-    new PutCommand({
-      TableName: TableNames.appData,
-      Item: {
-        pk: `REPORT#${reportId}`,
-        sk: `NODE#${nodeId}`,
-        gsi1pk: `NODE_REPORTS#${nodeId}`,
-        gsi1sk: new Date().toISOString(),
-        reportId,
-        reporterId,
-        nodeId,
-        type,
-        detail,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-      },
-    }),
-  )
-  return { id: reportId, reporterId, nodeId, type, detail, status: 'pending' }
+  const row = await prisma.report.create({
+    data: {
+      reporterId,
+      nodeId,
+      type,
+      detail: detail ?? null,
+      status: 'pending',
+    },
+  })
+  return {
+    id: row.id,
+    reporterId: row.reporterId,
+    nodeId: row.nodeId,
+    type: row.type,
+    detail: row.detail ?? undefined,
+    status: row.status,
+  }
 }
 
 export async function countRecentFraudReports(nodeId: string) {
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.appData,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'gsi1pk = :pk AND gsi1sk >= :since',
-      FilterExpression: '#type = :type',
-      ExpressionAttributeNames: { '#type': 'type' },
-      ExpressionAttributeValues: { ':pk': `NODE_REPORTS#${nodeId}`, ':since': since, ':type': 'fake_rewards' },
-    }),
-  )
-  return result.Count ?? 0
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  return prisma.report.count({
+    where: { nodeId, type: 'fake_rewards', createdAt: { gte: since } },
+  })
 }
 
 export async function flagNode(nodeId: string) {
-  return dynamo.updateNode(nodeId, { isActive: false })
+  return data.updateNode(nodeId, { isActive: false })
 }
 
 export async function countDismissedReports(reporterId: string) {
-  // Simplified: scan reports by reporter
-  const result = await documentClient.send(
-    new ScanCommand({
-      TableName: TableNames.appData,
-      FilterExpression: 'reporterId = :rid AND #status = :dismissed',
-      ExpressionAttributeNames: { '#status': 'status' },
-      ExpressionAttributeValues: { ':rid': reporterId, ':dismissed': 'dismissed' },
-    }),
-  )
-  return result.Count ?? 0
+  return prisma.report.count({ where: { reporterId, status: 'dismissed' } })
 }
 
+// ─── Who is here (last hour) ────────────────────────────────────────────────
+
 export async function getWhoIsHere(nodeId: string, limit: number) {
-  const { checkIns } = await getCheckInsByNode(nodeId, { hours: 1, limit: limit + 1 })
-  // Enrich with user data, deduplicate by userId
+  const since = new Date(Date.now() - 60 * 60 * 1000)
+
+  // First, distinct users who checked in to this node in the last hour, ordered
+  // by their most-recent check-in. We use a window function to grab the latest
+  // checked_in_at per user without a self-join.
+  const checkIns = await prisma.checkIn.findMany({
+    where: { nodeId, checkedInAt: { gte: since } },
+    orderBy: { checkedInAt: 'desc' },
+    take: (limit + 1) * 4, // generous cap; dedupe in memory
+    select: { userId: true, checkedInAt: true },
+  })
+
   const seen = new Set<string>()
-  const items = []
-  for (const ci of checkIns) {
-    if (seen.has(ci.userId)) continue
-    seen.add(ci.userId)
-    const user = await getUserById(ci.userId)
-    if (user) {
-      items.push({
-        userId: user.userId ?? (user as unknown as { id?: string }).id,
-        displayName: user.displayName,
-        username: user.username,
-        avatarUrl: user.avatarUrl,
-        tier: user.tier,
-        checkedInAt: ci.checkedInAt,
-      })
-    }
-    if (items.length >= limit) break
+  const ordered: Array<{ userId: string; checkedInAt: string }> = []
+  for (const c of checkIns) {
+    if (seen.has(c.userId)) continue
+    seen.add(c.userId)
+    ordered.push({ userId: c.userId, checkedInAt: c.checkedInAt.toISOString() })
+    if (ordered.length >= limit + 1) break
   }
-  const hasMore = checkIns.length > limit
+
+  const hasMore = ordered.length > limit
+  const sliced = hasMore ? ordered.slice(0, limit) : ordered
+
+  const userIds = sliced.map((o) => o.userId)
+  const users = await batchGetUsers(userIds)
+
+  const items = sliced
+    .map((o) => {
+      const u = users[o.userId]
+      if (!u) return null
+      return {
+        userId: u['userId'] as string,
+        displayName: u['displayName'] as string,
+        username: u['username'] as string,
+        avatarUrl: (u['avatarUrl'] as string | null | undefined) ?? null,
+        tier: u['tier'] as string,
+        checkedInAt: o.checkedInAt,
+      }
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+
   return { items, nextCursor: null, hasMore }
 }
 
-export async function registerNodeImage(nodeId: string, s3Key: string, uploadedBy: string, displayOrder: number) {
-  return dynamo.addNodeImage({ nodeId, s3Key, uploadedBy, displayOrder } as unknown as Parameters<
-    typeof dynamo.addNodeImage
-  >[0])
-}
+// ─── Node images ────────────────────────────────────────────────────────────
 
-export async function getCityBySlug(slug: string) {
-  const result = await documentClient.send(
-    new GetCommand({ TableName: TableNames.appData, Key: { pk: `CITY#${slug}`, sk: `CITY#${slug}` } }),
-  )
-  return result.Item ? { id: result.Item['cityId'] ?? slug, slug, name: result.Item['name'] } : null
+export async function registerNodeImage(
+  nodeId: string,
+  s3Key: string,
+  uploadedBy: string,
+  displayOrder: number,
+) {
+  return data.addNodeImage({ nodeId, s3Key, uploadedBy, displayOrder } as Parameters<
+    typeof data.addNodeImage
+  >[0])
 }

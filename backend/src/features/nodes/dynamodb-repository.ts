@@ -1,8 +1,13 @@
-// DynamoDB Repository for Nodes Feature
-import { GetCommand, QueryCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
-import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
-import { generateId } from '../../shared/db/entities.js'
-import { encodeGeohash, haversineMetres, neighbourCells, pickPrecision } from '../../shared/db/geohash.js'
+// Prisma-backed nodes data layer. Filename retained until Phase 3 rename.
+//
+// Spatial queries use PostGIS via $queryRaw with the `location GEOGRAPHY(POINT)`
+// generated column and the GIST index `idx_nodes_location` (already in
+// 20260330000003_core_tables migration).
+
+import { Prisma } from '@prisma/client'
+import { prisma } from '../../shared/db/prisma.js'
+import { nodeFromPrisma, nodeImageFromPrisma } from '../../shared/db/adapters.js'
+import { haversineMetres } from '../../shared/db/geohash.js'
 import type { Node, NodeImage } from './types.js'
 
 // ============================================================================
@@ -10,99 +15,74 @@ import type { Node, NodeImage } from './types.js'
 // ============================================================================
 
 export async function getNodeById(nodeId: string): Promise<Node | null> {
-  const result = await documentClient.send(new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } }))
-  return result.Item ? mapNode(result.Item) : null
+  const row = await prisma.node.findUnique({ where: { id: nodeId } })
+  return row ? nodeFromPrisma(row) : null
 }
 
 export async function getNodeBySlug(slug: string): Promise<Node | null> {
-  let lastKey: Record<string, unknown> | undefined
-  do {
-    const result = await documentClient.send(
-      new ScanCommand({
-        TableName: TableNames.nodes,
-        FilterExpression: 'slug = :slug',
-        ExpressionAttributeValues: { ':slug': slug },
-        ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
-      }),
-    )
-    if (result.Items?.[0]) return result.Items[0] as Node
-    lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
-  } while (lastKey)
-  return null
+  const row = await prisma.node.findUnique({ where: { slug } })
+  return row ? nodeFromPrisma(row) : null
 }
 
 export async function getNodesByBusinessId(businessId: string): Promise<Node[]> {
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.nodes,
-      IndexName: 'BusinessIndex',
-      KeyConditionExpression: 'businessId = :businessId',
-      ExpressionAttributeValues: { ':businessId': businessId },
-    }),
-  )
-  return (result.Items || []) as Node[]
+  const rows = await prisma.node.findMany({ where: { businessId } })
+  return rows.map(nodeFromPrisma)
 }
 
-export async function createNode(data: Omit<Node, 'nodeId' | 'createdAt'>): Promise<Node> {
-  const nodeId = generateId()
-  const now = new Date().toISOString()
-
-  const node: Node = {
-    ...data,
-    nodeId,
-    createdAt: now,
-    updatedAt: now,
-    claimStatus: data.claimStatus || 'unclaimed',
-    isVerified: data.isVerified ?? false,
-    isActive: data.isActive ?? true,
-    qrCheckinEnabled: data.qrCheckinEnabled ?? false,
-    nodeColour: data.nodeColour || 'default',
-  }
-
-  // Precompute geohash attributes for sparse spatial index (see shared/db/geohash.ts).
-  const geohash5 = encodeGeohash(node.lat, node.lng, 5)
-  const geohash7 = encodeGeohash(node.lat, node.lng, 7)
-
-  await documentClient.send(
-    new PutCommand({
-      TableName: TableNames.nodes,
-      Item: { ...node, id: nodeId, geohash5, geohash7 },
-    }),
-  )
-
-  return mapNode(node as unknown as Record<string, unknown>)
+export async function createNode(data: Omit<Node, 'nodeId' | 'createdAt' | 'updatedAt'>): Promise<Node> {
+  const row = await prisma.node.create({
+    data: {
+      name: data.name,
+      slug: data.slug,
+      category: data.category,
+      lat: data.lat,
+      lng: data.lng,
+      cityId: data.cityId ?? null,
+      businessId: data.businessId ?? null,
+      submittedBy: data.submittedBy ?? null,
+      claimStatus: data.claimStatus ?? 'unclaimed',
+      claimCipcStatus: data.claimCipcStatus ?? null,
+      nodeColour: data.nodeColour ?? 'default',
+      nodeIcon: data.nodeIcon ?? null,
+      qrCheckinEnabled: data.qrCheckinEnabled ?? false,
+      isVerified: data.isVerified ?? false,
+      isActive: data.isActive ?? true,
+    },
+  })
+  return nodeFromPrisma(row)
 }
 
 export async function updateNode(
   nodeId: string,
-  data: Partial<Omit<Node, 'nodeId' | 'createdAt'>>,
+  data: Partial<Omit<Node, 'nodeId' | 'createdAt' | 'updatedAt'>>,
 ): Promise<Node | null> {
-  const updateExpr = Object.keys(data)
-    .map((key) => `#${key} = :${key}`)
-    .join(', ')
+  const update: Record<string, unknown> = {}
+  if (data.name !== undefined) update['name'] = data.name
+  if (data.category !== undefined) update['category'] = data.category
+  if (data.lat !== undefined) update['lat'] = data.lat
+  if (data.lng !== undefined) update['lng'] = data.lng
+  if (data.cityId !== undefined) update['cityId'] = data.cityId
+  if (data.businessId !== undefined) update['businessId'] = data.businessId
+  if (data.claimStatus !== undefined) update['claimStatus'] = data.claimStatus
+  if (data.claimCipcStatus !== undefined) update['claimCipcStatus'] = data.claimCipcStatus
+  if (data.nodeColour !== undefined) update['nodeColour'] = data.nodeColour
+  if (data.nodeIcon !== undefined) update['nodeIcon'] = data.nodeIcon
+  if (data.qrCheckinEnabled !== undefined) update['qrCheckinEnabled'] = data.qrCheckinEnabled
+  if (data.isVerified !== undefined) update['isVerified'] = data.isVerified
+  if (data.isActive !== undefined) update['isActive'] = data.isActive
 
-  const result = await documentClient.send(
-    new UpdateCommand({
-      TableName: TableNames.nodes,
-      Key: { nodeId },
-      UpdateExpression: `SET ${updateExpr}, #updatedAt = :updatedAt`,
-      ExpressionAttributeNames: {
-        ...Object.keys(data).reduce((acc, key) => ({ ...acc, [`#${key}`]: key }), {}),
-        '#updatedAt': 'updatedAt',
-      },
-      ExpressionAttributeValues: {
-        ...Object.entries(data).reduce((acc, [key, value]) => ({ ...acc, [`:${key}`]: value }), {}),
-        ':updatedAt': new Date().toISOString(),
-      },
-      ReturnValues: 'ALL_NEW',
-    }),
-  )
+  if (Object.keys(update).length === 0) return getNodeById(nodeId)
 
-  return result.Attributes ? mapNode(result.Attributes) : null
+  try {
+    const row = await prisma.node.update({ where: { id: nodeId }, data: update })
+    return nodeFromPrisma(row)
+  } catch {
+    return null
+  }
 }
 
 export async function deleteNode(nodeId: string): Promise<void> {
-  await documentClient.send(new DeleteCommand({ TableName: TableNames.nodes, Key: { nodeId } }))
+  await prisma.node.delete({ where: { id: nodeId } }).catch(() => undefined)
 }
 
 export async function listNodes(options?: {
@@ -112,74 +92,24 @@ export async function listNodes(options?: {
   limit?: number
   cursor?: string
 }): Promise<{ nodes: Node[]; nextCursor?: string }> {
-  let result
+  const where: Record<string, unknown> = {}
+  if (options?.cityId) where['cityId'] = options.cityId
+  if (options?.category) where['category'] = options.category
+  if (options?.isActive !== undefined) where['isActive'] = options.isActive
 
-  if (options?.cityId) {
-    // Query by city using location index
-    result = await documentClient.send(
-      new QueryCommand({
-        TableName: TableNames.nodes,
-        IndexName: 'LocationIndex',
-        KeyConditionExpression: 'cityId = :cityId',
-        ExpressionAttributeValues: { ':cityId': options.cityId },
-        Limit: options.limit || 50,
-        ...(options.cursor ? { ExclusiveStartKey: JSON.parse(Buffer.from(options.cursor, 'base64').toString()) } : {}),
-      }),
-    )
-  } else {
-    // Scan with filters
-    let filterExpr = ''
-    const exprAttrValues: Record<string, unknown> = {}
+  const limit = options?.limit ?? 50
+  const rows = await prisma.node.findMany({
+    where,
+    take: limit + 1,
+    ...(options?.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
+    orderBy: { createdAt: 'desc' },
+  })
 
-    if (options?.category) {
-      filterExpr = 'category = :category'
-      exprAttrValues[':category'] = options.category
-    }
-    if (options?.isActive !== undefined) {
-      filterExpr = filterExpr ? `${filterExpr} AND isActive = :isActive` : 'isActive = :isActive'
-      exprAttrValues[':isActive'] = options.isActive
-    }
+  const hasMore = rows.length > limit
+  const sliced = hasMore ? rows.slice(0, limit) : rows
+  const nextCursor = hasMore && sliced.length > 0 ? sliced[sliced.length - 1]!.id : undefined
 
-    result = await documentClient.send(
-      new ScanCommand({
-        TableName: TableNames.nodes,
-        ...(filterExpr ? { FilterExpression: filterExpr } : {}),
-        ExpressionAttributeValues: exprAttrValues,
-        Limit: options?.limit || 50,
-      }),
-    )
-  }
-
-  const nodes = (result.Items || []) as Node[]
-  const nextCursor = result.LastEvaluatedKey
-    ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64')
-    : undefined
-
-  return { nodes: nodes.map((n) => mapNode(n as unknown as Record<string, unknown>)), nextCursor }
-}
-
-function mapNode(item: Record<string, unknown>): Node {
-  return {
-    nodeId: (item['nodeId'] as string) ?? (item['id'] as string),
-    name: item['name'] as string,
-    slug: item['slug'] as string,
-    category: item['category'] as string,
-    lat: item['lat'] as number,
-    lng: item['lng'] as number,
-    cityId: item['cityId'] as string | undefined,
-    businessId: item['businessId'] as string | undefined,
-    submittedBy: item['submittedBy'] as string | undefined,
-    claimStatus: (item['claimStatus'] as string) ?? 'unclaimed',
-    claimCipcStatus: item['claimCipcStatus'] as string | undefined,
-    nodeColour: (item['nodeColour'] as string) ?? '#000000',
-    nodeIcon: item['nodeIcon'] as string | undefined,
-    qrCheckinEnabled: (item['qrCheckinEnabled'] as boolean) ?? false,
-    isVerified: (item['isVerified'] as boolean) ?? false,
-    isActive: (item['isActive'] as boolean) ?? true,
-    boostUntil: (item['boostUntil'] as string | null | undefined) ?? null,
-    createdAt: (item['createdAt'] as string) ?? '',
-    updatedAt: (item['updatedAt'] as string) ?? '',
-  }
+  return { nodes: sliced.map(nodeFromPrisma), nextCursor }
 }
 
 // ============================================================================
@@ -187,68 +117,52 @@ function mapNode(item: Record<string, unknown>): Node {
 // ============================================================================
 
 export async function getNodeImages(nodeId: string): Promise<NodeImage[]> {
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.appData,
-      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :skPrefix)',
-      ExpressionAttributeValues: {
-        ':pk': `NODE#${nodeId}`,
-        ':skPrefix': 'IMAGE#',
-      },
-    }),
-  )
-  return (result.Items || []) as NodeImage[]
+  const rows = await prisma.nodeImage.findMany({
+    where: { nodeId },
+    orderBy: { displayOrder: 'asc' },
+  })
+  return rows.map(nodeImageFromPrisma)
 }
 
 export async function addNodeImage(data: Omit<NodeImage, 'imageId' | 'createdAt'>): Promise<NodeImage> {
-  const imageId = generateId()
-  const now = new Date().toISOString()
-
-  const image: NodeImage = {
-    ...data,
-    imageId,
-    createdAt: now,
-  }
-
-  await documentClient.send(
-    new PutCommand({
-      TableName: TableNames.appData,
-      Item: {
-        pk: `NODE#${data.nodeId}`,
-        sk: `IMAGE#${imageId}`,
-        ...image,
-      },
-    }),
-  )
-
-  return image
+  const row = await prisma.nodeImage.create({
+    data: {
+      nodeId: data.nodeId,
+      s3Key: data.s3Key,
+      displayOrder: data.displayOrder ?? 0,
+      uploadedBy: data.uploadedBy ?? null,
+    },
+  })
+  return nodeImageFromPrisma(row)
 }
 
-export async function deleteNodeImage(nodeId: string, imageId: string): Promise<void> {
-  await documentClient.send(
-    new DeleteCommand({
-      TableName: TableNames.appData,
-      Key: { pk: `NODE#${nodeId}`, sk: `IMAGE#${imageId}` },
-    }),
-  )
+export async function deleteNodeImage(_nodeId: string, imageId: string): Promise<void> {
+  await prisma.nodeImage.delete({ where: { id: imageId } }).catch(() => undefined)
 }
 
 // ============================================================================
-// NEARBY SEARCH (Using lat/lng comparison)
+// NEARBY SEARCH (PostGIS ST_DWithin)
 // ============================================================================
 
-let _nearbyScanWarned = false
+interface NearbyRow {
+  id: string
+  name: string
+  slug: string
+  category: string
+  lat: number
+  lng: number
+  city_id: string | null
+  business_id: string | null
+  claim_status: string
+  node_colour: string
+  node_icon: string | null
+  qr_checkin_enabled: boolean
+  is_verified: boolean
+  is_active: boolean
+  created_at: Date
+  distance: number
+}
 
-/**
- * Geohash-backed spatial query — O(9 queries) regardless of table size.
- *
- *   1. Pick a geohash precision whose cell size comfortably exceeds the radius.
- *   2. Compute the centre cell + 8 neighbours (avoids edge misses).
- *   3. Query the Geohash5Index GSI for each cell in parallel.
- *   4. Filter by exact Haversine distance and sort.
- *
- * Falls back to Scan with a warning if the GSI is not yet provisioned.
- */
 export async function findNearbyNodes(
   lat: number,
   lng: number,
@@ -256,79 +170,87 @@ export async function findNearbyNodes(
   options?: { category?: string; limit?: number },
 ): Promise<Node[]> {
   const radiusMetres = radiusKm * 1000
-  const precision = pickPrecision(radiusMetres)
-  const cells = neighbourCells(lat, lng, precision)
   const limit = options?.limit ?? 20
 
-  let items: Array<Record<string, unknown>> = []
+  // ST_DWithin uses the GIST index `idx_nodes_location` for fast spatial filtering.
+  // Returning distance lets us sort nearest-first without an extra round trip.
+  const rows = options?.category
+    ? await prisma.$queryRaw<NearbyRow[]>(Prisma.sql`
+        SELECT id, name, slug, category, lat, lng,
+               city_id, business_id, claim_status, node_colour, node_icon,
+               qr_checkin_enabled, is_verified, is_active, created_at,
+               ST_Distance(location, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography) AS distance
+        FROM nodes
+        WHERE is_active = TRUE
+          AND category = ${options.category}
+          AND ST_DWithin(
+                location,
+                ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography,
+                ${radiusMetres}
+              )
+        ORDER BY distance ASC
+        LIMIT ${limit}
+      `)
+    : await prisma.$queryRaw<NearbyRow[]>(Prisma.sql`
+        SELECT id, name, slug, category, lat, lng,
+               city_id, business_id, claim_status, node_colour, node_icon,
+               qr_checkin_enabled, is_verified, is_active, created_at,
+               ST_Distance(location, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography) AS distance
+        FROM nodes
+        WHERE is_active = TRUE
+          AND ST_DWithin(
+                location,
+                ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography,
+                ${radiusMetres}
+              )
+        ORDER BY distance ASC
+        LIMIT ${limit}
+      `)
 
-  try {
-    const perCell = await Promise.all(
-      cells.map((cell) => {
-        const values: Record<string, unknown> = { ':a': true }
-        let keyCondition: string
-        if (precision === 5) {
-          values[':c'] = cell
-          keyCondition = 'geohash5 = :c'
-        } else {
-          values[':c'] = cell.slice(0, 5)
-          values[':p'] = cell.slice(0, precision)
-          keyCondition = 'geohash5 = :c AND begins_with(geohash7, :p)'
-        }
-        if (options?.category) values[':cat'] = options.category
-
-        return documentClient
-          .send(
-            new QueryCommand({
-              TableName: TableNames.nodes,
-              IndexName: 'Geohash5Index',
-              KeyConditionExpression: keyCondition,
-              FilterExpression: options?.category
-                ? 'isActive = :a AND category = :cat'
-                : 'isActive = :a',
-              ExpressionAttributeValues: values,
-            }),
-          )
-          .then((r) => r.Items ?? [])
-      }),
-    )
-    items = perCell.flat()
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    if (msg.includes('specified index') || msg.includes('does not have the specified')) {
-      if (!_nearbyScanWarned) {
-        _nearbyScanWarned = true
-        console.warn(
-          '[nodes.findNearbyNodes] Geohash5Index GSI not provisioned — falling back to Scan. ' +
-            'Apply infra/SCALE_GSI_ADDITIONS.md to fix at scale.',
-        )
-      }
-      const result = await documentClient.send(
-        new ScanCommand({
-          TableName: TableNames.nodes,
-          FilterExpression: options?.category ? 'isActive = :a AND category = :cat' : 'isActive = :a',
-          ExpressionAttributeValues: options?.category
-            ? { ':a': true, ':cat': options.category }
-            : { ':a': true },
-        }),
-      )
-      items = (result.Items || []) as Array<Record<string, unknown>>
-    } else {
-      throw err
-    }
-  }
-
-  // De-dupe (cells can overlap), compute exact distance, filter, sort, limit.
-  const seen = new Set<string>()
-  const scored: Array<{ node: Node; distance: number }> = []
-  for (const item of items) {
-    const nodeId = (item['nodeId'] ?? item['id']) as string
-    if (!nodeId || seen.has(nodeId)) continue
-    seen.add(nodeId)
-    const n = mapNode(item)
-    const distM = haversineMetres(lat, lng, n.lat, n.lng)
-    if (distM <= radiusMetres) scored.push({ node: n, distance: distM })
-  }
-  scored.sort((a, b) => a.distance - b.distance)
-  return scored.slice(0, limit).map((s) => s.node)
+  // The `distance` field is informative but not part of Node DTO; callers that
+  // need it use `searchNodes`. Drop it here to keep the contract clean.
+  return rows.map((r) => ({
+    nodeId: r.id,
+    name: r.name,
+    slug: r.slug,
+    category: r.category,
+    lat: r.lat,
+    lng: r.lng,
+    cityId: r.city_id ?? undefined,
+    businessId: r.business_id ?? undefined,
+    submittedBy: undefined,
+    claimStatus: r.claim_status,
+    nodeColour: r.node_colour,
+    nodeIcon: r.node_icon ?? undefined,
+    qrCheckinEnabled: r.qr_checkin_enabled,
+    isVerified: r.is_verified,
+    isActive: r.is_active,
+    createdAt: r.created_at.toISOString(),
+    updatedAt: r.created_at.toISOString(),
+  }))
 }
+
+// Exported for callers (search) that need similarity + distance together.
+export async function searchNodesRaw(
+  query: string,
+  lat: number,
+  lng: number,
+  limit = 20,
+): Promise<Array<{ id: string; name: string; slug: string; category: string; lat: number; lng: number; similarity: number; distance: number }>> {
+  const rows = await prisma.$queryRaw<
+    Array<{ id: string; name: string; slug: string; category: string; lat: number; lng: number; similarity: number; distance: number }>
+  >(Prisma.sql`
+    SELECT id, name, slug, category, lat, lng,
+           similarity(name, ${query}) AS similarity,
+           ST_Distance(location, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography) AS distance
+    FROM nodes
+    WHERE is_active = TRUE
+      AND name % ${query}
+    ORDER BY similarity DESC, distance ASC
+    LIMIT ${limit}
+  `)
+  return rows
+}
+
+// Re-export for any caller that imported it from the old DDB module.
+export { haversineMetres }

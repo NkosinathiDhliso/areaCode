@@ -1,190 +1,122 @@
-// DynamoDB Repository for Check-In Feature
-import { GetCommand, QueryCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
-import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
-import { generateId } from '../../shared/db/entities.js'
+// Prisma-backed check-in data layer. Filename retained until Phase 3 rename.
+//
+// Heavy use of partitioned `check_ins` table. The composite indexes
+// (idx_check_ins_user_time, idx_check_ins_node_time) make all read paths
+// here index-only or single-index scans.
+
+import { Prisma } from '@prisma/client'
+import { prisma } from '../../shared/db/prisma.js'
+import { checkInFromPrisma } from '../../shared/db/adapters.js'
 import type { CheckIn } from './types.js'
 
 // ============================================================================
 // CHECK-IN OPERATIONS
 // ============================================================================
 
-export async function getCheckInById(checkInId: string, timestamp?: number): Promise<CheckIn | null> {
-  if (timestamp !== undefined) {
-    const result = await documentClient.send(
-      new GetCommand({
-        TableName: TableNames.checkins,
-        Key: { checkInId, timestamp },
-      }),
-    )
-    return result.Item ? mapCheckIn(result.Item) : null
-  }
-  // Without timestamp, query by checkInId (partition key only)
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.checkins,
-      KeyConditionExpression: 'checkInId = :id',
-      ExpressionAttributeValues: { ':id': checkInId },
-      Limit: 1,
-    }),
-  )
-  return result.Items?.[0] ? mapCheckIn(result.Items[0]) : null
+export async function getCheckInById(checkInId: string): Promise<CheckIn | null> {
+  const row = await prisma.checkIn.findUnique({ where: { id: checkInId } })
+  return row ? checkInFromPrisma(row) : null
 }
 
-export async function createCheckIn(data: Omit<CheckIn, 'checkInId' | 'checkedInAt'>): Promise<CheckIn> {
-  const checkInId = generateId()
-  const now = new Date().toISOString()
-  const ts = Date.now() // numeric timestamp for SK
+export async function createCheckIn(
+  data: Omit<CheckIn, 'checkInId' | 'checkedInAt'>,
+): Promise<CheckIn> {
+  const row = await prisma.checkIn.create({
+    data: {
+      userId: data.userId,
+      nodeId: data.nodeId,
+      neighbourhoodId: data.neighbourhoodId ?? null,
+      type: data.type ?? 'reward',
+    },
+  })
+  return checkInFromPrisma(row)
+}
 
-  const checkIn: CheckIn = {
-    ...data,
-    checkInId,
-    checkedInAt: now,
+function decodeCursor(cursor: string | undefined): Date | null {
+  if (!cursor) return null
+  try {
+    return new Date(Buffer.from(cursor, 'base64').toString('utf8'))
+  } catch {
+    return null
   }
+}
 
-  await documentClient.send(
-    new PutCommand({
-      TableName: TableNames.checkins,
-      Item: {
-        ...checkIn,
-        timestamp: ts,
-      },
-    }),
-  )
-
-  return checkIn
+function encodeCursor(d: Date): string {
+  return Buffer.from(d.toISOString()).toString('base64')
 }
 
 export async function getCheckInsByUser(
   userId: string,
-  options?: {
-    limit?: number
-    cursor?: string
-    startTime?: string
-    endTime?: string
-  },
+  options?: { limit?: number; cursor?: string; startTime?: string; endTime?: string },
 ): Promise<{ checkIns: CheckIn[]; nextCursor?: string }> {
-  let keyCondition = 'userId = :userId'
-  const exprValues: Record<string, unknown> = { ':userId': userId }
+  const limit = options?.limit ?? 50
+  const cursorDate = decodeCursor(options?.cursor)
 
-  if (options?.startTime && options?.endTime) {
-    keyCondition += ' AND #ts BETWEEN :start AND :end'
-    exprValues[':start'] = new Date(options.startTime).getTime()
-    exprValues[':end'] = new Date(options.endTime).getTime()
-  }
+  const where: Record<string, unknown> = { userId }
+  const range: Record<string, Date> = {}
+  if (options?.startTime) range['gte'] = new Date(options.startTime)
+  if (options?.endTime) range['lte'] = new Date(options.endTime)
+  if (cursorDate) range['lt'] = cursorDate
+  if (Object.keys(range).length > 0) where['checkedInAt'] = range
 
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.checkins,
-      IndexName: 'UserIndex',
-      KeyConditionExpression: keyCondition,
-      ...(options?.startTime ? { ExpressionAttributeNames: { '#ts': 'timestamp' } } : {}),
-      ExpressionAttributeValues: exprValues,
-      ScanIndexForward: false,
-      Limit: options?.limit || 50,
-      ...(options?.cursor ? { ExclusiveStartKey: JSON.parse(Buffer.from(options.cursor, 'base64').toString()) } : {}),
-    }),
-  )
+  const rows = await prisma.checkIn.findMany({
+    where,
+    orderBy: { checkedInAt: 'desc' },
+    take: limit + 1,
+  })
 
-  const checkIns = (result.Items || []).map((i) => mapCheckIn(i))
-  const nextCursor = result.LastEvaluatedKey
-    ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64')
-    : undefined
+  const hasMore = rows.length > limit
+  const sliced = hasMore ? rows.slice(0, limit) : rows
+  const nextCursor = hasMore && sliced.length > 0 ? encodeCursor(sliced[sliced.length - 1]!.checkedInAt) : undefined
 
-  return { checkIns, nextCursor }
+  return { checkIns: sliced.map(checkInFromPrisma), nextCursor }
 }
 
 export async function getCheckInsByNode(
   nodeId: string,
-  options?: {
-    limit?: number
-    cursor?: string
-    hours?: number
-  },
+  options?: { limit?: number; cursor?: string; hours?: number },
 ): Promise<{ checkIns: CheckIn[]; nextCursor?: string }> {
-  let filterExpr = ''
-  const exprValues: Record<string, unknown> = { ':nodeId': nodeId }
+  const limit = options?.limit ?? 50
+  const cursorDate = decodeCursor(options?.cursor)
 
-  if (options?.hours) {
-    const cutoff = new Date(Date.now() - options.hours * 60 * 60 * 1000).toISOString()
-    filterExpr = 'checkedInAt >= :cutoff'
-    exprValues[':cutoff'] = cutoff
-  }
+  const where: Record<string, unknown> = { nodeId }
+  const range: Record<string, Date> = {}
+  if (options?.hours) range['gte'] = new Date(Date.now() - options.hours * 60 * 60 * 1000)
+  if (cursorDate) range['lt'] = cursorDate
+  if (Object.keys(range).length > 0) where['checkedInAt'] = range
 
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.checkins,
-      IndexName: 'NodeIndex',
-      KeyConditionExpression: 'nodeId = :nodeId',
-      ExpressionAttributeValues: exprValues,
-      ...(filterExpr ? { FilterExpression: filterExpr } : {}),
-      ScanIndexForward: false,
-      Limit: options?.limit || 50,
-      ...(options?.cursor ? { ExclusiveStartKey: JSON.parse(Buffer.from(options.cursor, 'base64').toString()) } : {}),
-    }),
-  )
+  const rows = await prisma.checkIn.findMany({
+    where,
+    orderBy: { checkedInAt: 'desc' },
+    take: limit + 1,
+  })
 
-  const checkIns = (result.Items || []).map((i) => mapCheckIn(i))
-  const nextCursor = result.LastEvaluatedKey
-    ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64')
-    : undefined
+  const hasMore = rows.length > limit
+  const sliced = hasMore ? rows.slice(0, limit) : rows
+  const nextCursor = hasMore && sliced.length > 0 ? encodeCursor(sliced[sliced.length - 1]!.checkedInAt) : undefined
 
-  return { checkIns, nextCursor }
+  return { checkIns: sliced.map(checkInFromPrisma), nextCursor }
 }
 
-export async function getRecentCheckInCount(userId: string, nodeId: string, hours: number): Promise<number> {
-  const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
-
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.checkins,
-      IndexName: 'UserIndex',
-      KeyConditionExpression: 'userId = :userId',
-      FilterExpression: 'nodeId = :nodeId AND checkedInAt >= :cutoff',
-      ExpressionAttributeValues: {
-        ':userId': userId,
-        ':nodeId': nodeId,
-        ':cutoff': cutoff,
-      },
-    }),
-  )
-
-  return result.Count || 0
+export async function getRecentCheckInCount(
+  userId: string,
+  nodeId: string,
+  hours: number,
+): Promise<number> {
+  const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000)
+  return prisma.checkIn.count({ where: { userId, nodeId, checkedInAt: { gte: cutoff } } })
 }
 
 export async function getUserCheckInCountAtNode(userId: string, nodeId: string): Promise<number> {
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.checkins,
-      IndexName: 'UserIndex',
-      KeyConditionExpression: 'userId = :userId',
-      FilterExpression: 'nodeId = :nodeId',
-      ExpressionAttributeValues: {
-        ':userId': userId,
-        ':nodeId': nodeId,
-      },
-      Select: 'COUNT',
-    }),
-  )
-
-  return result.Count || 0
+  return prisma.checkIn.count({ where: { userId, nodeId } })
 }
 
 export async function getUserCheckInCount(userId: string): Promise<number> {
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.checkins,
-      IndexName: 'UserIndex',
-      KeyConditionExpression: 'userId = :userId',
-      ExpressionAttributeValues: { ':userId': userId },
-      Select: 'COUNT',
-    }),
-  )
-
-  return result.Count || 0
+  return prisma.checkIn.count({ where: { userId } })
 }
 
 // ============================================================================
-// LEADERBOARD
+// LEADERBOARD (Postgres fallback — Redis ZSET is the primary path)
 // ============================================================================
 
 export async function getLeaderboard(
@@ -192,22 +124,36 @@ export async function getLeaderboard(
   weekEnding: string,
   limit: number = 100,
 ): Promise<Array<{ userId: string; rank: number; checkInCount: number }>> {
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.appData,
-      KeyConditionExpression: 'pk = :pk',
-      ExpressionAttributeValues: {
-        ':pk': `LEADERBOARD#${cityId}#${weekEnding}`,
-      },
-      ScanIndexForward: true,
-      Limit: limit,
-    }),
-  )
+  const weekEndDate = new Date(weekEnding)
+  const weekStartDate = new Date(weekEndDate.getTime() - 7 * 24 * 60 * 60 * 1000)
 
-  return (result.Items || []).map((item, index) => ({
-    userId: item['userId'] as string,
-    rank: (item['rank'] as number) || index + 1,
-    checkInCount: (item['checkInCount'] as number) ?? 0,
+  // First try the historical archive table (populated by leaderboard-reset worker).
+  const history = await prisma.leaderboardHistory.findMany({
+    where: { cityId, weekEnding: weekEndDate },
+    orderBy: { rank: 'asc' },
+    take: limit,
+  })
+  if (history.length > 0) {
+    return history.map((h) => ({ userId: h.userId, rank: h.rank, checkInCount: h.checkInCount }))
+  }
+
+  // Otherwise, compute live from check_ins joined with users in this city.
+  const rows = await prisma.$queryRaw<Array<{ user_id: string; check_in_count: bigint }>>(Prisma.sql`
+    SELECT ci.user_id, COUNT(*)::bigint AS check_in_count
+    FROM check_ins ci
+    JOIN users u ON u.id = ci.user_id
+    WHERE u.city_id = ${cityId}::uuid
+      AND ci.checked_in_at >= ${weekStartDate}
+      AND ci.checked_in_at < ${weekEndDate}
+    GROUP BY ci.user_id
+    ORDER BY check_in_count DESC
+    LIMIT ${limit}
+  `)
+
+  return rows.map((r, i) => ({
+    userId: r.user_id,
+    rank: i + 1,
+    checkInCount: Number(r.check_in_count),
   }))
 }
 
@@ -218,21 +164,18 @@ export async function updateLeaderboardEntry(
   checkInCount: number,
   rank: number,
 ): Promise<void> {
-  await documentClient.send(
-    new PutCommand({
-      TableName: TableNames.appData,
-      Item: {
-        pk: `LEADERBOARD#${cityId}#${weekEnding}`,
-        sk: `RANK#${rank.toString().padStart(4, '0')}#${userId}`,
-        userId,
-        checkInCount,
-        rank,
-        cityId,
-        weekEnding,
-        updatedAt: new Date().toISOString(),
-      },
+  const weekEndDate = new Date(weekEnding)
+  // Persist to the history archive (idempotent via composite uniqueness pattern;
+  // we don't have a unique constraint, so use upsert via deleteMany+create
+  // wrapped in a transaction).
+  await prisma.$transaction([
+    prisma.leaderboardHistory.deleteMany({
+      where: { cityId, weekEnding: weekEndDate, userId },
     }),
-  )
+    prisma.leaderboardHistory.create({
+      data: { cityId, weekEnding: weekEndDate, userId, rank, checkInCount },
+    }),
+  ])
 }
 
 // ============================================================================
@@ -240,55 +183,12 @@ export async function updateLeaderboardEntry(
 // ============================================================================
 
 export async function getCheckInVelocity(userId: string, minutes: number): Promise<number> {
-  const cutoff = new Date(Date.now() - minutes * 60 * 1000).toISOString()
-
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.checkins,
-      IndexName: 'UserIndex',
-      KeyConditionExpression: 'userId = :userId',
-      FilterExpression: 'checkedInAt >= :cutoff',
-      ExpressionAttributeValues: {
-        ':userId': userId,
-        ':cutoff': cutoff,
-      },
-    }),
-  )
-
-  return result.Count || 0
+  const cutoff = new Date(Date.now() - minutes * 60 * 1000)
+  return prisma.checkIn.count({ where: { userId, checkedInAt: { gte: cutoff } } })
 }
 
 export async function markCheckInForDeletion(checkInId: string): Promise<void> {
-  // Need timestamp to address the item , query first
-  const item = await getCheckInById(checkInId)
-  if (!item) return
-  const ts = (item as unknown as Record<string, unknown>)['timestamp'] as number
-  const ttl = Math.floor(Date.now() / 1000) + 86400 // 1 day from now
-
-  await documentClient.send(
-    new UpdateCommand({
-      TableName: TableNames.checkins,
-      Key: { checkInId, timestamp: ts },
-      UpdateExpression: 'SET #deleted = :deleted, #ttl = :ttl',
-      ExpressionAttributeNames: {
-        '#deleted': 'deleted',
-        '#ttl': 'ttl',
-      },
-      ExpressionAttributeValues: {
-        ':deleted': true,
-        ':ttl': ttl,
-      },
-    }),
-  )
-}
-
-function mapCheckIn(item: Record<string, unknown>): CheckIn {
-  return {
-    checkInId: (item['checkInId'] as string) ?? (item['id'] as string),
-    userId: item['userId'] as string,
-    nodeId: item['nodeId'] as string,
-    neighbourhoodId: item['neighbourhoodId'] as string | undefined,
-    type: item['type'] as string,
-    checkedInAt: item['checkedInAt'] as string,
-  }
+  // Hard-delete is correct here under Postgres FKs. The "TTL marker" approach
+  // was DDB-specific. Cascade rules in the schema take care of dependents.
+  await prisma.checkIn.delete({ where: { id: checkInId } }).catch(() => undefined)
 }

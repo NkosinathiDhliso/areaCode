@@ -22,6 +22,10 @@ tfplan
 !README.md
 !SCALE.md
 !SCALE_GSI_ADDITIONS.md
+
+# Phase 2 backup files — DDB versions kept for diff reference until Phase 3.
+# Safe to delete once Postgres path is verified.
+*.ts.bak
 !.kiro/**/*.md
 
 # Secrets

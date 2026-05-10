@@ -1,26 +1,33 @@
-// DynamoDB Repository for Auth (Replaces Prisma)
-import { QueryCommand, PutCommand, GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
+// Prisma-backed auth orchestration repository.
+// Re-exports primitive lookups from the data-layer module and adds composite
+// queries (check-in history with node enrichment, consent records, erasure
+// requests) that span multiple tables.
 
-import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
-import { generateId } from '../../shared/db/entities.js'
-
+import { prisma } from '../../shared/db/prisma.js'
 import {
-  getUserById,
-  getUserByCognitoSub,
-  getUserByPhone,
-  createUser as createUserDb,
-  updateUser,
-  getBusinessByEmail,
-  createBusiness as createBusinessDb,
   getStaffById,
   getStaffByCognitoSub,
   getStaffByPhone,
+  getUserByCognitoSub,
+  getUserById,
+  getUserByEmail,
+  getUserByPhone,
+  getBusinessByEmail,
+  createUser as createUserDb,
+  createBusiness as createBusinessDb,
   createStaff as createStaffDb,
+  updateUser,
 } from './dynamodb-repository.js'
 
-// Re-export DynamoDB functions with same names as Prisma
-export { getStaffById, getUserByCognitoSub, getUserById }
-export { getUserByEmail } from './dynamodb-repository.js'
+export {
+  getStaffById,
+  getUserByCognitoSub,
+  getUserById,
+  getUserByEmail,
+  getUserByPhone as findUserByPhone,
+  getBusinessByEmail as findBusinessByEmail,
+  getStaffByPhone as findStaffByPhone,
+}
 
 // ─── User Profile ───────────────────────────────────────────────────────────
 
@@ -31,123 +38,86 @@ export async function updateUserProfile(
   return updateUser(userId, data)
 }
 
-export async function getUserCheckInHistory(userId: string, cursor: string | undefined, limit: number) {
-  // Query check-ins by userId from GSI
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.checkins,
-      IndexName: 'UserIndex',
-      KeyConditionExpression: 'userId = :userId',
-      ExpressionAttributeValues: { ':userId': userId },
-      ...(cursor ? { ExclusiveStartKey: JSON.parse(Buffer.from(cursor, 'base64').toString()) } : {}),
-      ScanIndexForward: false,
-      Limit: limit + 1,
-    }),
-  )
+export async function getUserCheckInHistory(
+  userId: string,
+  cursor: string | undefined,
+  limit: number,
+) {
+  // Cursor format: ISO timestamp of the last item from the previous page.
+  const cursorDate = cursor ? new Date(cursor) : null
 
-  const items = result.Items || []
-  const hasMore = items.length > limit
-  const sliced = hasMore ? items.slice(0, limit) : items
+  const rows = await prisma.checkIn.findMany({
+    where: {
+      userId,
+      ...(cursorDate ? { checkedInAt: { lt: cursorDate } } : {}),
+    },
+    include: {
+      node: { select: { name: true, slug: true, category: true } },
+    },
+    orderBy: { checkedInAt: 'desc' },
+    take: limit + 1,
+  })
 
-  // Fetch node details for each check-in
-  const enriched = await Promise.all(
-    sliced.map(async (checkIn) => {
-      const nodeResult = await documentClient.send(
-        new GetCommand({
-          TableName: TableNames.nodes,
-          Key: { nodeId: checkIn.nodeId },
-        }),
-      )
-      return {
-        ...checkIn,
-        node: nodeResult.Item
-          ? {
-              name: nodeResult.Item.name,
-              slug: nodeResult.Item.slug,
-              category: nodeResult.Item.category,
-            }
-          : null,
-      }
-    }),
-  )
+  const hasMore = rows.length > limit
+  const sliced = hasMore ? rows.slice(0, limit) : rows
 
-  const nextCursor =
-    hasMore && result.LastEvaluatedKey ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64') : null
+  const items = sliced.map((c) => ({
+    id: c.id,
+    userId: c.userId,
+    nodeId: c.nodeId,
+    type: c.type,
+    checkedInAt: c.checkedInAt.toISOString(),
+    node: c.node ? { name: c.node.name, slug: c.node.slug, category: c.node.category } : null,
+  }))
 
-  return { items: enriched, nextCursor, hasMore }
+  const nextCursor = hasMore && sliced.length > 0 ? sliced[sliced.length - 1]!.checkedInAt.toISOString() : null
+
+  return { items, nextCursor, hasMore }
 }
 
 // ─── Consent ────────────────────────────────────────────────────────────────
 
-export async function insertConsentRecord(userId: string, consentVersion: string, analyticsOptIn: boolean) {
-  const consentId = generateId()
-  await documentClient.send(
-    new PutCommand({
-      TableName: TableNames.appData,
-      Item: {
-        pk: `USER#${userId}`,
-        sk: `CONSENT#${consentId}`,
-        consentVersion,
-        analyticsOptIn,
-        consentedAt: new Date().toISOString(),
-      },
-    }),
-  )
+export async function insertConsentRecord(
+  userId: string,
+  consentVersion: string,
+  analyticsOptIn: boolean,
+) {
+  await prisma.consentRecord.create({
+    data: {
+      userId,
+      consentVersion,
+      analyticsOptIn,
+      broadcastLocation: true,
+    },
+  })
   return { userId, consentVersion, analyticsOptIn }
 }
 
 export async function getLatestConsent(userId: string) {
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.appData,
-      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :skPrefix)',
-      ExpressionAttributeValues: {
-        ':pk': `USER#${userId}`,
-        ':skPrefix': 'CONSENT#',
-      },
-      ScanIndexForward: false,
-      Limit: 1,
-    }),
-  )
-  return result.Items?.[0] || null
+  return prisma.consentRecord.findFirst({
+    where: { userId },
+    orderBy: { consentedAt: 'desc' },
+  })
 }
 
 // ─── Auth Lookups ───────────────────────────────────────────────────────────
-
-export { getUserByPhone as findUserByPhone }
-export { getBusinessByEmail as findBusinessByEmail }
 
 export async function findStaffByCognitoSub(cognitoSub: string) {
   return getStaffByCognitoSub(cognitoSub)
 }
 
-export async function findUserByUsername(username: string): Promise<unknown | null> {
+export async function findUserByUsername(username: string) {
   if (!username) return null
-  const result = await documentClient.send(
-    new ScanCommand({
-      TableName: TableNames.users,
-      FilterExpression: 'username = :username',
-      ExpressionAttributeValues: { ':username': username },
-      Limit: 1,
-    }),
-  )
-  return result.Items?.[0] || null
+  const row = await prisma.user.findUnique({ where: { username } })
+  return row
 }
 
 export async function findBusinessByPhone(phone: string) {
   if (!phone) return null
-  // No PhoneIndex GSI , scan at current scale
-  const result = await documentClient.send(
-    new ScanCommand({
-      TableName: TableNames.businesses,
-      FilterExpression: 'phone = :phone',
-      ExpressionAttributeValues: { ':phone': phone },
-    }),
-  )
-  return result.Items?.[0] || null
+  return prisma.businessAccount.findFirst({ where: { phone } })
 }
 
-export { getStaffByPhone as findStaffByPhone }
+// ─── User & Business Creation ───────────────────────────────────────────────
 
 export async function createUser(data: {
   phone?: string
@@ -158,9 +128,13 @@ export async function createUser(data: {
   cognitoSub: string
 }) {
   return createUserDb({
-    ...data,
+    phone: data.phone,
+    username: data.username,
+    displayName: data.displayName,
+    cityId: data.cityId,
+    cognitoSub: data.cognitoSub,
     musicGenres: [],
-  })
+  } as Parameters<typeof createUserDb>[0])
 }
 
 export async function createBusinessAccount(data: {
@@ -170,32 +144,20 @@ export async function createBusinessAccount(data: {
   cognitoSub: string
   phone?: string
 }) {
-  return createBusinessDb(data)
+  return createBusinessDb(data as Parameters<typeof createBusinessDb>[0])
 }
 
+// ─── Staff Invites ──────────────────────────────────────────────────────────
+
 export async function findStaffInviteByToken(token: string) {
-  const result = await documentClient.send(
-    new GetCommand({
-      TableName: TableNames.appData,
-      Key: { pk: `STAFF_INVITE#${token}`, sk: `STAFF_INVITE#${token}` },
-    }),
-  )
-  return result.Item || null
+  return prisma.staffInvite.findUnique({ where: { inviteToken: token } })
 }
 
 export async function acceptStaffInvite(inviteToken: string) {
-  const { UpdateCommand } = await import('@aws-sdk/lib-dynamodb')
-  await documentClient.send(
-    new UpdateCommand({
-      TableName: TableNames.appData,
-      Key: { pk: `STAFF_INVITE#${inviteToken}`, sk: `STAFF_INVITE#${inviteToken}` },
-      UpdateExpression: 'SET accepted = :accepted, acceptedAt = :acceptedAt',
-      ExpressionAttributeValues: {
-        ':accepted': true,
-        ':acceptedAt': new Date().toISOString(),
-      },
-    }),
-  )
+  await prisma.staffInvite.update({
+    where: { inviteToken },
+    data: { accepted: true },
+  })
   return { accepted: true }
 }
 
@@ -206,78 +168,38 @@ export async function createStaffAccount(data: {
   email?: string
   cognitoSub: string
 }) {
-  return createStaffDb({ ...data, isActive: true })
+  return createStaffDb({ ...data, isActive: true } as Parameters<typeof createStaffDb>[0])
 }
+
+// ─── Cities ─────────────────────────────────────────────────────────────────
 
 export async function getCityBySlug(slug: string) {
-  const result = await documentClient.send(
-    new GetCommand({
-      TableName: TableNames.appData,
-      Key: { pk: `CITY#${slug}`, sk: `CITY#${slug}` },
-    }),
-  )
-  return result.Item || null
+  const row = await prisma.city.findUnique({ where: { slug } })
+  return row ? { id: row.id, slug: row.slug, name: row.name } : null
 }
+
+// ─── Soft Delete History (POPIA prep) ───────────────────────────────────────
 
 export async function softDeleteCheckInHistory(userId: string) {
-  // In DynamoDB, we don't actually delete - we mark for TTL or soft delete
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.checkins,
-      IndexName: 'UserIndex',
-      KeyConditionExpression: 'userId = :userId',
-      ExpressionAttributeValues: { ':userId': userId },
-    }),
-  )
-
-  // Mark each check-in for deletion (set TTL to 1 day from now)
-  const oneDayFromNow = Math.floor(Date.now() / 1000) + 86400
-  const items = result.Items || []
-
-  await Promise.all(
-    items.map((item) =>
-      documentClient.send(
-        new PutCommand({
-          TableName: TableNames.checkins,
-          Item: {
-            ...item,
-            deleted: true,
-            ttl: oneDayFromNow,
-          },
-        }),
-      ),
-    ),
-  )
-
-  return { count: items.length }
+  // Hard-delete is preferred under Postgres because we have FK cascade and
+  // ACID. The "soft delete with TTL" pattern was a DDB workaround.
+  const result = await prisma.checkIn.deleteMany({ where: { userId } })
+  return { count: result.count }
 }
 
-// ─── Account Deletion (POPIA erasure) ───────────────────────────────────────
+// ─── Erasure Requests ───────────────────────────────────────────────────────
 
 export async function createErasureRequest(userId: string) {
-  const requestId = generateId()
-  await documentClient.send(
-    new PutCommand({
-      TableName: TableNames.appData,
-      Item: {
-        pk: `ERASURE#${userId}`,
-        sk: `REQUEST#${requestId}`,
-        userId,
-        status: 'pending',
-        requestedAt: new Date().toISOString(),
-      },
-    }),
-  )
-  return { id: requestId, userId, status: 'pending' }
+  const row = await prisma.erasureRequest.create({
+    data: { userId, status: 'pending' },
+  })
+  return { id: row.id, userId: row.userId, status: row.status }
 }
 
 export async function hasActiveErasureRequest(userId: string) {
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.appData,
-      KeyConditionExpression: 'pk = :pk',
-      ExpressionAttributeValues: { ':pk': `ERASURE#${userId}` },
-    }),
-  )
-  return result.Items?.some((item) => item.status === 'pending') || false
+  const found = await prisma.erasureRequest.findFirst({
+    where: { userId, status: 'pending' },
+    select: { id: true },
+  })
+  return !!found
 }

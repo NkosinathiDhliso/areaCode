@@ -90,12 +90,11 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
   const [reportError, setReportError] = useState('')
   const [reportSuccess, setReportSuccess] = useState(false)
 
-  if (!node) return null
-
   const isDormant = state === 'dormant' && rewards.length === 0
   const activeRewards = rewards.filter((r) => r.isActive)
 
   useEffect(() => {
+    if (!node) return
     if (isOpen && activeRewards.length > 0) {
       activeRewards.forEach((reward) => {
         analytics.track('reward_viewed', {
@@ -106,7 +105,9 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
     }
     // Intentionally excluding activeRewards to prevent re-firing unless the sheet toggles
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, node.id])
+  }, [isOpen, node?.id])
+
+  if (!node) return null
 
   function handleCheckIn() {
     if (!isAuthenticated) {

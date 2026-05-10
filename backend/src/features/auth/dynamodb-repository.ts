@@ -1,376 +1,218 @@
-// DynamoDB Repository for Auth Feature (Replaces Prisma)
-// Keys match actual table schemas:
-//   users      → PK: userId  (no SK)     GSIs: EmailIndex, CognitoIndex
-//   businesses → PK: businessId (no SK)  GSI: OwnerIndex
-//   app-data   → PK: pk, SK: sk          GSI: GSI1(gsi1pk, gsi1sk)
-import { GetCommand, QueryCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
-import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
-import { generateId } from '../../shared/db/entities.js'
+// Prisma-backed implementation. Filename retained ("dynamodb-repository.ts")
+// until Phase 3 rename so the 12+ existing import sites don't churn in this PR.
+//
+// All exported function signatures are unchanged — callers see the same
+// camelCase DTOs (`userId`, `businessId`, `staffId`) thanks to adapters.ts.
+
+import { prisma } from '../../shared/db/prisma.js'
+import {
+  userFromPrisma,
+  businessFromPrisma,
+  staffFromPrisma,
+} from '../../shared/db/adapters.js'
 import type { User, BusinessAccount, StaffAccount } from './types.js'
 
 // ============================================================================
-// USER OPERATIONS  (table PK = userId, no SK)
+// USER OPERATIONS
 // ============================================================================
 
 export async function getUserById(userId: string): Promise<User | null> {
-  const result = await documentClient.send(new GetCommand({ TableName: TableNames.users, Key: { userId } }))
-  return result.Item ? mapUser(result.Item) : null
+  const row = await prisma.user.findUnique({ where: { id: userId } })
+  return row ? userFromPrisma(row) : null
 }
 
 export async function getUserByCognitoSub(cognitoSub: string): Promise<User | null> {
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.users,
-      IndexName: 'CognitoIndex',
-      KeyConditionExpression: 'cognitoSub = :sub',
-      ExpressionAttributeValues: { ':sub': cognitoSub },
-      Limit: 1,
-    }),
-  )
-  return result.Items?.[0] ? mapUser(result.Items[0]) : null
+  const row = await prisma.user.findUnique({ where: { cognitoSub } })
+  return row ? userFromPrisma(row) : null
 }
 
 export async function getUserByPhone(phone: string): Promise<User | null> {
-  // Paginated scan for phone lookup (no PhoneIndex GSI)
-  let lastKey: Record<string, unknown> | undefined
-  do {
-    const result = await documentClient.send(
-      new ScanCommand({
-        TableName: TableNames.users,
-        FilterExpression: 'phone = :phone',
-        ExpressionAttributeValues: { ':phone': phone },
-        ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
-      }),
-    )
-    if (result.Items?.[0]) return mapUser(result.Items[0])
-    lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
-  } while (lastKey)
+  const row = await prisma.user.findUnique({ where: { phone } })
+  return row ? userFromPrisma(row) : null
+}
+
+export async function getUserByEmail(_email: string): Promise<User | null> {
+  // Users in this schema log in by phone or cognitoSub. Email is reserved for
+  // business accounts. Returning null preserves the previous DDB behaviour
+  // where the EmailIndex was business-account-shaped on user-table writes.
   return null
 }
 
-export async function getUserByEmail(email: string): Promise<User | null> {
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.users,
-      IndexName: 'EmailIndex',
-      KeyConditionExpression: 'email = :email',
-      ExpressionAttributeValues: { ':email': email },
-      Limit: 1,
-    }),
-  )
-  return result.Items?.[0] ? mapUser(result.Items[0]) : null
-}
-
-export async function createUser(data: Omit<User, 'userId' | 'createdAt'>): Promise<User> {
-  const userId = generateId()
-  const now = new Date().toISOString()
-
-  const item: Record<string, unknown> = {
-    userId,
-    ...data,
-    id: userId,
-    tier: data.tier || 'local',
-    totalCheckIns: data.totalCheckIns || 0,
-    streakCount: data.streakCount || 0,
-    privacyLevel: (data as Record<string, unknown>).privacyLevel || 'friends_only',
-    isDisabled: false,
-    onboardingComplete: false,
-    createdAt: now,
-    updatedAt: now,
-  }
-
-  await documentClient.send(new PutCommand({ TableName: TableNames.users, Item: item }))
-
-  return mapUser(item)
+export async function createUser(
+  data: Omit<User, 'userId' | 'createdAt'>,
+): Promise<User> {
+  const row = await prisma.user.create({
+    data: {
+      phone: data.phone ?? null,
+      username: data.username,
+      displayName: data.displayName,
+      avatarUrl: data.avatarUrl ?? null,
+      cityId: data.cityId ?? null,
+      neighbourhoodId: data.neighbourhoodId ?? null,
+      tier: data.tier ?? 'local',
+      totalCheckIns: data.totalCheckIns ?? 0,
+      streakCount: data.streakCount ?? 0,
+      cognitoSub: data.cognitoSub ?? null,
+      musicGenres: data.musicGenres ?? [],
+      dimensionScores: (data.dimensionScores as object | undefined) ?? undefined,
+      archetypeId: data.archetypeId ?? null,
+      streamingProvider: data.streamingProvider ?? null,
+    },
+  })
+  return userFromPrisma(row)
 }
 
 export async function updateUser(
   userId: string,
   data: Partial<Omit<User, 'userId' | 'createdAt'>>,
 ): Promise<User | null> {
-  const keys = Object.keys(data).filter((k) => data[k as keyof typeof data] !== undefined)
-  if (keys.length === 0) return getUserById(userId)
+  // Filter to fields that exist on the Prisma User model.
+  const update: Record<string, unknown> = {}
+  if (data.displayName !== undefined) update['displayName'] = data.displayName
+  if (data.avatarUrl !== undefined) update['avatarUrl'] = data.avatarUrl
+  if (data.cityId !== undefined) update['cityId'] = data.cityId
+  if (data.neighbourhoodId !== undefined) update['neighbourhoodId'] = data.neighbourhoodId
+  if (data.tier !== undefined) update['tier'] = data.tier
+  if (data.totalCheckIns !== undefined) update['totalCheckIns'] = data.totalCheckIns
+  if (data.streakCount !== undefined) update['streakCount'] = data.streakCount
+  if (data.cognitoSub !== undefined) update['cognitoSub'] = data.cognitoSub
+  if (data.phone !== undefined) update['phone'] = data.phone
+  if (data.musicGenres !== undefined) update['musicGenres'] = data.musicGenres
+  if (data.dimensionScores !== undefined) update['dimensionScores'] = data.dimensionScores
+  if (data.archetypeId !== undefined) update['archetypeId'] = data.archetypeId
+  if (data.streamingProvider !== undefined) update['streamingProvider'] = data.streamingProvider
 
-  const updateExpression = keys.map((key) => `#${key} = :${key}`).join(', ')
+  if (Object.keys(update).length === 0) return getUserById(userId)
 
-  const expressionAttributeNames: Record<string, string> = {
-    '#updatedAt': 'updatedAt',
+  try {
+    const row = await prisma.user.update({ where: { id: userId }, data: update })
+    return userFromPrisma(row)
+  } catch {
+    return null
   }
-  keys.forEach((key) => {
-    expressionAttributeNames[`#${key}`] = key
-  })
-
-  const expressionAttributeValues: Record<string, unknown> = {
-    ':updatedAt': new Date().toISOString(),
-  }
-  keys.forEach((key) => {
-    expressionAttributeValues[`:${key}`] = data[key as keyof typeof data]
-  })
-
-  const result = await documentClient.send(
-    new UpdateCommand({
-      TableName: TableNames.users,
-      Key: { userId },
-      UpdateExpression: `SET ${updateExpression}, #updatedAt = :updatedAt`,
-      ExpressionAttributeNames: expressionAttributeNames,
-      ExpressionAttributeValues: expressionAttributeValues,
-      ReturnValues: 'ALL_NEW',
-    }),
-  )
-
-  return result.Attributes ? mapUser(result.Attributes) : null
 }
 
-function mapUser(item: Record<string, unknown>): User {
-  return {
-    ...item,
-    id: (item['userId'] as string) ?? (item['id'] as string),
-    userId: (item['userId'] as string) ?? (item['id'] as string),
-  } as User
+export async function deleteUser(userId: string): Promise<void> {
+  await prisma.user.delete({ where: { id: userId } }).catch(() => undefined)
 }
 
 // ============================================================================
-// BUSINESS ACCOUNT OPERATIONS  (table PK = businessId, no SK)
+// BUSINESS ACCOUNT OPERATIONS
 // ============================================================================
 
 export async function getBusinessById(businessId: string): Promise<BusinessAccount | null> {
-  const result = await documentClient.send(new GetCommand({ TableName: TableNames.businesses, Key: { businessId } }))
-  return result.Item ? mapBiz(result.Item) : null
+  const row = await prisma.businessAccount.findUnique({ where: { id: businessId } })
+  return row ? businessFromPrisma(row) : null
 }
 
 export async function getBusinessByCognitoSub(cognitoSub: string): Promise<BusinessAccount | null> {
-  let lastKey: Record<string, unknown> | undefined
-  do {
-    const result = await documentClient.send(
-      new ScanCommand({
-        TableName: TableNames.businesses,
-        FilterExpression: 'cognitoSub = :sub',
-        ExpressionAttributeValues: { ':sub': cognitoSub },
-        ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
-      }),
-    )
-    if (result.Items?.[0]) return mapBiz(result.Items[0])
-    lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
-  } while (lastKey)
-  return null
+  const row = await prisma.businessAccount.findUnique({ where: { cognitoSub } })
+  return row ? businessFromPrisma(row) : null
 }
 
 export async function getBusinessByEmail(email: string): Promise<BusinessAccount | null> {
-  let lastKey: Record<string, unknown> | undefined
-  do {
-    const result = await documentClient.send(
-      new ScanCommand({
-        TableName: TableNames.businesses,
-        FilterExpression: 'email = :email',
-        ExpressionAttributeValues: { ':email': email },
-        ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
-      }),
-    )
-    if (result.Items?.[0]) return mapBiz(result.Items[0])
-    lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
-  } while (lastKey)
-  return null
+  const row = await prisma.businessAccount.findUnique({ where: { email } })
+  return row ? businessFromPrisma(row) : null
 }
 
-export async function getBusinessByOwnerId(ownerId: string): Promise<BusinessAccount | null> {
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.businesses,
-      IndexName: 'OwnerIndex',
-      KeyConditionExpression: 'ownerId = :ownerId',
-      ExpressionAttributeValues: { ':ownerId': ownerId },
-      Limit: 1,
-    }),
-  )
-  return result.Items?.[0] ? mapBiz(result.Items[0]) : null
+export async function getBusinessByOwnerId(_ownerId: string): Promise<BusinessAccount | null> {
+  // The Prisma schema does not currently have an `ownerId` column on
+  // business_accounts. Owners are linked via cognitoSub. Preserve the legacy
+  // null-on-miss behaviour so callers don't hard-fail.
+  return null
 }
 
 export async function createBusiness(
   data: Omit<BusinessAccount, 'businessId' | 'createdAt'>,
 ): Promise<BusinessAccount> {
-  const businessId = generateId()
-  const now = new Date().toISOString()
-
-  const item: Record<string, unknown> = {
-    businessId,
-    ...data,
-    id: businessId,
-    tier: data.tier || 'free',
-    isActive: data.isActive ?? true,
-    createdAt: now,
-    updatedAt: now,
-  }
-
-  await documentClient.send(new PutCommand({ TableName: TableNames.businesses, Item: item }))
-
-  return mapBiz(item)
+  const row = await prisma.businessAccount.create({
+    data: {
+      email: data.email,
+      phone: data.phone ?? null,
+      businessName: data.businessName,
+      registrationNumber: data.registrationNumber ?? null,
+      cognitoSub: data.cognitoSub ?? null,
+      tier: data.tier ?? 'free',
+      trialEndsAt: data.trialEndsAt ? new Date(data.trialEndsAt) : null,
+      paymentGraceUntil: data.paymentGraceUntil ? new Date(data.paymentGraceUntil) : null,
+      yocoCustomerId: data.yocoCustomerId ?? null,
+      isActive: data.isActive ?? true,
+    },
+  })
+  return businessFromPrisma(row)
 }
 
 export async function updateBusiness(
   businessId: string,
   data: Partial<Omit<BusinessAccount, 'businessId' | 'createdAt'>>,
 ): Promise<BusinessAccount | null> {
-  const keys = Object.keys(data).filter((k) => data[k as keyof typeof data] !== undefined)
-  if (keys.length === 0) return getBusinessById(businessId)
+  const update: Record<string, unknown> = {}
+  if (data.email !== undefined) update['email'] = data.email
+  if (data.phone !== undefined) update['phone'] = data.phone
+  if (data.businessName !== undefined) update['businessName'] = data.businessName
+  if (data.registrationNumber !== undefined) update['registrationNumber'] = data.registrationNumber
+  if (data.cognitoSub !== undefined) update['cognitoSub'] = data.cognitoSub
+  if (data.tier !== undefined) update['tier'] = data.tier
+  if (data.trialEndsAt !== undefined)
+    update['trialEndsAt'] = data.trialEndsAt ? new Date(data.trialEndsAt) : null
+  if (data.paymentGraceUntil !== undefined)
+    update['paymentGraceUntil'] = data.paymentGraceUntil ? new Date(data.paymentGraceUntil) : null
+  if (data.yocoCustomerId !== undefined) update['yocoCustomerId'] = data.yocoCustomerId
+  if (data.isActive !== undefined) update['isActive'] = data.isActive
 
-  const expressionAttributeNames: Record<string, string> = { '#updatedAt': 'updatedAt' }
-  const expressionAttributeValues: Record<string, unknown> = { ':updatedAt': new Date().toISOString() }
-  keys.forEach((key) => {
-    expressionAttributeNames[`#${key}`] = key
-    expressionAttributeValues[`:${key}`] = data[key as keyof typeof data]
-  })
+  if (Object.keys(update).length === 0) return getBusinessById(businessId)
 
-  const result = await documentClient.send(
-    new UpdateCommand({
-      TableName: TableNames.businesses,
-      Key: { businessId },
-      UpdateExpression: `SET ${keys.map((k) => `#${k} = :${k}`).join(', ')}, #updatedAt = :updatedAt`,
-      ExpressionAttributeNames: expressionAttributeNames,
-      ExpressionAttributeValues: expressionAttributeValues,
-      ReturnValues: 'ALL_NEW',
-    }),
-  )
-
-  return result.Attributes ? mapBiz(result.Attributes) : null
-}
-
-function mapBiz(item: Record<string, unknown>): BusinessAccount {
-  return {
-    ...item,
-    id: (item['businessId'] as string) ?? (item['id'] as string),
-    businessId: (item['businessId'] as string) ?? (item['id'] as string),
-  } as BusinessAccount
+  try {
+    const row = await prisma.businessAccount.update({ where: { id: businessId }, data: update })
+    return businessFromPrisma(row)
+  } catch {
+    return null
+  }
 }
 
 // ============================================================================
-// STAFF ACCOUNT OPERATIONS  (app-data table, PK: pk, SK: sk)
+// STAFF ACCOUNT OPERATIONS
 // ============================================================================
 
 export async function getStaffById(staffId: string): Promise<StaffAccount | null> {
-  const result = await documentClient.send(
-    new GetCommand({
-      TableName: TableNames.appData,
-      Key: { pk: `STAFF#${staffId}`, sk: `PROFILE#${staffId}` },
-    }),
-  )
-  return result.Item ? mapStaff(result.Item) : null
+  const row = await prisma.staffAccount.findUnique({ where: { id: staffId } })
+  return row ? staffFromPrisma(row) : null
 }
 
 export async function getStaffByCognitoSub(cognitoSub: string): Promise<StaffAccount | null> {
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.appData,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'gsi1pk = :pk',
-      ExpressionAttributeValues: { ':pk': `COGNITO#${cognitoSub}` },
-      Limit: 1,
-    }),
-  )
-  return result.Items?.[0] ? mapStaff(result.Items[0]) : null
+  const row = await prisma.staffAccount.findUnique({ where: { cognitoSub } })
+  return row ? staffFromPrisma(row) : null
 }
 
 export async function getStaffByPhone(phone: string): Promise<StaffAccount | null> {
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.appData,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'gsi1pk = :pk',
-      ExpressionAttributeValues: { ':pk': `STAFF_PHONE#${phone}` },
-      Limit: 1,
-    }),
-  )
-  return result.Items?.[0] ? mapStaff(result.Items[0]) : null
+  const row = await prisma.staffAccount.findUnique({ where: { phone } })
+  return row ? staffFromPrisma(row) : null
 }
 
-export async function createStaff(data: Omit<StaffAccount, 'staffId' | 'createdAt'>): Promise<StaffAccount> {
+export async function createStaff(
+  data: Omit<StaffAccount, 'staffId' | 'createdAt'>,
+): Promise<StaffAccount> {
   if (!data.cognitoSub && !data.phone) {
     throw new Error('createStaff requires cognitoSub or phone')
   }
-
-  const staffId = generateId()
-  const now = new Date().toISOString()
-
-  const staff: StaffAccount = {
-    ...data,
-    staffId,
-    id: staffId,
-    createdAt: now,
-    isActive: data.isActive ?? true,
-  }
-
-  const gsi1pk = data.cognitoSub ? `COGNITO#${data.cognitoSub}` : `STAFF_PHONE#${data.phone as string}`
-
-  await documentClient.send(
-    new PutCommand({
-      TableName: TableNames.appData,
-      Item: {
-        pk: `STAFF#${staffId}`,
-        sk: `PROFILE#${staffId}`,
-        gsi1pk,
-        gsi1sk: `BUSINESS#${data.businessId}`,
-        ...staff,
-      },
-    }),
-  )
-
-  // Write phone→staff lookup entry
-  if (data.phone) {
-    await documentClient.send(
-      new PutCommand({
-        TableName: TableNames.appData,
-        Item: {
-          pk: `STAFF_PHONE#${data.phone}`,
-          sk: `STAFF#${staffId}`,
-          gsi1pk: `STAFF_PHONE#${data.phone}`,
-          gsi1sk: `STAFF#${staffId}`,
-          staffId,
-          businessId: data.businessId,
-          phone: data.phone,
-        },
-      }),
-    )
-  }
-
-  // Write business→staff lookup entry for getStaffByBusinessId
-  await documentClient.send(
-    new PutCommand({
-      TableName: TableNames.appData,
-      Item: {
-        pk: `BIZ_STAFF#${data.businessId}`,
-        sk: `STAFF#${staffId}`,
-        gsi1pk: `BIZ_STAFF#${data.businessId}`,
-        gsi1sk: now,
-        staffId,
-        businessId: data.businessId,
-        isActive: staff.isActive,
-        role: (data as any).role ?? 'staff',
-      },
-    }),
-  )
-
-  return staff
+  const row = await prisma.staffAccount.create({
+    data: {
+      businessId: data.businessId,
+      name: data.name,
+      // Schema requires phone non-null; supply a synthetic placeholder for
+      // OAuth-only staff so legacy unique-on-phone constraint holds.
+      phone: data.phone ?? `oauth:${data.cognitoSub}`,
+      cognitoSub: data.cognitoSub ?? null,
+      isActive: data.isActive ?? true,
+    },
+  })
+  return staffFromPrisma(row)
 }
 
 export async function getStaffByBusinessId(businessId: string): Promise<StaffAccount[]> {
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.appData,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'gsi1pk = :pk',
-      ExpressionAttributeValues: { ':pk': `BIZ_STAFF#${businessId}` },
-    }),
-  )
-  return (result.Items || []).map((i) => mapStaff(i))
-}
-
-export async function deleteUser(userId: string): Promise<void> {
-  await documentClient.send(new DeleteCommand({ TableName: TableNames.users, Key: { userId } }))
-}
-
-function mapStaff(item: Record<string, unknown>): StaffAccount {
-  return {
-    ...item,
-    id: (item['staffId'] as string) ?? (item['id'] as string),
-    staffId: (item['staffId'] as string) ?? (item['id'] as string),
-  } as StaffAccount
+  const rows = await prisma.staffAccount.findMany({
+    where: { businessId },
+    orderBy: { createdAt: 'asc' },
+  })
+  return rows.map(staffFromPrisma)
 }

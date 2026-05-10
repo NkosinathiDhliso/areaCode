@@ -9,7 +9,12 @@
     "build:lambda": "npx tsx build.mts",
     "test": "vitest run",
     "test:data-integrity": "vitest run src/__tests__/data-integrity.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:generate": "prisma generate",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:reset": "prisma migrate reset --force",
+    "db:studio": "prisma studio"
   },
   "dependencies": {
     "@area-code/shared": "workspace:*",
@@ -25,6 +30,7 @@
     "@fastify/aws-lambda": "^5.0.0",
     "@fastify/cors": "^11.2.0",
     "@fastify/helmet": "^13.0.2",
+    "@prisma/client": "^6.1.0",
     "@sentry/node": "^10.47.0",
     "fastify": "^5.8.4",
     "ioredis": "^5.4.1",
