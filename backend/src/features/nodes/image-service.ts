@@ -1,6 +1,5 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import sharp from 'sharp'
 
 const s3 = new S3Client({})
 const BUCKET = process.env['MEDIA_BUCKET'] ?? 'area-code-media'
@@ -18,6 +17,10 @@ export interface ImageProcessingResult {
  * and compresses to WebP format.
  */
 export async function processImage(inputBuffer: Buffer): Promise<{ buffer: Buffer; width: number; height: number }> {
+  // Lazy-import sharp so the API Lambda can cold-start even when sharp's
+  // platform-specific binary is not bundled. Image post-processing is intended
+  // to run in a worker Lambda with a sharp-bearing layer, not the API hot path.
+  const sharp = (await import('sharp')).default
   const image = sharp(inputBuffer)
   const metadata = await image.metadata()
 

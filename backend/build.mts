@@ -13,6 +13,10 @@ const sharedBuildOptions = {
   external: [
     // AWS SDK v3 is provided in the Lambda runtime
     '@aws-sdk/*',
+    // sharp ships platform-specific native binaries; it is not bundled into
+    // the API Lambda. Image post-processing runs in a separate worker Lambda
+    // with a sharp-bearing layer.
+    'sharp',
   ],
   banner: {
     js: [
