@@ -4,3 +4,4 @@ dist
 coverage
 *.tfstate
 .terraform
+pnpm-lock.yaml

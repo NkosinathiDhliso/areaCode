@@ -3,7 +3,9 @@ frontend:
   phases:
     preBuild:
       commands:
-        - npm install -g pnpm
+        # Pin pnpm to v9 to match CI and avoid pnpm 10's stricter
+        # ERR_PNPM_IGNORED_BUILDS behavior that was failing builds.
+        - npm install -g pnpm@9
         - pnpm install --frozen-lockfile
     build:
       commands:
