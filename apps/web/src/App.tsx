@@ -141,8 +141,10 @@ function AppContent() {
   useEffect(() => {
     const socket = getSocket(accessToken ?? undefined)
 
-    socket.on('connect', () => setOnline())
-    socket.on('disconnect', () => setApiOnly())
+    const handleConnect = () => setOnline()
+    const handleDisconnect = () => setApiOnly()
+    socket.on('connect', handleConnect)
+    socket.on('disconnect', handleDisconnect)
 
     const handleOnline = () => setOnline()
     const handleOffline = () => setOffline()
@@ -150,6 +152,8 @@ function AppContent() {
     window.addEventListener('offline', handleOffline)
 
     return () => {
+      socket.off('connect', handleConnect)
+      socket.off('disconnect', handleDisconnect)
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
