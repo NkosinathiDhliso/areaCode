@@ -62,15 +62,27 @@ variable "spotify_redirect_uri" {
   default     = "https://areacode.co.za/api/v1/streaming/spotify/callback"
 }
 
-# --- Data sources for secrets (some optional) ---
-data "aws_secretsmanager_secret" "db_url" {
-  name = "area-code/${local.env}/db-url"
+variable "sentry_dsn" {
+  description = "Sentry DSN for backend error monitoring. Leave empty to disable Sentry."
+  type        = string
+  sensitive   = true
+  default     = ""
 }
 
-data "aws_secretsmanager_secret" "redis_url" {
-  name = "area-code/${local.env}/redis-url"
+variable "anonymization_salt" {
+  description = "Salt used to anonymize user IDs in venue intelligence reports"
+  type        = string
+  sensitive   = true
+  default     = "report-anonymization-salt-prod"
 }
 
+variable "enable_api_custom_domain" {
+  description = "Set to true to provision api.areacode.co.za in front of the HTTP API. Requires the areacode.co.za Route53 zone to already exist in this account."
+  type        = bool
+  default     = true
+}
+
+# --- Data sources for secrets ---
 data "aws_secretsmanager_secret" "qr_hmac" {
   name = "area-code/${local.env}/qr-hmac-secret"
 }
@@ -116,9 +128,9 @@ module "cognito_staff" {
 }
 
 module "cognito_admin" {
-  source    = "../../modules/cognito"
-  env       = local.env
-  pool_name = "admin"
+  source              = "../../modules/cognito"
+  env                 = local.env
+  pool_name           = "admin"
   username_attributes = ["email"]
   explicit_auth_flows = [
     "ALLOW_ADMIN_USER_PASSWORD_AUTH",
@@ -420,6 +432,7 @@ module "lambda_api" {
   handler       = "index.handler"
   timeout       = 30
   memory_size   = 512
+  tracing_mode  = "Active"
   environment_variables = {
     AREA_CODE_ENV                           = local.env
     USERS_TABLE                             = aws_dynamodb_table.users.name
@@ -438,62 +451,27 @@ module "lambda_api" {
     AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
     AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
     AREA_CODE_S3_MEDIA_BUCKET               = module.s3_media.bucket_name
-    AREA_CODE_SQS_PUSH_QUEUE_URL            = module.sqs_push_sender.queue_url
-    AREA_CODE_CONSENT_VERSION               = "v1.0"
+    # MEDIA_BUCKET kept as an alias for any code paths that still read the short name.
+    MEDIA_BUCKET                 = module.s3_media.bucket_name
+    AREA_CODE_SQS_PUSH_QUEUE_URL = module.sqs_push_sender.queue_url
+    AREA_CODE_CONSENT_VERSION    = "v1.0"
+    AREA_CODE_ANONYMIZATION_SALT = var.anonymization_salt
     # HMAC secret used for QR codes AND Spotify OAuth state signing
-    AREA_CODE_QR_HMAC_SECRET                = data.aws_secretsmanager_secret_version.qr_hmac.secret_string
+    AREA_CODE_QR_HMAC_SECRET = data.aws_secretsmanager_secret_version.qr_hmac.secret_string
     # Spotify OAuth — supplied via TF variables (terraform.tfvars or TF_VAR_*)
-    SPOTIFY_CLIENT_ID                       = var.spotify_client_id
-    SPOTIFY_CLIENT_SECRET                   = var.spotify_client_secret
-    SPOTIFY_REDIRECT_URI                    = var.spotify_redirect_uri
+    SPOTIFY_CLIENT_ID     = var.spotify_client_id
+    SPOTIFY_CLIENT_SECRET = var.spotify_client_secret
+    SPOTIFY_REDIRECT_URI  = var.spotify_redirect_uri
+    # Error monitoring (no-op if sentry_dsn is empty)
+    SENTRY_DSN = var.sentry_dsn
+    GIT_SHA    = var.git_sha
   }
 }
 
-# Legacy per-route Lambdas kept for backward compatibility during migration
-module "lambda_check_in" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "check-in"
-  timeout                = 10
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
-  environment_variables = {
-    AREA_CODE_ENV  = local.env
-    USERS_TABLE    = aws_dynamodb_table.users.name
-    NODES_TABLE    = aws_dynamodb_table.nodes.name
-    CHECKINS_TABLE = aws_dynamodb_table.checkins.name
-  }
-}
-
-module "lambda_node_detail" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "node-detail"
-  timeout                = 10
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
-  environment_variables = {
-    AREA_CODE_ENV = local.env
-    NODES_TABLE   = aws_dynamodb_table.nodes.name
-  }
-}
-
-module "lambda_rewards_near_me" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "rewards-near-me"
-  timeout                = 10
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
-  environment_variables = {
-    AREA_CODE_ENV = local.env
-    REWARDS_TABLE = aws_dynamodb_table.rewards.name
-    NODES_TABLE   = aws_dynamodb_table.nodes.name
-  }
-}
+# Legacy per-route Lambdas (check-in, node-detail, rewards-near-me) were removed
+# from production in May 2026. All routes are now served by the monolith API Lambda
+# via the `$default` API Gateway integration. The archived Terraform blocks live in
+# _archive/retired-high-cost-infra/ if historical reference is needed.
 
 module "lambda_reward_evaluator" {
   source                 = "../../modules/lambda"
@@ -576,13 +554,47 @@ module "lambda_yoco_webhook" {
   }
 }
 
+# Report dispatcher Lambda — triggered by EventBridge, fans out SQS messages per business
+module "lambda_report_dispatcher" {
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "report-dispatcher"
+  timeout       = 30
+  memory_size   = 256
+  environment_variables = {
+    AREA_CODE_ENV              = local.env
+    BUSINESSES_TABLE           = aws_dynamodb_table.businesses.name
+    NODES_TABLE                = aws_dynamodb_table.nodes.name
+    CHECKINS_TABLE             = aws_dynamodb_table.checkins.name
+    AREA_CODE_REPORT_QUEUE_URL = module.sqs_report_generation.queue_url
+  }
+}
+
+# Report generator Lambda — SQS-triggered worker, generates one report per business
+module "lambda_report_generator" {
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "report-generator"
+  timeout       = 120
+  memory_size   = 512
+  environment_variables = {
+    AREA_CODE_ENV                = local.env
+    USERS_TABLE                  = aws_dynamodb_table.users.name
+    NODES_TABLE                  = aws_dynamodb_table.nodes.name
+    CHECKINS_TABLE               = aws_dynamodb_table.checkins.name
+    REWARDS_TABLE                = aws_dynamodb_table.rewards.name
+    BUSINESSES_TABLE             = aws_dynamodb_table.businesses.name
+    APP_DATA_TABLE               = aws_dynamodb_table.app_data.name
+    AREA_CODE_REPORT_QUEUE_URL   = module.sqs_report_generation.queue_url
+    AREA_CODE_SQS_PUSH_QUEUE_URL = module.sqs_push_sender.queue_url
+    AREA_CODE_ANONYMIZATION_SALT = var.anonymization_salt
+  }
+}
+
 # --- Lambda DynamoDB IAM permissions ---
 resource "aws_iam_role_policy" "lambda_dynamodb" {
   for_each = {
     api               = module.lambda_api.role_name
-    check_in          = module.lambda_check_in.role_name
-    node_detail       = module.lambda_node_detail.role_name
-    rewards_near_me   = module.lambda_rewards_near_me.role_name
     pulse_decay       = module.lambda_pulse_decay.role_name
     yoco_webhook      = module.lambda_yoco_webhook.role_name
     reward_evaluator  = module.lambda_reward_evaluator.role_name
@@ -673,6 +685,15 @@ module "sqs_push_sender" {
   visibility_timeout = 30
 }
 
+module "sqs_report_generation" {
+  source              = "../../modules/sqs"
+  env                 = local.env
+  queue_name          = "report-generation"
+  visibility_timeout  = 150
+  max_receive_count   = 2
+  lambda_function_arn = module.lambda_report_generator.function_arn
+}
+
 # --- Lambda IAM: API + check-in -> SQS send ---
 resource "aws_iam_role_policy" "api_sqs_send" {
   name = "sqs-send"
@@ -683,21 +704,7 @@ resource "aws_iam_role_policy" "api_sqs_send" {
     Statement = [{
       Effect   = "Allow"
       Action   = ["sqs:SendMessage"]
-      Resource = module.sqs_reward_eval.queue_arn
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "checkin_sqs_send" {
-  name = "sqs-send"
-  role = module.lambda_check_in.role_name
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["sqs:SendMessage"]
-      Resource = module.sqs_reward_eval.queue_arn
+      Resource = [module.sqs_reward_eval.queue_arn, module.sqs_push_sender.queue_arn]
     }]
   })
 }
@@ -719,6 +726,132 @@ resource "aws_iam_role_policy" "reward_eval_sqs" {
         Effect   = "Allow"
         Action   = ["sqs:SendMessage"]
         Resource = module.sqs_push_sender.queue_arn
+      }
+    ]
+  })
+}
+
+# --- Lambda IAM: report-dispatcher -> DynamoDB read (businesses, nodes, checkins) ---
+resource "aws_iam_role_policy" "report_dispatcher_dynamodb" {
+  name = "dynamodb-read-access"
+  role = module.lambda_report_dispatcher.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "dynamodb:GetItem",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+      ]
+      Resource = [
+        aws_dynamodb_table.businesses.arn,
+        "${aws_dynamodb_table.businesses.arn}/index/*",
+        aws_dynamodb_table.nodes.arn,
+        "${aws_dynamodb_table.nodes.arn}/index/*",
+        aws_dynamodb_table.checkins.arn,
+        "${aws_dynamodb_table.checkins.arn}/index/*"
+      ]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "report_dispatcher_sqs_send" {
+  name = "sqs-send"
+  role = module.lambda_report_dispatcher.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["sqs:SendMessage"]
+      Resource = [module.sqs_report_generation.queue_arn]
+    }]
+  })
+}
+
+# --- Lambda IAM: report-generator -> DynamoDB read/write (all tables) ---
+resource "aws_iam_role_policy" "report_generator_dynamodb" {
+  name = "dynamodb-access"
+  role = module.lambda_report_generator.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+      ]
+      Resource = [
+        aws_dynamodb_table.users.arn,
+        "${aws_dynamodb_table.users.arn}/index/*",
+        aws_dynamodb_table.nodes.arn,
+        "${aws_dynamodb_table.nodes.arn}/index/*",
+        aws_dynamodb_table.checkins.arn,
+        "${aws_dynamodb_table.checkins.arn}/index/*",
+        aws_dynamodb_table.rewards.arn,
+        "${aws_dynamodb_table.rewards.arn}/index/*",
+        aws_dynamodb_table.businesses.arn,
+        "${aws_dynamodb_table.businesses.arn}/index/*",
+        aws_dynamodb_table.app_data.arn,
+        "${aws_dynamodb_table.app_data.arn}/index/*"
+      ]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "report_generator_sqs" {
+  name = "sqs-access"
+  role = module.lambda_report_generator.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+        Resource = [module.sqs_report_generation.queue_arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"]
+        Resource = [module.sqs_push_sender.queue_arn]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "report_generator_websocket" {
+  name = "websocket-manage"
+  role = module.lambda_report_generator.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "execute-api:ManageConnections",
+          "execute-api:Invoke"
+        ]
+        Resource = "arn:aws:execute-api:us-east-1:*:${module.websocket.websocket_api_id}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:Query"
+        ]
+        Resource = [
+          module.websocket.connections_table_arn,
+          "${module.websocket.connections_table_arn}/index/*"
+        ]
       }
     ]
   })
@@ -753,6 +886,18 @@ module "eventbridge_schedules" {
       schedule_expression  = "cron(0 2 * * ? *)"
       lambda_arn           = module.lambda_cleanup.function_arn
       lambda_function_name = module.lambda_cleanup.function_name
+    }
+    report-weekly = {
+      description          = "Weekly intelligence report generation Monday 06:00 SAST (04:00 UTC)"
+      schedule_expression  = "cron(0 4 ? * MON *)"
+      lambda_arn           = module.lambda_report_dispatcher.function_arn
+      lambda_function_name = module.lambda_report_dispatcher.function_name
+    }
+    report-monthly = {
+      description          = "Monthly intelligence report 1st of month 06:00 SAST (04:00 UTC)"
+      schedule_expression  = "cron(0 4 1 * ? *)"
+      lambda_arn           = module.lambda_report_dispatcher.function_arn
+      lambda_function_name = module.lambda_report_dispatcher.function_name
     }
   }
 }
@@ -800,24 +945,269 @@ resource "aws_lambda_permission" "apigw_yoco_webhook" {
   source_arn    = "${module.api_gateway.api_execution_arn}/*/*"
 }
 
+# =============================================================================
+# Custom domain (api.areacode.co.za) — optional, gated on enable_api_custom_domain
+# =============================================================================
+
+data "aws_route53_zone" "root" {
+  count        = var.enable_api_custom_domain ? 1 : 0
+  name         = "areacode.co.za"
+  private_zone = false
+}
+
+resource "aws_acm_certificate" "api" {
+  count             = var.enable_api_custom_domain ? 1 : 0
+  domain_name       = "api.areacode.co.za"
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "api_cert_validation" {
+  for_each = var.enable_api_custom_domain ? {
+    for dvo in aws_acm_certificate.api[0].domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  } : {}
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = data.aws_route53_zone.root[0].zone_id
+}
+
+resource "aws_acm_certificate_validation" "api" {
+  count                   = var.enable_api_custom_domain ? 1 : 0
+  certificate_arn         = aws_acm_certificate.api[0].arn
+  validation_record_fqdns = [for r in aws_route53_record.api_cert_validation : r.fqdn]
+}
+
+resource "aws_apigatewayv2_domain_name" "api" {
+  count       = var.enable_api_custom_domain ? 1 : 0
+  domain_name = "api.areacode.co.za"
+
+  domain_name_configuration {
+    certificate_arn = aws_acm_certificate_validation.api[0].certificate_arn
+    endpoint_type   = "REGIONAL"
+    security_policy = "TLS_1_2"
+  }
+}
+
+resource "aws_apigatewayv2_api_mapping" "api" {
+  count       = var.enable_api_custom_domain ? 1 : 0
+  api_id      = module.api_gateway.api_id
+  domain_name = aws_apigatewayv2_domain_name.api[0].id
+  stage       = "$default"
+}
+
+resource "aws_route53_record" "api" {
+  count   = var.enable_api_custom_domain ? 1 : 0
+  zone_id = data.aws_route53_zone.root[0].zone_id
+  name    = "api.areacode.co.za"
+  type    = "A"
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.api[0].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.api[0].domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# =============================================================================
+# Uptime: Route53 health check against the API /health endpoint
+# =============================================================================
+
+resource "aws_route53_health_check" "api" {
+  count             = var.enable_api_custom_domain ? 1 : 0
+  fqdn              = "api.areacode.co.za"
+  port              = 443
+  type              = "HTTPS"
+  resource_path     = "/health"
+  failure_threshold = 3
+  request_interval  = 30
+  measure_latency   = true
+
+  tags = {
+    Name        = "area-code-${local.env}-api-health"
+    Environment = local.env
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "api_health" {
+  count               = var.enable_api_custom_domain ? 1 : 0
+  alarm_name          = "area-code-${local.env}-api-health"
+  alarm_description   = "api.areacode.co.za /health is failing"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "HealthCheckStatus"
+  namespace           = "AWS/Route53"
+  period              = 60
+  statistic           = "Minimum"
+  threshold           = 1
+  treat_missing_data  = "breaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  # Route53 health checks publish metrics only to us-east-1
+  dimensions = {
+    HealthCheckId = aws_route53_health_check.api[0].id
+  }
+}
+
 # --- CloudWatch alarms ---
 resource "aws_sns_topic" "alerts" {
   name = "area-code-${local.env}-alerts"
 }
 
-resource "aws_cloudwatch_metric_alarm" "checkin_errors" {
-  alarm_name          = "area-code-${local.env}-checkin-errors"
+# Alarm: API Lambda errors > 5 in 5 minutes
+resource "aws_cloudwatch_metric_alarm" "api_errors" {
+  alarm_name          = "area-code-${local.env}-api-errors"
+  alarm_description   = "API Lambda had more than 5 errors in a 5 minute window"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
+  evaluation_periods  = 1
   metric_name         = "Errors"
   namespace           = "AWS/Lambda"
-  period              = 60
+  period              = 300
   statistic           = "Sum"
-  threshold           = 10
+  threshold           = 5
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+
+  dimensions = {
+    FunctionName = module.lambda_api.function_name
+  }
+}
+
+# Alarm: API Lambda p99 duration > 10s (cold-start or DynamoDB regression)
+resource "aws_cloudwatch_metric_alarm" "api_duration_p99" {
+  alarm_name          = "area-code-${local.env}-api-duration-p99"
+  alarm_description   = "API Lambda p99 duration above 10 seconds"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "Duration"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  extended_statistic  = "p99"
+  threshold           = 10000
+  treat_missing_data  = "notBreaching"
   alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
-    FunctionName = module.lambda_check_in.function_name
+    FunctionName = module.lambda_api.function_name
+  }
+}
+
+# Alarm: API Lambda throttles > 0
+resource "aws_cloudwatch_metric_alarm" "api_throttles" {
+  alarm_name          = "area-code-${local.env}-api-throttles"
+  alarm_description   = "API Lambda is being throttled"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "Throttles"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  dimensions = {
+    FunctionName = module.lambda_api.function_name
+  }
+}
+
+# DynamoDB table-level alarms (ThrottledRequests and SystemErrors)
+locals {
+  dynamo_tables = {
+    users      = aws_dynamodb_table.users.name
+    nodes      = aws_dynamodb_table.nodes.name
+    checkins   = aws_dynamodb_table.checkins.name
+    rewards    = aws_dynamodb_table.rewards.name
+    businesses = aws_dynamodb_table.businesses.name
+    app_data   = aws_dynamodb_table.app_data.name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "dynamo_throttles" {
+  for_each = local.dynamo_tables
+
+  alarm_name          = "area-code-${local.env}-dynamo-${each.key}-throttles"
+  alarm_description   = "DynamoDB table ${each.value} is being throttled"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ThrottledRequests"
+  namespace           = "AWS/DynamoDB"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  dimensions = {
+    TableName = each.value
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "dynamo_system_errors" {
+  for_each = local.dynamo_tables
+
+  alarm_name          = "area-code-${local.env}-dynamo-${each.key}-system-errors"
+  alarm_description   = "DynamoDB table ${each.value} returned system errors"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "SystemErrors"
+  namespace           = "AWS/DynamoDB"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  dimensions = {
+    TableName = each.value
+  }
+}
+
+# SQS dead-letter queue alarms — any message in a DLQ is a failed delivery
+resource "aws_cloudwatch_metric_alarm" "sqs_reward_eval_dlq" {
+  alarm_name          = "area-code-${local.env}-sqs-reward-eval-dlq"
+  alarm_description   = "Messages landed in the reward-eval DLQ"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 300
+  statistic           = "Maximum"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  dimensions = {
+    QueueName = "area-code-${local.env}-reward-eval-dlq"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "sqs_push_sender_dlq" {
+  alarm_name          = "area-code-${local.env}-sqs-push-sender-dlq"
+  alarm_description   = "Messages landed in the push-sender DLQ"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 300
+  statistic           = "Maximum"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  dimensions = {
+    QueueName = "area-code-${local.env}-push-sender-dlq"
   }
 }
 
@@ -926,6 +1316,19 @@ output "sqs_reward_eval_url" {
 
 output "sqs_push_sender_url" {
   value = module.sqs_push_sender.queue_url
+}
+
+output "sqs_report_generation_url" {
+  value = module.sqs_report_generation.queue_url
+}
+
+output "sns_alerts_topic_arn" {
+  value = aws_sns_topic.alerts.arn
+}
+
+output "api_custom_domain" {
+  value       = var.enable_api_custom_domain ? "https://api.areacode.co.za" : null
+  description = "Custom API domain (null when enable_api_custom_domain=false)"
 }
 
 # --- WebSocket API Gateway + Lambda ---

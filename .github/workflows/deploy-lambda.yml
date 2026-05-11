@@ -1,16 +1,7 @@
 name: Deploy Lambda
 on:
-  push:
-    branches: [master, main]
-    paths:
-      - 'backend/src/**'
-
   workflow_dispatch:
     inputs:
-      function:
-        description: 'Lambda function name (or "all")'
-        required: true
-        default: all
       environment:
         description: 'Target environment'
         required: true
@@ -19,6 +10,11 @@ on:
         options:
           - dev
           - prod
+      skip_terraform:
+        description: 'Skip terraform apply (deploy Lambda code only)'
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   deploy:
@@ -26,6 +22,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    environment: ${{ github.event.inputs.environment }}
 
     steps:
       - uses: actions/checkout@v4
@@ -48,15 +45,12 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
 
-      - name: Build and deploy
-        run: |
-          ENV="${{ github.event.inputs.environment || 'prod' }}"
-          FN="${{ github.event.inputs.function || 'all' }}"
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
 
-          if [ "$FN" = "all" ]; then
-            make build-all
-            make deploy-all ENV=$ENV
-          else
-            make build-fn FN=$FN
-            make deploy-fn FN=$FN ENV=$ENV
-          fi
+      - name: Build and deploy
+        env:
+          SKIP_BUILD: 'false'
+          SKIP_TERRAFORM: ${{ github.event.inputs.skip_terraform }}
+        run: ./scripts/deploy-serverless.sh us-east-1 ${{ github.event.inputs.environment }}

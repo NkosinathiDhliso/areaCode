@@ -46,14 +46,24 @@ variable "vpc_security_group_ids" {
   default = []
 }
 
+variable "tracing_mode" {
+  description = "X-Ray tracing mode (Active or PassThrough). Empty disables X-Ray."
+  type        = string
+  default     = ""
+  validation {
+    condition     = contains(["", "Active", "PassThrough"], var.tracing_mode)
+    error_message = "tracing_mode must be one of: '', 'Active', 'PassThrough'."
+  }
+}
+
 resource "aws_iam_role" "lambda" {
   name = "area-code-${var.env}-${var.function_name}-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "lambda.amazonaws.com" }
     }]
   })
@@ -68,6 +78,12 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc" {
   count      = var.lambda_in_vpc ? 1 : 0
   role       = aws_iam_role.lambda.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_xray" {
+  count      = var.tracing_mode != "" ? 1 : 0
+  role       = aws_iam_role.lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
 }
 
 resource "aws_iam_role_policy" "secrets_access" {
@@ -111,6 +127,13 @@ resource "aws_lambda_function" "this" {
     content {
       subnet_ids         = var.vpc_subnet_ids
       security_group_ids = var.vpc_security_group_ids
+    }
+  }
+
+  dynamic "tracing_config" {
+    for_each = var.tracing_mode != "" ? [1] : []
+    content {
+      mode = var.tracing_mode
     }
   }
 

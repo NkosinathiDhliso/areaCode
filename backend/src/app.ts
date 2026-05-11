@@ -60,6 +60,16 @@ export async function buildApp() {
     return payload
   })
 
+  // Security headers — HSTS in production only (localhost is http).
+  const isProdEnv = process.env['AREA_CODE_ENV'] === 'prod'
+  app.addHook('onSend', async (_request, reply) => {
+    if (isProdEnv) {
+      void reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    }
+    void reply.header('X-Content-Type-Options', 'nosniff')
+    void reply.header('Referrer-Policy', 'strict-origin-when-cross-origin')
+  })
+
   // CORS
   const isProd = process.env['AREA_CODE_ENV'] === 'prod'
   const amplifyOrigins = [

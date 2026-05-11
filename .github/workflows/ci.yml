@@ -80,30 +80,19 @@ jobs:
       - name: Run data integrity checks
         run: pnpm exec vitest run --reporter=verbose backend/src/__tests__/data-integrity.test.ts
 
-  schema-validation:
-    name: Prisma Schema Validation
+  serverless-guard:
+    name: Serverless-Only Guard
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Validate Prisma schema
-        run: pnpm exec prisma validate
-        working-directory: backend
-      - name: Check for pending migrations
-        run: pnpm exec prisma migrate diff --from-migrations ./prisma/migrations --to-schema-datamodel ./prisma/schema.prisma --exit-code
-        working-directory: backend
+      - name: Run serverless guard
+        shell: pwsh
+        run: pwsh -ExecutionPolicy Bypass -File scripts/assert-serverless-only.ps1
 
   build-lambdas:
     name: Build Lambda Functions
     runs-on: ubuntu-latest
-    needs: [lint-format, typecheck, test, data-integrity]
+    needs: [lint-format, typecheck, test, data-integrity, serverless-guard]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -114,38 +103,17 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Build all Lambda functions
-        run: make build-all
+      - name: Build Lambda bundles (monolith + websocket + workers)
+        run: pnpm --filter backend build:lambda
       - name: Upload Lambda artifacts
         uses: actions/upload-artifact@v4
         with:
           name: lambda-bundles
-          path: dist/*.zip
+          path: |
+            backend/dist/lambda/index.mjs
+            backend/dist/websocket/index.mjs
+            backend/dist/workers/**/index.mjs
           retention-days: 7
-
-  build-ecs-image:
-    name: Build ECS Docker Image
-    runs-on: ubuntu-latest
-    needs: [lint-format, typecheck, test, data-integrity]
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: us-east-1
-      - name: Login to ECR
-        id: ecr-login
-        uses: aws-actions/amazon-ecr-login@v2
-      - name: Build and tag Docker image
-        working-directory: backend
-        run: |
-          IMAGE_TAG="${{ github.sha }}"
-          docker build -t area-code-api:${IMAGE_TAG} .
-          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
 
   build-frontends:
     name: Build Frontends
@@ -168,14 +136,14 @@ jobs:
         run: pnpm exec vite build
         working-directory: apps/${{ matrix.app }}
         env:
-          VITE_DEV_MOCK: "false"
+          VITE_DEV_MOCK: 'false'
 
   # ── Deploy to Dev ──────────────────────────────────────────────────────────
 
   deploy-dev:
     name: Deploy to Dev
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    needs: [build-lambdas, build-ecs-image, build-frontends, schema-validation]
+    needs: [build-lambdas, build-frontends, serverless-guard]
     runs-on: ubuntu-latest
     environment: dev
     permissions:
@@ -198,41 +166,17 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
 
-      - name: Login to ECR
-        id: ecr-login
-        uses: aws-actions/amazon-ecr-login@v2
-
-      # 1. Run DB migrations via Lambda
-      - name: Run Prisma migrations (dev)
-        run: |
-          aws lambda invoke \
-            --function-name area-code-dev-run-migration \
-            --payload '{}' \
-            /tmp/migration-output.json
-          cat /tmp/migration-output.json
-
-      # 2. Deploy Lambda functions
       - name: Download Lambda artifacts
         uses: actions/download-artifact@v4
         with:
           name: lambda-bundles
-          path: dist/
-      - name: Deploy Lambdas to dev
-        run: make deploy-all ENV=dev
+          path: backend/dist/
 
-      # 3. Build + push ECS image
-      - name: Push ECS image to dev
-        working-directory: backend
-        run: |
-          ECR_REPO="${{ steps.ecr-login.outputs.registry }}/area-code-dev-api"
-          IMAGE_TAG="${{ github.sha }}"
-          docker build -t ${ECR_REPO}:${IMAGE_TAG} -t ${ECR_REPO}:latest .
-          docker push ${ECR_REPO}:${IMAGE_TAG}
-          docker push ${ECR_REPO}:latest
-          aws ecs update-service \
-            --cluster area-code-dev \
-            --service area-code-dev-api \
-            --force-new-deployment
+      - name: Deploy Lambdas to dev
+        run: ./scripts/deploy-serverless.sh us-east-1 dev
+        env:
+          SKIP_BUILD: 'true'
+          SKIP_TERRAFORM: 'true'
 
   # ── Deploy to Prod ─────────────────────────────────────────────────────────
 
@@ -262,41 +206,18 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
 
-      - name: Login to ECR
-        id: ecr-login
-        uses: aws-actions/amazon-ecr-login@v2
-
-      # 1. Run DB migrations via Lambda
-      - name: Run Prisma migrations (prod)
-        run: |
-          aws lambda invoke \
-            --function-name area-code-prod-run-migration \
-            --payload '{}' \
-            /tmp/migration-output.json
-          cat /tmp/migration-output.json
-
-      # 2. Deploy Lambda functions
       - name: Download Lambda artifacts
         uses: actions/download-artifact@v4
         with:
           name: lambda-bundles
-          path: dist/
-      - name: Deploy Lambdas to prod
-        run: make deploy-all ENV=prod
+          path: backend/dist/
 
-      # 3. Build + push ECS image
-      - name: Push ECS image to prod
-        working-directory: backend
-        run: |
-          ECR_REPO="${{ steps.ecr-login.outputs.registry }}/area-code-prod-api"
-          IMAGE_TAG="${{ github.sha }}"
-          docker build -t ${ECR_REPO}:${IMAGE_TAG} -t ${ECR_REPO}:latest .
-          docker push ${ECR_REPO}:${IMAGE_TAG}
-          docker push ${ECR_REPO}:latest
-          aws ecs update-service \
-            --cluster area-code-prod \
-            --service area-code-prod-api \
-            --force-new-deployment
+      - name: Deploy Lambdas to prod
+        run: ./scripts/deploy-serverless.sh us-east-1 prod
+        env:
+          SKIP_BUILD: 'true'
+          SKIP_TERRAFORM: 'true'
+
       - name: Smoke test prod API
         run: |
           sleep 30
@@ -307,7 +228,7 @@ jobs:
           echo "Nodes endpoint status: ${NODES_STATUS}"
           test "${NODES_STATUS}" = "200"
 
-      # Notify Sentry of new release
+      # Notify Sentry of new release (only runs if token is configured)
       - name: Create Sentry release
         if: env.SENTRY_AUTH_TOKEN != ''
         env:

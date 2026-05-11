@@ -20,6 +20,7 @@ tfplan
 !ENGINEERING_STANDARDS.md
 !README.md
 !.kiro/**/*.md
+!docs/**/*.md
 
 # Secrets
 .env

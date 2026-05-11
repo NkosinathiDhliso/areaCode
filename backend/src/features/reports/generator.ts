@@ -330,7 +330,9 @@ async function sendWebSocketNotification(businessId: string, reportId: string): 
  * Queue email notification via SQS push-sender.
  */
 async function queueEmailNotification(businessId: string, reportId: string, periodType: string): Promise<void> {
-  const queueUrl = process.env['AREA_CODE_PUSH_SENDER_QUEUE_URL']
+  // Terraform sets AREA_CODE_SQS_PUSH_QUEUE_URL; keep AREA_CODE_PUSH_SENDER_QUEUE_URL
+  // as a fallback for local dev or any legacy caller.
+  const queueUrl = process.env['AREA_CODE_SQS_PUSH_QUEUE_URL'] ?? process.env['AREA_CODE_PUSH_SENDER_QUEUE_URL']
   if (!queueUrl) return
 
   try {

@@ -2,7 +2,9 @@ import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } fro
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 const s3 = new S3Client({})
-const BUCKET = process.env['MEDIA_BUCKET'] ?? 'area-code-media'
+// Prefer AREA_CODE_S3_MEDIA_BUCKET (set by Terraform) and fall back to
+// MEDIA_BUCKET for local dev / legacy callers.
+const BUCKET = process.env['AREA_CODE_S3_MEDIA_BUCKET'] ?? process.env['MEDIA_BUCKET'] ?? 'area-code-media'
 const MAX_WIDTH = 1200
 
 export interface ImageProcessingResult {
