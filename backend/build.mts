@@ -20,13 +20,16 @@ const sharedBuildOptions = {
   ],
   banner: {
     js: [
-      // ESM compatibility shims for __dirname / require
-      'import { createRequire as _cr } from "module";',
-      'import { fileURLToPath as _fp } from "url";',
-      'import { dirname as _dn } from "path";',
-      'const require = _cr(import.meta.url);',
-      'const __filename = _fp(import.meta.url);',
-      'const __dirname = _dn(__filename);',
+      // ESM compatibility shims for __dirname / require.
+      // Names are deliberately verbose so esbuild's minifier cannot generate
+      // colliding identifiers in bundled third-party code (e.g. sentry/otel
+      // had a generated `_dn` that collided with the previous shim).
+      'import { createRequire as __esbCreateRequire } from "module";',
+      'import { fileURLToPath as __esbFileURLToPath } from "url";',
+      'import { dirname as __esbDirname } from "path";',
+      'const require = __esbCreateRequire(import.meta.url);',
+      'const __filename = __esbFileURLToPath(import.meta.url);',
+      'const __dirname = __esbDirname(__filename);',
     ].join(''),
   },
 }
