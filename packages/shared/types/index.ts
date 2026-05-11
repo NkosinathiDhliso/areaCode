@@ -129,6 +129,8 @@ export interface Node {
   qrCheckinEnabled: boolean
   isVerified: boolean
   isActive: boolean
+  headerImageKey?: string | null
+  instagramHandle?: string | null
   createdAt: string
 }
 

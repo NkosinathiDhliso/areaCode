@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 /**
  * Unit tests for the Who-Is-Here endpoint service logic.
@@ -6,11 +6,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
  */
 
 // Mock the repository module
-vi.mock('../../shared/db/prisma.js', () => ({
-  prisma: {},
-  isDbAvailable: false,
-}))
-
 vi.mock('../../shared/redis/client.js', () => ({
   redis: { zrevrange: vi.fn(), zrevrank: vi.fn(), zscore: vi.fn() },
 }))

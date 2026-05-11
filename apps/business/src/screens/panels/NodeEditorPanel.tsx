@@ -40,6 +40,13 @@ export function NodeEditorPanel() {
   const [photoUploading, setPhotoUploading] = useState(false)
   const [photoMessage, setPhotoMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
+  // Header image state
+  const [headerImageUrl, setHeaderImageUrl] = useState<string | null>(null)
+
+  // Instagram handle state
+  const [instagramHandle, setInstagramHandle] = useState('')
+  const [instagramSaving, setInstagramSaving] = useState(false)
+
   useEffect(() => {
     if (!addVenueOpen) return
     const apiKey = import.meta.env['VITE_GOOGLE_MAPS_API_KEY'] as string | undefined
@@ -143,6 +150,17 @@ export function NodeEditorPanel() {
     setEditAddress('')
     setEditLat(undefined)
     setEditLng(undefined)
+
+    // Seed header image preview
+    const cdnUrl = import.meta.env['VITE_CDN_URL'] as string | undefined
+    if (selected.headerImageKey && cdnUrl) {
+      setHeaderImageUrl(`${cdnUrl}/${selected.headerImageKey}`)
+    } else {
+      setHeaderImageUrl(null)
+    }
+
+    // Seed Instagram handle
+    setInstagramHandle(selected.instagramHandle ?? '')
   }, [selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Attach Google Places autocomplete to the edit address input once selected exists and script is ready
@@ -422,6 +440,62 @@ export function NodeEditorPanel() {
                   {photoMessage.text}
                 </p>
               )}
+
+              {/* Header Image Preview */}
+              {headerImageUrl && (
+                <div className="flex flex-col gap-2">
+                  <label className="text-[var(--text-secondary)] text-xs font-medium">Header Image</label>
+                  <img
+                    src={headerImageUrl}
+                    alt="Header preview"
+                    className="w-full h-32 object-cover rounded-xl border border-[var(--border)]"
+                  />
+                </div>
+              )}
+
+              {/* Instagram Handle */}
+              <div className="flex flex-col gap-2">
+                <label className="text-[var(--text-secondary)] text-xs font-medium">Instagram Handle</label>
+                <div className="flex flex-row gap-2">
+                  <input
+                    type="text"
+                    value={instagramHandle}
+                    onChange={(e) => setInstagramHandle(e.target.value.replace(/^@/, ''))}
+                    placeholder="e.g. yourhandle"
+                    className="flex-1 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+                  />
+                  <button
+                    onClick={() => {
+                      if (!selected) return
+                      setInstagramSaving(true)
+                      api
+                        .put(`/v1/business/nodes/${selected.id}/instagram`, {
+                          handle: instagramHandle || null,
+                        })
+                        .then(() => setPhotoMessage({ type: 'success', text: 'Instagram saved.' }))
+                        .catch(() => setPhotoMessage({ type: 'error', text: 'Failed to save Instagram.' }))
+                        .finally(() => {
+                          setInstagramSaving(false)
+                          setTimeout(() => setPhotoMessage(null), 3000)
+                        })
+                    }}
+                    disabled={instagramSaving}
+                    className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-4 py-2.5 text-sm disabled:opacity-50"
+                  >
+                    {instagramSaving ? '...' : 'Save'}
+                  </button>
+                </div>
+                {instagramHandle && (
+                  <a
+                    href={`https://instagram.com/${instagramHandle}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[var(--accent)] text-xs"
+                  >
+                    @{instagramHandle}
+                  </a>
+                )}
+              </div>
               <button
                 onClick={() => void handleSave()}
                 disabled={saving || !name.trim()}

@@ -11,6 +11,8 @@ import { businessRoutes } from './features/business/handler.js'
 import { notificationRoutes } from './features/notifications/handler.js'
 import { musicRoutes } from './features/music/handler.js'
 import { nodeRoutes } from './features/nodes/handler.js'
+import { nodeImageRoutes } from './features/nodes/image-routes.js'
+import { instagramRoutes } from './features/nodes/instagram-routes.js'
 import { privacyRoutes } from './features/privacy/handler.js'
 import { reportRoutes } from './features/reports/handler.js'
 import { rewardRoutes } from './features/rewards/handler.js'
@@ -158,6 +160,8 @@ export async function buildApp() {
   await app.register(sessionRoutes)
   await app.register(profileRoutes)
   await app.register(nodeRoutes)
+  await app.register(nodeImageRoutes)
+  await app.register(instagramRoutes)
   await app.register(checkInRoutes)
   await app.register(rewardRoutes)
   await app.register(businessRoutes)

@@ -8,6 +8,8 @@ dist/
 .terraform/
 *.tfstate
 *.tfstate.backup
+*.tfvars
+*.bak
 .terraform.lock.hcl
 infra/modules/lambda/placeholder.zip
 tfplan
