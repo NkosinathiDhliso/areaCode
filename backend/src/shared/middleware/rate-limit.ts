@@ -1,18 +1,18 @@
-import type { FastifyRequest, FastifyReply } from 'fastify';
-import { kvIncr, kvTtl } from '../kv/dynamodb-kv.js';
-import { AppError } from '../errors/AppError.js';
+import type { FastifyRequest } from 'fastify'
+import { kvIncr, kvTtl } from '../kv/dynamodb-kv.js'
+import { AppError } from '../errors/AppError.js'
 
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE'];
+const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
 interface RateLimitOptions {
   /** Key prefix for this limiter */
-  key: string;
+  key: string
   /** Max requests in the window */
-  max: number;
+  max: number
   /** Window in seconds */
-  windowSeconds: number;
+  windowSeconds: number
   /** Function to extract identifier (defaults to IP) */
-  identifierFn?: (request: FastifyRequest) => string;
+  identifierFn?: (request: FastifyRequest) => string
 }
 
 /**
@@ -20,23 +20,21 @@ interface RateLimitOptions {
  * Returns a Fastify preHandler.
  */
 export function rateLimitMiddleware(options: RateLimitOptions) {
-  const { key, max, windowSeconds, identifierFn } = options;
+  const { key, max, windowSeconds, identifierFn } = options
 
-  return async (request: FastifyRequest, _reply: FastifyReply) => {
-    if (DEV_MODE) return; // Skip rate limiting in dev mode
+  return async (request: FastifyRequest) => {
+    if (DEV_MODE) return // Skip rate limiting in dev mode
 
-    const identifier = identifierFn
-      ? identifierFn(request)
-      : request.ip;
+    const identifier = identifierFn ? identifierFn(request) : request.ip
 
-    const kvKey = `ratelimit:${key}:${identifier}`;
-    const current = await kvIncr(kvKey, windowSeconds);
+    const kvKey = `ratelimit:${key}:${identifier}`
+    const current = await kvIncr(kvKey, windowSeconds)
 
     if (current > max) {
-      const ttl = await kvTtl(kvKey);
-      throw AppError.tooManyRequests(
-        `Rate limit exceeded. Try again in ${ttl > 0 ? ttl : windowSeconds}s.`
-      );
+      const ttl = await kvTtl(kvKey)
+      const waitSeconds = ttl > 0 ? ttl : windowSeconds
+      const retryAt = new Date(Date.now() + waitSeconds * 1000).toISOString()
+      throw AppError.tooManyRequests(`Too many requests. Try again in ${waitSeconds}s.`, retryAt)
     }
-  };
+  }
 }

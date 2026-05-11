@@ -50,6 +50,7 @@ interface NodeDetailSheetProps {
   onCheckIn: () => void
   onSignup: () => void
   qrFallback?: boolean
+  isCheckingIn?: boolean
 }
 
 export const NodeDetailSheet = memo(function NodeDetailSheet({
@@ -61,6 +62,7 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
   onCheckIn,
   onSignup,
   qrFallback = false,
+  isCheckingIn = false,
 }: NodeDetailSheetProps) {
   const { t } = useTranslation()
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
@@ -154,7 +156,7 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
     }
   }
 
-  const ctaInfo = getCtaInfo(geoStatus, qrFallback, t)
+  const ctaInfo = getCtaInfo(geoStatus, qrFallback, isCheckingIn, t)
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose}>
@@ -408,8 +410,12 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
 function getCtaInfo(
   geoStatus: GeoStatus,
   qrFallback: boolean,
+  isCheckingIn: boolean,
   t: (key: string) => string,
 ): { label: string; disabled: boolean } {
+  if (isCheckingIn) {
+    return { label: t('checkin.checking'), disabled: true }
+  }
   if (qrFallback) {
     return { label: t('checkin.scanQr'), disabled: true }
   }

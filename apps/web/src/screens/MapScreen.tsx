@@ -25,12 +25,6 @@ interface MapScreenProps {
 
 const DEFAULT_ZOOM = 13
 
-// Use the user's city from their profile, fallback to Johannesburg
-function getUserCitySlug(): string {
-  const userStore = useUserStore.getState()
-  return userStore.user?.citySlug ?? 'johannesburg'
-}
-
 export function MapScreen({ onNavigate }: MapScreenProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -44,7 +38,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const onboarding = useUserStore((s) => s.onboarding)
   const markHintSeen = useUserStore((s) => s.markHintSeen)
   const { requestLocation, geoStatus } = useGeolocation()
-  const { checkIn, qrFallback, resetQrFallback } = useCheckIn()
+  const { checkIn, isPending: checkInPending, qrFallback, resetQrFallback } = useCheckIn()
 
   const citySlug = useUserStore((s) => s.user?.citySlug) ?? 'johannesburg'
 
@@ -256,6 +250,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
           setSignupOpen(true)
         }}
         qrFallback={qrFallback}
+        isCheckingIn={checkInPending}
       />
 
       <SignupSheet isOpen={signupOpen} onClose={() => setSignupOpen(false)} onNavigate={onNavigate} />
