@@ -9,7 +9,7 @@ import type { Node, NodeCategory, Reward } from '@area-code/shared/types'
 
 import { useMapInit } from '../hooks/useMapInit'
 import { useMapMarkers } from '../hooks/useMapMarkers'
-import { useMapSockets } from '../hooks/useMapSockets'
+import { useDeltaPoll } from '@area-code/shared/hooks/useDeltaPoll'
 import { getNodeState } from '../lib/mapHelpers'
 import { CategoryFilterBar } from '../components/CategoryFilterBar'
 import { ToastOverlay } from '../components/ToastOverlay'
@@ -43,7 +43,6 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const { containerRef, mapRef, mapReady, mapError, retryMap } = useMapInit()
   const setNodes = useMapStore((s) => s.setNodes)
   const pulseScores = useMapStore((s) => s.pulseScores)
-  const accessToken = useConsumerAuthStore((s) => s.accessToken)
   const permissionState = useLocationStore((s) => s.permissionState)
   const lastKnownPosition = useLocationStore((s) => s.lastKnownPosition)
   const onboarding = useUserStore((s) => s.onboarding)
@@ -61,9 +60,10 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const [primingOpen, setPrimingOpen] = useState(false)
   const [primingShownThisSession, setPrimingShownThisSession] = useState(false)
 
-  // Socket subscriptions, citySlug passed for anonymous room join
+  // Delta polling replaces WebSocket subscriptions for consumer apps
+  useDeltaPoll(citySlug)
+
   const userId = useConsumerAuthStore((s) => s.userId)
-  useMapSockets(citySlug, accessToken ?? undefined, userId)
 
   // Fetch nodes for city
   const { data: nodeList } = useQuery({

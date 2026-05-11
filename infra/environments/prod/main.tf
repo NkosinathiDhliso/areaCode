@@ -251,6 +251,16 @@ resource "aws_dynamodb_table" "nodes" {
     type = "S"
   }
 
+  attribute {
+    name = "cityId"
+    type = "S"
+  }
+
+  attribute {
+    name = "signalUpdatedAt"
+    type = "S"
+  }
+
   global_secondary_index {
     name            = "BusinessIndex"
     hash_key        = "businessId"
@@ -260,6 +270,13 @@ resource "aws_dynamodb_table" "nodes" {
   global_secondary_index {
     name            = "LocationIndex"
     hash_key        = "location"
+    projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "CityUpdatedIndex"
+    hash_key        = "cityId"
+    range_key       = "signalUpdatedAt"
     projection_type = "ALL"
   }
 

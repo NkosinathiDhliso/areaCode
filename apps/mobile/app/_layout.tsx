@@ -8,7 +8,6 @@ WebBrowser.maybeCompleteAuthSession()
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
 import { api } from '@area-code/shared/lib/api'
-import { getSocket } from '@area-code/shared/lib/socket'
 import { colors } from '../src/theme'
 import '../src/i18n'
 
@@ -17,8 +16,7 @@ const queryClient = new QueryClient({
 })
 
 export default function RootLayout() {
-  const accessToken = useConsumerAuthStore((s) => s.accessToken)
-  const { setOnline, setApiOnly, setOffline } = useConnectivityStore()
+  const { setOnline } = useConnectivityStore()
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
@@ -29,17 +27,11 @@ export default function RootLayout() {
     api.setTokenProvider(() => useConsumerAuthStore.getState().accessToken)
   }, [])
 
+  // Connectivity state management (replaces WebSocket connectivity)
+  // Assume online initially; API error handling will surface connectivity issues
   useEffect(() => {
-    const socket = getSocket(accessToken ?? undefined)
-    const onConnect = () => setOnline()
-    const onDisconnect = () => setApiOnly()
-    socket.on('connect', onConnect)
-    socket.on('disconnect', onDisconnect)
-    return () => {
-      socket.off('connect', onConnect)
-      socket.off('disconnect', onDisconnect)
-    }
-  }, [accessToken, setOnline, setApiOnly, setOffline])
+    setOnline()
+  }, [setOnline])
 
   if (!ready) return null
 

@@ -1,4 +1,5 @@
 export { useCheckIn } from './useCheckIn'
+export { useDeltaPoll } from './useDeltaPoll'
 export { useNodePulse } from './useNodePulse'
 export { useRealtimeToast } from './useRealtimeToast'
 export { useStateSurge } from './useStateSurge'

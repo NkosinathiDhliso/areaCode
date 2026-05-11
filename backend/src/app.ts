@@ -11,8 +11,10 @@ import { businessRoutes } from './features/business/handler.js'
 import { notificationRoutes } from './features/notifications/handler.js'
 import { musicRoutes } from './features/music/handler.js'
 import { nodeRoutes } from './features/nodes/handler.js'
+import { deltaRoutes } from './features/nodes/delta-handler.js'
 import { privacyRoutes } from './features/privacy/handler.js'
 import { reportRoutes } from './features/reports/handler.js'
+import { signalRoutes } from './features/signals/handler.js'
 import { rewardRoutes } from './features/rewards/handler.js'
 import { isBlocked } from './features/social/block-repository.js'
 import { socialRoutes } from './features/social/handler.js'
@@ -255,6 +257,7 @@ export async function buildApp() {
   await app.register(sessionRoutes)
   await app.register(profileRoutes)
   await app.register(nodeRoutes)
+  await app.register(deltaRoutes)
   await app.register(checkInRoutes)
   await app.register(rewardRoutes)
   await app.register(businessRoutes)
@@ -263,6 +266,7 @@ export async function buildApp() {
   await app.register(notificationRoutes)
   await app.register(musicRoutes)
   await app.register(staffRoutes)
+  await app.register(signalRoutes)
   await app.register(privacyRoutes)
   await app.register(reportRoutes)
 

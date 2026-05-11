@@ -6,7 +6,6 @@ import { useNavigationStore } from '@area-code/shared/stores/navigationStore'
 import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
 import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { api } from '@area-code/shared/lib/api'
-import { getSocket } from '@area-code/shared/lib/socket'
 import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
 import { GlobalErrorToast } from '@area-code/shared/components/GlobalErrorToast'
 import { OnboardingFlow } from '@area-code/shared/components/OnboardingFlow'
@@ -91,10 +90,8 @@ export function App() {
 
 function AppContent() {
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
-  const accessToken = useConsumerAuthStore((s) => s.accessToken)
   const resetNavigation = useNavigationStore((s) => s.resetNavigation)
   const setOnline = useConnectivityStore((s) => s.setOnline)
-  const setApiOnly = useConnectivityStore((s) => s.setApiOnly)
   const setOffline = useConnectivityStore((s) => s.setOffline)
 
   // Activate SAST time-based theme (06:00–18:00 light, 18:00–06:00 dark)
@@ -137,27 +134,25 @@ function AppContent() {
     resetNavigation()
   }, [resetNavigation])
 
-  // Socket + connectivity state management
+  // Connectivity state management via browser events
   useEffect(() => {
-    const socket = getSocket(accessToken ?? undefined)
-
-    const handleConnect = () => setOnline()
-    const handleDisconnect = () => setApiOnly()
-    socket.on('connect', handleConnect)
-    socket.on('disconnect', handleDisconnect)
-
     const handleOnline = () => setOnline()
     const handleOffline = () => setOffline()
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
 
+    // Set initial state based on navigator.onLine
+    if (navigator.onLine) {
+      setOnline()
+    } else {
+      setOffline()
+    }
+
     return () => {
-      socket.off('connect', handleConnect)
-      socket.off('disconnect', handleDisconnect)
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
-  }, [accessToken, setOnline, setApiOnly, setOffline])
+  }, [setOnline, setOffline])
 
   // Check onboarding status after login
   useEffect(() => {
