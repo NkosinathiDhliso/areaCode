@@ -331,10 +331,35 @@ export async function getQrData(nodeId: string, businessId: string) {
 
 // ─── Trial Management ───────────────────────────────────────────────────────
 
+const TRIAL_DAYS = 14
+
 export async function startTrial(businessId: string, plan: 'growth' | 'pro') {
-  if (DEV_MODE) return { id: businessId, tier: plan, trialEndsAt: new Date(Date.now() + 14 * 86400000).toISOString() }
-  const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
-  return repo.updateBusinessTier(businessId, plan, trialEndsAt)
+  if (DEV_MODE) {
+    return {
+      id: businessId,
+      tier: plan,
+      trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 86400000).toISOString(),
+    }
+  }
+
+  const biz = await repo.findBusinessById(businessId)
+  if (!biz) throw AppError.notFound('Business not found')
+
+  // One trial per business ever. trialEndsAt is set to a non-null value on
+  // trial start and stays non-null even after the trial expires, so its
+  // presence is a reliable marker that a trial has been used.
+  if (biz.trialEndsAt) {
+    throw AppError.conflict('You have already used your free trial. Upgrade to continue with this plan.')
+  }
+
+  // Trials only apply to plans that offer them.
+  if (!BUSINESS_PLANS[plan].trialDays) {
+    throw AppError.badRequest('This plan does not include a free trial')
+  }
+
+  const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  await repo.updateBusinessTier(businessId, plan, trialEndsAt)
+  return { success: true, tier: plan, trialEndsAt }
 }
 
 // ─── Live Stats ─────────────────────────────────────────────────────────────

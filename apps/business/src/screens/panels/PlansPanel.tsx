@@ -23,11 +23,20 @@ interface PlansResponse {
   payg: PlanInfo
 }
 
+interface BusinessProfile {
+  tier?: string
+  // Set (non-null) once a trial has ever been started — either active or expired.
+  // The backend enforces one trial per business, so we use this to hide
+  // the "Start trial" CTA for businesses that have already used theirs.
+  trialEndsAt?: string | null
+}
+
 export function PlansPanel() {
   const { t } = useTranslation()
   const [plans, setPlans] = useState<PlansResponse | null>(null)
   const [loading, setLoading] = useState<string | null>(null)
   const [currentTier, setCurrentTier] = useState<'starter' | 'growth' | 'pro' | 'payg'>('starter')
+  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState(false)
 
@@ -36,19 +45,43 @@ export function PlansPanel() {
       try {
         const [plansRes, profileRes] = await Promise.all([
           api.get<PlansResponse>('/v1/business/plans'),
-          api.get<{ tier?: string }>('/v1/business/me'),
+          api.get<BusinessProfile>('/v1/business/me'),
         ])
         setPlans(plansRes)
         const raw = profileRes.tier ?? 'starter'
         // 'free' is a legacy value — treat it as starter for display
         const mapped = raw === 'free' ? 'starter' : raw
         setCurrentTier(mapped as 'starter' | 'growth' | 'pro' | 'payg')
+        setTrialEndsAt(profileRes.trialEndsAt ?? null)
       } catch {
         setLoadError(true)
       }
     }
     void load()
   }, [])
+
+  // A business gets exactly one trial, ever. trialEndsAt being non-null means
+  // they've already claimed it (active or expired), so new trial CTAs are hidden.
+  const hasUsedTrial = trialEndsAt !== null
+  const trialIsActive = trialEndsAt !== null && new Date(trialEndsAt).getTime() > Date.now()
+
+  async function handleStartTrial(plan: 'growth' | 'pro') {
+    setLoading(plan)
+    setCheckoutError(null)
+    try {
+      const res = await api.post<{ success: boolean; tier: string; trialEndsAt: string }>('/v1/business/trial/start', {
+        plan,
+      })
+      // Update local state so the UI reflects the active trial immediately
+      setCurrentTier(res.tier as 'starter' | 'growth' | 'pro' | 'payg')
+      setTrialEndsAt(res.trialEndsAt)
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message
+      setCheckoutError(msg && msg.length < 200 ? msg : 'Failed to start trial. Please try again.')
+    } finally {
+      setLoading(null)
+    }
+  }
 
   async function handleSelectPlan(plan: 'growth' | 'pro' | 'payg', interval?: string) {
     setLoading(plan)
@@ -73,14 +106,25 @@ export function PlansPanel() {
   }
 
   function renderPlanCard(key: string, plan: PlanInfo, actionPlan?: 'growth' | 'pro' | 'payg') {
-    const isStarter = !actionPlan
     const isPAYG = actionPlan === 'payg'
     const isCurrent = key === currentTier
+    // Offer a free trial only when the plan supports it AND the business
+    // hasn't already claimed their one trial.
+    const canStartTrial = !!plan.trialDays && !hasUsedTrial && (actionPlan === 'growth' || actionPlan === 'pro')
     const priceDisplay = isPAYG
       ? `${formatZAR((plan.dailyPriceCents ?? 0) / 100)}/day`
       : plan.monthlyPriceCents === 0
         ? t('biz.plans.free')
         : `${formatZAR((plan.monthlyPriceCents ?? 0) / 100)}/mo`
+
+    function handleClick() {
+      if (!actionPlan) return
+      if (canStartTrial && (actionPlan === 'growth' || actionPlan === 'pro')) {
+        void handleStartTrial(actionPlan)
+      } else {
+        void handleSelectPlan(actionPlan, isPAYG ? 'daily' : 'monthly')
+      }
+    }
 
     return (
       <div
@@ -96,7 +140,7 @@ export function PlansPanel() {
         <div className="flex flex-row items-center justify-between">
           <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">{plan.name}</span>
           {isCurrent && <span className="text-[var(--accent)] text-xs font-medium">{t('biz.plans.current')}</span>}
-          {plan.trialDays && !isCurrent && (
+          {canStartTrial && !isCurrent && (
             <span className="text-[var(--success)] text-xs font-medium">{plan.trialDays}-day free trial</span>
           )}
         </div>
@@ -110,6 +154,9 @@ export function PlansPanel() {
         {isPAYG && plan.weeklyPriceCents !== undefined && (
           <span className="text-[var(--text-muted)] text-xs">or {formatZAR(plan.weeklyPriceCents / 100)}/week</span>
         )}
+        {canStartTrial && (
+          <span className="text-[var(--text-muted)] text-xs">No card needed. Billing starts after your trial.</span>
+        )}
 
         <div className="flex flex-col gap-1 mt-1">
           <FeatureRow label={t('biz.plans.nodes')} value={formatLimit(plan.maxNodes)} />
@@ -119,7 +166,7 @@ export function PlansPanel() {
 
         {actionPlan && !isCurrent && (
           <button
-            onClick={() => handleSelectPlan(actionPlan, isPAYG ? 'daily' : 'monthly')}
+            onClick={handleClick}
             disabled={loading !== null}
             className={`font-semibold rounded-xl py-3 text-sm transition-all duration-150 active:scale-95 disabled:opacity-50 mt-1 ${
               key === 'growth'
@@ -127,7 +174,7 @@ export function PlansPanel() {
                 : 'border border-[var(--border-strong)] text-[var(--text-primary)] bg-transparent'
             }`}
           >
-            {loading === actionPlan ? '...' : plan.trialDays ? t('biz.plans.startTrial') : t('biz.plans.subscribe')}
+            {loading === actionPlan ? '...' : canStartTrial ? t('biz.plans.startTrial') : t('biz.plans.subscribe')}
           </button>
         )}
         {isCurrent && (
@@ -149,6 +196,18 @@ export function PlansPanel() {
     <div className="p-5 flex flex-col gap-4">
       <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('biz.plans.title')}</h2>
       <p className="text-[var(--text-secondary)] text-sm">{t('biz.plans.subtitle')}</p>
+
+      {trialIsActive && trialEndsAt && (
+        <div className="bg-[var(--success-subtle,#e7f7ee)] border border-[var(--success)] rounded-xl px-4 py-3 text-[var(--text-primary)] text-sm">
+          Free trial active — ends {new Date(trialEndsAt).toLocaleDateString()}. Add a payment method before then to
+          keep your {currentTier} features.
+        </div>
+      )}
+      {!trialIsActive && hasUsedTrial && (
+        <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl px-4 py-3 text-[var(--text-secondary)] text-xs">
+          You&apos;ve already used your free trial. Pick a plan below to keep using paid features.
+        </div>
+      )}
       {checkoutError && (
         <div className="bg-[var(--danger-subtle,#fee)] border border-[var(--danger)] rounded-xl px-4 py-3 text-[var(--danger)] text-sm">
           {checkoutError}
