@@ -22,6 +22,7 @@ import { ConsumerLogin } from './screens/ConsumerLogin'
 import { ConsumerSignup } from './screens/ConsumerSignup'
 import { ConsumerOAuthCallback } from './screens/ConsumerOAuthCallback'
 import { AuthLanding } from './screens/AuthLanding'
+import { QrCheckIn } from './screens/QrCheckIn'
 import { BottomNav } from './components/BottomNav'
 import { ConnectivityBanner } from './components/ConnectivityBanner'
 import type { AppRoute } from './types'
@@ -161,12 +162,43 @@ function AppContent() {
     void checkOnboarding()
   }, [isAuthenticated, onboardingChecked, setRoute])
 
+  // Resume a pending QR check-in after sign-in.
+  // When an unauthenticated visitor scans a venue QR (areacode.co.za/qr/...),
+  // the QrCheckIn screen stashes {nodeId, token} in sessionStorage and routes
+  // them to login. Once authenticated, send them back to the same deep link so
+  // the check-in completes.
+  useEffect(() => {
+    if (!isAuthenticated) return
+    let pending: { nodeId?: string; token?: string } | null = null
+    try {
+      const raw = sessionStorage.getItem('pendingQrCheckIn')
+      if (raw) pending = JSON.parse(raw) as { nodeId?: string; token?: string }
+    } catch {
+      pending = null
+    }
+    if (pending?.nodeId && pending.token) {
+      sessionStorage.removeItem('pendingQrCheckIn')
+      window.location.replace(`/qr/${pending.nodeId}/${pending.token}`)
+    }
+  }, [isAuthenticated])
+
   // Must be called before any conditional returns to satisfy Rules of Hooks
   const activeDefaultTab = useNavigationStore((s) => s.activeDefaultTab)
 
   // OAuth callback is the only screen rendered without the shell
   if (window.location.pathname.startsWith('/auth/callback')) {
     return <ConsumerOAuthCallback onNavigate={setRoute} />
+  }
+
+  // Venue-printed QR deep link: /qr/{nodeId}/{token}
+  // Rendered full-screen so it completes the check-in flow before returning
+  // the user to the map.
+  const qrMatch = window.location.pathname.match(/^\/qr\/([^/]+)\/([^/?#]+)/)
+  if (qrMatch) {
+    const [, qrNodeId, qrToken] = qrMatch
+    if (qrNodeId && qrToken) {
+      return <QrCheckIn nodeId={qrNodeId} token={qrToken} onNavigate={setRoute} />
+    }
   }
 
   // Onboarding takes the entire screen until completed — never overlay it on top

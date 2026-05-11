@@ -7,6 +7,7 @@ import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import type { GeoStatus } from '@area-code/shared/stores/locationStore'
 import { CrowdVibeSection } from './CrowdVibeSection'
+import { QrScannerSheet } from './QrScannerSheet'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 
 // ─── Directions Helper ──────────────────────────────────────────────────────
@@ -82,6 +83,7 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
   const [reporting, setReporting] = useState(false)
   const [reportError, setReportError] = useState('')
   const [reportSuccess, setReportSuccess] = useState(false)
+  const [qrSheetOpen, setQrSheetOpen] = useState(false)
 
   if (!node) return null
 
@@ -93,7 +95,30 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
       onSignup()
       return
     }
+    if (qrFallback) {
+      // Out of GPS range — open the in-app scanner so the user can scan
+      // the venue's printed QR to prove presence.
+      setQrSheetOpen(true)
+      return
+    }
     onCheckIn()
+  }
+
+  function handleQrScanned(raw: string) {
+    setQrSheetOpen(false)
+    // The venue's printed QR encodes https://areacode.co.za/qr/{nodeId}/{token}.
+    // Navigate to that URL so the deep-link handler runs the check-in flow
+    // with the same code path as a native camera scan.
+    const match = raw.match(/\/qr\/([^/?#]+)\/([^/?#]+)/)
+    if (match) {
+      const [, scannedNodeId, scannedToken] = match
+      if (scannedNodeId && scannedToken) {
+        window.location.href = `/qr/${scannedNodeId}/${scannedToken}`
+        return
+      }
+    }
+    // Unknown QR format — stay on the sheet; the user can tap "Check in" again
+    // if they misfired.
   }
 
   function handleShare() {
@@ -403,6 +428,8 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
           </div>
         </div>
       )}
+
+      <QrScannerSheet isOpen={qrSheetOpen} onClose={() => setQrSheetOpen(false)} onScanned={handleQrScanned} />
     </BottomSheet>
   )
 })
@@ -417,7 +444,8 @@ function getCtaInfo(
     return { label: t('checkin.checking'), disabled: true }
   }
   if (qrFallback) {
-    return { label: t('checkin.scanQr'), disabled: true }
+    // Enabled so tapping opens the in-app QR scanner as a fallback to GPS.
+    return { label: t('checkin.scanQr'), disabled: false }
   }
 
   switch (geoStatus) {
