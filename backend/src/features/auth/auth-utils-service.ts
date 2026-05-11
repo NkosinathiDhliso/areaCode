@@ -8,7 +8,7 @@ export async function acceptStaffInvite(token: string, name: string, phone: stri
   const invite = await repo.findStaffInviteByToken(token)
   if (!invite) throw AppError.notFound('Invite not found or expired')
   if (invite.accepted) throw AppError.gone('Invite already accepted')
-  if (invite.expiresAt && new Date(invite.expiresAt as string) < new Date()) {
+  if (invite.expiresAt && new Date(invite.expiresAt as unknown as string) < new Date()) {
     throw AppError.gone('Invite expired')
   }
 

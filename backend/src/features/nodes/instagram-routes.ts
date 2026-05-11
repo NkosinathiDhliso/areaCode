@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { AppError } from '../../shared/errors/AppError'
-import { QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+import { GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb'
 
 const instagramSchema = z.object({
@@ -33,17 +33,8 @@ export async function instagramRoutes(app: FastifyInstance) {
     const body = instagramSchema.parse(request.body)
 
     // Verify node ownership
-    const nodeResult = await documentClient.send(
-      new QueryCommand({
-        TableName: TableNames.appData,
-        KeyConditionExpression: 'pk = :pk AND sk = :sk',
-        ExpressionAttributeValues: {
-          ':pk': `NODE#${nodeId}`,
-          ':sk': 'METADATA',
-        },
-      }),
-    )
-    const node = nodeResult.Items?.[0]
+    const nodeResult = await documentClient.send(new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } }))
+    const node = nodeResult.Item
     if (!node || node['businessId'] !== business.id) {
       throw new AppError(403, 'forbidden', 'You do not own this node')
     }
@@ -54,8 +45,8 @@ export async function instagramRoutes(app: FastifyInstance) {
     if (handle) {
       await documentClient.send(
         new UpdateCommand({
-          TableName: TableNames.appData,
-          Key: { pk: `NODE#${nodeId}`, sk: 'METADATA' },
+          TableName: TableNames.nodes,
+          Key: { nodeId },
           UpdateExpression: 'SET instagramHandle = :handle',
           ExpressionAttributeValues: { ':handle': handle },
         }),
@@ -63,8 +54,8 @@ export async function instagramRoutes(app: FastifyInstance) {
     } else {
       await documentClient.send(
         new UpdateCommand({
-          TableName: TableNames.appData,
-          Key: { pk: `NODE#${nodeId}`, sk: 'METADATA' },
+          TableName: TableNames.nodes,
+          Key: { nodeId },
           UpdateExpression: 'REMOVE instagramHandle',
         }),
       )

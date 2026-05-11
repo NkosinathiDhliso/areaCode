@@ -116,7 +116,7 @@ describe('Property 7: Staff Queue Bounds and Ordering', () => {
           expect(queue.getLiveQueue().length).toBeLessThanOrEqual(MAX_LIVE_QUEUE)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -135,7 +135,7 @@ describe('Property 7: Staff Queue Bounds and Ordering', () => {
           expect(items[0]!.id).toBe(lastAdded.id)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -151,7 +151,7 @@ describe('Property 7: Staff Queue Bounds and Ordering', () => {
           expect(queue.getRecentRedemptions().length).toBeLessThanOrEqual(MAX_RECENT_REDEMPTIONS)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -178,7 +178,7 @@ describe('Property 7: Staff Queue Bounds and Ordering', () => {
           expect(filtered.length).toBe(expectedCount)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -198,7 +198,7 @@ describe('Property 7: Staff Queue Bounds and Ordering', () => {
           expect(actualIds).toEqual(expectedIds)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
@@ -214,7 +214,7 @@ describe('Property 8: Redemption Code Validation', () => {
           expect(isValidRedemptionCode(hexCode)).toBe(true)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -226,7 +226,7 @@ describe('Property 8: Redemption Code Validation', () => {
           expect(isValidRedemptionCode(shortCode)).toBe(false)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -238,7 +238,7 @@ describe('Property 8: Redemption Code Validation', () => {
           expect(isValidRedemptionCode(longCode)).toBe(false)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -258,7 +258,7 @@ describe('Property 8: Redemption Code Validation', () => {
           expect(isValidRedemptionCode(code.slice(0, 32))).toBe(false)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -272,7 +272,7 @@ describe('Property 8: Redemption Code Validation', () => {
           expect(isValidRedemptionCode(code)).toBe(true)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

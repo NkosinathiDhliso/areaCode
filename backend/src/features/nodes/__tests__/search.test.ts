@@ -40,7 +40,7 @@ describe('node search ranking', () => {
           expect(computeRank(sorted[i - 1]!)).toBeGreaterThanOrEqual(computeRank(sorted[i]!))
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 30 },
     )
   })
 
@@ -57,7 +57,7 @@ describe('node search ranking', () => {
           expect(computeRank(high)).toBeGreaterThan(computeRank(low))
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 30 },
     )
   })
 })

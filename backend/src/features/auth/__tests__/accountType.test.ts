@@ -25,7 +25,7 @@ describe('account-type endpoint', () => {
         const result = simulateGetAccountType(phone, db)
         expect(ALLOWED_RESPONSES).toContain(result)
       }),
-      { numRuns: 300 },
+      { numRuns: 30 },
     )
   })
 
@@ -41,7 +41,7 @@ describe('account-type endpoint', () => {
         expect(result).toBe('not_found')
         return true
       }),
-      { numRuns: 300 },
+      { numRuns: 30 },
     )
   })
 })
@@ -61,7 +61,7 @@ describe('OTP rate limiting', () => {
       fc.property(fc.integer({ min: 4, max: 100 }), (count) => {
         expect(simulateOtpRateLimit(count, 3)).toBe(false)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 

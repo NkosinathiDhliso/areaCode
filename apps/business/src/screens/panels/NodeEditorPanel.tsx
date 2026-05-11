@@ -97,7 +97,9 @@ export function NodeEditorPanel() {
       waitForGoogle()
     }
 
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [addVenueOpen])
 
   useEffect(() => {
@@ -148,6 +150,8 @@ export function NodeEditorPanel() {
     setEditAddress('')
     setEditLat(undefined)
     setEditLng(undefined)
+    setHeaderImageUrl(selected.headerImageKey ?? null)
+    setInstagramHandle(selected.instagramHandle ?? '')
   }, [selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Attach Google Places autocomplete to the edit address input once selected exists and script is ready
@@ -195,7 +199,9 @@ export function NodeEditorPanel() {
       wait()
     }
 
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleAddVenue() {
@@ -324,7 +330,10 @@ export function NodeEditorPanel() {
     const handle = instagramHandle.replace(/^@/, '').trim()
     // Validate: alphanumeric + underscores + periods, max 30 chars
     if (handle && !/^[a-zA-Z0-9_.]{1,30}$/.test(handle)) {
-      setInstagramMessage({ type: 'error', text: 'Invalid handle. Use letters, numbers, underscores, and periods (max 30 chars).' })
+      setInstagramMessage({
+        type: 'error',
+        text: 'Invalid handle. Use letters, numbers, underscores, and periods (max 30 chars).',
+      })
       return
     }
     setInstagramSaving(true)
@@ -439,7 +448,11 @@ export function NodeEditorPanel() {
                 <label className="text-[var(--text-secondary)] text-xs font-medium">Header Image</label>
                 {headerImageUrl && (
                   <div className="relative rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
-                    <img src={`${(import.meta.env['VITE_CDN_URL'] as string | undefined) ?? ''}/nodes/${headerImageUrl}`} alt="Header" className="w-full h-full object-cover" />
+                    <img
+                      src={`${(import.meta.env['VITE_CDN_URL'] as string | undefined) ?? ''}/${headerImageUrl}`}
+                      alt="Header"
+                      className="w-full h-full object-cover"
+                    />
                   </div>
                 )}
                 <input
@@ -502,7 +515,9 @@ export function NodeEditorPanel() {
                   </button>
                 </div>
                 {instagramMessage && (
-                  <p className={`text-xs ${instagramMessage.type === 'success' ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
+                  <p
+                    className={`text-xs ${instagramMessage.type === 'success' ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}
+                  >
                     {instagramMessage.text}
                   </p>
                 )}

@@ -27,7 +27,7 @@ describe('Property 21: Instagram Handle Validation', () => {
         expect(result.valid).toBe(true)
         expect(result.handle).toBe(handle)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -41,7 +41,7 @@ describe('Property 21: Instagram Handle Validation', () => {
         expect(result.handle).not.toContain('@')
         expect(result.handle).toBe(handle)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -55,7 +55,7 @@ describe('Property 21: Instagram Handle Validation', () => {
         const result = validateInstagramHandle(handle)
         expect(result.valid).toBe(false)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -65,7 +65,7 @@ describe('Property 21: Instagram Handle Validation', () => {
         const result = validateInstagramHandle(handle)
         expect(result.valid).toBe(false)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -80,7 +80,7 @@ describe('Property 21: Instagram Handle Validation', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 

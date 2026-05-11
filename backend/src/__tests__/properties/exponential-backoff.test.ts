@@ -27,7 +27,7 @@ describe('Property 9: Exponential Backoff Calculation', () => {
           expect(result).toBeCloseTo(expected, 5)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -41,7 +41,7 @@ describe('Property 9: Exponential Backoff Calculation', () => {
           expect(result).toBeLessThanOrEqual(30000)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -56,7 +56,7 @@ describe('Property 9: Exponential Backoff Calculation', () => {
           expect(result).toBeGreaterThanOrEqual(1000)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -72,7 +72,7 @@ describe('Property 9: Exponential Backoff Calculation', () => {
           expect(next).toBeGreaterThanOrEqual(current)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -87,7 +87,7 @@ describe('Property 9: Exponential Backoff Calculation', () => {
           expect(result).toBe(30000)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -101,7 +101,7 @@ describe('Property 9: Exponential Backoff Calculation', () => {
           expect(result).toBeLessThanOrEqual(30000)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

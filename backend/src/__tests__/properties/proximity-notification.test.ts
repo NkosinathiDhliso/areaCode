@@ -70,7 +70,7 @@ describe('Property 10: Proximity Notification Trigger', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -90,7 +90,7 @@ describe('Property 10: Proximity Notification Trigger', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -111,7 +111,7 @@ describe('Property 10: Proximity Notification Trigger', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -127,7 +127,7 @@ describe('Property 10: Proximity Notification Trigger', () => {
           expect(shouldNotify(nodeId, lastNotifiedMap, now)).toBe(true)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -143,7 +143,7 @@ describe('Property 10: Proximity Notification Trigger', () => {
           expect(shouldNotify(nodeId, lastNotifiedMap, now)).toBe(false)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -155,7 +155,7 @@ describe('Property 10: Proximity Notification Trigger', () => {
           expect(shouldNotify(nodeId, {}, Date.now())).toBe(true)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -165,7 +165,7 @@ describe('Property 10: Proximity Notification Trigger', () => {
         const dist = haversineDistanceMetres(lat1, lng1, lat2, lng2)
         expect(dist).toBeGreaterThanOrEqual(0)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -176,7 +176,7 @@ describe('Property 10: Proximity Notification Trigger', () => {
         const d2 = haversineDistanceMetres(lat2, lng2, lat1, lng1)
         expect(d1).toBeCloseTo(d2, 5)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

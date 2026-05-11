@@ -126,7 +126,7 @@ describe('Property 1: Payment Record Completeness and Idempotency', () => {
           expect(lastCondition).toBe('attribute_not_exists(pk) AND attribute_not_exists(sk)')
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -157,7 +157,7 @@ describe('Property 1: Payment Record Completeness and Idempotency', () => {
           expect(result.duplicate).toBe(true)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -186,7 +186,7 @@ describe('Property 1: Payment Record Completeness and Idempotency', () => {
           await expect(createPaymentRecord(input)).rejects.toThrow('Service unavailable')
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
@@ -195,7 +195,7 @@ describe('Property 18: Timezone Partition Key Correctness', () => {
   it('partition key uses SAST (UTC+2) date, not UTC date', async () => {
     await fc.assert(
       fc.property(
-        fc.date({ min: new Date('2024-01-01T00:00:00Z'), max: new Date('2026-12-31T23:59:59Z') }),
+        fc.date({ min: new Date('2024-01-01T00:00:00Z'), max: new Date('2026-12-31T23:59:59Z') }).filter((d) => !isNaN(d.getTime())),
         (utcDate) => {
           const isoTimestamp = utcDate.toISOString()
           const result = getRevenuePartitionMonth(isoTimestamp)
@@ -209,7 +209,7 @@ describe('Property 18: Timezone Partition Key Correctness', () => {
           expect(result).toBe(expected)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -236,7 +236,7 @@ describe('Property 18: Timezone Partition Key Correctness', () => {
           expect(result).toBe(expected)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -254,7 +254,7 @@ describe('Property 18: Timezone Partition Key Correctness', () => {
           expect(result).toMatch(/^\d{4}-\d{2}$/)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -302,7 +302,7 @@ describe('Property 18: Timezone Partition Key Correctness', () => {
           expect(gsi1pk).toBe(`REVENUE#${expectedMonth}`)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

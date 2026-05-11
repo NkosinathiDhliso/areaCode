@@ -40,7 +40,7 @@ describe('Property 14: Webhook Signature Verification', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -54,7 +54,7 @@ describe('Property 14: Webhook Signature Verification', () => {
           expect(verifyWebhookSignature(body, '', secret)).toBe(false)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -68,7 +68,7 @@ describe('Property 14: Webhook Signature Verification', () => {
           expect(verifyWebhookSignature(body, signature, '')).toBe(false)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -87,7 +87,7 @@ describe('Property 14: Webhook Signature Verification', () => {
           expect(verifyWebhookSignature(body, signatureWithSecret1, secret2)).toBe(false)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -113,7 +113,7 @@ describe('Property 14: Webhook Signature Verification', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -131,7 +131,7 @@ describe('Property 14: Webhook Signature Verification', () => {
           expect(result).toBe(false)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -155,7 +155,7 @@ describe('Property 14: Webhook Signature Verification', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

@@ -10,7 +10,7 @@ export async function getStaffInviteMeta(token: string) {
   const invite = await repo.findStaffInviteByToken(token)
   if (!invite) throw AppError.notFound('Invite not found')
 
-  const expired = Boolean(invite.expiresAt && new Date(invite.expiresAt as string) < new Date())
+  const expired = Boolean(invite.expiresAt && new Date(invite.expiresAt as unknown as string) < new Date())
 
   return {
     expired,
@@ -120,7 +120,7 @@ export async function acceptStaffInviteEmail(opts: {
   const invite = await repo.findStaffInviteByToken(opts.token)
   if (!invite) throw AppError.notFound('Invite not found or expired')
   if (invite.accepted) throw AppError.gone('Invite already accepted')
-  if (invite.expiresAt && new Date(invite.expiresAt as string) < new Date()) {
+  if (invite.expiresAt && new Date(invite.expiresAt as unknown as string) < new Date()) {
     throw AppError.gone('Invite expired')
   }
 
@@ -191,7 +191,7 @@ export async function staffOAuthAcceptInvite(opts: {
   const invite = await repo.findStaffInviteByToken(opts.inviteToken)
   if (!invite) throw AppError.notFound('Invite not found or expired')
   if (invite.accepted) throw AppError.gone('Invite already accepted')
-  if (invite.expiresAt && new Date(invite.expiresAt as string) < new Date()) {
+  if (invite.expiresAt && new Date(invite.expiresAt as unknown as string) < new Date()) {
     throw AppError.gone('Invite expired')
   }
 

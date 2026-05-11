@@ -38,14 +38,29 @@ function buildClient(): PrismaClient {
   })
 }
 
-export const prisma: PrismaClient = globalThis.__areaCodePrisma ?? buildClient()
+/** Flag indicating whether a real DB connection is available */
+export const isDbAvailable = Boolean(process.env['AREA_CODE_DB_URL'])
 
-if (process.env['NODE_ENV'] !== 'production') {
-  globalThis.__areaCodePrisma = prisma
-}
+// Lazy-initialize Prisma client — only throws when actually accessed without DB URL
+let _prismaInstance: PrismaClient | undefined = globalThis.__areaCodePrisma
+
+export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    if (!_prismaInstance) {
+      _prismaInstance = buildClient()
+      if (process.env['NODE_ENV'] !== 'production') {
+        globalThis.__areaCodePrisma = _prismaInstance
+      }
+    }
+    return (_prismaInstance as unknown as Record<string | symbol, unknown>)[prop]
+  },
+})
 
 /** For long-running servers only. Lambda should NEVER call this. */
 export async function disconnectPrisma(): Promise<void> {
-  await prisma.$disconnect()
-  globalThis.__areaCodePrisma = undefined
+  if (_prismaInstance) {
+    await _prismaInstance.$disconnect()
+    _prismaInstance = undefined
+    globalThis.__areaCodePrisma = undefined
+  }
 }

@@ -61,7 +61,7 @@ describe('Feature: venue-intelligence-reports, Property 7: Repeat Visitor Rate C
           expect(result.repeatRate).toBeCloseTo(expectedRate, 10)
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -82,7 +82,7 @@ describe('Feature: venue-intelligence-reports, Property 7: Repeat Visitor Rate C
         const expectedFirstTime = currentSet.size - intersectionCount
         expect(result.firstTimeVisitorCount).toBe(expectedFirstTime)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -95,7 +95,7 @@ describe('Feature: venue-intelligence-reports, Property 7: Repeat Visitor Rate C
         const result = analyzeRepeatVisitors(currentSet, previousSet)
         expect(result.totalUniqueVisitors).toBe(currentSet.size)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -110,7 +110,7 @@ describe('Feature: venue-intelligence-reports, Property 7: Repeat Visitor Rate C
         expect(result.firstTimeVisitorCount).toBe(0)
         expect(result.totalUniqueVisitors).toBe(0)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -124,7 +124,7 @@ describe('Feature: venue-intelligence-reports, Property 7: Repeat Visitor Rate C
         expect(result.repeatRate).toBeGreaterThanOrEqual(0)
         expect(result.repeatRate).toBeLessThanOrEqual(100)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

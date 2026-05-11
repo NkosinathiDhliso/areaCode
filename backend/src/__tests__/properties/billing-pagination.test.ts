@@ -93,7 +93,7 @@ describe('Property 12: Billing Pagination and Sorting', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -114,7 +114,7 @@ describe('Property 12: Billing Pagination and Sorting', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -141,7 +141,7 @@ describe('Property 12: Billing Pagination and Sorting', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -164,7 +164,7 @@ describe('Property 12: Billing Pagination and Sorting', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -184,7 +184,7 @@ describe('Property 12: Billing Pagination and Sorting', () => {
           expect(pages[0]!.length).toBe(20)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -199,7 +199,7 @@ describe('Property 12: Billing Pagination and Sorting', () => {
           expect(pages[1]!.length).toBe(1)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

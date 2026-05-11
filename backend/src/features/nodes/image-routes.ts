@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { AppError } from '../../shared/errors/AppError'
 import { generateUploadUrl, deleteImage } from './image-service'
-import { QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+import { GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb'
 
 const uploadUrlSchema = z.object({
@@ -25,31 +25,22 @@ export async function nodeImageRoutes(app: FastifyInstance) {
     const body = uploadUrlSchema.parse(request.body)
 
     // Verify node ownership
-    const nodeResult = await documentClient.send(
-      new QueryCommand({
-        TableName: TableNames.appData,
-        KeyConditionExpression: 'pk = :pk AND sk = :sk',
-        ExpressionAttributeValues: {
-          ':pk': `NODE#${nodeId}`,
-          ':sk': 'METADATA',
-        },
-      }),
-    )
-    const node = nodeResult.Items?.[0]
+    const nodeResult = await documentClient.send(new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } }))
+    const node = nodeResult.Item
     if (!node || node['businessId'] !== business.id) {
       throw new AppError(403, 'forbidden', 'You do not own this node')
     }
 
     // If node already has a header image, we'll replace it after upload
-    const existingKey = node['headerImageKey'] as string | null
+    const existingKey = (node['headerImageKey'] as string | undefined) ?? null
 
     const { uploadUrl, objectKey } = await generateUploadUrl(nodeId, body.contentType)
 
     // Store the pending key on the node (will be processed after upload)
     await documentClient.send(
       new UpdateCommand({
-        TableName: TableNames.appData,
-        Key: { pk: `NODE#${nodeId}`, sk: 'METADATA' },
+        TableName: TableNames.nodes,
+        Key: { nodeId },
         UpdateExpression: 'SET headerImageKey = :key',
         ExpressionAttributeValues: { ':key': objectKey },
       }),
@@ -57,7 +48,11 @@ export async function nodeImageRoutes(app: FastifyInstance) {
 
     // Delete old image if replacing
     if (existingKey && existingKey !== objectKey) {
-      try { await deleteImage(existingKey) } catch { /* best effort */ }
+      try {
+        await deleteImage(existingKey)
+      } catch {
+        /* best effort */
+      }
     }
 
     return reply.send({ uploadUrl, objectKey })
@@ -76,28 +71,19 @@ export async function nodeImageRoutes(app: FastifyInstance) {
     const { nodeId } = request.params as { nodeId: string }
 
     // Verify node ownership
-    const nodeResult = await documentClient.send(
-      new QueryCommand({
-        TableName: TableNames.appData,
-        KeyConditionExpression: 'pk = :pk AND sk = :sk',
-        ExpressionAttributeValues: {
-          ':pk': `NODE#${nodeId}`,
-          ':sk': 'METADATA',
-        },
-      }),
-    )
-    const node = nodeResult.Items?.[0]
+    const nodeResult = await documentClient.send(new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } }))
+    const node = nodeResult.Item
     if (!node || node['businessId'] !== business.id) {
       throw new AppError(403, 'forbidden', 'You do not own this node')
     }
 
-    const headerImageKey = node['headerImageKey'] as string | null
+    const headerImageKey = (node['headerImageKey'] as string | undefined) ?? null
     if (headerImageKey) {
       await deleteImage(headerImageKey)
       await documentClient.send(
         new UpdateCommand({
-          TableName: TableNames.appData,
-          Key: { pk: `NODE#${nodeId}`, sk: 'METADATA' },
+          TableName: TableNames.nodes,
+          Key: { nodeId },
           UpdateExpression: 'REMOVE headerImageKey',
         }),
       )

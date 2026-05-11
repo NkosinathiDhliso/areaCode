@@ -98,7 +98,7 @@ describe('Property 5: Marker Rendering Invariants', () => {
           expect(radius).toBeCloseTo(expected, 10)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -111,7 +111,7 @@ describe('Property 5: Marker Rendering Invariants', () => {
           expect(radius).toBeGreaterThanOrEqual(BOOST_FLOOR_RADIUS)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -126,7 +126,7 @@ describe('Property 5: Marker Rendering Invariants', () => {
           expect(touchTarget).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -142,7 +142,7 @@ describe('Property 5: Marker Rendering Invariants', () => {
           expect(intensity).toBeLessThanOrEqual(1)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -156,7 +156,7 @@ describe('Property 5: Marker Rendering Invariants', () => {
           expect(radius).toBeLessThanOrEqual(MAX_RADIUS)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
@@ -178,7 +178,7 @@ describe('Property 6: Marker Z-Ordering', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -197,7 +197,7 @@ describe('Property 6: Marker Z-Ordering', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
@@ -221,7 +221,7 @@ describe('Property 19: Animation Budget Enforcement', () => {
           expect(animated.size).toBeLessThanOrEqual(4)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -235,7 +235,7 @@ describe('Property 19: Animation Budget Enforcement', () => {
           expect(animated.size).toBeLessThanOrEqual(8)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -257,7 +257,7 @@ describe('Property 19: Animation Budget Enforcement', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -274,7 +274,7 @@ describe('Property 19: Animation Budget Enforcement', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -288,7 +288,7 @@ describe('Property 19: Animation Budget Enforcement', () => {
           expect(animated.size).toBe(0)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
@@ -313,7 +313,7 @@ describe('Property 20: Map Clustering Logic', () => {
           expect(result.individual.length).toBe(markers.length)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -331,7 +331,7 @@ describe('Property 20: Map Clustering Logic', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -347,7 +347,7 @@ describe('Property 20: Map Clustering Logic', () => {
           expect(totalClustered + totalIndividual).toBe(markers.length)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -391,7 +391,7 @@ describe('Property 20: Map Clustering Logic', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

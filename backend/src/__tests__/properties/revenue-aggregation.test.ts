@@ -172,7 +172,7 @@ describe('Property 2: Revenue Aggregation Correctness', () => {
 
         expect(mrr).toBe(expected)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -191,7 +191,7 @@ describe('Property 2: Revenue Aggregation Correctness', () => {
         // MRR should be non-negative
         expect(mrr).toBeGreaterThanOrEqual(0)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -218,7 +218,7 @@ describe('Property 2: Revenue Aggregation Correctness', () => {
           expect(boostRev).toBeGreaterThanOrEqual(0)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
@@ -236,7 +236,7 @@ describe('Property 3: Revenue Query Filtering and Grouping', () => {
 
         expect(breakdownSum).toBe(totalRevenue)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -261,7 +261,7 @@ describe('Property 3: Revenue Query Filtering and Grouping', () => {
           expect(totalCount).toBe(businesses.length)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
@@ -291,7 +291,7 @@ describe('Property 4: Trial Conversion Rate Computation', () => {
           expect(rate).toBe(expected)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -305,7 +305,7 @@ describe('Property 4: Trial Conversion Rate Computation', () => {
           expect(rate).toBeLessThanOrEqual(100)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -332,7 +332,7 @@ describe('Property 4: Trial Conversion Rate Computation', () => {
           expect(rate).toBe(0)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

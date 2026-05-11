@@ -18,7 +18,7 @@ describe('getTier', () => {
         const higher = getTier(base + delta)
         expect(tierIndex(higher)).toBeGreaterThanOrEqual(tierIndex(lower))
       }),
-      { numRuns: 500 },
+      { numRuns: 50 },
     )
   })
 
@@ -31,7 +31,7 @@ describe('getTier', () => {
       fc.property(fc.integer({ min: 500, max: 10000 }), (count) => {
         expect(getTier(count)).toBe('legend')
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 

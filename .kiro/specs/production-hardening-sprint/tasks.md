@@ -28,7 +28,7 @@ This plan implements 31 requirements for the Area Code platform production harde
 - [x] 2. Checkpoint — Discovery sweep complete
   - Ensure TypeScript compiles cleanly (`pnpm typecheck`), ask the user if questions arise.
 
-- [ ] 3. Shared UI Component Library
+- [x] 3. Shared UI Component Library
   - [x] 3.1 Create `packages/shared/components/Button.tsx` with primary, secondary, ghost, danger variants, size options, loading spinner, disabled state, and `active:scale-95` press feedback
     - TypeScript props interface (no `any`), `aria-*` attributes, `className` prop for layout overrides only
     - Gradient shift on primary variant hover/press
@@ -96,7 +96,7 @@ This plan implements 31 requirements for the Area Code platform production harde
 - [x] 8. Checkpoint — Infrastructure layer complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 9. WebSocket Health and Reconnection
+- [x] 9. WebSocket Health and Reconnection
   - [x] 9.1 Implement client-side WebSocket reconnection with exponential backoff (1s initial, 30s max, with jitter) across all apps
     - _Requirements: 12.1_
   - [x] 9.2 Implement server-side stale connection cleanup — detect connections without heartbeat within 60 seconds and remove from DynamoDB ws-connections table
@@ -109,7 +109,7 @@ This plan implements 31 requirements for the Area Code platform production harde
     - **Property 9: Exponential Backoff Calculation**
     - **Validates: Requirements 12.1**
 
-- [ ] 10. Revenue Payment Storage
+- [x] 10. Revenue Payment Storage
   - [x] 10.1 Implement `PaymentService.processPaymentEvent` — store payment record with dual-key pattern (pk=`PAYMENT#<businessId>`, sk=`<timestamp>#<paymentId>`, gsi1pk=`REVENUE#<YYYY-MM>` using SAST timezone, gsi1sk=`<timestamp>#<paymentId>`)
     - Include all required fields: amount (ZAR cents), type, planTier, businessId, nodeId, status, paymentProvider="yoco", currency="ZAR"
     - Use `ConditionExpression: 'attribute_not_exists(pk) AND attribute_not_exists(sk)'` for idempotency
@@ -119,7 +119,7 @@ This plan implements 31 requirements for the Area Code platform production harde
     - **Property 18: Timezone Partition Key Correctness**
     - **Validates: Requirements 1.1, 1.3, 1.4, 23.6**
 
-- [ ] 11. Admin Revenue Dashboard
+- [x] 11. Admin Revenue Dashboard
   - [x] 11.1 Implement `RevenueService` with methods: `getMRR()`, `getBoostRevenue(start, end)`, `getSubscriptionCounts()`, `getTrialConversionRate()`, `getFlexDailyRevenue(start, end)`, `getPerBusinessBreakdown(start, end)` — all querying via `REVENUE#<YYYY-MM>` partition key, never table scan
     - MRR = sum of succeeded subscription payments normalized to monthly
     - Trial conversion = businesses upgraded from starter within 30 days / total starter businesses
@@ -134,7 +134,7 @@ This plan implements 31 requirements for the Area Code platform production harde
     - **Property 4: Trial Conversion Rate Computation**
     - **Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5, 2.7**
 
-- [ ] 12. Business Billing History
+- [x] 12. Business Billing History
   - [x] 12.1 Create `GET /v1/business/me/billing` endpoint — paginated (20 per page), sorted by date descending, querying `PAYMENT#<businessId>` partition key with ownership verification
     - _Requirements: 9.2, 9.3, 22.3_
   - [x] 12.2 Build Billing Panel UI in BusinessDashboard with payment history table (date, description, amount in ZAR, status badge), current plan name, next billing date, and "Billing" tab navigation
@@ -144,7 +144,7 @@ This plan implements 31 requirements for the Area Code platform production harde
     - **Property 12: Billing Pagination and Sorting**
     - **Validates: Requirements 9.2**
 
-- [ ] 13. Payment Trust UX
+- [x] 13. Payment Trust UX
   - [x] 13.1 Build pre-payment confirmation summary (item description, amount in ZAR, billing frequency, "Confirm & Pay" button) shown before Yoco redirect for both subscriptions and boosts
     - _Requirements: 28.1_
   - [x] 13.2 Build post-payment return states: success (green, plan/boost details), pending (amber, processing message), failed (red, reason + "Try again")
@@ -154,10 +154,10 @@ This plan implements 31 requirements for the Area Code platform production harde
   - [x] 13.4 Apply status badges in billing history using shared Badge component (green=Paid, red=Failed, amber=Pending, grey=Refunded)
     - _Requirements: 28.3_
 
-- [ ] 14. Checkpoint — Revenue and billing complete
+- [x] 14. Checkpoint — Revenue and billing complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 15. Staff App — Live Queue, Validation, and Store
+- [x] 15. Staff App — Live Queue, Validation, and Store
   - [x] 15.1 Implement Staff Zustand store (`packages/shared/stores/staffStore.ts`) managing liveQueue (max 20), recentRedemptions (max 50), todayStats, wsStatus, with actions for addCheckIn, addRedemption, updateStats, setWsStatus, reset
     - _Requirements: 6.1, 6.2, 6.3_
   - [x] 15.2 Implement staff WebSocket connection — join business room, subscribe to `staff:checkin`, `staff:redemption`, `staff:stats_update` events, update store on each event, handle disconnection with exponential backoff
@@ -173,7 +173,7 @@ This plan implements 31 requirements for the Area Code platform production harde
     - **Property 8: Redemption Code Validation**
     - **Validates: Requirements 4.3, 5.2, 5.6**
 
-- [ ] 16. Dynamic Map Markers and Performance Budget
+- [x] 16. Dynamic Map Markers and Performance Budget
   - [x] 16.1 Implement marker radius computation: `8 + (Math.min(pulseScore / 200, 1) * 20)` px, boost floor of 18px, touch target always >= 44px, glow intensity = `Math.min(pulseScore / 200, 1)`
     - _Requirements: 3.1, 3.2, 3.3, 3.5_
   - [x] 16.2 Implement marker animations: gold ring + pulsing for boosted nodes, breathing scale (1.0→1.15, 2s) for popping state, z-ordering by pulse score (higher score = higher z-index)
@@ -190,7 +190,7 @@ This plan implements 31 requirements for the Area Code platform production harde
     - **Property 20: Map Clustering Logic**
     - **Validates: Requirements 3.1, 3.2, 3.3, 3.5, 3.6, 30.1, 30.2, 30.3, 30.5, 30.6**
 
-- [ ] 17. BottomSheet and NodeDetailSheet Premium Upgrade
+- [x] 17. BottomSheet and NodeDetailSheet Premium Upgrade
   - [x] 17.1 Upgrade shared `BottomSheet` component: swipe-to-dismiss (velocity > 300px/s), body scroll lock, focus restoration, `aria-labelledby` + `role="dialog"`, exit animation (200ms slide-down + fade), snap points (half/full screen), iOS safe-area padding
     - Spring-based ease (`cubic-bezier(0.32, 0.72, 0, 1)`) over 350ms open, 200ms close
     - _Requirements: 26.1, 26.2, 26.3, 26.4, 26.5, 26.6, 26.7, 20.6_
@@ -198,7 +198,7 @@ This plan implements 31 requirements for the Area Code platform production harde
     - Skeleton loading for rewards section, tokenized boost gold colors, venue metadata (address, distance, open/closed, pulse context)
     - _Requirements: 26.8, 26.9, 26.10, 26.11, 26.12, 26.13, 26.14_
 
-- [ ] 18. Boost ROI Panel
+- [x] 18. Boost ROI Panel
   - [x] 18.1 Implement boost ROI service: compute baseline (avg check-ins same window, prior 4 weeks), compute uplift `((boost_checkins - baseline) / baseline) * 100`, handle insufficient data (< 2 weeks)
     - _Requirements: 8.2, 8.3, 8.4_
   - [x] 18.2 Create `GET /v1/business/me/boosts/roi` endpoint with ownership verification and build Boost ROI Panel UI showing past boosts with date, duration, check-ins, uplift %, and cost in ZAR
@@ -207,7 +207,7 @@ This plan implements 31 requirements for the Area Code platform production harde
     - **Property 11: Boost ROI Computation**
     - **Validates: Requirements 8.2, 8.3, 8.4**
 
-- [ ] 19. Proximity Notifications (Client-Side)
+- [x] 19. Proximity Notifications (Client-Side)
   - [x] 19.1 Implement `ProximityModule` at `packages/shared/lib/proximity.ts`: haversine distance calculation, filter nodes within 500m with buzzing/popping state, 15-minute debounce per node in client storage, opt-in check
     - No GPS sent to backend — uses cached node data from map
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
@@ -217,15 +217,15 @@ This plan implements 31 requirements for the Area Code platform production harde
     - **Property 10: Proximity Notification Trigger**
     - **Validates: Requirements 7.2, 7.3, 7.4**
 
-- [ ] 20. Checkpoint — Core features complete
+- [x] 20. Checkpoint — Core features complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 21. PAYG Rename to Flex Daily
+- [x] 21. PAYG Rename to Flex Daily
   - [x] 21.1 Update PlansPanel display: rename "Pay As You Go" to "Flex Daily", update description to "Low daily rate, no commitment", use `flex_daily` identifier in new code while maintaining backward compatibility with existing "payg" data
     - Update SALES_PITCH.md documentation
     - _Requirements: 10.1, 10.2, 10.3, 10.4_
 
-- [ ] 22. Search, Image Safety, and Search Polish
+- [x] 22. Search, Image Safety, and Search Polish
   - [x] 22.1 Implement client-side search filtering: case-insensitive `includes()` on node name and category from cached map data, sort by haversine distance when location available, return within 500ms
     - _Requirements: 13.1, 13.2, 13.4, 23.3, 23.4_
   - [x] 22.2 Build search UI: recent searches (last 5 from localStorage), nearby trending (top 3 by pulse within 2km), skeleton loading rows, result rows with name/category/distance/pulse badge/boost indicator, empty state, error state with retry, clear button + Enter support
@@ -237,14 +237,14 @@ This plan implements 31 requirements for the Area Code platform production harde
     - **Property 17: Image Processing Invariants**
     - **Validates: Requirements 13.1, 13.2, 23.1, 23.2**
 
-- [ ] 23. Business Node Header Image Upload
+- [x] 23. Business Node Header Image Upload
   - [x] 23.1 Create `POST /v1/business/nodes/:nodeId/image/upload-url` endpoint (presigned S3 PUT URL scoped to nodeId, JPEG/PNG, max 2MB) and `DELETE /v1/business/nodes/:nodeId/image` endpoint
     - Store `headerImageKey` on node record, replace existing image on re-upload (delete old S3 object)
     - _Requirements: 17.1, 17.2, 17.3, 17.4_
   - [x] 23.2 Build image upload control in NodeEditorPanel and display header image in NodeDetailSheet (full-width banner, 16:9, object-fit cover, rounded-t-3xl) with gradient placeholder fallback
     - _Requirements: 17.1, 17.5, 17.6_
 
-- [ ] 24. Instagram Handle Integration
+- [x] 24. Instagram Handle Integration
   - [x] 24.1 Add Instagram handle input to NodeEditorPanel (@ prefix, alphanumeric + underscores + periods, max 30 chars), create `PUT /v1/business/nodes/:nodeId/instagram` endpoint storing handle without @ prefix
     - _Requirements: 18.1, 18.2_
   - [x] 24.2 Display Instagram button in NodeDetailSheet (below check-in) when handle exists, open `https://instagram.com/<handle>` on tap, hide button when no handle set
@@ -253,11 +253,11 @@ This plan implements 31 requirements for the Area Code platform production harde
     - **Property 21: Instagram Handle Validation**
     - **Validates: Requirements 18.1, 18.2**
 
-- [ ] 25. Directions App Chooser
+- [x] 25. Directions App Chooser
   - [x] 25.1 Build directions chooser bottom sheet/action menu: list Google Maps, Waze, Apple Maps (iOS only), construct correct deep link URLs using node lat/lng, remember last-used preference in localStorage, open directly if only one app available
     - _Requirements: 19.1, 19.2, 19.3, 19.4, 19.5_
 
-- [ ] 26. Business Dashboard Command Center
+- [x] 26. Business Dashboard Command Center
   - [x] 26.1 Build overview panel: live pulse state, current plan + next billing date, active boost countdown, today's check-ins, today's redemptions, setup completion percentage
     - _Requirements: 29.1_
   - [x] 26.2 Reorganize dashboard navigation into sections: Live, Growth, Team, Account — with notification badge counts for items needing attention
@@ -265,20 +265,20 @@ This plan implements 31 requirements for the Area Code platform production harde
   - [x] 26.3 Build setup checklist for new businesses (create node, add image, create reward, invite staff, choose plan) with "next best action" highlight linking to relevant panels
     - _Requirements: 29.3, 29.4_
 
-- [ ] 27. Checkpoint — Feature work complete
+- [x] 27. Checkpoint — Feature work complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 28. Onboarding Flow
+- [x] 28. Onboarding Flow
   - [x] 28.1 Build onboarding screens: location permission (with explanation + "Grant Access"), notification priming ("Enable"/"Skip"), music connection ("Connect"/"Skip"), first check-in tutorial ("Got it")
     - Progress dots, full-bleed illustrations with brand gradient background, warm on-brand copy
     - Mark profile as onboarded on completion, don't show again
     - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 20.32, 20.33, 20.34_
 
-- [ ] 29. Internationalization Completeness
+- [x] 29. Internationalization Completeness
   - [x] 29.1 Wrap all user-facing strings across all apps in `t()` translation function calls: UI labels, error messages, toast notifications, empty states, form validation messages
     - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5_
 
-- [ ] 30. UX Polish Pass
+- [x] 30. UX Polish Pass
   - [x] 30.1 Apply motion system: spring-based bottom sheet animations, `active:scale-95` on all buttons, page/panel transitions (250ms fade + 8px translateY, 50ms stagger), toast slide-in with progress bar and swipe-to-dismiss, card hover/press lift
     - Respect `prefers-reduced-motion` — replace all animations with instant state changes
     - _Requirements: 20.6, 20.7, 20.8, 20.9, 20.10, 20.11_
@@ -293,10 +293,10 @@ This plan implements 31 requirements for the Area Code platform production harde
   - [x] 30.6 Ensure all text uses typography scale tokens (no arbitrary font sizes), all spacing uses the 4px grid system, and overall visual quality is screenshot-ready for marketing
     - _Requirements: 20.1, 20.2, 20.5, 20.35_
 
-- [ ] 31. Checkpoint — Polish complete
+- [x] 31. Checkpoint — Polish complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 32. Verification Gate
+- [x] 32. Verification Gate
   - [x] 32.1 Run `pnpm typecheck` — fix any TypeScript compilation errors across all apps and packages until zero errors
     - _Requirements: 31.1_
   - [x] 32.2 Run `pnpm test` — fix any test failures until zero failures

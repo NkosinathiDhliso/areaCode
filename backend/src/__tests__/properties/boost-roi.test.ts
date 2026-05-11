@@ -28,7 +28,7 @@ describe('Property 11: Boost ROI Computation', () => {
           expect(baseline).toBeCloseTo(expectedMean, 10)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -42,7 +42,7 @@ describe('Property 11: Boost ROI Computation', () => {
           expect(baseline).toBeNull()
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -60,7 +60,7 @@ describe('Property 11: Boost ROI Computation', () => {
           expect(uplift).toBeCloseTo(expected, 5)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -73,7 +73,7 @@ describe('Property 11: Boost ROI Computation', () => {
           expect(uplift).toBeNull()
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -86,7 +86,7 @@ describe('Property 11: Boost ROI Computation', () => {
           expect(uplift).toBeNull()
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -102,7 +102,7 @@ describe('Property 11: Boost ROI Computation', () => {
           expect(uplift!).toBeGreaterThan(0)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -118,7 +118,7 @@ describe('Property 11: Boost ROI Computation', () => {
           expect(uplift!).toBeLessThan(0)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

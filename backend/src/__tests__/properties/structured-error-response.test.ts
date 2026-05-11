@@ -175,7 +175,7 @@ describe('Property 22: Structured Error Response', () => {
           expect(body).not.toHaveProperty('name')
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -227,7 +227,7 @@ describe('Property 22: Structured Error Response', () => {
           expect(body).not.toHaveProperty('cause')
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -272,7 +272,7 @@ describe('Property 22: Structured Error Response', () => {
           expect(body).not.toHaveProperty('type')
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

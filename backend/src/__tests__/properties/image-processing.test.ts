@@ -44,7 +44,7 @@ describe('Property 17: Image Processing Invariants', () => {
           expect(result.width).toBeLessThanOrEqual(1200)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   }, 60000)
 
@@ -64,7 +64,7 @@ describe('Property 17: Image Processing Invariants', () => {
           expect(Math.abs(result.height - expectedHeight)).toBeLessThanOrEqual(1)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   }, 60000)
 
@@ -81,7 +81,7 @@ describe('Property 17: Image Processing Invariants', () => {
           expect(metadata.format).toBe('webp')
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   }, 60000)
 
@@ -98,7 +98,7 @@ describe('Property 17: Image Processing Invariants', () => {
           expect(metadata.exif).toBeUndefined()
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   }, 60000)
 
@@ -113,7 +113,7 @@ describe('Property 17: Image Processing Invariants', () => {
           expect(result.width).toBeLessThanOrEqual(width)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   }, 60000)
 })

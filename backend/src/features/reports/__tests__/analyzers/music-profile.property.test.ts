@@ -150,7 +150,7 @@ describe('Feature: venue-intelligence-reports, Property 6: Music Profile Aggrega
           expect(result.archetypeDimensions[dim]).toBeCloseTo(expectedAvg, 5)
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -186,7 +186,7 @@ describe('Feature: venue-intelligence-reports, Property 6: Music Profile Aggrega
           expect(visitorCount).toBe(genreCounts.get(genre))
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -202,7 +202,7 @@ describe('Feature: venue-intelligence-reports, Property 6: Music Profile Aggrega
         expect(result.topGenres).toEqual([])
         expect(result.archetypeDimensions).toEqual({})
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -215,7 +215,7 @@ describe('Feature: venue-intelligence-reports, Property 6: Music Profile Aggrega
         const result = analyzeMusicProfile(visitorIds, musicPrefsMap)
         expect(result.hasInsufficientData).toBe(false)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

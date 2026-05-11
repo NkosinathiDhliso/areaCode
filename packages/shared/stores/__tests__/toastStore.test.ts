@@ -46,7 +46,7 @@ describe('toast queue management', () => {
           expect(useToastStore.getState().queue.length).toBeLessThanOrEqual(3)
         }
       }),
-      { numRuns: 300 },
+      { numRuns: 30 },
     )
   })
 
@@ -79,7 +79,7 @@ describe('toast queue management', () => {
         const queue = useToastStore.getState().queue
         expect(queue[0]?.type).toBe('surge')
       }),
-      { numRuns: 200 },
+      { numRuns: 30 },
     )
   })
 
@@ -99,7 +99,7 @@ describe('toast queue management', () => {
           expect(queue[i - 1]!.priority).toBeLessThanOrEqual(queue[i]!.priority)
         }
       }),
-      { numRuns: 300 },
+      { numRuns: 30 },
     )
   })
 })

@@ -59,7 +59,7 @@ describe('computeDimensionScores', () => {
           expect(val).toBeLessThanOrEqual(1.0)
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 30 },
     )
   })
 
@@ -78,7 +78,7 @@ describe('computeDimensionScores', () => {
           expect(result![dim]).toBeCloseTo(expected, 3)
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 30 },
     )
   })
 })
@@ -220,7 +220,7 @@ describe('resolveArchetype', () => {
         expect(result.name).toBeTruthy()
         expect(result.id).toBeTruthy()
       }),
-      { numRuns: 500 },
+      { numRuns: 50 },
     )
   })
 

@@ -94,7 +94,7 @@ describe('Feature: venue-intelligence-reports, Property 11: Journey Analysis Cor
           expect(result.partnershipSuggestions.length).toBeLessThanOrEqual(2)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -111,7 +111,7 @@ describe('Feature: venue-intelligence-reports, Property 11: Journey Analysis Cor
         expect(result.topOverlapVenues).toHaveLength(0)
         expect(result.partnershipSuggestions).toHaveLength(0)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

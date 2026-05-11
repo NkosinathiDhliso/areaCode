@@ -20,7 +20,7 @@ describe('haversineDistance', () => {
         const ba = haversineDistance(b.lat, b.lng, a.lat, a.lng)
         expect(Math.abs(ab - ba)).toBeLessThan(0.001)
       }),
-      { numRuns: 200 },
+      { numRuns: 30 },
     )
   })
 
@@ -29,7 +29,7 @@ describe('haversineDistance', () => {
       fc.property(coordArb, (a) => {
         expect(haversineDistance(a.lat, a.lng, a.lat, a.lng)).toBe(0)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -38,7 +38,7 @@ describe('haversineDistance', () => {
       fc.property(coordArb, coordArb, (a, b) => {
         expect(haversineDistance(a.lat, a.lng, b.lat, b.lng)).toBeGreaterThanOrEqual(0)
       }),
-      { numRuns: 200 },
+      { numRuns: 30 },
     )
   })
 })

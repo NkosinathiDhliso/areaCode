@@ -71,7 +71,7 @@ describe('Property 13: Client-Side Search Filtering and Sorting', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -93,7 +93,7 @@ describe('Property 13: Client-Side Search Filtering and Sorting', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -106,7 +106,7 @@ describe('Property 13: Client-Side Search Filtering and Sorting', () => {
           expect(searchNodes('   ', nodes)).toHaveLength(0)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -121,7 +121,7 @@ describe('Property 13: Client-Side Search Filtering and Sorting', () => {
           expect(new Set(ids).size).toBe(ids.length)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

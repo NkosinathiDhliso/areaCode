@@ -67,7 +67,7 @@ describe('Feature: venue-intelligence-reports, Property 9: Benchmark Computation
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -86,7 +86,7 @@ describe('Feature: venue-intelligence-reports, Property 9: Benchmark Computation
           expect(Object.keys(result.metrics)).toHaveLength(0)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 

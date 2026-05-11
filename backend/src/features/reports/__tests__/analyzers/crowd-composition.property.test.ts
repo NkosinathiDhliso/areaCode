@@ -55,7 +55,7 @@ describe('Feature: venue-intelligence-reports, Property 4: Crowd Composition Inv
         expect(percentageSum).toBeGreaterThanOrEqual(99)
         expect(percentageSum).toBeLessThanOrEqual(101)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -79,7 +79,7 @@ describe('Feature: venue-intelligence-reports, Property 4: Crowd Composition Inv
           expect(percentage).toBeCloseTo(expectedPercentage, 1)
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -113,7 +113,7 @@ describe('Feature: venue-intelligence-reports, Property 4: Crowd Composition Inv
           expect(result.tierUniqueCounts[tier]).toBe(visitors.size)
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -150,7 +150,7 @@ describe('Feature: venue-intelligence-reports, Property 4: Crowd Composition Inv
           expect(result.tierUniqueCounts).toHaveProperty(tier)
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

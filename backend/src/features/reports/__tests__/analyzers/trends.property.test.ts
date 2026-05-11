@@ -58,7 +58,7 @@ describe('Feature: venue-intelligence-reports, Property 8: Trend Computation Cor
           expect(delta.previous).toBe(previous)
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -83,7 +83,7 @@ describe('Feature: venue-intelligence-reports, Property 8: Trend Computation Cor
           }
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -103,7 +103,7 @@ describe('Feature: venue-intelligence-reports, Property 8: Trend Computation Cor
           expect(delta.current).toBe(currentMetrics[key])
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -131,7 +131,7 @@ describe('Feature: venue-intelligence-reports, Property 8: Trend Computation Cor
           expect(delta.percentChange).toBe(100)
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 

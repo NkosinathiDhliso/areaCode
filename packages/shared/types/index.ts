@@ -131,6 +131,8 @@ export interface Node {
   isActive: boolean
   createdAt: string
   boostUntil?: string | null
+  headerImageKey?: string | null
+  instagramHandle?: string | null
 }
 
 export interface PulseScore {
@@ -346,7 +348,12 @@ export interface ServerToClientEvents {
   'reward:slots_update': (payload: { rewardId: string; slotsRemaining: number }) => void
   'leaderboard:update': (payload: { userId: string; rank: number; delta: number }) => void
   'business:checkin': (payload: BusinessCheckinPayload) => void
-  'business:checkin_detail': (payload: { nodeId: string; consumerName: string; tier: string; timestamp: string }) => void
+  'business:checkin_detail': (payload: {
+    nodeId: string
+    consumerName: string
+    tier: string
+    timestamp: string
+  }) => void
   'business:reward_claimed': (payload: BusinessRewardClaimedPayload) => void
   'toast:friend_checkin': (payload: { type: 'checkin'; message: string; nodeId?: string; avatarUrl?: string }) => void
 }

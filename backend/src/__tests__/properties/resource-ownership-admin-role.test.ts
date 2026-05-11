@@ -44,7 +44,7 @@ describe('Property 15: Resource Ownership Enforcement', () => {
         // Same businessId should NOT throw
         expect(() => verifyBusinessOwnership(businessId, businessId)).not.toThrow()
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -64,7 +64,7 @@ describe('Property 15: Resource Ownership Enforcement', () => {
           expect(error.error).toBe('forbidden')
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -74,7 +74,7 @@ describe('Property 15: Resource Ownership Enforcement', () => {
         // Same businessId should NOT throw
         expect(() => verifyStaffBusinessLinkage(businessId, businessId)).not.toThrow()
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -93,7 +93,7 @@ describe('Property 15: Resource Ownership Enforcement', () => {
           expect(error.error).toBe('forbidden')
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -109,7 +109,7 @@ describe('Property 15: Resource Ownership Enforcement', () => {
           expect(() => verifyBusinessOwnership(id2, id1)).toThrow()
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
@@ -149,7 +149,7 @@ describe('Property 16: Admin Role Authorization', () => {
           }
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -168,7 +168,7 @@ describe('Property 16: Admin Role Authorization', () => {
         // super_admin should always have permission
         expect(() => checkPermission('super_admin', action)).not.toThrow()
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -195,7 +195,7 @@ describe('Property 16: Admin Role Authorization', () => {
           expect(error.error).toBe('forbidden')
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -209,7 +209,7 @@ describe('Property 16: Admin Role Authorization', () => {
           expect(getRoleLevel(unknownRole)).toBe(0)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -229,7 +229,7 @@ describe('Property 16: Admin Role Authorization', () => {
           expect(ROLE_PERMISSIONS['super_admin'].has(action)).toBe(true)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

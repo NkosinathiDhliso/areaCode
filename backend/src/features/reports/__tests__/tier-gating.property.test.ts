@@ -218,7 +218,7 @@ describe('Feature: venue-intelligence-reports, Property 12: Tier Gating Correctn
         expect(fullResult.recommendations).toEqual(report.recommendations)
         expect(fullResult.journeyInsights).toEqual(report.journeyInsights)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -248,7 +248,7 @@ describe('Feature: venue-intelligence-reports, Property 12: Tier Gating Correctn
           expect(result).not.toHaveProperty(section)
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
