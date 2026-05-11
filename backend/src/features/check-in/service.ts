@@ -82,11 +82,13 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
     }
   } else {
     if (input.lat === undefined || input.lng === undefined) {
-      throw AppError.badRequest('Location required for GPS check-in')
+      throw new AppError(422, 'accuracy_insufficient', 'Location required for GPS check-in')
     }
     const within = await repo.checkProximity(input.nodeId, input.lat, input.lng, PROXIMITY_RADIUS)
     if (!within) {
-      throw AppError.unprocessable('You are too far from this venue')
+      // Client uses error='accuracy_insufficient' to offer the QR-at-venue fallback
+      // instead of showing a hard failure toast.
+      throw new AppError(422, 'accuracy_insufficient', 'You are too far from this venue')
     }
   }
 
