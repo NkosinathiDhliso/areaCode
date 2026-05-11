@@ -34,8 +34,13 @@ api.setRefreshHandler({
   getRefreshToken: () => useConsumerAuthStore.getState().refreshToken,
   onTokenRefreshed: (token) => useConsumerAuthStore.getState().setAccessToken(token),
   onAuthExpired: () => {
+    // Navigate first to prevent React re-renders with stale auth state (avoids error #310)
+    // The login page will clear auth state on mount
     useConsumerAuthStore.getState().logout()
-    window.location.href = '/login'
+    // Use replace to avoid back-button loops
+    if (window.location.pathname !== '/login') {
+      window.location.replace('/login')
+    }
   },
 })
 
