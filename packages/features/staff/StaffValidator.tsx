@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import jsQR from 'jsqr'
 
 import { api, type ApiError } from '../../shared/lib/api'
 import { Box, Text } from '../../shared/components/primitives'
@@ -71,6 +72,38 @@ export function StaffValidator() {
     setScanning(false)
   }
 
+  function waitForVideoElement(maxWait = 2000): Promise<HTMLVideoElement | null> {
+    return new Promise((resolve) => {
+      // Use requestAnimationFrame to wait for next paint (React render flush)
+      requestAnimationFrame(async () => {
+        if (videoRef.current) {
+          resolve(videoRef.current)
+          return
+        }
+        // Yield a microtask to allow React to flush state updates
+        await Promise.resolve()
+        if (videoRef.current) {
+          resolve(videoRef.current)
+          return
+        }
+        // If video element still not available, poll until it appears
+        const start = Date.now()
+        const poll = () => {
+          if (videoRef.current) {
+            resolve(videoRef.current)
+            return
+          }
+          if (Date.now() - start >= maxWait) {
+            resolve(null)
+            return
+          }
+          setTimeout(poll, 50)
+        }
+        setTimeout(poll, 0)
+      })
+    })
+  }
+
   async function startCamera() {
     setCameraError(null)
     try {
@@ -80,14 +113,16 @@ export function StaffValidator() {
       streamRef.current = stream
       setScanning(true)
 
-      // Wait for video element to be available
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          videoRef.current.play()
-          startScanning()
-        }
-      })
+      // Wait for video element to be rendered by React
+      const video = await waitForVideoElement()
+      if (video && streamRef.current) {
+        video.srcObject = streamRef.current
+        await video.play()
+        startScanning()
+      } else {
+        setCameraError('Camera failed to initialize. Please try again.')
+        stopCamera()
+      }
     } catch {
       setCameraError('Camera access denied. Please use manual code entry.')
       setScanning(false)
@@ -115,10 +150,22 @@ export function StaffValidator() {
         }
       }, 250)
     } else {
-      // Fallback: canvas-based approach (limited without a QR library)
-      // Show message to use manual entry
-      setCameraError('QR scanning not supported in this browser. Please use manual code entry.')
-      stopCamera()
+      // Fallback: canvas-based jsQR decoding for Safari/Firefox
+      scanIntervalRef.current = setInterval(() => {
+        if (!videoRef.current || !canvasRef.current || videoRef.current.readyState < 2) return
+        const canvas = canvasRef.current
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return
+        canvas.width = videoRef.current.videoWidth
+        canvas.height = videoRef.current.videoHeight
+        ctx.drawImage(videoRef.current, 0, 0)
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        const qrCode = jsQR(imageData.data, canvas.width, canvas.height)
+        if (qrCode?.data) {
+          stopCamera()
+          handleCodeScanned(qrCode.data)
+        }
+      }, 300)
     }
   }
 
@@ -135,9 +182,7 @@ export function StaffValidator() {
     if (!targetCode || loading) return
     setLoading(true)
     try {
-      const res = await api.get<PreviewData>(
-        `/v1/staff/redeem/${encodeURIComponent(targetCode)}/preview`,
-      )
+      const res = await api.get<PreviewData>(`/v1/staff/redeem/${encodeURIComponent(targetCode)}/preview`)
       setPreview(res)
       setFlowState('preview')
     } catch (err) {
@@ -176,9 +221,12 @@ export function StaffValidator() {
 
   function getErrorMessage(error: string): string {
     switch (error) {
-      case 'expired_code': return 'Code has expired'
-      case 'already_redeemed': return 'Already redeemed'
-      default: return 'Invalid code'
+      case 'expired_code':
+        return 'Code has expired'
+      case 'already_redeemed':
+        return 'Already redeemed'
+      default:
+        return 'Invalid code'
     }
   }
 
@@ -191,10 +239,34 @@ export function StaffValidator() {
         }`}
       >
         <Text className="text-white text-5xl">
-          {result.success
-            ? <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            : <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          }
+          {result.success ? (
+            <svg
+              width="48"
+              height="48"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          ) : (
+            <svg
+              width="48"
+              height="48"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          )}
         </Text>
         <Text className="text-white font-bold text-xl font-[Syne] text-center">
           {result.success ? 'Redeemed!' : 'Failed'}
@@ -203,9 +275,7 @@ export function StaffValidator() {
           <Text className="text-white text-sm opacity-90">{result.rewardTitle}</Text>
         )}
         {result.success && result.redeemedAt && (
-          <Text className="text-white text-xs opacity-75">
-            {new Date(result.redeemedAt).toLocaleString()}
-          </Text>
+          <Text className="text-white text-xs opacity-75">{new Date(result.redeemedAt).toLocaleString()}</Text>
         )}
         {!result.success && result.error && (
           <Text className="text-white text-sm opacity-90">{getErrorMessage(result.error)}</Text>
@@ -229,17 +299,11 @@ export function StaffValidator() {
             </Text>
           )}
           {preview.rewardDescription && (
-            <Text className="text-[var(--text-secondary)] text-sm text-center">
-              {preview.rewardDescription}
-            </Text>
+            <Text className="text-[var(--text-secondary)] text-sm text-center">{preview.rewardDescription}</Text>
           )}
           <Box className="border-t border-[var(--border)] pt-3 mt-1 flex flex-col items-center gap-1">
-            <Text className="text-[var(--text-primary)] font-medium text-sm">
-              {preview.consumerDisplayName}
-            </Text>
-            <Text className="text-[var(--text-muted)] text-xs capitalize">
-              {preview.consumerTier}
-            </Text>
+            <Text className="text-[var(--text-primary)] font-medium text-sm">{preview.consumerDisplayName}</Text>
+            <Text className="text-[var(--text-muted)] text-xs capitalize">{preview.consumerTier}</Text>
           </Box>
         </Box>
 
@@ -280,12 +344,7 @@ export function StaffValidator() {
       {/* QR Scanner */}
       {scanning && (
         <Box className="w-full max-w-xs relative rounded-2xl overflow-hidden bg-black aspect-square">
-          <video
-            ref={videoRef}
-            className="w-full h-full object-cover"
-            playsInline
-            muted
-          />
+          <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
           {/* Viewfinder overlay */}
           <Box className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <Box className="w-48 h-48 border-2 border-white rounded-xl opacity-60" />
@@ -296,7 +355,19 @@ export function StaffValidator() {
             className="absolute top-2 right-2 bg-black bg-opacity-50 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm"
             aria-label="Close scanner"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </Box>
       )}
@@ -310,11 +381,7 @@ export function StaffValidator() {
         </button>
       )}
 
-      {cameraError && (
-        <Text className="text-[var(--warning)] text-xs text-center max-w-xs">
-          {cameraError}
-        </Text>
-      )}
+      {cameraError && <Text className="text-[var(--warning)] text-xs text-center max-w-xs">{cameraError}</Text>}
 
       <input
         ref={inputRef}

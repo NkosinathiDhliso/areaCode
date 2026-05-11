@@ -8,8 +8,6 @@ import { useSocketRoom } from '@area-code/shared/hooks/useSocketRoom'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import type { BusinessCheckinPayload } from '@area-code/shared/types'
 
-import { NodeEditorPanel } from './NodeEditorPanel'
-
 interface LiveStats {
   checkInsToday: number
   pulseScore: number
@@ -74,10 +72,6 @@ export function LivePanel() {
 
   return (
     <div className="p-5 flex flex-col gap-6">
-      <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl">
-        <NodeEditorPanel />
-      </div>
-
       <div className="flex flex-col items-center gap-2 py-8">
         <span className="text-[var(--text-primary)] text-6xl font-bold font-[Syne] tracking-[-0.03em]">
           {stats?.checkInsToday ?? 0}

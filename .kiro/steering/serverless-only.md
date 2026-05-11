@@ -31,6 +31,7 @@ Never create, suggest, or reference any of the following AWS resources in any en
 - **CloudWatch Logs** — observability
 - **Amplify Hosting** — frontend deployments
 - **Pinpoint SMS Voice v2** — OTP SMS delivery
+- **SES** — transactional email (admin notifications, receipts)
 - **Secrets Manager** — secret storage (but avoid VPC Interface Endpoints to access it; use Lambda environment variables or parameter store instead where possible)
 
 ## Infrastructure Rules

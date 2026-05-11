@@ -29,7 +29,36 @@ export interface UserReport {
   createdAt: string
 }
 
-const HIGH_PRIORITY_CATEGORIES: Set<ReportCategory> = new Set(['harassment_report', 'stalking'])
+export const HIGH_PRIORITY_CATEGORIES: Set<ReportCategory> = new Set(['harassment_report', 'stalking'])
+
+/**
+ * Determines the priority for a report based on its category.
+ * Harassment and stalking reports are always high priority.
+ */
+export function determineReportPriority(category: ReportCategory): ReportPriority {
+  return HIGH_PRIORITY_CATEGORIES.has(category) ? 'high' : 'normal'
+}
+
+/**
+ * Determines whether a report category should create an abuse flag.
+ * Returns the abuse flag metadata if yes, null otherwise.
+ */
+export function buildAbuseFlagForReport(report: {
+  reportId: string
+  reporterId: string
+  reportedUserId: string
+  category: ReportCategory
+  description: string
+}): { type: string; priority: ReportPriority; entityId: string } | null {
+  if (!HIGH_PRIORITY_CATEGORIES.has(report.category)) {
+    return null
+  }
+  return {
+    type: 'harassment_report',
+    priority: 'high',
+    entityId: report.reportedUserId,
+  }
+}
 
 export async function createReport(data: {
   reporterId: string
@@ -62,7 +91,7 @@ export async function createReport(data: {
         gsi1sk: `${priority}#${now}`,
         ...report,
       },
-    })
+    }),
   )
 
   // Create high-priority abuse flag for harassment/stalking reports
@@ -91,7 +120,7 @@ export async function createReport(data: {
           priority: 'high',
           createdAt: now,
         },
-      })
+      }),
     )
   }
 
@@ -107,7 +136,7 @@ export async function getReportQueue(limit = 50): Promise<UserReport[]> {
       ExpressionAttributeValues: { ':pk': 'REPORT_QUEUE' },
       ScanIndexForward: false, // newest first, high priority first
       Limit: limit,
-    })
+    }),
   )
   return (result.Items || []) as UserReport[]
 }

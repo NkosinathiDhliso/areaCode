@@ -311,6 +311,11 @@ export function NodeEditorPanel() {
       if (!putRes.ok) throw new Error(`S3 upload failed (${putRes.status})`)
       // 3. Register the image against the node
       await api.post(`/v1/nodes/${selected.id}/images`, { s3Key: presigned.s3Key, displayOrder: 0 })
+      // 4. Immediately update the header image preview
+      const cdnUrl = import.meta.env['VITE_CDN_URL'] as string | undefined
+      if (cdnUrl) {
+        setHeaderImageUrl(`${cdnUrl}/${presigned.s3Key}`)
+      }
       setPhotoMessage({ type: 'success', text: 'Photo uploaded.' })
       setTimeout(() => setPhotoMessage(null), 3000)
     } catch (err: unknown) {

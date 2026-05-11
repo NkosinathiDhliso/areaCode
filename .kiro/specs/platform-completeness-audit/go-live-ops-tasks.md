@@ -17,12 +17,12 @@ All work happens on the `serverless-prod-cleanup` branch. All infrastructure rem
 
 ## Tasks
 
-- [ ] 1. Clean CI/CD Pipelines (remove ECS/Prisma/Docker references)
-  - [ ] 1.1 Remove `deploy-ecs.yml` workflow entirely
+- [x] 1. Clean CI/CD Pipelines (remove ECS/Prisma/Docker references)
+  - [x] 1.1 Remove `deploy-ecs.yml` workflow entirely
     - Delete `.github/workflows/deploy-ecs.yml` — it deploys to ECS/Fargate which no longer exists
     - Move to `_archive/retired-high-cost-infra/.github/workflows/deploy-ecs.yml` if preservation is desired
 
-  - [ ] 1.2 Clean `ci.yml` — remove ECS and Prisma jobs
+  - [x] 1.2 Clean `ci.yml` — remove ECS and Prisma jobs
     - Remove the `schema-validation` job (Prisma schema validate + migrate diff) — we use DynamoDB, not Prisma
     - Remove the `build-ecs-image` job (Docker build + ECR push) — no ECS exists
     - Remove `deploy-dev` steps that reference: `aws ecs update-service`, ECR login/push, `run-migration` Lambda invoke
@@ -36,11 +36,11 @@ All work happens on the `serverless-prod-cleanup` branch. All infrastructure rem
     - If it references a Makefile that doesn't exist on this branch, update to use the actual build command
     - Ensure it deploys: api, websocket, and all worker Lambdas from `dist/`
 
-  - [ ] 1.4 Add serverless guard to CI
+  - [x] 1.4 Add serverless guard to CI
     - Add a `serverless-guard` job to `ci.yml` that runs `pnpm guard:serverless`
     - Make it a required check so PRs that reintroduce forbidden patterns are blocked
 
-  - [ ] 1.5 Run `pnpm guard:serverless` to verify no forbidden patterns leaked in
+  - [x] 1.5 Run `pnpm guard:serverless` to verify no forbidden patterns leaked in
 
 - [ ] 2. Fix Environment Variable Mismatches
   - [ ] 2.1 Fix `MEDIA_BUCKET` vs `AREA_CODE_S3_MEDIA_BUCKET` mismatch

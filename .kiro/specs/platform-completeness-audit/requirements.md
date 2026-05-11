@@ -33,7 +33,9 @@ Area Code is a South African location-based loyalty and check-in platform with f
 
 ---
 
-## TIER 1: MUST-HAVE FOR LAUNCH
+## Requirements
+
+### TIER 1: MUST-HAVE FOR LAUNCH
 
 ### Requirement 1: Check-In History View
 
@@ -116,7 +118,6 @@ Area Code is a South African location-based loyalty and check-in platform with f
 4. WHEN a check-in request fails, THE Consumer_Portal SHALL display the failure reason (cooldown active, too far from venue, QR expired) and retain the venue detail sheet in its open state
 5. IF a reward redemption request fails, THEN THE Staff_Portal SHALL display the specific failure reason (invalid_code, already_redeemed, expired_code) to the staff member
 6. THE Consumer_Portal SHALL implement a global error boundary that catches unhandled exceptions and displays a recovery screen with a reload option
-
 
 ### Requirement 8: Business Individual Check-In Details
 
@@ -297,20 +298,19 @@ Area Code is a South African location-based loyalty and check-in platform with f
 
 ---
 
-## TIER 2: IMPORTANT FOR SCALE
+### TIER 2: IMPORTANT FOR SCALE
 
 ### Requirement 23: Mobile Settings Screen
 
-**User Story:** As a mobile consumer, I want a settings screen where I can manage notification preferences, language, and app configuration, so that I can customize my experience.
+**User Story:** As a mobile consumer, I want a settings screen where I can manage notification preferences and app configuration, so that I can customize my experience.
 
 #### Acceptance Criteria
 
 1. THE Consumer_Portal (mobile) SHALL provide a settings screen accessible from the profile tab
 2. THE Consumer_Portal (mobile) SHALL allow the consumer to toggle notification preferences (streak at risk, reward activated, reward claimed, leaderboard pre-warning, followed user check-in)
-3. THE Consumer_Portal (mobile) SHALL allow the consumer to select a preferred language from available translations
-4. WHEN the consumer changes a notification preference, THE Consumer_Portal SHALL persist the change to the Notification_Service within 5 seconds
+3. WHEN the consumer changes a notification preference, THE Consumer_Portal SHALL persist the change to the Notification_Service within 5 seconds
 
-### Requirement 23: In-App Notification Center
+### Requirement 24: In-App Notification Center
 
 **User Story:** As a consumer, I want to view a history of my notifications, so that I can review past alerts I may have missed.
 
@@ -322,7 +322,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 4. THE Notification_Service SHALL persist all notifications sent to a consumer (WebSocket and push) in a notification history table
 5. THE Consumer_Portal SHALL support paginated loading of notification history
 
-### Requirement 24: Social Sharing
+### Requirement 25: Social Sharing
 
 **User Story:** As a consumer, I want to share my check-ins and achievements on social media, so that I can invite friends and show off my activity.
 
@@ -332,7 +332,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Consumer_Portal SHALL support sharing to at least WhatsApp, Instagram Stories, and Twitter via the native share sheet
 3. THE Consumer_Portal SHALL include the venue name, consumer's tier, and a branded Area Code watermark in the shareable content
 
-### Requirement 25: Achievement and Badge System
+### Requirement 26: Achievement and Badge System
 
 **User Story:** As a consumer, I want to earn badges for milestones beyond tier progression, so that I have additional goals to work toward.
 
@@ -343,7 +343,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 3. WHEN a badge is earned, THE Notification_Service SHALL send a notification to the consumer
 4. THE Consumer_Portal SHALL display the criteria required to unlock each locked badge
 
-### Requirement 26: Referral System
+### Requirement 27: Referral System
 
 **User Story:** As a consumer, I want to invite friends and earn rewards for successful referrals, so that I am incentivized to grow the platform.
 
@@ -354,7 +354,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 3. THE Consumer_Portal SHALL display the consumer's referral code, total successful referrals, and earned referral rewards on the profile screen
 4. THE Consumer_Portal SHALL provide a share action for the referral code via the native share sheet
 
-### Requirement 27: Offline Data Caching
+### Requirement 28: Offline Data Caching
 
 **User Story:** As a consumer on a limited data plan, I want the app to cache essential data locally, so that I can browse previously loaded content without an active connection.
 
@@ -365,7 +365,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 3. WHEN the device regains connectivity, THE Consumer_Portal (mobile) SHALL refresh cached data automatically
 4. THE Consumer_Portal (mobile) SHALL limit the local cache size to 10 megabytes
 
-### Requirement 28: Business Payment and Billing History
+### Requirement 29: Business Payment and Billing History
 
 **User Story:** As a business owner, I want to view my payment history, so that I can track my spending and verify charges.
 
@@ -376,7 +376,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 3. WHEN a Yoco webhook event is processed, THE Business_Service SHALL persist the payment event details (amount, status, plan, timestamp) in a payment history table
 4. THE Business_Portal SHALL support paginated loading of payment history
 
-### Requirement 29: Staff Performance Tracking
+### Requirement 30: Staff Performance Tracking
 
 **User Story:** As a business owner, I want to see how many redemptions each staff member has processed, so that I can evaluate staff performance.
 
@@ -386,7 +386,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Business_Portal SHALL display the most recent redemption timestamp for each staff member
 3. THE Business_Portal SHALL allow sorting staff members by redemption count
 
-### Requirement 30: Venue Operating Hours
+### Requirement 31: Venue Operating Hours
 
 **User Story:** As a business owner, I want to set operating hours for my venues, so that consumers know when my venue is open.
 
@@ -397,7 +397,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 3. WHEN a venue is currently outside its operating hours, THE Consumer_Portal SHALL display an "Currently Closed" indicator on the venue detail sheet
 4. IF a consumer attempts to check in at a venue outside its operating hours, THEN THE Check_In_Service SHALL allow the check-in but display a warning that the venue may be closed
 
-### Requirement 31: Venue Open/Closed Status
+### Requirement 32: Venue Open/Closed Status
 
 **User Story:** As a business owner, I want to manually set my venue as open or closed (for load shedding or other reasons), so that consumers have accurate availability information.
 
@@ -408,7 +408,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 3. WHEN a venue is marked as closed, THE Consumer_Portal SHALL display a "Closed" badge on the venue marker and detail sheet
 4. WHEN a venue is marked as closed, THE Consumer_Portal SHALL still allow the consumer to view venue details but SHALL display a warning that the venue is currently closed
 
-### Requirement 32: Peak Hours Analysis
+### Requirement 33: Peak Hours Analysis
 
 **User Story:** As a business owner, I want to see when my venue is busiest, so that I can optimize staffing and promotions.
 
@@ -418,7 +418,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Business_Service SHALL compute peak hours from check-in timestamp data aggregated over the past 30 days
 3. THE Business_Portal SHALL highlight the top 3 busiest hours for the venue
 
-### Requirement 33: Churn Indicators
+### Requirement 34: Churn Indicators
 
 **User Story:** As a business owner, I want to be alerted when regular customers stop visiting, so that I can take retention actions.
 
@@ -428,7 +428,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. WHEN churned consumers are identified, THE Business_Portal SHALL display a "Regulars at Risk" section in the Audience panel with the count of at-risk consumers
 3. THE Business_Portal SHALL display the last check-in date for each at-risk consumer (display name and tier only, no personal identifiers)
 
-### Requirement 34: System Health Monitoring
+### Requirement 35: System Health Monitoring
 
 **User Story:** As an admin, I want visibility into system health metrics, so that I can identify and respond to technical issues.
 
@@ -440,7 +440,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 4. THE Admin_Portal SHALL display WebSocket active connection count
 5. IF any health metric exceeds a warning threshold (Lambda error rate above 5%, DynamoDB throttling above 0, SMS delivery rate below 90%), THEN THE Admin_Portal SHALL display a warning indicator
 
-### Requirement 35: Financial Overview for Admin
+### Requirement 36: Financial Overview for Admin
 
 **User Story:** As an admin, I want to see revenue and payment metrics, so that I can track platform financial health.
 
@@ -451,7 +451,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 3. THE Admin_Portal SHALL display the count of businesses currently in payment grace period
 4. THE Admin_Portal SHALL display total boost revenue for the current month
 
-### Requirement 36: Admin Bulk Actions
+### Requirement 37: Admin Bulk Actions
 
 **User Story:** As an admin, I want to perform actions on multiple users or businesses at once, so that I can manage the platform efficiently at scale.
 
@@ -463,7 +463,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 4. WHEN multiple businesses are selected, THE Admin_Portal SHALL allow the admin to perform bulk actions (extend trial, deactivate)
 5. THE Admin_Portal SHALL display a confirmation dialog before executing any bulk action, showing the count of affected entities
 
-### Requirement 37: Admin Advanced Filtering
+### Requirement 38: Admin Advanced Filtering
 
 **User Story:** As an admin, I want to filter users and businesses by date range, status, and tier, so that I can find specific records efficiently.
 
@@ -474,7 +474,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 3. WHEN filters are applied, THE Admin_Portal SHALL update the search results to reflect the active filters
 4. THE Admin_Portal SHALL allow combining text search with filter controls
 
-### Requirement 38: Admin Data Export
+### Requirement 39: Admin Data Export
 
 **User Story:** As an admin, I want to export user, business, and report data, so that I can perform offline analysis and generate reports.
 
@@ -486,7 +486,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 4. THE Admin_Portal SHALL include all visible columns in the exported CSV file
 5. WHEN an export is initiated, THE Admin_Portal SHALL generate the file asynchronously and provide a download link upon completion
 
-### Requirement 39: Reward Code Push Notification
+### Requirement 40: Reward Code Push Notification
 
 **User Story:** As a consumer, I want to receive a push notification when a reward code is generated for me, so that I do not miss claimable rewards.
 
@@ -496,7 +496,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Notification_Service SHALL deliver the notification via WebSocket if the consumer has an active connection, or via push notification otherwise
 3. THE Notification_Service SHALL rate-limit reward code notifications to a maximum of 2 per consumer per day
 
-### Requirement 40: Leaderboard Reset Notification
+### Requirement 41: Leaderboard Reset Notification
 
 **User Story:** As a consumer, I want to be notified of my final leaderboard rank when the weekly leaderboard resets, so that I know how I performed.
 
@@ -506,7 +506,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Notification_Service SHALL send the leaderboard reset notification within 1 hour of the reset event
 3. THE Notification_Service SHALL deliver the notification via push notification (not WebSocket) since the reset occurs at a scheduled time
 
-### Requirement 41: Unsurfaced Abuse Flag Remediation
+### Requirement 42: Unsurfaced Abuse Flag Remediation
 
 **User Story:** As an admin, I want all backend-created abuse flags to appear in the Admin Portal, so that no automated detection goes unreviewed.
 
@@ -516,7 +516,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Admin_Portal SHALL query the abuse flags endpoint and display results in the abuse flags section
 3. THE Admin_Portal SHALL display the flag type, evidence JSON, creation timestamp, and auto-actioned status for each flag
 
-### Requirement 42: Load Shedding Awareness
+### Requirement 43: Load Shedding Awareness
 
 **User Story:** As a consumer, I want to see which venues may be affected by load shedding, so that I do not travel to a closed venue.
 
@@ -526,7 +526,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Business_Portal SHALL provide a "closed due to load shedding" option distinct from a general "closed" status
 3. THE Consumer_Portal SHALL allow filtering the map to hide venues currently affected by load shedding
 
-### Requirement 43: Data-Light Mode
+### Requirement 44: Data-Light Mode
 
 **User Story:** As a consumer on a limited data plan, I want a data-light mode that reduces bandwidth usage, so that I can use the app without exhausting my data allocation.
 
@@ -535,9 +535,9 @@ Area Code is a South African location-based loyalty and check-in platform with f
 1. THE Consumer_Portal (mobile) SHALL provide a data-light mode toggle in the settings screen
 2. WHILE data-light mode is active, THE Consumer_Portal (mobile) SHALL disable automatic image loading and use text-only venue markers
 3. WHILE data-light mode is active, THE Consumer_Portal (mobile) SHALL reduce API polling frequency by 50 percent
-4. WHILE data-light mode is active, THE Consumer_Portal (mobile) SHALL disable WebSocket connections and use polling-only for updates
+4. WHILE data-light mode is active, THE Consumer_Portal (mobile) SHALL disable the persistent WebSocket connection and fall back to polling for real-time updates; notifications SHALL be delivered via push notification instead of WebSocket during data-light mode
 
-### Requirement 44: MAU and DAU Tracking
+### Requirement 45: MAU and DAU Tracking
 
 **User Story:** As a platform stakeholder, I want to track monthly and daily active user counts, so that I can measure platform engagement.
 
@@ -547,7 +547,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Admin_Portal SHALL display DAU and MAU metrics on the dashboard overview with a 7-day trend chart
 3. THE Admin_Service SHALL compute DAU and MAU using DynamoDB counters updated on each authenticated consumer API request
 
-### Requirement 45: Check-In Velocity Trends
+### Requirement 46: Check-In Velocity Trends
 
 **User Story:** As a platform stakeholder, I want to see check-in volume trends over time, so that I can measure platform growth.
 
@@ -557,7 +557,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Admin_Service SHALL aggregate daily check-in counts from the check-in table and store them in a daily metrics record
 3. THE Admin_Portal SHALL display the week-over-week percentage change in check-in volume
 
-### Requirement 46: Reward Claim Rate Metrics
+### Requirement 47: Reward Claim Rate Metrics
 
 **User Story:** As a platform stakeholder, I want to see platform-wide reward claim rates, so that I can assess the effectiveness of the reward system.
 
@@ -569,9 +569,9 @@ Area Code is a South African location-based loyalty and check-in platform with f
 
 ---
 
-## TIER 3: NICE-TO-HAVE (Market Differentiation)
+### TIER 3: NICE-TO-HAVE (Market Differentiation)
 
-### Requirement 47: Consumer "Who's Here" View
+### Requirement 48: Consumer "Who's Here" View
 
 **User Story:** As a consumer, I want to see who else is checked in at a venue (friends and anonymous counts), so that I can decide whether to visit.
 
@@ -581,7 +581,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Consumer_Portal SHALL display the names and avatars of mutual friends currently checked in at the venue
 3. THE Consumer_Portal SHALL display the tier distribution of checked-in consumers without revealing non-friend identities
 
-### Requirement 48: Venue Reviews and Ratings
+### Requirement 49: Venue Reviews and Ratings
 
 **User Story:** As a consumer, I want to rate and review venues I have visited, so that I can share my experience with other consumers.
 
@@ -592,7 +592,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 3. THE Consumer_Portal SHALL display the most recent reviews on the venue detail sheet with the reviewer's display name and tier
 4. THE Consumer_Portal SHALL allow a consumer to edit or delete their own review
 
-### Requirement 49: Consumer Crowd Vibe Display
+### Requirement 50: Consumer Crowd Vibe Display
 
 **User Story:** As a consumer, I want to see the music vibe of a venue's current crowd, so that I can find venues that match my music taste.
 
@@ -602,7 +602,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Consumer_Portal SHALL display the aggregate dimension scores as a visual radar chart
 3. WHEN the crowd vibe data is empty (no checked-in consumers with music preferences), THE Consumer_Portal SHALL display a "No vibe data yet" placeholder
 
-### Requirement 50: Competitor Comparison for Business
+### Requirement 51: Competitor Comparison for Business
 
 **User Story:** As a business owner, I want to see how my venue compares to nearby competitors, so that I can benchmark my performance.
 
@@ -612,7 +612,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Business_Portal SHALL display the business's check-in rank relative to nearby venues
 3. THE Business_Portal SHALL not reveal the names or specific metrics of individual competitor venues
 
-### Requirement 51: Boost ROI Metrics
+### Requirement 52: Boost ROI Metrics
 
 **User Story:** As a business owner, I want to see the return on investment for my boosts, so that I can decide whether to purchase more.
 
@@ -622,7 +622,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Business_Portal SHALL display the cost per incremental check-in for each boost
 3. THE Business_Portal SHALL display the total boost spend and total incremental check-ins for the current month
 
-### Requirement 52: Invoice and Receipt Download
+### Requirement 53: Invoice and Receipt Download
 
 **User Story:** As a business owner, I want to download invoices for my payments, so that I can use them for accounting and tax purposes.
 
@@ -632,7 +632,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Business_Portal SHALL include the business name, payment amount, date, VAT number (if provided), and payment reference on the invoice
 3. THE Business_Portal SHALL include the Area Code company details and South African VAT registration on the invoice
 
-### Requirement 53: Business Data Export
+### Requirement 54: Business Data Export
 
 **User Story:** As a business owner, I want to export my analytics data, so that I can perform custom analysis outside the platform.
 
@@ -643,7 +643,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 3. THE Business_Portal SHALL provide an export action for reward performance data in CSV format
 4. THE Business_Portal SHALL include date range selection for all data exports
 
-### Requirement 54: Staff Personal Performance Stats
+### Requirement 55: Staff Personal Performance Stats
 
 **User Story:** As a staff member, I want to see my own redemption statistics, so that I can track my performance.
 
@@ -652,7 +652,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 1. THE Staff_Portal SHALL display the staff member's total redemption count for the current day and current week
 2. THE Staff_Portal SHALL display a list of the staff member's recent redemptions with reward title and timestamp
 
-### Requirement 55: Refund and Reversal Capability
+### Requirement 56: Refund and Reversal Capability
 
 **User Story:** As a staff member, I want to reverse an incorrect redemption, so that mistakes can be corrected.
 
@@ -752,7 +752,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Check_In_Service SHALL use an expanded proximity radius (500 metres instead of 200 metres) for Nodes flagged as being in areas with imprecise GPS
 3. THE Business_Portal SHALL allow the business owner to flag a Node as being in an area with imprecise GPS during registration
 
-### Requirement 69: Business Tier Distribution Analytics
+### Requirement 66: Business Tier Distribution Analytics
 
 **User Story:** As a platform stakeholder, I want to see the distribution of businesses across plan tiers, so that I can assess monetization health.
 
@@ -761,7 +761,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 1. THE Admin_Portal SHALL display a chart showing the count of businesses on each plan tier (free, starter, growth, pro, payg)
 2. THE Admin_Portal SHALL display the month-over-month change in business tier distribution
 
-### Requirement 70: Revenue Per Business Tracking
+### Requirement 67: Revenue Per Business Tracking
 
 **User Story:** As a platform stakeholder, I want to see average revenue per business, so that I can track monetization efficiency.
 
@@ -770,7 +770,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 1. THE Admin_Portal SHALL display the average revenue per paying business for the current month
 2. THE Admin_Portal SHALL display the total number of paying businesses and total revenue
 
-### Requirement 71: Churn Rate Calculation
+### Requirement 68: Churn Rate Calculation
 
 **User Story:** As a platform stakeholder, I want to see consumer and business churn rates, so that I can measure retention.
 
@@ -780,7 +780,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Admin_Service SHALL compute monthly business churn rate (businesses that downgraded to free or became inactive)
 3. THE Admin_Portal SHALL display consumer and business churn rates on the dashboard overview with a 3-month trend
 
-### Requirement 72: Geographic Coverage Metrics
+### Requirement 69: Geographic Coverage Metrics
 
 **User Story:** As a platform stakeholder, I want to see geographic coverage metrics, so that I can identify expansion opportunities.
 
@@ -790,7 +790,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Admin_Portal SHALL display a map visualization showing Node density by geographic area
 3. THE Admin_Portal SHALL display cities with zero or fewer than 5 Nodes as expansion targets
 
-### Requirement 73: Social Graph Density Metrics
+### Requirement 70: Social Graph Density Metrics
 
 **User Story:** As a platform stakeholder, I want to see social graph metrics, so that I can assess the strength of the social network.
 
@@ -800,7 +800,7 @@ Area Code is a South African location-based loyalty and check-in platform with f
 2. THE Admin_Portal SHALL display the percentage of consumers with at least one mutual friend
 3. THE Admin_Portal SHALL display the total follow count and mutual follow count platform-wide
 
-### Requirement 74: Music Archetype Adoption Rates
+### Requirement 71: Music Archetype Adoption Rates
 
 **User Story:** As a platform stakeholder, I want to see how many consumers have set music preferences and which archetypes are most common, so that I can assess feature adoption.
 
@@ -809,3 +809,52 @@ Area Code is a South African location-based loyalty and check-in platform with f
 1. THE Admin_Portal SHALL display the percentage of consumers who have set at least one music genre preference
 2. THE Admin_Portal SHALL display the distribution of resolved archetypes across all consumers with music preferences
 3. THE Admin_Portal SHALL display the percentage of consumers who have connected a streaming service (Spotify or Apple Music)
+
+### Requirement 72: Static QR Tokens for Printed Posters
+
+**User Story:** As a business owner, I want my printed QR code posters to work permanently without expiring, so that I do not need to reprint them when tokens rotate.
+
+#### Acceptance Criteria
+
+1. WHEN a business owner generates a QR code for a Node, THE Business_Service SHALL generate a permanent static token that does not expire or rotate
+2. THE Check_In_Service SHALL validate QR tokens by looking up the static token stored against the Node record, not by computing a time-based HMAC
+3. WHEN a consumer scans a printed QR code poster, THE Consumer_Portal SHALL accept the static token regardless of when the poster was printed
+4. THE Business_Portal SHALL allow a business owner to regenerate (invalidate and replace) a Node's QR token if the poster is compromised, creating a new permanent token
+5. THE Check_In_Service SHALL reject any QR token that does not match the current static token stored for the Node
+
+### Requirement 73: POPIA Self-Service Account Deletion
+
+**User Story:** As a consumer, I want to delete my account and all associated data, so that I can exercise my right to erasure under POPIA.
+
+#### Acceptance Criteria
+
+1. THE Consumer_Portal SHALL provide an "Delete My Account" action in the settings screen
+2. WHEN a consumer initiates account deletion, THE Consumer_Portal SHALL display a confirmation dialog explaining that all data will be permanently erased within 30 days
+3. WHEN a consumer confirms account deletion, THE Auth_Service SHALL mark the account for erasure and immediately revoke all active sessions
+4. THE Erasure_Service SHALL delete all consumer data (check-ins, rewards, social connections, notifications, music preferences) from DynamoDB within 30 days of the deletion request
+5. THE Erasure_Service SHALL create an audit log entry recording the erasure request and completion
+6. THE Admin_Portal SHALL display pending erasure requests with a countdown to the 30-day deadline
+
+### Requirement 74: API Rate Limiting Transparency
+
+**User Story:** As a consumer, I want to understand why I am being rate-limited and when I can retry, so that I am not confused by silent failures.
+
+#### Acceptance Criteria
+
+1. WHEN an API request is rate-limited (HTTP 429), THE backend SHALL include a `cooldownUntil` timestamp and a human-readable `message` in the response body
+2. WHEN the Consumer_Portal receives a 429 response, THE Consumer_Portal SHALL display the cooldown message and a countdown timer showing when the action can be retried
+3. THE Check_In_Service SHALL enforce a per-consumer cooldown of 1 check-in per Node per 4-hour window and return the cooldown expiry in the 429 response
+4. THE Auth_Service SHALL enforce a per-phone-number OTP request limit of 5 per hour and return the cooldown expiry in the 429 response
+5. THE Consumer_Portal SHALL disable the check-in button and display "Available in X minutes" when a cooldown is active for the current Node
+
+### Requirement 75: Deployment Verification and Smoke Tests
+
+**User Story:** As a platform operator, I want automated post-deployment verification, so that I can confirm all services are functioning correctly after each release.
+
+#### Acceptance Criteria
+
+1. WHEN a new Lambda deployment completes, THE deployment pipeline SHALL execute a smoke test that verifies the health endpoint returns HTTP 200
+2. THE smoke test suite SHALL verify: API Gateway routing (GET /v1/health), DynamoDB connectivity (read a canary record), Cognito token validation (verify a test token), and WebSocket connection establishment
+3. THE smoke test suite SHALL complete within 60 seconds and report pass/fail status
+4. IF any smoke test fails, THEN THE deployment pipeline SHALL trigger a CloudWatch alarm and notify the admin via SES
+5. THE Admin_Portal SHALL display the most recent deployment status (timestamp, version, smoke test result) on the system health section

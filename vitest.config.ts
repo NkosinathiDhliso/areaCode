@@ -1,6 +1,12 @@
 import { defineConfig } from 'vitest/config'
+import { resolve } from 'node:path'
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@area-code/shared': resolve(__dirname, 'packages/shared'),
+    },
+  },
   test: {
     globals: true,
     /** Cold Fastify `buildApp()` in integration suites can exceed 30s on some machines. */

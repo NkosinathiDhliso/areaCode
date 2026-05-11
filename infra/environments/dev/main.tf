@@ -390,6 +390,8 @@ module "lambda_api" {
     AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
     AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
     AREA_CODE_S3_MEDIA_BUCKET               = module.s3_media.bucket_name
+    # MEDIA_BUCKET kept as an alias for any code paths that still read the short name.
+    MEDIA_BUCKET                            = module.s3_media.bucket_name
     AREA_CODE_SQS_PUSH_QUEUE_URL            = module.sqs_push_sender.queue_url
     AREA_CODE_CONSENT_VERSION               = "v1.0"
   }

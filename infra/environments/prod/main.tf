@@ -76,6 +76,52 @@ variable "anonymization_salt" {
   default     = "report-anonymization-salt-prod"
 }
 
+variable "yoco_secret_key" {
+  description = "Yoco production secret key for payment processing"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "yoco_webhook_secret" {
+  description = "Yoco webhook signature verification secret"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "vapid_public_key" {
+  description = "VAPID public key for web push notifications"
+  type        = string
+  default     = ""
+}
+
+variable "vapid_private_key" {
+  description = "VAPID private key for web push notifications"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "apple_music_team_id" {
+  description = "Apple Developer Team ID for Apple Music integration"
+  type        = string
+  default     = ""
+}
+
+variable "apple_music_key_id" {
+  description = "Apple Music API key ID"
+  type        = string
+  default     = ""
+}
+
+variable "apple_music_private_key" {
+  description = "Apple Music private key (PEM-encoded .p8 content)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "enable_api_custom_domain" {
   description = "Set to true to provision api.areacode.co.za in front of the HTTP API. Requires the areacode.co.za Route53 zone to already exist in this account."
   type        = bool
@@ -462,6 +508,22 @@ module "lambda_api" {
     SPOTIFY_CLIENT_ID     = var.spotify_client_id
     SPOTIFY_CLIENT_SECRET = var.spotify_client_secret
     SPOTIFY_REDIRECT_URI  = var.spotify_redirect_uri
+    # Yoco payment gateway — supplied via TF variables (terraform.tfvars or TF_VAR_*)
+    YOCO_PROD_SECRET_KEY = var.yoco_secret_key
+    YOCO_WEBHOOK_SECRET  = var.yoco_webhook_secret
+    # Business portal URL for Yoco checkout redirects
+    BUSINESS_APP_URL = "https://business.areacode.co.za"
+    # WebSocket broadcast support — allows API Lambda to push events to connected clients
+    CONNECTIONS_TABLE  = module.websocket.connections_table_name
+    WEBSOCKET_ENDPOINT = replace(module.websocket.websocket_api_endpoint, "wss://", "https://")
+    # Web push (VAPID) — no-op if keys are empty
+    AREA_CODE_VAPID_PUBLIC_KEY  = var.vapid_public_key
+    AREA_CODE_VAPID_PRIVATE_KEY = var.vapid_private_key
+    AREA_CODE_VAPID_SUBJECT     = "mailto:tech@areacode.co.za"
+    # Apple Music integration — no-op if keys are empty
+    APPLE_MUSIC_TEAM_ID     = var.apple_music_team_id
+    APPLE_MUSIC_KEY_ID      = var.apple_music_key_id
+    APPLE_MUSIC_PRIVATE_KEY = var.apple_music_private_key
     # Error monitoring (no-op if sentry_dsn is empty)
     SENTRY_DSN = var.sentry_dsn
     GIT_SHA    = var.git_sha
@@ -549,8 +611,9 @@ module "lambda_yoco_webhook" {
   function_name = "yoco-webhook"
   timeout       = 30
   environment_variables = {
-    AREA_CODE_ENV    = local.env
-    BUSINESSES_TABLE = aws_dynamodb_table.businesses.name
+    AREA_CODE_ENV       = local.env
+    BUSINESSES_TABLE    = aws_dynamodb_table.businesses.name
+    YOCO_WEBHOOK_SECRET = var.yoco_webhook_secret
   }
 }
 

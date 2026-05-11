@@ -19,7 +19,9 @@ const s3 = new S3Client({
   requestChecksumCalculation: 'WHEN_REQUIRED',
   responseChecksumValidation: 'WHEN_REQUIRED',
 })
-const BUCKET = process.env['AREA_CODE_S3_MEDIA_BUCKET'] ?? 'area-code-media'
+// Prefer AREA_CODE_S3_MEDIA_BUCKET (set by Terraform) and fall back to
+// MEDIA_BUCKET for local dev / legacy callers.
+const BUCKET = process.env['AREA_CODE_S3_MEDIA_BUCKET'] ?? process.env['MEDIA_BUCKET'] ?? 'area-code-media'
 const ENV = process.env['AREA_CODE_ENV'] ?? 'dev'
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 

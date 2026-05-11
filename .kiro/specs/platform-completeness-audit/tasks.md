@@ -15,7 +15,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Ensure new consumer accounts default to `privacyLevel = "friends_only"` in `consumerSignup` in `backend/src/features/auth/service.ts`
     - _Requirements: 22.1, 22.3, 22.4, 22.5_
 
-  - [ ]* 1.2 Write property tests for PrivacyGuard module
+  - [x] 1.2 Write property tests for PrivacyGuard module
     - **Property 22: New accounts default to friends_only privacy**
     - **Property 23: Privacy level controls visibility in social queries**
     - **Property 24: No GPS coordinates in consumer-facing responses**
@@ -30,7 +30,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Harassment/stalking reports must create high-priority abuse flags
     - _Requirements: 22.7, 22.8, 22.9_
 
-  - [ ]* 1.4 Write property test for harassment report → high-priority flag
+  - [x] 1.4 Write property test for harassment report → high-priority flag
     - **Property 26: Harassment reports create high-priority abuse flags**
     - Create test in `backend/src/__tests__/properties/privacy-guard.property.test.ts`
     - **Validates: Requirements 22.9**
@@ -60,7 +60,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Add block action to user profiles, friend list, and "who's here" entries
     - _Requirements: 22.2, 22.8, 22.11_
 
-  - [ ]* 1.8 Write unit tests for privacy endpoints and block logic
+  - [x] 1.8 Write unit tests for privacy endpoints and block logic
     - Test self-block returns 400
     - Test block/unblock round-trip
     - Test privacy level validation rejects invalid values
@@ -79,7 +79,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Ensure payload contains ONLY `displayName` and `tier` — never phone, email, userId, cognitoSub, lat, lng
     - _Requirements: 16.1, 16.2, 16.3, 16.4_
 
-  - [ ]* 3.2 Write property tests for business check-in event privacy
+  - [x] 3.2 Write property tests for business check-in event privacy
     - **Property 6: Visit frequency computation**
     - **Property 7: Business check-in events contain only privacy-safe fields**
     - Create `backend/src/__tests__/properties/data-integrity.property.test.ts`
@@ -91,7 +91,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Create `GET /v1/business/staff/:staffId/redemptions` endpoint in `backend/src/features/business/handler.ts` to query redemptions by staff member
     - _Requirements: 19.1, 19.2, 19.3_
 
-  - [ ]* 3.4 Write property test for staff attribution
+  - [x] 3.4 Write property test for staff attribution
     - **Property 20: Staff attribution on redemption**
     - Add to `backend/src/__tests__/properties/data-integrity.property.test.ts`
     - **Validates: Requirements 19.1**
@@ -115,7 +115,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - If tier changed, emit `tier:changed` WebSocket event with `{ oldTier, newTier, benefits[] }` and send notification via the notification pipeline
     - _Requirements: 20.1, 20.2, 20.3_
 
-  - [ ]* 3.8 Write property tests for notification pipeline
+  - [x] 3.8 Write property tests for notification pipeline
     - **Property 13: Notification recipient targeting within time window**
     - **Property 14: Notification preference enforcement**
     - **Property 15: Notification rate limiting**
@@ -131,7 +131,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Create audit log entry for every admin moderation action
     - _Requirements: 18.1, 18.2, 18.3, 18.4_
 
-  - [ ]* 3.10 Write property tests for disable cascade
+  - [x] 3.10 Write property tests for disable cascade
     - **Property 17: Disabled user is blocked from check-in and reward claims**
     - **Property 18: Disabling a business deactivates all its nodes**
     - **Property 19: Every admin action produces an audit log entry**
@@ -156,7 +156,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Display error message with retry option on API failure
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
-  - [ ]* 5.2 Write property tests for check-in history pagination
+  - [x] 5.2 Write property tests for check-in history pagination
     - **Property 1: Pagination preserves ordering and completeness**
     - **Property 2: Check-in history entries contain required fields**
     - Create `backend/src/__tests__/properties/pagination.property.test.ts`
@@ -170,7 +170,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Display number of additional check-ins required to reach next tier
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
 
-  - [ ]* 5.4 Write property test for tier computation
+  - [x] 5.4 Write property test for tier computation
     - **Property 3: Tier computation is correct for any check-in count**
     - Create `backend/src/__tests__/properties/tier-computation.property.test.ts`
     - **Validates: Requirements 2.4, 2.5**
@@ -183,7 +183,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Create `StreakInfoPanel` in consumer web and mobile — explanation of streak mechanics, current count, start date, at-risk warning, and broken-streak message
     - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
-  - [ ]* 5.6 Write property test for streak at-risk detection
+  - [x] 5.6 Write property test for streak at-risk detection
     - **Property 4: Streak at-risk detection**
     - Create `backend/src/__tests__/properties/streak.property.test.ts`
     - **Validates: Requirements 3.3**
@@ -195,7 +195,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Display "no results found" when query matches nothing; restore full venue list on clear
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
-  - [ ]* 5.8 Write property test for venue search
+  - [x] 5.8 Write property test for venue search
     - **Property 5: Venue search returns only matching results**
     - Create `backend/src/__tests__/properties/venue-search.property.test.ts`
     - **Validates: Requirements 4.2**
@@ -251,7 +251,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Display summary comparison of all active rewards ranked by claim rate
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
 
-  - [ ]* 7.3 Write property tests for reward metrics
+  - [x] 7.3 Write property tests for reward metrics
     - **Property 8: Reward rate metrics are correctly bounded**
     - **Property 9: Reward summary is sorted by claim rate**
     - Create `backend/src/__tests__/properties/reward-metrics.property.test.ts`
@@ -318,7 +318,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Subscribe to `abuse:new_flag` WebSocket event for real-time flag appearance
     - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 21.1, 21.2, 21.3_
 
-  - [ ]* 11.3 Write property tests for abuse flag ordering and admin audit
+  - [x] 11.3 Write property tests for abuse flag ordering and admin audit
     - **Property 10: Abuse flags are ordered by creation date descending**
     - **Property 19: Every admin action produces an audit log entry**
     - Add to `backend/src/__tests__/properties/admin-ordering.property.test.ts`
@@ -332,7 +332,7 @@ This plan implements the 22 Tier 1 (must-have for launch) requirements across al
     - Support paginated loading with cursor-based pagination
     - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5_
 
-  - [ ]* 11.5 Write property tests for audit log filtering and pagination
+  - [x] 11.5 Write property tests for audit log filtering and pagination
     - **Property 11: Audit log filtering returns only matching entries**
     - **Property 12: Audit log pagination preserves completeness**
     - Create `backend/src/__tests__/properties/admin-ordering.property.test.ts`
