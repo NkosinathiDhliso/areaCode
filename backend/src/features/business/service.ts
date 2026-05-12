@@ -350,6 +350,12 @@ export async function getQrData(nodeId: string, businessId: string) {
   const node = await repo.getNodeForBusiness(nodeId, businessId)
   if (!node) throw AppError.forbidden('You do not own this node')
 
+  // Auto-enable QR check-ins when a business generates a QR code
+  if (!(node as Record<string, unknown>)['qrCheckinEnabled']) {
+    const { updateNode } = await import('../nodes/dynamodb-repository.js')
+    await updateNode(nodeId, { qrCheckinEnabled: true })
+  }
+
   const token = generateQrToken(nodeId)
   return {
     url: `https://areacode.co.za/qr/${nodeId}/${token}`,
@@ -541,7 +547,15 @@ export async function getCurrentNodeQr(businessId: string) {
   }
   const nodes = await repo.getNodesForBusiness(businessId)
   if (!nodes.length) throw AppError.notFound('No nodes found')
-  const nodeId = nodes[0]!.id
+  const node = nodes[0]!
+  const nodeId = node.id
+
+  // Auto-enable QR check-ins when a business generates a QR code
+  if (!(node as Record<string, unknown>)['qrCheckinEnabled']) {
+    const { updateNode } = await import('../nodes/dynamodb-repository.js')
+    await updateNode(nodeId, { qrCheckinEnabled: true })
+  }
+
   const token = generateQrToken(nodeId)
   return { url: `https://areacode.co.za/qr/${nodeId}/${token}`, token, nodeId }
 }
