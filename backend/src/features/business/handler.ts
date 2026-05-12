@@ -265,4 +265,14 @@ export async function businessRoutes(app: FastifyInstance) {
     const auth = getAuth(request)
     return service.getRewardsSummary(auth.userId)
   })
+
+  // POST /v1/business/downgrade
+  app.post(
+    '/v1/business/downgrade',
+    { preHandler: [requireAuth('business'), requireBusinessPermission('manage_billing')] },
+    async (request) => {
+      const auth = getAuth(request)
+      return service.downgradeToFree(auth.userId)
+    },
+  )
 }

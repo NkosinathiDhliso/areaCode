@@ -169,7 +169,32 @@ class WebSocketManager {
 // Singleton instance
 let wsManager: WebSocketManager | null = null
 
+// Legacy Socket.io-style exports for backwards compatibility
+type SocketLike = {
+  on: WebSocketManager['on']
+  off: WebSocketManager['off']
+  emit: WebSocketManager['emit']
+  disconnect: () => void
+  connected: boolean
+}
+
+// Socket override for dev mocks — when set, getSocket/getWebSocket return this instead
+let socketOverrideInstance: SocketLike | null = null
+
+function isDevMock(): boolean {
+  try {
+    const env =
+      typeof import.meta !== 'undefined' ? (import.meta as unknown as Record<string, Record<string, string>>).env : {}
+    return env?.VITE_DEV_MOCK === 'true'
+  } catch {
+    return false
+  }
+}
+
 function getWebSocketUrl(): string | null {
+  // In dev mock mode, don't resolve a real WebSocket URL — the mock layer handles events
+  if (isDevMock()) return null
+
   const env =
     typeof import.meta !== 'undefined' ? (import.meta as unknown as Record<string, Record<string, string>>).env : {}
 
@@ -249,20 +274,16 @@ export function disconnectWebSocket(): void {
   wsManager = null
 }
 
-// Legacy Socket.io-style exports for backwards compatibility
-type SocketLike = {
-  on: WebSocketManager['on']
-  off: WebSocketManager['off']
-  emit: WebSocketManager['emit']
-  disconnect: () => void
-  connected: boolean
-}
-
 // Compatibility layer for existing code
 export function getSocket(
   token?: string,
   opts?: { userId?: string; citySlug?: string; businessId?: string },
 ): SocketLike {
+  // If a mock socket override is active (dev mode), return it directly
+  if (socketOverrideInstance) {
+    return socketOverrideInstance
+  }
+
   const ws = getWebSocket(token, opts)
 
   return {
@@ -280,7 +301,11 @@ export function disconnectSocket(): void {
   disconnectWebSocket()
 }
 
-export function setSocketOverride(_override?: unknown): void {
-  // No-op in WebSocket mode (was for dev mocks)
-  console.warn('setSocketOverride not supported in WebSocket mode')
+export function setSocketOverride(override?: unknown): void {
+  if (!override) {
+    socketOverrideInstance = null
+    return
+  }
+  // Accept any object that quacks like a SocketLike (MockSocket from dev mocks)
+  socketOverrideInstance = override as SocketLike
 }

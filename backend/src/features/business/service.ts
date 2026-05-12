@@ -516,3 +516,11 @@ export async function getCurrentNodeQr(businessId: string) {
   const token = generateQrToken(nodeId)
   return { url: `https://areacode.co.za/qr/${nodeId}/${token}`, token, nodeId }
 }
+
+// ─── Downgrade / Cancel Subscription ────────────────────────────────────────
+
+export async function downgradeToFree(businessId: string) {
+  if (DEV_MODE) return { success: true, tier: 'starter' }
+  await repo.updateBusinessTier(businessId, 'starter', null)
+  return { success: true, tier: 'starter' }
+}

@@ -77,4 +77,19 @@ export async function staffRoutes(app: FastifyInstance) {
       return redeemReward(params.code, auth.userId)
     },
   )
+
+  // GET /v1/staff/business — returns the business name for the staff member's business
+  app.get(
+    '/v1/staff/business',
+    { preHandler: [requireAuth('staff')] },
+    async (request) => {
+      const auth = getAuth(request)
+      const { getStaffById } = await import('../auth/dynamodb-repository.js')
+      const { findBusinessById } = await import('../business/repository.js')
+      const staff = await getStaffById(auth.userId)
+      if (!staff?.businessId) return { businessName: null }
+      const biz = await findBusinessById(staff.businessId)
+      return { businessName: biz?.businessName ?? null }
+    },
+  )
 }

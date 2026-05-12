@@ -1008,6 +1008,45 @@ export async function checkOtpRateLimit(phone: string) {
   await kvSet(`otp:cooldown:${phone}`, '1', 60)
 }
 
+// ─── Password Reset (Consumer) ──────────────────────────────────────────────
+
+export async function requestPasswordReset(email: string) {
+  const normalizedEmail = email.toLowerCase().trim()
+  const user = await repo.getUserByEmail(normalizedEmail)
+  // Always return success to prevent email enumeration
+  if (!user) return { success: true }
+
+  await checkOtpRateLimit(`reset:${normalizedEmail}`)
+
+  // Generate 6-digit code
+  const code = String(Math.floor(100000 + Math.random() * 900000))
+  await kvSet(`password-reset:${normalizedEmail}`, code, 600) // 10 min expiry
+
+  // Send email via SES (or log in dev mode)
+  if (DEV_MODE) {
+    console.log(`[DEV] Password reset code for ${normalizedEmail}: ${code}`)
+  } else {
+    const { sendPasswordResetEmail } = await import('../../shared/email/ses.js')
+    await sendPasswordResetEmail(normalizedEmail, code)
+  }
+
+  return { success: true }
+}
+
+export async function confirmPasswordReset(email: string, code: string, newPassword: string) {
+  const normalizedEmail = email.toLowerCase().trim()
+  const storedCode = await kvGet(`password-reset:${normalizedEmail}`)
+  if (!storedCode || storedCode !== code) {
+    throw AppError.badRequest('Invalid or expired reset code.')
+  }
+
+  // Set new password in Cognito
+  await cognito.adminSetUserPassword('consumer', normalizedEmail, newPassword)
+  await kvDel(`password-reset:${normalizedEmail}`)
+
+  return { success: true }
+}
+
 // Staff invite and token revocation in auth-utils-service.ts
 export { acceptStaffInvite, revokeUserTokens } from './auth-utils-service.js'
 // Session management in session-service.ts

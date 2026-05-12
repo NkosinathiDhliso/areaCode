@@ -22,6 +22,7 @@ import { ConsumerLogin } from './screens/ConsumerLogin'
 import { ConsumerSignup } from './screens/ConsumerSignup'
 import { ConsumerOAuthCallback } from './screens/ConsumerOAuthCallback'
 import { AuthLanding } from './screens/AuthLanding'
+import { ForgotPassword } from './screens/ForgotPassword'
 import { QrCheckIn } from './screens/QrCheckIn'
 import { BottomNav } from './components/BottomNav'
 import { ConnectivityBanner } from './components/ConnectivityBanner'
@@ -43,6 +44,7 @@ const ROUTE_PATHS: Record<AppRoute, string> = {
   landing: '/',
   login: '/login',
   signup: '/signup',
+  'forgot-password': '/forgot-password',
   map: '/map',
   gets: '/gets',
   ranks: '/ranks',
@@ -56,6 +58,7 @@ const ROUTE_PATHS: Record<AppRoute, string> = {
 function pathToRoute(path: string): AppRoute {
   if (path === '/login') return 'login'
   if (path === '/signup/consumer' || path === '/signup') return 'signup'
+  if (path === '/forgot-password') return 'forgot-password'
   if (path === '/map') return 'map'
   if (path === '/gets') return 'gets'
   if (path === '/ranks') return 'ranks'
@@ -228,6 +231,7 @@ function AppContent() {
             {activeRoute === 'landing' && !isAuthenticated && <AuthLanding onNavigate={setRoute} />}
             {activeRoute === 'login' && <ConsumerLogin onNavigate={setRoute} />}
             {activeRoute === 'signup' && <ConsumerSignup onNavigate={setRoute} />}
+            {activeRoute === 'forgot-password' && <ForgotPassword onNavigate={setRoute} />}
             {activeRoute === 'map' && <MapScreen onNavigate={setRoute} />}
             {activeRoute === 'gets' && <RewardsScreen />}
             {activeRoute === 'ranks' && <LeaderboardScreen />}

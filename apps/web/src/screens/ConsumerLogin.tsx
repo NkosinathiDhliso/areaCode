@@ -104,7 +104,10 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
 
       {error && <p className="text-xs text-[var(--danger)] mt-4 text-center">{error}</p>}
 
-      <button type="button" onClick={() => onNavigate('signup')} className="mt-8 text-[var(--accent)] text-sm">
+      <button type="button" onClick={() => onNavigate('forgot-password')} className="mt-4 text-[var(--text-muted)] text-sm">
+        {t('auth.login.forgotPassword', 'Forgot password?')}
+      </button>
+      <button type="button" onClick={() => onNavigate('signup')} className="mt-3 text-[var(--accent)] text-sm">
         {t('auth.login.noAccount')}
       </button>
       <button type="button" onClick={() => onNavigate('map')} className="mt-3 text-[var(--text-muted)] text-xs">

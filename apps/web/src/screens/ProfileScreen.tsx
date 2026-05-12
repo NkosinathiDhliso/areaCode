@@ -33,6 +33,8 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   const setUser = useUserStore((s) => s.setUser)
   const { preference, setPreference } = useTheme()
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
 
   const { data: profile } = useQuery({
     queryKey: ['user', 'me'],
@@ -228,6 +230,13 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
         {t('auth.gated.signOut')}
       </button>
 
+      <button
+        onClick={() => setShowDeleteAccountConfirm(true)}
+        className="w-full text-[var(--danger)] text-sm mt-4 mb-4"
+      >
+        {t('profile.deleteAccount', 'Delete my account')}
+      </button>
+
       {/* Delete confirmation dialog (Issue #4) */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-5">
@@ -257,6 +266,51 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
                   <Spinner size="sm" className="border-white border-t-transparent" />
                 ) : (
                   t('profile.deleteHistory')
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete account confirmation dialog */}
+      {showDeleteAccountConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-5">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
+              {t('profile.deleteAccountTitle', 'Delete your account?')}
+            </h3>
+            <p className="text-[var(--text-secondary)] text-sm mb-4">
+              {t(
+                'profile.deleteAccountBody',
+                'This will permanently delete your account, check-in history, rewards, and all associated data. This action cannot be undone.',
+              )}
+            </p>
+            <div className="flex flex-row gap-3">
+              <button
+                onClick={() => setShowDeleteAccountConfirm(false)}
+                className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+              >
+                {t('common.cancel', 'Cancel')}
+              </button>
+              <button
+                onClick={() => {
+                  setDeletingAccount(true)
+                  void api.delete('/v1/users/me').then(() => {
+                    logout()
+                    onNavigate('landing')
+                  }).catch(() => {
+                    setDeletingAccount(false)
+                    setShowDeleteAccountConfirm(false)
+                  })
+                }}
+                disabled={deletingAccount}
+                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2"
+              >
+                {deletingAccount ? (
+                  <Spinner size="sm" className="border-white border-t-transparent" />
+                ) : (
+                  t('profile.deleteAccountConfirm', 'Delete account')
                 )}
               </button>
             </div>

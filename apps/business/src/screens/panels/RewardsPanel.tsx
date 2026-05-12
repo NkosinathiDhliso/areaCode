@@ -12,6 +12,7 @@ export function RewardsPanel() {
   const [nodes, setNodes] = useState<Node[]>([])
   const [showForm, setShowForm] = useState(false)
   const [fetchError, setFetchError] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -35,6 +36,15 @@ export function RewardsPanel() {
       setRewards(res.items ?? [])
     } catch {
       useErrorStore.getState().showError('Couldn\'t refresh rewards. Pull down to try again.')
+    }
+  }
+
+  async function handleToggleActive(reward: Reward) {
+    try {
+      await api.put(`/v1/business/rewards/${reward.id}`, { isActive: !reward.isActive })
+      await reload()
+    } catch {
+      useErrorStore.getState().showError('Failed to update reward status.')
     }
   }
 
@@ -86,19 +96,106 @@ export function RewardsPanel() {
       <div className="flex flex-col gap-3">
         {rewards.map((r) => (
           <div key={r.id} className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
-            <div className="flex flex-row items-center justify-between mb-1">
-              <span className="text-[var(--text-primary)] font-medium">{r.title}</span>
-              <span className={`text-xs ${r.isActive ? 'text-[var(--success)]' : 'text-[var(--text-muted)]'}`}>
-                {r.isActive ? 'Active' : 'Inactive'}
-              </span>
-            </div>
-            <div className="text-[var(--text-secondary)] text-xs">
-              {r.claimedCount}/{r.totalSlots ?? '∞'} claimed
-              {r.expiresAt && ` · Expires ${formatRelativeTime(r.expiresAt)}`}
-            </div>
+            {editingId === r.id ? (
+              <RewardEditForm
+                reward={r}
+                onSaved={() => { setEditingId(null); void reload() }}
+                onCancel={() => setEditingId(null)}
+              />
+            ) : (
+              <>
+                <div className="flex flex-row items-center justify-between mb-1">
+                  <span className="text-[var(--text-primary)] font-medium">{r.title}</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setEditingId(r.id)}
+                      className="text-[var(--accent)] text-xs font-medium"
+                      aria-label="Edit reward"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => void handleToggleActive(r)}
+                      className={`text-xs font-medium ${r.isActive ? 'text-[var(--danger)]' : 'text-[var(--success)]'}`}
+                      aria-label={r.isActive ? 'Deactivate reward' : 'Activate reward'}
+                    >
+                      {r.isActive ? 'Deactivate' : 'Activate'}
+                    </button>
+                  </div>
+                </div>
+                <div className="text-[var(--text-secondary)] text-xs">
+                  {r.claimedCount}/{r.totalSlots ?? '∞'} claimed
+                  {r.expiresAt && ` · Expires ${formatRelativeTime(r.expiresAt)}`}
+                </div>
+                <div className="mt-1">
+                  <span className={`text-xs ${r.isActive ? 'text-[var(--success)]' : 'text-[var(--text-muted)]'}`}>
+                    {r.isActive ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+function RewardEditForm({ reward, onSaved, onCancel }: { reward: Reward; onSaved: () => void; onCancel: () => void }) {
+  const [title, setTitle] = useState(reward.title)
+  const [slots, setSlots] = useState(reward.totalSlots != null ? String(reward.totalSlots) : '')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSave() {
+    if (!title.trim()) { setError('Title is required.'); return }
+    setLoading(true)
+    setError(null)
+    try {
+      const body: Record<string, unknown> = { title: title.trim() }
+      if (slots) body['totalSlots'] = parseInt(slots, 10)
+      await api.put(`/v1/business/rewards/${reward.id}`, body)
+      onSaved()
+    } catch (err: unknown) {
+      const e = err as { message?: string }
+      setError(e.message ?? 'Failed to update reward.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <input
+        type="text"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Reward title"
+        className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+      />
+      <input
+        type="number"
+        value={slots}
+        onChange={(e) => setSlots(e.target.value)}
+        placeholder="Total slots (leave empty for unlimited)"
+        className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+      />
+      <div className="flex flex-row gap-2">
+        <button
+          onClick={onCancel}
+          className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={() => void handleSave()}
+          disabled={loading || !title.trim()}
+          className="flex-1 bg-[var(--accent)] text-white font-semibold rounded-xl py-2.5 text-sm disabled:opacity-50"
+        >
+          {loading ? '...' : 'Save'}
+        </button>
+      </div>
+      {error && <p className="text-[var(--danger)] text-xs">{error}</p>}
     </div>
   )
 }

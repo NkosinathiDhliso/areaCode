@@ -389,6 +389,38 @@ export async function authRoutes(app: FastifyInstance) {
   // ─── User Profile & Consent ───────────────────────────────────────────
   // Profile, tier-progress, streak, consent, history routes are in profile-handler.ts
 
+  // ─── Password Reset (Consumer) ────────────────────────────────────────
+
+  // POST /v1/auth/forgot-password
+  app.post(
+    '/v1/auth/forgot-password',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'forgot-password', max: 3, windowSeconds: 300 }),
+        validate({ body: z.object({ email: z.string().email() }) }),
+      ],
+    },
+    async (request) => {
+      const body = request.body as { email: string }
+      return service.requestPasswordReset(body.email)
+    },
+  )
+
+  // POST /v1/auth/reset-password
+  app.post(
+    '/v1/auth/reset-password',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'reset-password', max: 5, windowSeconds: 300 }),
+        validate({ body: z.object({ email: z.string().email(), code: z.string().length(6), newPassword: z.string().min(8).max(256) }) }),
+      ],
+    },
+    async (request) => {
+      const body = request.body as { email: string; code: string; newPassword: string }
+      return service.confirmPasswordReset(body.email, body.code, body.newPassword)
+    },
+  )
+
   // GET /v1/auth/account-type
   app.get(
     '/v1/auth/account-type',

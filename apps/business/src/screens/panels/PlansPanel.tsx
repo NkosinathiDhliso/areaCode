@@ -39,6 +39,8 @@ export function PlansPanel() {
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState(false)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -98,6 +100,22 @@ export function PlansPanel() {
       setCheckoutError(msg && msg.length < 200 ? msg : 'Failed to start checkout. Please try again.')
     } finally {
       setLoading(null)
+    }
+  }
+
+  async function handleCancelSubscription() {
+    setCancelling(true)
+    setCheckoutError(null)
+    try {
+      const res = await api.post<{ success: boolean; tier: string }>('/v1/business/downgrade', {})
+      setCurrentTier(res.tier as 'starter' | 'growth' | 'pro' | 'payg')
+      setShowCancelConfirm(false)
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message
+      setCheckoutError(msg && msg.length < 200 ? msg : 'Failed to cancel subscription. Please try again.')
+      setShowCancelConfirm(false)
+    } finally {
+      setCancelling(false)
     }
   }
 
@@ -220,6 +238,43 @@ export function PlansPanel() {
           {renderPlanCard('growth', plans.growth, 'growth')}
           {renderPlanCard('pro', plans.pro, 'pro')}
           {renderPlanCard('payg', plans.payg, 'payg')}
+        </div>
+      )}
+
+      {currentTier !== 'starter' && (
+        <button
+          onClick={() => setShowCancelConfirm(true)}
+          className="w-full text-[var(--danger)] text-sm mt-4"
+        >
+          {t('biz.plans.cancelSubscription', 'Cancel subscription')}
+        </button>
+      )}
+
+      {showCancelConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-5">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
+              {t('biz.plans.cancelTitle', 'Cancel subscription?')}
+            </h3>
+            <p className="text-[var(--text-secondary)] text-sm mb-4">
+              {t('biz.plans.cancelBody', 'Your plan will be downgraded to Starter immediately. You will lose access to paid features like extra nodes, rewards, and staff slots.')}
+            </p>
+            <div className="flex flex-row gap-3">
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+              >
+                {t('common.cancel', 'Keep plan')}
+              </button>
+              <button
+                onClick={() => void handleCancelSubscription()}
+                disabled={cancelling}
+                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium"
+              >
+                {cancelling ? '...' : t('biz.plans.confirmCancel', 'Cancel subscription')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

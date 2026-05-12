@@ -10,4 +10,5 @@ export type AppRoute =
   | 'history'
   | 'login'
   | 'signup'
+  | 'forgot-password'
   | 'landing'

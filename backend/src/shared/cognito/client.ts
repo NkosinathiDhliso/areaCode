@@ -402,6 +402,20 @@ export async function setAdminUserRole(cognitoSub: string, role: string): Promis
   )
 }
 
+// ─── Set User Password ──────────────────────────────────────────────────────
+
+export async function adminSetUserPassword(role: AuthRole, username: string, password: string) {
+  const pool = getPool(role)
+  await cognitoClient.send(
+    new AdminSetUserPasswordCommand({
+      UserPoolId: pool.userPoolId,
+      Username: username,
+      Password: password,
+      Permanent: true,
+    }),
+  )
+}
+
 // ─── Disable User ───────────────────────────────────────────────────────────
 
 export async function disableCognitoUser(role: AuthRole, cognitoSub: string) {
