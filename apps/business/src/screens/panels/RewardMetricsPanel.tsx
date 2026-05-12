@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@area-code/shared/lib/api'
+import { useErrorStore } from '@area-code/shared/stores/errorStore'
 
 interface RewardMetrics {
   claimRate: number
@@ -48,6 +49,7 @@ export function RewardMetricsPanel() {
       setMetrics(res)
     } catch {
       setMetrics(null)
+      useErrorStore.getState().showError('Couldn\'t load reward metrics. Try again.')
     }
   }
 
