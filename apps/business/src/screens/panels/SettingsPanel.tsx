@@ -1,4 +1,5 @@
 import { api } from '@area-code/shared/lib/api'
+import { useErrorStore } from '@area-code/shared/stores/errorStore'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 import type { BusinessAccount, StaffAccount } from '@area-code/shared/types'
 import { useEffect, useState } from 'react'
@@ -132,7 +133,7 @@ export function SettingsPanel() {
         await api.delete(`/v1/business/staff/${staffId}`)
         setStaff((prev) => prev.filter((s) => s.id !== staffId))
       } catch {
-        /* Fail silently */
+        useErrorStore.getState().showError('Couldn\'t remove staff member. Try again.')
       }
     })()
   }

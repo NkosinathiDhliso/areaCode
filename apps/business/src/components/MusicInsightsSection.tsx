@@ -12,14 +12,23 @@ const GENRE_LABELS: Record<MusicGenre, string> = {
 export function MusicInsightsSection() {
   const { t } = useTranslation()
   const [data, setData] = useState<BusinessMusicAudience | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     api.get<BusinessMusicAudience>('/v1/business/me/audience/music')
       .then((res) => { if (!cancelled) setData(res) })
-      .catch(() => {})
+      .catch(() => { if (!cancelled) setLoadError(true) })
     return () => { cancelled = true }
   }, [])
+
+  if (loadError) {
+    return (
+      <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
+        <p className="text-[var(--text-muted)] text-sm text-center">{t('biz.audience.loadError', 'Couldn\'t load music insights.')}</p>
+      </div>
+    )
+  }
 
   if (!data || data.totalWithMusicPrefs < 20) {
     if (data && data.totalWithMusicPrefs < 20) {

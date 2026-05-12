@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@area-code/shared/lib/api'
+import { useErrorStore } from '@area-code/shared/stores/errorStore'
 import type { Node, Reward } from '@area-code/shared/types'
 import { formatRelativeTime } from '@area-code/shared/lib/formatters'
 
@@ -33,7 +34,7 @@ export function RewardsPanel() {
       const res = await api.get<{ items: Reward[] }>('/v1/business/rewards')
       setRewards(res.items ?? [])
     } catch {
-      // Fail silently on reload
+      useErrorStore.getState().showError('Couldn\'t refresh rewards. Pull down to try again.')
     }
   }
 
