@@ -4,6 +4,7 @@ import { BottomSheet } from '@area-code/shared/components/BottomSheet'
 import { api } from '@area-code/shared/lib/api'
 import type { Node, Reward, NodeState } from '@area-code/shared/types'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
+import { useErrorStore } from '@area-code/shared/stores/errorStore'
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import type { GeoStatus } from '@area-code/shared/stores/locationStore'
 import { CrowdVibeSection } from './CrowdVibeSection'
@@ -117,16 +118,21 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
         return
       }
     }
-    // Unknown QR format — stay on the sheet; the user can tap "Check in" again
-    // if they misfired.
+    // Unknown QR format — tell the user this isn't a valid Area Code QR
+    useErrorStore.getState().showError(
+      t('qr.invalidFormat', 'That QR code isn\'t from Area Code. Look for the poster at the venue entrance or counter.'),
+    )
   }
 
   function handleShare() {
     const url = `https://areacode.co.za/node/${node!.slug}`
     if (navigator.share) {
-      void navigator.share({ title: node!.name, text: t('share.text'), url })
+      void navigator.share({ title: node!.name, text: t('share.text'), url }).catch(() => {})
     } else {
-      void navigator.clipboard.writeText(url)
+      void navigator.clipboard.writeText(url).then(
+        () => useErrorStore.getState().showError(t('share.copied', 'Link copied to clipboard')),
+        () => useErrorStore.getState().showError(t('share.copyFailed', 'Couldn\'t copy link')),
+      )
     }
     setMenuOpen(false)
   }

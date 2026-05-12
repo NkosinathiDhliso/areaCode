@@ -17,7 +17,7 @@ export function LeaderboardScreen() {
   const userCitySlug = useUserStore((s) => s.user?.citySlug)
   const citySlug = userCitySlug ?? 'johannesburg'
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['leaderboard', citySlug],
     queryFn: () => api.get<LeaderboardResponse>(`/v1/leaderboard/${citySlug}`),
     staleTime: 30_000,
@@ -35,6 +35,18 @@ export function LeaderboardScreen() {
           {Array.from({ length: 10 }).map((_, i) => (
             <Skeleton key={i} className="h-14 rounded-2xl" />
           ))}
+        </div>
+      ) : isError ? (
+        <div className="flex flex-col items-center gap-3 py-8">
+          <p className="text-[var(--text-muted)] text-sm text-center">
+            {t('leaderboard.loadError', 'Couldn\'t load the leaderboard. Check your connection.')}
+          </p>
+          <button
+            onClick={() => void refetch()}
+            className="text-[var(--accent)] text-sm font-medium"
+          >
+            {t('common.retry', 'Retry')}
+          </button>
         </div>
       ) : data?.entries && data.entries.length > 0 ? (
         <div className="flex flex-col gap-2">

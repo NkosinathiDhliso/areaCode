@@ -24,6 +24,7 @@ export function SearchSheet({ isOpen, onClose, onSelectNode }: SearchSheetProps)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
+  const [searchError, setSearchError] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pos = useLocationStore((s) => s.lastKnownPosition)
@@ -35,6 +36,7 @@ export function SearchSheet({ isOpen, onClose, onSelectNode }: SearchSheetProps)
       // Clear stale results when sheet closes (Issue #17)
       setQuery('')
       setResults([])
+      setSearchError(false)
     }
   }, [isOpen])
 
@@ -42,11 +44,13 @@ export function SearchSheet({ isOpen, onClose, onSelectNode }: SearchSheetProps)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     if (query.length < 2) {
       setResults([])
+      setSearchError(false)
       return
     }
 
     debounceRef.current = setTimeout(async () => {
       setLoading(true)
+      setSearchError(false)
       try {
         const lat = pos?.lat ?? -26.2041
         const lng = pos?.lng ?? 28.0473
@@ -56,6 +60,7 @@ export function SearchSheet({ isOpen, onClose, onSelectNode }: SearchSheetProps)
         setResults(data)
       } catch {
         setResults([])
+        setSearchError(true)
       } finally {
         setLoading(false)
       }
@@ -100,7 +105,13 @@ export function SearchSheet({ isOpen, onClose, onSelectNode }: SearchSheetProps)
         </div>
       )}
 
-      {query.length >= 2 && !loading && results.length === 0 && (
+      {searchError && !loading && (
+        <p className="text-[var(--warning)] text-sm text-center py-4">
+          {t('search.error', 'Search failed. Check your connection and try again.')}
+        </p>
+      )}
+
+      {query.length >= 2 && !loading && !searchError && results.length === 0 && (
         <p className="text-[var(--text-muted)] text-sm text-center py-4">
           {t('search.noResults')}
         </p>

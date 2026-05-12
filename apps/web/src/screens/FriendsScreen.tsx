@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
+import { useErrorStore } from '@area-code/shared/stores/errorStore'
 import { Avatar } from '@area-code/shared/components/Avatar'
 import { TierBadge } from '@area-code/shared/components/TierBadge'
 import { Skeleton } from '@area-code/shared/components/Skeleton'
@@ -65,13 +66,14 @@ export function FriendsScreen() {
 
 function FriendsTab() {
   const { t } = useTranslation()
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['friends'],
     queryFn: () => api.get<{ friends: FriendEntry[]; count: number }>('/v1/users/me/friends'),
     staleTime: 30_000,
   })
 
   if (isLoading) return <LoadingSkeleton />
+  if (isError) return <ErrorState message={t('friends.loadError', 'Couldn\'t load friends.')} onRetry={() => void refetch()} />
 
   if (!data?.friends.length) {
     return <EmptyState message={t('friends.noFriends')} />
@@ -91,7 +93,7 @@ function FollowingTab() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['following'],
     queryFn: () => api.get<{ users: FollowingEntry[]; count: number }>('/v1/users/me/following'),
     staleTime: 30_000,
@@ -103,9 +105,13 @@ function FollowingTab() {
       void queryClient.invalidateQueries({ queryKey: ['following'] })
       void queryClient.invalidateQueries({ queryKey: ['friends'] })
     },
+    onError: () => {
+      useErrorStore.getState().showError(t('friends.unfollowError', 'Couldn\'t unfollow. Try again.'))
+    },
   })
 
   if (isLoading) return <LoadingSkeleton />
+  if (isError) return <ErrorState message={t('friends.loadError', 'Couldn\'t load following.')} onRetry={() => void refetch()} />
 
   if (!data?.users.length) {
     return <EmptyState message={t('friends.notFollowingAnyone')} />
@@ -145,7 +151,7 @@ function FollowersTab() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['followers'],
     queryFn: () => api.get<{ users: FollowerEntry[]; count: number }>('/v1/users/me/followers'),
     staleTime: 30_000,
@@ -158,9 +164,13 @@ function FollowersTab() {
       void queryClient.invalidateQueries({ queryKey: ['friends'] })
       void queryClient.invalidateQueries({ queryKey: ['following'] })
     },
+    onError: () => {
+      useErrorStore.getState().showError(t('friends.followError', 'Couldn\'t follow. Try again.'))
+    },
   })
 
   if (isLoading) return <LoadingSkeleton />
+  if (isError) return <ErrorState message={t('friends.loadError', 'Couldn\'t load followers.')} onRetry={() => void refetch()} />
 
   if (!data?.users.length) {
     return <EmptyState message={t('friends.noFollowers')} />
@@ -215,6 +225,9 @@ function SearchTab({ search, setSearch }: { search: string; setSearch: (s: strin
       void queryClient.invalidateQueries({ queryKey: ['friends'] })
       void queryClient.invalidateQueries({ queryKey: ['following'] })
     },
+    onError: () => {
+      useErrorStore.getState().showError(t('friends.followError', 'Couldn\'t follow. Try again.'))
+    },
   })
 
   const unfollowMutation = useMutation({
@@ -223,6 +236,9 @@ function SearchTab({ search, setSearch }: { search: string; setSearch: (s: strin
       void queryClient.invalidateQueries({ queryKey: ['user-search'] })
       void queryClient.invalidateQueries({ queryKey: ['friends'] })
       void queryClient.invalidateQueries({ queryKey: ['following'] })
+    },
+    onError: () => {
+      useErrorStore.getState().showError(t('friends.unfollowError', 'Couldn\'t unfollow. Try again.'))
     },
   })
 
@@ -320,4 +336,16 @@ function LoadingSkeleton({ count = 5 }: { count?: number }) {
 
 function EmptyState({ message }: { message: string }) {
   return <p className="text-[var(--text-muted)] text-sm text-center py-8">{message}</p>
+}
+
+function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const { t } = useTranslation()
+  return (
+    <div className="flex flex-col items-center gap-3 py-8">
+      <p className="text-[var(--text-muted)] text-sm text-center">{message}</p>
+      <button onClick={onRetry} className="text-[var(--accent)] text-sm font-medium">
+        {t('common.retry', 'Retry')}
+      </button>
+    </div>
+  )
 }

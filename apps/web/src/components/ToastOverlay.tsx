@@ -41,13 +41,14 @@ export function ToastOverlay() {
   }, [translateX, currentToast, removeToast])
 
   // Hidden when bottom sheet is open
-  if (isBottomSheetOpen || !currentToast) return null
+  if (!currentToast) return null
 
   return (
     <div
-      className="absolute left-4 right-4"
+      className="fixed left-4 right-4"
       style={{
-        bottom: 'calc(var(--nav-height) + 8px)',
+        bottom: 'calc(var(--nav-height, 56px) + 8px)',
+        zIndex: isBottomSheetOpen ? 10000 : 9998,
         transform: `translateX(${translateX}px)`,
         opacity: Math.max(0, 1 - Math.abs(translateX) / 120),
         transition: touchStartX !== null ? 'none' : 'transform 200ms, opacity 200ms',

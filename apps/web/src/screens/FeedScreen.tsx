@@ -31,6 +31,8 @@ export function FeedScreen() {
     hasNextPage,
     isFetchingNextPage,
     isLoading,
+    isError,
+    refetch,
   } = useInfiniteQuery({
     queryKey: ['feed'],
     queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
@@ -73,6 +75,18 @@ export function FeedScreen() {
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-16 rounded-2xl" />
           ))}
+        </div>
+      ) : isError ? (
+        <div className="flex flex-col items-center gap-3 py-8">
+          <p className="text-[var(--text-muted)] text-sm text-center">
+            {t('feed.loadError', 'Couldn\'t load your feed. Check your connection.')}
+          </p>
+          <button
+            onClick={() => void refetch()}
+            className="text-[var(--accent)] text-sm font-medium"
+          >
+            {t('common.retry', 'Retry')}
+          </button>
         </div>
       ) : allItems.length > 0 ? (
         <div className="flex flex-col gap-3">

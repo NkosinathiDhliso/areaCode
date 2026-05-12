@@ -36,7 +36,7 @@ export function ErrorToast({
         bottom: '80px',
         left: '50%',
         transform: 'translateX(-50%)',
-        zIndex: 9999,
+        zIndex: 10001,
         display: 'flex',
         alignItems: 'center',
         gap: '12px',
