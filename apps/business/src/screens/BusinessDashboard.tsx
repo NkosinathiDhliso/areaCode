@@ -1,8 +1,6 @@
 import { useRef, useState, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
 
-import { api } from '@area-code/shared/lib/api'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import { useBusinessStore, type DashboardPanel } from '@area-code/shared/stores/businessStore'
 import { Spinner } from '@area-code/shared/components/Spinner'
@@ -74,51 +72,6 @@ function PanelFallback() {
   )
 }
 
-interface OnboardingStatus {
-  hasNode: boolean
-  hasReward: boolean
-  hasStaff: boolean
-  hasQr: boolean
-}
-
-function OnboardingChecklist({ status, onNavigate }: { status: OnboardingStatus; onNavigate: (panel: DashboardPanel) => void }) {
-  const { t } = useTranslation()
-  const items = [
-    { done: status.hasNode, label: t('biz.onboarding.createVenue', 'Create your venue'), panel: 'settings' as DashboardPanel },
-    { done: status.hasReward, label: t('biz.onboarding.addReward', 'Add a reward'), panel: 'rewards' as DashboardPanel },
-    { done: status.hasStaff, label: t('biz.onboarding.inviteStaff', 'Invite staff'), panel: 'settings' as DashboardPanel },
-    { done: status.hasQr, label: t('biz.onboarding.generateQr', 'Generate QR code'), panel: 'settings' as DashboardPanel },
-  ]
-
-  const allDone = items.every((i) => i.done)
-  if (allDone) return null
-
-  return (
-    <div className="mx-4 mt-3 p-4 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl">
-      <h3 className="text-[var(--text-primary)] font-bold text-sm font-[Syne] mb-3">
-        {t('biz.onboarding.title', 'Get started')}
-      </h3>
-      <div className="flex flex-col gap-2">
-        {items.map((item, i) => (
-          <button
-            key={i}
-            onClick={() => !item.done && onNavigate(item.panel)}
-            className="flex items-center gap-2 text-left"
-            disabled={item.done}
-          >
-            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs ${item.done ? 'bg-green-500/20 text-green-500' : 'bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]'}`}>
-              {item.done ? '✓' : (i + 1)}
-            </span>
-            <span className={`text-sm ${item.done ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-primary)]'}`}>
-              {item.label}
-            </span>
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 export function BusinessDashboard() {
   const { t } = useTranslation()
   const logout = useBusinessAuthStore((s) => s.logout)
@@ -129,14 +82,6 @@ export function BusinessDashboard() {
   const navRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [touchStart, setTouchStart] = useState<number | null>(null)
-
-  // Onboarding status query — only fetch if endpoint is available (graceful 404 handling)
-  const { data: onboardingStatus } = useQuery<OnboardingStatus>({
-    queryKey: ['business', 'onboarding-status'],
-    queryFn: () => api.get<OnboardingStatus>('/v1/business/me/onboarding-status'),
-    staleTime: 60_000,
-    retry: false,
-  })
 
   // Filter panels based on user's permissions.
   // If permissions haven't loaded yet (empty array = role endpoint failed or not deployed),
@@ -230,9 +175,6 @@ export function BusinessDashboard() {
           </button>
         ))}
       </nav>
-
-      {/* Onboarding checklist for first-run experience */}
-      {onboardingStatus && <OnboardingChecklist status={onboardingStatus} onNavigate={setPanel} />}
 
       {/* Single active panel (Issue #27 — only active panel mounts) */}
       <div

@@ -35,6 +35,7 @@ export function LivePanel() {
     queryFn: () => api.get<LiveStats>('/v1/business/me/live-stats'),
     refetchInterval: POLL_INTERVAL_MS,
     staleTime: POLL_INTERVAL_MS,
+    retry: 1,
   })
 
   // Join business:{businessId} room with symmetric cleanup via useSocketRoom

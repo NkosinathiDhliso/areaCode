@@ -18,7 +18,9 @@ export function StaffHome() {
       if (res.businessName) setBusinessName(res.businessName)
       if (res.isActive === false) setBusinessDeactivated(true)
     }).catch((err: any) => {
-      if (err?.statusCode === 403 || err?.statusCode === 404) setBusinessDeactivated(true)
+      // Only treat 403 as deactivation (explicit denial).
+      // 404 means the endpoint isn't deployed yet — don't block the user.
+      if (err?.statusCode === 403) setBusinessDeactivated(true)
     })
   }, [businessId])
 

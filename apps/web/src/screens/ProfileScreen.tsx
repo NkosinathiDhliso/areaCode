@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
+import { useErrorStore } from '@area-code/shared/stores/errorStore'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useUserStore } from '@area-code/shared/stores/userStore'
 import { useTheme } from '@area-code/shared/hooks/useTheme'
@@ -224,6 +225,8 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
               a.download = `area-code-data-export-${new Date().toISOString().slice(0, 10)}.json`
               a.click()
               URL.revokeObjectURL(url)
+            }).catch(() => {
+              useErrorStore.getState().showError(t('profile.exportFailed', 'Couldn\'t download your data. Try again.'))
             })
           }}
           className="w-full text-left text-[var(--text-primary)] text-sm py-2"
