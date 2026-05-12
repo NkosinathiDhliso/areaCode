@@ -123,21 +123,27 @@ export function BusinessDashboard() {
   const { t } = useTranslation()
   const logout = useBusinessAuthStore((s) => s.logout)
   const hasPermission = useBusinessAuthStore((s) => s.hasPermission)
+  const permissions = useBusinessAuthStore((s) => s.permissions)
   const role = useBusinessAuthStore((s) => s.role)
   const { currentPanel, setPanel } = useBusinessStore()
   const navRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [touchStart, setTouchStart] = useState<number | null>(null)
 
-  // Onboarding status query
+  // Onboarding status query — only fetch if endpoint is available (graceful 404 handling)
   const { data: onboardingStatus } = useQuery<OnboardingStatus>({
     queryKey: ['business', 'onboarding-status'],
     queryFn: () => api.get<OnboardingStatus>('/v1/business/me/onboarding-status'),
     staleTime: 60_000,
+    retry: false,
   })
 
-  // Filter panels based on user's permissions
-  const visiblePanels = PANELS.filter((panel) => hasPermission(PANEL_PERMISSIONS[panel]))
+  // Filter panels based on user's permissions.
+  // If permissions haven't loaded yet (empty array = role endpoint failed or not deployed),
+  // show ALL panels. Never hide the nav — that's a worse UX than showing too much.
+  const visiblePanels = permissions.length > 0
+    ? PANELS.filter((panel) => hasPermission(PANEL_PERMISSIONS[panel]))
+    : PANELS
   const currentIdx = visiblePanels.indexOf(currentPanel)
 
   // If current panel is not visible (e.g. role changed), reset to first visible
