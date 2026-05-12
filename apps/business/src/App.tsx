@@ -16,7 +16,10 @@ const queryClient = new QueryClient()
 
 // Wire once at module load — before any component renders
 api.setTokenProvider(() => useBusinessAuthStore.getState().accessToken)
-api.setRefreshPath('/v1/auth/business/refresh')
+// Managers use staff Cognito pool for refresh; owners use business pool.
+// Check stored role to set the correct path immediately on page load.
+const storedRole = useBusinessAuthStore.getState().role
+api.setRefreshPath(storedRole === 'manager' ? '/v1/auth/staff/refresh' : '/v1/auth/business/refresh')
 api.setRefreshHandler({
   getRefreshToken: () => useBusinessAuthStore.getState().refreshToken,
   onTokenRefreshed: (token) => useBusinessAuthStore.getState().setAccessToken(token),
@@ -53,7 +56,13 @@ function AppContent() {
   useEffect(() => {
     if (!isAuthenticated) return
     api.get<{ role: 'owner' | 'manager' | 'staff'; permissions: string[] }>('/v1/business/me/role')
-      .then((res) => setRole(res.role, res.permissions))
+      .then((res) => {
+        setRole(res.role, res.permissions)
+        // Managers authenticate via staff Cognito pool — use staff refresh path
+        if (res.role === 'manager') {
+          api.setRefreshPath('/v1/auth/staff/refresh')
+        }
+      })
       .catch(() => {
         // Fallback: assume owner if role endpoint fails (backward compat)
         setRole('owner', [])
