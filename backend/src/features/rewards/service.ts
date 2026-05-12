@@ -1,5 +1,6 @@
 import { AppError } from '../../shared/errors/AppError.js'
 import { findBusinessById } from '../business/repository.js'
+import { getEffectiveTier } from '../business/service.js'
 import * as repo from './repository.js'
 import { notifyNewRewardConsumers } from '../notifications/service.js'
 
@@ -95,9 +96,9 @@ export async function createReward(
   }
 
   const business = await findBusinessById(businessId)
-  const tier = business?.tier ?? 'free'
+  const effectiveTier = getEffectiveTier(business as any ?? { tier: 'free' })
   const count = await repo.countActiveRewardsForBusiness(businessId)
-  const limit = TIER_REWARD_LIMITS[tier] ?? TIER_REWARD_LIMITS['free']
+  const limit = TIER_REWARD_LIMITS[effectiveTier] ?? TIER_REWARD_LIMITS['free']
   if (limit !== undefined && limit !== null && count >= limit) {
     throw AppError.forbidden('Active reward limit reached for your tier')
   }

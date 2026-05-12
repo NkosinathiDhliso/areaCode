@@ -972,6 +972,7 @@ export {
   updateConsent,
   getUserConsent,
   requestAccountDeletion,
+  getFullDataExport,
 } from './profile-service.js'
 
 export async function getAccountType(phone: string): Promise<string> {

@@ -213,6 +213,23 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
         >
           {t('profile.exportHistory')}
         </button>
+        {/* Full data export (POPIA compliance) */}
+        <button
+          onClick={() => {
+            void api.get<Record<string, unknown>>('/v1/users/me/data-export').then((data) => {
+              const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `area-code-data-export-${new Date().toISOString().slice(0, 10)}.json`
+              a.click()
+              URL.revokeObjectURL(url)
+            })
+          }}
+          className="w-full text-left text-[var(--text-primary)] text-sm py-2"
+        >
+          {t('profile.downloadData', 'Download my data')}
+        </button>
         {/* Delete history with confirmation (Issue #4) */}
         <button
           onClick={() => setShowDeleteConfirm(true)}

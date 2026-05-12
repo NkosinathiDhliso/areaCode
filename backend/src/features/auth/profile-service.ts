@@ -107,3 +107,42 @@ export async function requestAccountDeletion(userId: string) {
   await repo.createErasureRequest(userId)
   return { success: true, message: 'Your data will be erased within 30 days per POPIA requirements.' }
 }
+
+// ─── Full Data Export (POPIA) ────────────────────────────────────────────────
+
+export async function getFullDataExport(userId: string) {
+  if (DEV_MODE) return { profile: {}, checkIns: [], rewards: [], social: {}, exportedAt: new Date().toISOString() }
+
+  const profile = await repo.getUserById(userId)
+
+  // Get ALL check-ins (no limit)
+  const { getCheckInsByUser } = await import('../check-in/dynamodb-repository.js')
+  const checkInResult = await getCheckInsByUser(userId, { limit: 1000 })
+
+  // Get unclaimed rewards
+  const { getUnclaimedRewards } = await import('../rewards/service.js')
+  const rewards = await getUnclaimedRewards(userId)
+
+  // Get social connections
+  const { getFollowingIds } = await import('../social/repository.js')
+  const following = await getFollowingIds(userId)
+
+  return {
+    profile: {
+      username: profile?.username,
+      displayName: profile?.displayName,
+      email: profile?.email,
+      phone: profile?.phone,
+      cityId: profile?.cityId,
+      tier: profile?.tier,
+      totalCheckIns: (profile as any)?.totalCheckIns,
+      createdAt: (profile as any)?.createdAt,
+      musicGenres: (profile as any)?.musicGenres,
+      privacyLevel: (profile as any)?.privacyLevel,
+    },
+    checkIns: checkInResult.checkIns,
+    rewards,
+    social: { followingCount: following.length },
+    exportedAt: new Date().toISOString(),
+  }
+}

@@ -87,9 +87,10 @@ export async function staffRoutes(app: FastifyInstance) {
       const { getStaffById } = await import('../auth/dynamodb-repository.js')
       const { findBusinessById } = await import('../business/repository.js')
       const staff = await getStaffById(auth.userId)
-      if (!staff?.businessId) return { businessName: null }
+      if (!staff?.businessId) return { businessName: null, isActive: true }
       const biz = await findBusinessById(staff.businessId)
-      return { businessName: biz?.businessName ?? null }
+      const isActive = biz ? (biz as unknown as Record<string, unknown>)['isActive'] !== false : false
+      return { businessName: biz?.businessName ?? null, isActive }
     },
   )
 }

@@ -382,6 +382,26 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // ─── Archetype Management ───────────────────────────────────────────────
 
+  // GET /v1/admin/nodes?q=search
+  app.get('/v1/admin/nodes', { preHandler: [adminAuth] }, async (request) => {
+    const role = await getAdminRole(request)
+    const query = (request.query as Record<string, string>)['q'] ?? ''
+    return service.searchNodes(role, query)
+  })
+
+  // POST /v1/admin/nodes/:nodeId/:action
+  app.post(
+    '/v1/admin/nodes/:nodeId/:action',
+    { preHandler: [adminAuth] },
+    async (request) => {
+      const auth = getAuth(request)
+      const role = await getAdminRole(request)
+      const params = request.params as { nodeId: string; action: string }
+      const body = request.body as Record<string, unknown> | undefined
+      return service.nodeAction(auth.userId, role, params.nodeId, params.action, body)
+    },
+  )
+
   // GET /v1/admin/archetypes
   app.get(
     '/v1/admin/archetypes',

@@ -5,6 +5,34 @@ import { BUSINESS_PLANS, BOOST_PRICING, type BoostDuration } from './types.js'
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
+// ─── Onboarding Status ──────────────────────────────────────────────────────
+
+export async function getOnboardingStatus(businessId: string) {
+  if (DEV_MODE) return { hasNode: true, hasReward: true, hasStaff: true, hasQr: true }
+  const nodes = await repo.getNodesForBusiness(businessId)
+  const rewards = await getBusinessRewards(businessId)
+  const staff = await repo.listStaffAccounts(businessId)
+  return {
+    hasNode: nodes.length > 0,
+    hasReward: (rewards.items ?? []).length > 0,
+    hasStaff: staff.length > 0,
+    hasQr: nodes.some((n: any) => n.qrCheckinEnabled),
+  }
+}
+
+// ─── Trial Expiry Enforcement ───────────────────────────────────────────────
+
+export function getEffectiveTier(biz: { tier?: string; trialEndsAt?: string | null }): string {
+  const tier = biz.tier ?? 'free'
+  if (tier === 'free' || tier === 'starter') return 'starter'
+  // If on a paid tier but trial has expired and no payment, downgrade
+  if (biz.trialEndsAt && new Date(biz.trialEndsAt).getTime() < Date.now()) {
+    // Check if they have a payment method (yocoCustomerId)
+    if (!(biz as any).yocoCustomerId) return 'starter'
+  }
+  return tier
+}
+
 // ─── Business Profile ───────────────────────────────────────────────────────
 
 export async function getBusinessProfile(cognitoSub: string) {
@@ -253,11 +281,12 @@ export async function inviteStaff(businessId: string, phone?: string, email?: st
   const biz = await repo.findBusinessById(businessId)
   if (!biz) throw AppError.notFound('Business not found')
 
-  const limit = STAFF_LIMITS[biz.tier ?? 'free']
+  const effectiveTier = getEffectiveTier(biz as any)
+  const limit = STAFF_LIMITS[effectiveTier]
   if (limit !== null && limit !== undefined) {
     const count = await repo.countStaffForBusiness(businessId)
     if (count >= limit) {
-      throw AppError.forbidden(`Staff limit reached for ${biz.tier} tier (max ${limit})`)
+      throw AppError.forbidden(`Staff limit reached for ${effectiveTier} tier (max ${limit})`)
     }
   }
 

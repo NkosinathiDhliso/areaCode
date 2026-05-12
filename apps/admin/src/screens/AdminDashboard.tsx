@@ -5,6 +5,7 @@ import { useAdminAuthStore } from '../stores/adminAuthStore'
 import { DashboardOverview } from './DashboardOverview'
 import { ConsumerManagement } from './ConsumerManagement'
 import { BusinessManagement } from './BusinessManagement'
+import { NodeManagement } from './NodeManagement'
 import { ReportQueue } from './ReportQueue'
 import { ConsentAudit } from './ConsentAudit'
 import { AbuseFlagDashboard } from './AbuseFlagDashboard'
@@ -13,12 +14,13 @@ import { ArchetypeManagement } from '../components/ArchetypeManagement'
 import { GenreWeightEditor } from '../components/GenreWeightEditor'
 import { AdminIAM } from './AdminIAM'
 
-type Tab = 'dashboard' | 'consumers' | 'businesses' | 'reports' | 'abuse-flags' | 'audit-trail' | 'consent' | 'archetypes' | 'genre-weights' | 'iam'
+type Tab = 'dashboard' | 'consumers' | 'businesses' | 'nodes' | 'reports' | 'abuse-flags' | 'audit-trail' | 'consent' | 'archetypes' | 'genre-weights' | 'iam'
 
 const TAB_LABELS: Record<Tab, string> = {
   dashboard: 'admin.nav.dashboard',
   consumers: 'admin.nav.consumers',
   businesses: 'admin.nav.businesses',
+  nodes: 'admin.nav.nodes',
   reports: 'admin.nav.reports',
   'abuse-flags': 'admin.nav.abuseFlags',
   'audit-trail': 'admin.nav.auditTrail',
@@ -31,7 +33,7 @@ const TAB_LABELS: Record<Tab, string> = {
 function getVisibleTabs(role: string | null): Tab[] {
   switch (role) {
     case 'super_admin':
-      return ['dashboard', 'consumers', 'businesses', 'reports', 'abuse-flags', 'audit-trail', 'consent', 'archetypes', 'genre-weights', 'iam']
+      return ['dashboard', 'consumers', 'businesses', 'nodes', 'reports', 'abuse-flags', 'audit-trail', 'consent', 'archetypes', 'genre-weights', 'iam']
     case 'support_agent':
       return ['consumers', 'businesses']
     case 'content_moderator':
@@ -81,6 +83,7 @@ export function AdminDashboard() {
         {activeTab === 'dashboard' && <DashboardOverview />}
         {activeTab === 'consumers' && <ConsumerManagement />}
         {activeTab === 'businesses' && <BusinessManagement />}
+        {activeTab === 'nodes' && <NodeManagement />}
         {activeTab === 'reports' && <ReportQueue />}
         {activeTab === 'abuse-flags' && <AbuseFlagDashboard />}
         {activeTab === 'audit-trail' && <AuditTrailViewer />}

@@ -490,6 +490,71 @@ export async function updateGenreWeights(adminId: string, adminRole: AdminRole, 
   return { matrix: updated }
 }
 
+// ─── Node Management ────────────────────────────────────────────────────────
+
+export async function searchNodes(adminRole: AdminRole, query: string) {
+  checkPermission(adminRole, 'view_business')
+  const { ScanCommand } = await import('@aws-sdk/lib-dynamodb')
+  const { documentClient, TableNames } = await import('../../shared/db/dynamodb.js')
+  const q = query.toLowerCase()
+  const result = await documentClient.send(
+    new ScanCommand({ TableName: TableNames.nodes }),
+  )
+  const nodes = (result.Items ?? [])
+    .filter((n) => {
+      if (!q) return true
+      const name = ((n['name'] as string) ?? '').toLowerCase()
+      return name.includes(q)
+    })
+    .slice(0, 50)
+  return { items: nodes }
+}
+
+export async function nodeAction(
+  adminId: string,
+  adminRole: AdminRole,
+  nodeId: string,
+  action: string,
+  body?: Record<string, unknown>,
+) {
+  checkPermission(adminRole, 'manage_business')
+  const { getNodeById, updateNode } = await import('../nodes/dynamodb-repository.js')
+
+  switch (action) {
+    case 'deactivate':
+      await updateNode(nodeId, { isActive: false })
+      await createAuditLog(adminId, adminRole, 'node_deactivate', nodeId, { before: { isActive: true }, after: { isActive: false } })
+      return { success: true }
+    case 'activate':
+      await updateNode(nodeId, { isActive: true })
+      await createAuditLog(adminId, adminRole, 'node_activate', nodeId, { before: { isActive: false }, after: { isActive: true } })
+      return { success: true }
+    case 'update':
+      if (!body) throw AppError.badRequest('Body required')
+      const node = await getNodeById(nodeId)
+      const allowedFields: Record<string, unknown> = {}
+      if (body['name']) allowedFields['name'] = body['name']
+      if (body['category']) allowedFields['category'] = body['category']
+      await updateNode(nodeId, allowedFields as any)
+      await createAuditLog(adminId, adminRole, 'node_update', nodeId, { before: node, after: allowedFields })
+      return { success: true }
+    default:
+      throw AppError.badRequest(`Unknown action: ${action}`)
+  }
+}
+
+async function createAuditLog(adminId: string, adminRole: AdminRole, action: string, entityId: string, state?: { before?: unknown; after?: unknown }) {
+  await repo.createAuditLog({
+    adminId,
+    adminRole,
+    action,
+    entityType: 'node',
+    entityId,
+    ...(state?.before ? { beforeState: state.before } : {}),
+    ...(state?.after ? { afterState: state.after } : {}),
+  })
+}
+
 // ─── Consumer Search ────────────────────────────────────────────────────────
 
 export async function searchConsumers(adminRole: AdminRole, query: string) {

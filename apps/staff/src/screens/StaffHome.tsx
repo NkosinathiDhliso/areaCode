@@ -10,15 +10,28 @@ export function StaffHome() {
   const { t } = useTranslation()
   const { staffName, businessId, logout } = useStaffAuthStore()
   const [businessName, setBusinessName] = useState<string | null>(null)
+  const [businessDeactivated, setBusinessDeactivated] = useState(false)
 
   useEffect(() => {
     if (!businessId) return
-    void api.get<{ businessName?: string }>('/v1/staff/business').then((res) => {
+    void api.get<{ businessName?: string; isActive?: boolean }>('/v1/staff/business').then((res) => {
       if (res.businessName) setBusinessName(res.businessName)
-    }).catch(() => {
-      // Best effort — don't block the UI
+      if (res.isActive === false) setBusinessDeactivated(true)
+    }).catch((err: any) => {
+      if (err?.statusCode === 403 || err?.statusCode === 404) setBusinessDeactivated(true)
     })
   }, [businessId])
+
+  if (businessDeactivated) {
+    return (
+      <div className="flex flex-col items-center justify-center h-dvh px-6 bg-[var(--bg-base)] gap-4">
+        <div className="text-4xl">🚫</div>
+        <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] text-center">Business deactivated</h1>
+        <p className="text-[var(--text-secondary)] text-sm text-center">This business account has been deactivated. Contact the business owner for more information.</p>
+        <button onClick={logout} className="text-[var(--accent)] text-sm font-medium">Sign out</button>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-dvh bg-[var(--bg-base)]">

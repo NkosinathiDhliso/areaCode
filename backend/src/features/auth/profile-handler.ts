@@ -161,6 +161,16 @@ export async function profileRoutes(app: FastifyInstance) {
     },
   )
 
+  // GET /v1/users/me/data-export (POPIA full data export)
+  app.get(
+    '/v1/users/me/data-export',
+    { preHandler: [requireAuth('consumer')] },
+    async (request) => {
+      const auth = getAuth(request)
+      return service.getFullDataExport(auth.userId)
+    },
+  )
+
   // POST /v1/users/me/onboarding/complete
   app.post(
     '/v1/users/me/onboarding/complete',

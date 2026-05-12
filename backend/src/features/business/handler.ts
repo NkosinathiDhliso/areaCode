@@ -28,6 +28,12 @@ export async function businessRoutes(app: FastifyInstance) {
     return service.getBusinessProfile(auth.cognitoSub)
   })
 
+  // GET /v1/business/me/onboarding-status
+  app.get('/v1/business/me/onboarding-status', { preHandler: [requireAuth('business')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.getOnboardingStatus(auth.userId)
+  })
+
   // GET /v1/business/me/role — returns the current user's role and permissions
   app.get('/v1/business/me/role', { preHandler: [requireAuth('business')] }, async (request) => {
     const auth = getAuth(request)
