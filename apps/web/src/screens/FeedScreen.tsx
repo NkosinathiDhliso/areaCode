@@ -1,6 +1,7 @@
 import { useCallback, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useInfiniteQuery } from '@tanstack/react-query'
+import { Users } from 'lucide-react'
 import { api } from '@area-code/shared/lib/api'
 import { Avatar } from '@area-code/shared/components/Avatar'
 import { Skeleton } from '@area-code/shared/components/Skeleton'
@@ -123,7 +124,7 @@ export function FeedScreen() {
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-12 gap-3">
-          <span className="text-[var(--text-muted)] text-4xl opacity-40">👋</span>
+          <Users size={32} strokeWidth={1.5} className="text-[var(--text-muted)] opacity-40" />
           <p className="text-[var(--text-muted)] text-sm text-center max-w-xs">
             {t('feed.emptyState', 'Your feed is empty. Follow friends to see their check-ins here.')}
           </p>

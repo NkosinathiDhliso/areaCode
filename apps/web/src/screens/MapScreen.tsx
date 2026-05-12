@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { MapPinOff } from 'lucide-react'
 
 import { api } from '@area-code/shared/lib/api'
 import { useMapStore, useConsumerAuthStore, useLocationStore, useUserStore } from '@area-code/shared/stores'
 import { useGeolocation, useCheckIn } from '@area-code/shared/hooks'
+import { Spinner } from '@area-code/shared/components/Spinner'
 import type { Node, NodeCategory, Reward } from '@area-code/shared/types'
 
 import { useMapInit } from '../hooks/useMapInit'
@@ -157,11 +159,21 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     <div className="h-full w-full relative">
       <div ref={containerRef} className="absolute inset-0 w-full h-full" />
 
+      {/* Map loading overlay */}
+      {!mapReady && !mapError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-[var(--bg-base)] z-5">
+          <div className="flex flex-col items-center gap-3">
+            <Spinner size="lg" />
+            <span className="text-[var(--text-muted)] text-sm">Loading map...</span>
+          </div>
+        </div>
+      )}
+
       {/* Map error fallback */}
       {mapError && (
         <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[var(--bg-base)] px-6">
-          <div className="text-4xl mb-4">🗺️</div>
-          <h2 className="text-[var(--text-primary)] font-bold text-lg mb-2 text-center">Map unavailable</h2>
+          <MapPinOff size={32} strokeWidth={1.5} className="text-[var(--text-muted)]" />
+          <h2 className="text-[var(--text-primary)] font-bold text-lg mb-2 text-center mt-4">Map unavailable</h2>
           <p className="text-[var(--text-secondary)] text-sm mb-6 text-center max-w-[280px]">{mapError}</p>
           <button
             onClick={retryMap}

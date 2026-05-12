@@ -7,6 +7,8 @@ import { Box, Text } from './primitives'
 interface EmptyStateProps {
   icon?: 'search' | 'list' | 'people' | 'reward' | 'chart' | 'flag' | 'shield' | 'inbox' | 'history' | 'staff'
   message: string
+  actionLabel?: string
+  onAction?: () => void
   className?: string
 }
 
@@ -23,7 +25,7 @@ const ICONS: Record<string, LucideIcon> = {
   staff: UserRound,
 }
 
-export function EmptyState({ icon = 'inbox', message, className = '' }: EmptyStateProps) {
+export function EmptyState({ icon = 'inbox', message, actionLabel, onAction, className = '' }: EmptyStateProps) {
   const IconComponent = ICONS[icon] ?? Inbox
 
   return (
@@ -37,6 +39,14 @@ export function EmptyState({ icon = 'inbox', message, className = '' }: EmptySta
       <Text className="text-[var(--text-muted)] text-sm text-center max-w-xs">
         {message}
       </Text>
+      {actionLabel && onAction && (
+        <button
+          onClick={onAction}
+          className="text-[var(--accent)] text-sm font-medium mt-1"
+        >
+          {actionLabel}
+        </button>
+      )}
     </Box>
   )
 }

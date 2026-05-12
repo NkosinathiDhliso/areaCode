@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { MapPin, Check, Lock, AlertCircle } from 'lucide-react'
 import { api, type ApiError } from '@area-code/shared/lib/api'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import type { CheckInResponse } from '@area-code/shared/types'
@@ -89,7 +90,9 @@ export function QrCheckIn({ nodeId, token, onNavigate }: QrCheckInProps) {
       <div className="w-full max-w-sm flex flex-col items-center gap-4 text-center">
         {phase === 'submitting' && (
           <>
-            <div className="animate-pulse text-4xl">📍</div>
+            <div className="animate-pulse">
+              <MapPin size={32} strokeWidth={1.5} className="text-[var(--accent)]" />
+            </div>
             <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">
               {t('qr.checkingIn', 'Checking you in…')}
             </h1>
@@ -98,7 +101,7 @@ export function QrCheckIn({ nodeId, token, onNavigate }: QrCheckInProps) {
 
         {phase === 'success' && (
           <>
-            <div className="text-[var(--success)] text-4xl">✓</div>
+            <Check size={32} strokeWidth={1.5} className="text-[var(--success)]" />
             <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">
               {t('qr.success', 'Checked in')}
             </h1>
@@ -108,7 +111,7 @@ export function QrCheckIn({ nodeId, token, onNavigate }: QrCheckInProps) {
 
         {phase === 'unauthenticated' && (
           <>
-            <div className="text-4xl">🔐</div>
+            <Lock size={32} strokeWidth={1.5} className="text-[var(--accent)]" />
             <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">
               {t('qr.signInTitle', 'Sign in to check in')}
             </h1>
@@ -132,7 +135,7 @@ export function QrCheckIn({ nodeId, token, onNavigate }: QrCheckInProps) {
 
         {phase === 'error' && (
           <>
-            <div className="text-[var(--danger)] text-4xl">!</div>
+            <AlertCircle size={32} strokeWidth={1.5} className="text-[var(--danger)]" />
             <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">
               {t('qr.errorTitle', "Couldn't check you in")}
             </h1>

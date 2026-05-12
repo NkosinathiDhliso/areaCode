@@ -88,6 +88,11 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
           placeholder={t('auth.login.password', 'Password')}
           className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
         />
+        {password.length > 0 && password.length < 8 && (
+          <p className="text-[var(--warning)] text-xs -mt-2">
+            {t('auth.login.passwordShort', 'Password must be at least 8 characters')}
+          </p>
+        )}
         <button
           type="button"
           onClick={() => void handleEmailLogin()}
