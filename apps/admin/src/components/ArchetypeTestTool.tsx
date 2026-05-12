@@ -15,6 +15,7 @@ export function ArchetypeTestTool() {
   const [selected, setSelected] = useState<MusicGenre[]>([])
   const [result, setResult] = useState<ArchetypeTestResult | null>(null)
   const [loading, setLoading] = useState(false)
+  const [testError, setTestError] = useState(false)
 
   function toggle(genre: MusicGenre) {
     setSelected((prev) =>
@@ -24,11 +25,12 @@ export function ArchetypeTestTool() {
 
   async function handleTest() {
     setLoading(true)
+    setTestError(false)
     try {
       const res = await api.post<ArchetypeTestResult>('/v1/admin/archetypes/test', { genres: selected })
       setResult(res)
     } catch {
-      // silent
+      setTestError(true)
     } finally {
       setLoading(false)
     }
@@ -55,6 +57,10 @@ export function ArchetypeTestTool() {
         className="bg-[var(--accent)] text-white rounded-xl py-2 text-sm disabled:opacity-50">
         {t('admin.archetypes.test')}
       </button>
+
+      {testError && (
+        <p className="text-[var(--warning)] text-xs text-center">Test failed. Check connection and try again.</p>
+      )}
 
       {result && (
         <div className="flex flex-col gap-3">

@@ -18,13 +18,17 @@ export function DashboardOverview() {
   const { t } = useTranslation()
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
 
   async function fetchMetrics() {
     try {
       const res = await api.get<DashboardMetrics>('/v1/admin/dashboard')
       setMetrics(res)
+      setLoadError(false)
     } catch {
-      // Fail silently
+      // On initial load, metrics stays null → fallback UI shows retry button.
+      // On interval refresh, stale data remains visible (acceptable for admin).
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
