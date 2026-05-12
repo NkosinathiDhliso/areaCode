@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import jsQR from 'jsqr'
 import { BottomSheet } from '@area-code/shared/components/BottomSheet'
 
 interface QrScannerSheetProps {
@@ -13,7 +14,7 @@ interface QrScannerSheetProps {
   onScanned: (raw: string) => void
 }
 
-type ScannerState = 'idle' | 'requesting' | 'scanning' | 'unsupported' | 'denied'
+type ScannerState = 'idle' | 'requesting' | 'scanning' | 'denied'
 
 type BarcodeDetectorCtor = new (options: { formats: string[] }) => {
   detect(source: HTMLVideoElement): Promise<Array<{ rawValue?: string }>>
@@ -27,6 +28,7 @@ function getBarcodeDetector(): BarcodeDetectorCtor | null {
 export function QrScannerSheet({ isOpen, onClose, onScanned }: QrScannerSheetProps) {
   const { t } = useTranslation()
   const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [state, setState] = useState<ScannerState>('idle')
@@ -36,12 +38,6 @@ export function QrScannerSheet({ isOpen, onClose, onScanned }: QrScannerSheetPro
     if (!isOpen) {
       stopCamera()
       setState('idle')
-      return
-    }
-
-    const Detector = getBarcodeDetector()
-    if (!Detector) {
-      setState('unsupported')
       return
     }
 
@@ -64,21 +60,48 @@ export function QrScannerSheet({ isOpen, onClose, onScanned }: QrScannerSheetPro
         }
         setState('scanning')
 
-        const detector = new Detector!({ formats: ['qr_code'] })
-        scanIntervalRef.current = setInterval(async () => {
-          const video = videoRef.current
-          if (!video || video.readyState < 2) return
-          try {
-            const codes = await detector.detect(video)
-            const raw = codes[0]?.rawValue
-            if (raw) {
-              stopCamera()
-              onScanned(raw)
+        const Detector = getBarcodeDetector()
+        if (Detector) {
+          // Use native BarcodeDetector when available (Chromium)
+          const detector = new Detector({ formats: ['qr_code'] })
+          scanIntervalRef.current = setInterval(async () => {
+            const video = videoRef.current
+            if (!video || video.readyState < 2) return
+            try {
+              const codes = await detector.detect(video)
+              const raw = codes[0]?.rawValue
+              if (raw) {
+                stopCamera()
+                onScanned(raw)
+              }
+            } catch {
+              // Transient detection failures are expected; keep scanning.
             }
-          } catch {
-            // Transient detection failures are expected; keep scanning.
-          }
-        }, 250)
+          }, 250)
+        } else {
+          // Fallback: use jsQR for browsers without BarcodeDetector (Firefox, older Safari)
+          scanIntervalRef.current = setInterval(() => {
+            const video = videoRef.current
+            const canvas = canvasRef.current
+            if (!video || !canvas || video.readyState < 2) return
+
+            const ctx = canvas.getContext('2d', { willReadFrequently: true })
+            if (!ctx) return
+
+            canvas.width = video.videoWidth
+            canvas.height = video.videoHeight
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: 'dontInvert',
+            })
+            if (code?.data) {
+              stopCamera()
+              onScanned(code.data)
+            }
+          }, 300)
+        }
       } catch {
         setState('denied')
       }
@@ -120,6 +143,8 @@ export function QrScannerSheet({ isOpen, onClose, onScanned }: QrScannerSheetPro
 
         <div className="w-full max-w-xs relative rounded-2xl overflow-hidden bg-black aspect-square">
           <video ref={videoRef} className="w-full h-full object-cover" playsInline muted autoPlay />
+          {/* Hidden canvas used by jsQR fallback to extract video frames */}
+          <canvas ref={canvasRef} className="hidden" />
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="w-48 h-48 border-2 border-white rounded-xl opacity-70" />
           </div>
@@ -133,14 +158,6 @@ export function QrScannerSheet({ isOpen, onClose, onScanned }: QrScannerSheetPro
               {t(
                 'qr.denied',
                 'Camera access denied. Enable camera permission in your browser settings, or open the QR URL directly.',
-              )}
-            </div>
-          )}
-          {state === 'unsupported' && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-80 text-white text-xs text-center px-4">
-              {t(
-                'qr.unsupported',
-                'This browser does not support in-app scanning. Use your phone camera to scan the QR instead.',
               )}
             </div>
           )}

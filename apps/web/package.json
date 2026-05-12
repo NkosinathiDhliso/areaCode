@@ -12,6 +12,7 @@
     "@area-code/shared": "workspace:*",
     "@tanstack/react-query": "^5.0.0",
     "i18next": "^24.0.0",
+    "jsqr": "^1.4.0",
     "lucide-react": "^1.14.0",
     "mapbox-gl": "^3.9.0",
     "react": "^18.3.0",
