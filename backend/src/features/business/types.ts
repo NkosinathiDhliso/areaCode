@@ -1,5 +1,43 @@
 import { z } from 'zod'
 
+// ─── Business Member Roles ──────────────────────────────────────────────────
+
+/**
+ * Role hierarchy for business portal access:
+ * - owner: Full access. Billing, plan changes, delete business, transfer ownership.
+ * - manager: Day-to-day operations. Rewards, nodes, analytics, staff, QR codes.
+ *            Cannot touch billing or delete the business.
+ * - staff: Scan redemption codes only (uses the separate staff app).
+ */
+export type BusinessMemberRole = 'owner' | 'manager' | 'staff'
+
+/**
+ * Permissions map. Each role has a fixed set of capabilities.
+ * No custom permissions — keeps it simple for small business owners.
+ */
+export const ROLE_PERMISSIONS: Record<BusinessMemberRole, readonly string[]> = {
+  owner: [
+    'view_live', 'view_check_ins', 'view_rewards', 'manage_rewards',
+    'view_audience', 'manage_boost', 'view_staff', 'manage_staff',
+    'invite_manager', 'invite_staff', 'view_reports', 'manage_reports',
+    'view_plans', 'manage_billing', 'view_settings', 'manage_settings',
+    'manage_nodes', 'view_qr', 'view_metrics', 'transfer_ownership',
+  ],
+  manager: [
+    'view_live', 'view_check_ins', 'view_rewards', 'manage_rewards',
+    'view_audience', 'manage_boost', 'view_staff', 'manage_staff',
+    'invite_staff', 'view_reports', 'manage_reports',
+    'view_settings', 'manage_nodes', 'view_qr', 'view_metrics',
+  ],
+  staff: [
+    'redeem_codes',
+  ],
+} as const
+
+export function hasPermission(role: BusinessMemberRole, permission: string): boolean {
+  return ROLE_PERMISSIONS[role].includes(permission)
+}
+
 // Business plans , never hardcoded in frontend
 export const BUSINESS_PLANS = {
   starter: { name: 'Starter', monthlyPrice: 0, yearlyPrice: 0, maxNodes: 1, maxRewards: 3, maxStaff: 2 },
@@ -51,6 +89,7 @@ export const staffInviteBodySchema = z
   .object({
     phone: z.string().optional(),
     email: z.string().email().optional(),
+    role: z.enum(['manager', 'staff']).default('staff'),
   })
   .refine((d) => d.phone || d.email, { message: 'Phone or email required' })
 

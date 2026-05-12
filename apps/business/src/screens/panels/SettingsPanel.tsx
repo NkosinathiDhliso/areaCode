@@ -33,6 +33,7 @@ export function SettingsPanel() {
 
   // Invite form state
   const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState<'manager' | 'staff'>('staff')
   const [inviteLoading, setInviteLoading] = useState(false)
   const [inviteResult, setInviteResult] = useState<{ token: string } | null>(null)
   const [inviteError, setInviteError] = useState<string | null>(null)
@@ -66,9 +67,11 @@ export function SettingsPanel() {
     try {
       const res = await api.post<StaffInvite>('/v1/business/staff/invite', {
         email: inviteEmail.trim().toLowerCase(),
+        role: inviteRole,
       })
       setInviteResult({ token: res.inviteToken })
       setInviteEmail('')
+      setInviteRole('staff')
       // Refresh invites list
       const inviteRes = await api.get<{ items: StaffInvite[] }>('/v1/business/staff/invites')
       setInvites(inviteRes.items ?? [])
@@ -175,24 +178,49 @@ export function SettingsPanel() {
 
       {/* Staff Management */}
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
-        <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">Staff Members</h3>
+        <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">Team Members</h3>
 
         {/* Invite form */}
-        <div className="flex flex-row gap-2 mb-4">
-          <input
-            type="email"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            placeholder="Staff email address"
-            className="flex-1 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-3 py-2.5 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-          />
-          <button
-            onClick={handleInviteStaff}
-            disabled={inviteLoading || !inviteEmail.trim()}
-            className="bg-[var(--accent)] text-white font-medium rounded-xl px-4 py-2.5 text-sm transition-all active:scale-95 disabled:opacity-50 whitespace-nowrap"
-          >
-            {inviteLoading ? '...' : 'Invite'}
-          </button>
+        <div className="flex flex-col gap-2 mb-4">
+          <div className="flex flex-row gap-2">
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="Email address"
+              className="flex-1 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-3 py-2.5 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+            />
+            <button
+              onClick={handleInviteStaff}
+              disabled={inviteLoading || !inviteEmail.trim()}
+              className="bg-[var(--accent)] text-white font-medium rounded-xl px-4 py-2.5 text-sm transition-all active:scale-95 disabled:opacity-50 whitespace-nowrap"
+            >
+              {inviteLoading ? '...' : 'Invite'}
+            </button>
+          </div>
+          {/* Role selector */}
+          <div className="flex flex-row gap-2">
+            <button
+              onClick={() => setInviteRole('staff')}
+              className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all ${
+                inviteRole === 'staff'
+                  ? 'bg-[var(--accent)] text-white'
+                  : 'bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-secondary)]'
+              }`}
+            >
+              Staff — scan codes only
+            </button>
+            <button
+              onClick={() => setInviteRole('manager')}
+              className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all ${
+                inviteRole === 'manager'
+                  ? 'bg-[var(--accent)] text-white'
+                  : 'bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-secondary)]'
+              }`}
+            >
+              Manager — full access
+            </button>
+          </div>
         </div>
 
         {inviteError && <p className="text-[var(--danger)] text-xs mb-3">{inviteError}</p>}

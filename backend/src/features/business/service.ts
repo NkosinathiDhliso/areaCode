@@ -246,9 +246,9 @@ const STAFF_LIMITS: Record<string, number | null> = {
   payg: 2,
 }
 
-export async function inviteStaff(businessId: string, phone?: string, email?: string) {
+export async function inviteStaff(businessId: string, phone?: string, email?: string, role: 'manager' | 'staff' = 'staff') {
   if (DEV_MODE) {
-    return { id: `dev-invite-${Date.now()}`, businessId, phone, email, inviteToken: 'dev-token', accepted: false }
+    return { id: `dev-invite-${Date.now()}`, businessId, phone, email, role, inviteToken: 'dev-token', accepted: false }
   }
   const biz = await repo.findBusinessById(businessId)
   if (!biz) throw AppError.notFound('Business not found')
@@ -261,7 +261,7 @@ export async function inviteStaff(businessId: string, phone?: string, email?: st
     }
   }
 
-  return repo.createStaffInvite(businessId, phone, email)
+  return repo.createStaffInvite(businessId, phone, email, role)
 }
 
 export async function listStaffInvites(businessId: string) {

@@ -162,6 +162,8 @@ export interface StaffAccount {
   phone?: string
   email?: string
   cognitoSub?: string
+  /** Role within the business: 'manager' has portal access, 'staff' can only redeem codes. */
+  role?: 'manager' | 'staff'
   isActive: boolean
   createdAt: string
 }

@@ -49,6 +49,21 @@ const PANEL_LABELS: Record<DashboardPanel, string> = {
   settings: 'biz.panel.settings',
 }
 
+// Permission required to see each panel. If the user lacks the permission,
+// the panel is hidden from the nav entirely (no confusing disabled states).
+const PANEL_PERMISSIONS: Record<DashboardPanel, string> = {
+  live: 'view_live',
+  'check-ins': 'view_check_ins',
+  rewards: 'view_rewards',
+  'reward-metrics': 'view_metrics',
+  audience: 'view_audience',
+  boost: 'manage_boost',
+  'staff-redemptions': 'view_staff',
+  reports: 'view_reports',
+  plans: 'view_plans',
+  settings: 'view_settings',
+}
+
 function PanelFallback() {
   return (
     <div className="flex items-center justify-center h-full">
@@ -60,11 +75,19 @@ function PanelFallback() {
 export function BusinessDashboard() {
   const { t } = useTranslation()
   const logout = useBusinessAuthStore((s) => s.logout)
+  const hasPermission = useBusinessAuthStore((s) => s.hasPermission)
+  const role = useBusinessAuthStore((s) => s.role)
   const { currentPanel, setPanel } = useBusinessStore()
   const navRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [touchStart, setTouchStart] = useState<number | null>(null)
-  const currentIdx = PANELS.indexOf(currentPanel)
+
+  // Filter panels based on user's permissions
+  const visiblePanels = PANELS.filter((panel) => hasPermission(PANEL_PERMISSIONS[panel]))
+  const currentIdx = visiblePanels.indexOf(currentPanel)
+
+  // If current panel is not visible (e.g. role changed), reset to first visible
+  const activePanel = visiblePanels.includes(currentPanel) ? currentPanel : (visiblePanels[0] ?? 'live')
 
   function handleTouchStart(e: React.TouchEvent) {
     setTouchStart(e.touches[0]?.clientX ?? null)
@@ -74,17 +97,17 @@ export function BusinessDashboard() {
     if (touchStart === null) return
     const diff = (e.changedTouches[0]?.clientX ?? 0) - touchStart
     if (Math.abs(diff) > 60) {
-      if (diff < 0 && currentIdx < PANELS.length - 1) {
-        setPanel(PANELS[currentIdx + 1]!)
+      if (diff < 0 && currentIdx < visiblePanels.length - 1) {
+        setPanel(visiblePanels[currentIdx + 1]!)
       } else if (diff > 0 && currentIdx > 0) {
-        setPanel(PANELS[currentIdx - 1]!)
+        setPanel(visiblePanels[currentIdx - 1]!)
       }
     }
     setTouchStart(null)
   }
 
   function renderPanel() {
-    switch (currentPanel) {
+    switch (activePanel) {
       case 'live':
         return <LivePanel />
       case 'check-ins':
@@ -114,7 +137,14 @@ export function BusinessDashboard() {
     <div className="flex flex-col h-dvh bg-[var(--bg-base)] overflow-hidden">
       {/* Header */}
       <header className="flex flex-row items-center justify-between px-5 py-3 border-b border-[var(--border)]">
-        <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">Area Code</span>
+        <div className="flex flex-row items-center gap-2">
+          <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">Area Code</span>
+          {role && role !== 'owner' && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent)]/10 text-[var(--accent)] font-medium capitalize">
+              {role}
+            </span>
+          )}
+        </div>
         <button onClick={logout} className="text-[var(--text-muted)] text-sm">
           {t('biz.logout')}
         </button>
@@ -125,12 +155,12 @@ export function BusinessDashboard() {
         ref={navRef}
         className="flex flex-row items-center gap-1 px-4 py-2.5 border-b border-[var(--border)] overflow-x-auto no-scrollbar"
       >
-        {PANELS.map((panel) => (
+        {visiblePanels.map((panel) => (
           <button
             key={panel}
             onClick={() => setPanel(panel)}
             className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-150 whitespace-nowrap ${
-              panel === currentPanel
+              panel === activePanel
                 ? 'bg-[var(--accent)] text-white'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}

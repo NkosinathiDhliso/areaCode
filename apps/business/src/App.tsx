@@ -38,6 +38,7 @@ function AppContent() {
   const isAuthenticated = useBusinessAuthStore((s) => s.isAuthenticated)
   const accessToken = useBusinessAuthStore((s) => s.accessToken)
   const businessId = useBusinessAuthStore((s) => s.businessId)
+  const setRole = useBusinessAuthStore((s) => s.setRole)
   const [screen, setScreen] = useState<'login' | 'signup'>('login')
   useTheme()
 
@@ -47,6 +48,17 @@ function AppContent() {
       getSocket(accessToken, { businessId })
     }
   }, [accessToken, businessId])
+
+  // Fetch role and permissions on auth
+  useEffect(() => {
+    if (!isAuthenticated) return
+    api.get<{ role: 'owner' | 'manager' | 'staff'; permissions: string[] }>('/v1/business/me/role')
+      .then((res) => setRole(res.role, res.permissions))
+      .catch(() => {
+        // Fallback: assume owner if role endpoint fails (backward compat)
+        setRole('owner', [])
+      })
+  }, [isAuthenticated, setRole])
 
   if (isAuthenticated) return <BusinessDashboard />
 

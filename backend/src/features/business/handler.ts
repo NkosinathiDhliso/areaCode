@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
+import { requireBusinessPermission } from '../../shared/middleware/business-role.js'
 import { validate } from '../../shared/middleware/validation.js'
 import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
 import * as service from './service.js'
@@ -25,6 +26,28 @@ export async function businessRoutes(app: FastifyInstance) {
   app.get('/v1/business/me', { preHandler: [requireAuth('business')] }, async (request) => {
     const auth = getAuth(request)
     return service.getBusinessProfile(auth.cognitoSub)
+  })
+
+  // GET /v1/business/me/role — returns the current user's role and permissions
+  app.get('/v1/business/me/role', { preHandler: [requireAuth('business')] }, async (request) => {
+    const auth = getAuth(request)
+    const { getBusinessById } = await import('../auth/dynamodb-repository.js')
+    const { getStaffById } = await import('../auth/dynamodb-repository.js')
+    const { ROLE_PERMISSIONS } = await import('./types.js')
+    type BusinessMemberRole = import('./types.js').BusinessMemberRole
+
+    let role: BusinessMemberRole = 'owner'
+    const business = await getBusinessById(auth.userId)
+    if (!business) {
+      const staff = await getStaffById(auth.userId)
+      if (staff && staff.role === 'manager') {
+        role = 'manager'
+      } else {
+        role = 'staff'
+      }
+    }
+
+    return { role, permissions: ROLE_PERMISSIONS[role] }
   })
 
   // GET /v1/business/me/live-stats
@@ -72,7 +95,7 @@ export async function businessRoutes(app: FastifyInstance) {
   app.post(
     '/v1/business/checkout',
     {
-      preHandler: [requireAuth('business'), validate({ body: checkoutBodySchema })],
+      preHandler: [requireAuth('business'), requireBusinessPermission('manage_billing'), validate({ body: checkoutBodySchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -90,6 +113,7 @@ export async function businessRoutes(app: FastifyInstance) {
     {
       preHandler: [
         requireAuth('business'),
+        requireBusinessPermission('manage_billing'),
         rateLimitMiddleware({ key: 'trial-start', max: 5, windowSeconds: 300 }),
         validate({ body: trialStartBodySchema }),
       ],
@@ -138,12 +162,21 @@ export async function businessRoutes(app: FastifyInstance) {
   app.post(
     '/v1/business/staff/invite',
     {
-      preHandler: [requireAuth('business'), validate({ body: staffInviteBodySchema })],
+      preHandler: [requireAuth('business'), requireBusinessPermission('manage_staff'), validate({ body: staffInviteBodySchema })],
     },
     async (request) => {
       const auth = getAuth(request)
-      const body = request.body as { phone?: string; email?: string }
-      return service.inviteStaff(auth.userId, body.phone, body.email)
+      const body = request.body as { phone?: string; email?: string; role?: 'manager' | 'staff' }
+      const inviteRole = body.role ?? 'staff'
+      // Only owners can invite managers
+      if (inviteRole === 'manager') {
+        const { getBusinessRole } = await import('../../shared/middleware/business-role.js')
+        const bizRole = getBusinessRole(request)
+        if (bizRole.memberRole !== 'owner') {
+          throw (await import('../../shared/errors/AppError.js')).AppError.forbidden('Only the owner can invite managers.')
+        }
+      }
+      return service.inviteStaff(auth.userId, body.phone, body.email, inviteRole)
     },
   )
 
