@@ -23,19 +23,29 @@ const checkInQuerySchema = z.object({
 
 export async function businessRoutes(app: FastifyInstance) {
   // GET /v1/business/me
-  app.get('/v1/business/me', { preHandler: [requireAuth('business')] }, async (request) => {
+  app.get('/v1/business/me', { preHandler: [requireAuth('business', 'staff')] }, async (request) => {
     const auth = getAuth(request)
+    if (auth.role === 'staff') {
+      // Manager accessing business portal — resolve their business via staff record
+      const { getStaffById } = await import('../auth/dynamodb-repository.js')
+      const staff = await getStaffById(auth.userId)
+      if (!staff || staff.role !== 'manager') throw (await import('../../shared/errors/AppError.js')).AppError.forbidden('Access denied')
+      const { findBusinessById } = await import('./repository.js')
+      const biz = await findBusinessById(staff.businessId)
+      if (!biz) throw (await import('../../shared/errors/AppError.js')).AppError.notFound('Business not found')
+      return biz
+    }
     return service.getBusinessProfile(auth.cognitoSub)
   })
 
   // GET /v1/business/me/onboarding-status
-  app.get('/v1/business/me/onboarding-status', { preHandler: [requireAuth('business')] }, async (request) => {
+  app.get('/v1/business/me/onboarding-status', { preHandler: [requireAuth('business', 'staff')] }, async (request) => {
     const auth = getAuth(request)
     return service.getOnboardingStatus(auth.userId)
   })
 
   // GET /v1/business/me/role — returns the current user's role and permissions
-  app.get('/v1/business/me/role', { preHandler: [requireAuth('business')] }, async (request) => {
+  app.get('/v1/business/me/role', { preHandler: [requireAuth('business', 'staff')] }, async (request) => {
     const auth = getAuth(request)
     const { getBusinessById } = await import('../auth/dynamodb-repository.js')
     const { getStaffById } = await import('../auth/dynamodb-repository.js')
@@ -57,37 +67,37 @@ export async function businessRoutes(app: FastifyInstance) {
   })
 
   // GET /v1/business/me/live-stats
-  app.get('/v1/business/me/live-stats', { preHandler: [requireAuth('business')] }, async (request) => {
+  app.get('/v1/business/me/live-stats', { preHandler: [requireAuth('business', 'staff')] }, async (request) => {
     const auth = getAuth(request)
     return service.getLiveStats(auth.userId)
   })
 
   // GET /v1/business/me/nodes
-  app.get('/v1/business/me/nodes', { preHandler: [requireAuth('business')] }, async (request) => {
+  app.get('/v1/business/me/nodes', { preHandler: [requireAuth('business', 'staff')] }, async (request) => {
     const auth = getAuth(request)
     return service.getBusinessNodes(auth.userId)
   })
 
   // GET /v1/business/me/audience
-  app.get('/v1/business/me/audience', { preHandler: [requireAuth('business')] }, async (request) => {
+  app.get('/v1/business/me/audience', { preHandler: [requireAuth('business', 'staff')] }, async (request) => {
     const auth = getAuth(request)
     return service.getAudienceAnalytics(auth.userId)
   })
 
   // GET /v1/business/me/recent-redemptions
-  app.get('/v1/business/me/recent-redemptions', { preHandler: [requireAuth('business')] }, async (request) => {
+  app.get('/v1/business/me/recent-redemptions', { preHandler: [requireAuth('business', 'staff')] }, async (request) => {
     const auth = getAuth(request)
     return service.getRecentRedemptions(auth.userId)
   })
 
   // GET /v1/business/rewards
-  app.get('/v1/business/rewards', { preHandler: [requireAuth('business')] }, async (request) => {
+  app.get('/v1/business/rewards', { preHandler: [requireAuth('business', 'staff')] }, async (request) => {
     const auth = getAuth(request)
     return service.getBusinessRewards(auth.userId)
   })
 
   // GET /v1/business/nodes/current/qr
-  app.get('/v1/business/nodes/current/qr', { preHandler: [requireAuth('business')] }, async (request) => {
+  app.get('/v1/business/nodes/current/qr', { preHandler: [requireAuth('business', 'staff')] }, async (request) => {
     const auth = getAuth(request)
     return service.getCurrentNodeQr(auth.userId)
   })
@@ -101,7 +111,7 @@ export async function businessRoutes(app: FastifyInstance) {
   app.post(
     '/v1/business/checkout',
     {
-      preHandler: [requireAuth('business'), requireBusinessPermission('manage_billing'), validate({ body: checkoutBodySchema })],
+      preHandler: [requireAuth('business', 'staff'), requireBusinessPermission('manage_billing'), validate({ body: checkoutBodySchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -118,7 +128,7 @@ export async function businessRoutes(app: FastifyInstance) {
     '/v1/business/trial/start',
     {
       preHandler: [
-        requireAuth('business'),
+        requireAuth('business', 'staff'),
         requireBusinessPermission('manage_billing'),
         rateLimitMiddleware({ key: 'trial-start', max: 5, windowSeconds: 300 }),
         validate({ body: trialStartBodySchema }),
@@ -135,7 +145,7 @@ export async function businessRoutes(app: FastifyInstance) {
   app.post(
     '/v1/business/boost',
     {
-      preHandler: [requireAuth('business'), validate({ body: boostBodySchema })],
+      preHandler: [requireAuth('business', 'staff'), validate({ body: boostBodySchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -168,7 +178,7 @@ export async function businessRoutes(app: FastifyInstance) {
   app.post(
     '/v1/business/staff/invite',
     {
-      preHandler: [requireAuth('business'), requireBusinessPermission('manage_staff'), validate({ body: staffInviteBodySchema })],
+      preHandler: [requireAuth('business', 'staff'), requireBusinessPermission('manage_staff'), validate({ body: staffInviteBodySchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -187,13 +197,13 @@ export async function businessRoutes(app: FastifyInstance) {
   )
 
   // GET /v1/business/staff
-  app.get('/v1/business/staff', { preHandler: [requireAuth('business')] }, async (request) => {
+  app.get('/v1/business/staff', { preHandler: [requireAuth('business', 'staff')] }, async (request) => {
     const auth = getAuth(request)
     return service.listStaff(auth.userId)
   })
 
   // GET /v1/business/staff/invites
-  app.get('/v1/business/staff/invites', { preHandler: [requireAuth('business')] }, async (request) => {
+  app.get('/v1/business/staff/invites', { preHandler: [requireAuth('business', 'staff')] }, async (request) => {
     const auth = getAuth(request)
     const invites = await service.listStaffInvites(auth.userId)
     return { items: invites }
@@ -203,7 +213,7 @@ export async function businessRoutes(app: FastifyInstance) {
   app.delete(
     '/v1/business/staff/:id',
     {
-      preHandler: [requireAuth('business'), validate({ params: staffIdParamsSchema })],
+      preHandler: [requireAuth('business', 'staff'), validate({ params: staffIdParamsSchema })],
     },
     async (request, reply) => {
       const auth = getAuth(request)
@@ -217,7 +227,7 @@ export async function businessRoutes(app: FastifyInstance) {
   app.get(
     '/v1/business/nodes/:nodeId/qr',
     {
-      preHandler: [requireAuth('business'), validate({ params: nodeIdParamsSchema })],
+      preHandler: [requireAuth('business', 'staff'), validate({ params: nodeIdParamsSchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -230,7 +240,7 @@ export async function businessRoutes(app: FastifyInstance) {
   app.get(
     '/v1/business/staff/:staffId/redemptions',
     {
-      preHandler: [requireAuth('business'), validate({ params: staffRedemptionParamsSchema })],
+      preHandler: [requireAuth('business', 'staff'), validate({ params: staffRedemptionParamsSchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -244,7 +254,7 @@ export async function businessRoutes(app: FastifyInstance) {
   app.get(
     '/v1/business/check-ins',
     {
-      preHandler: [requireAuth('business'), validate({ query: checkInQuerySchema })],
+      preHandler: [requireAuth('business', 'staff'), validate({ query: checkInQuerySchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -257,7 +267,7 @@ export async function businessRoutes(app: FastifyInstance) {
   app.get(
     '/v1/business/rewards/:rewardId/metrics',
     {
-      preHandler: [requireAuth('business'), validate({ params: z.object({ rewardId: z.string().uuid() }) })],
+      preHandler: [requireAuth('business', 'staff'), validate({ params: z.object({ rewardId: z.string().uuid() }) })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -267,7 +277,7 @@ export async function businessRoutes(app: FastifyInstance) {
   )
 
   // GET /v1/business/rewards/summary
-  app.get('/v1/business/rewards/summary', { preHandler: [requireAuth('business')] }, async (request) => {
+  app.get('/v1/business/rewards/summary', { preHandler: [requireAuth('business', 'staff')] }, async (request) => {
     const auth = getAuth(request)
     return service.getRewardsSummary(auth.userId)
   })
@@ -275,7 +285,7 @@ export async function businessRoutes(app: FastifyInstance) {
   // POST /v1/business/downgrade
   app.post(
     '/v1/business/downgrade',
-    { preHandler: [requireAuth('business'), requireBusinessPermission('manage_billing')] },
+    { preHandler: [requireAuth('business', 'staff'), requireBusinessPermission('manage_billing')] },
     async (request) => {
       const auth = getAuth(request)
       return service.downgradeToFree(auth.userId)

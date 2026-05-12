@@ -685,11 +685,13 @@ export async function acceptStaffInviteEmail(opts: {
   const cognitoUser = await cognito.createEmailPasswordUser('staff', email, opts.password)
   await repo.acceptStaffInvite(opts.token)
 
+  const inviteRole = (invite.role as string) ?? 'staff'
   const staff = await repo.createStaffAccount({
     businessId,
     name: opts.name.trim(),
     email,
     cognitoSub: cognitoUser.sub,
+    role: inviteRole as 'manager' | 'staff',
   })
 
   await cognito.updateUserAttributes('staff', email, {
@@ -772,11 +774,13 @@ export async function staffOAuthAcceptInvite(opts: {
 
   await repo.acceptStaffInvite(opts.inviteToken)
 
+  const inviteRole = (invite.role as string) ?? 'staff'
   const staff = await repo.createStaffAccount({
     businessId,
     name: opts.name.trim(),
     cognitoSub: opts.cognitoSub,
     email,
+    role: inviteRole as 'manager' | 'staff',
   })
 
   await cognito.updateUserAttributesByCognitoSub('staff', opts.cognitoSub, {

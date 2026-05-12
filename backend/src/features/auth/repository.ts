@@ -205,8 +205,9 @@ export async function createStaffAccount(data: {
   phone?: string
   email?: string
   cognitoSub: string
+  role?: 'manager' | 'staff'
 }) {
-  return createStaffDb({ ...data, isActive: true })
+  return createStaffDb({ ...data, role: data.role ?? 'staff', isActive: true })
 }
 
 export async function getCityBySlug(slug: string) {

@@ -1,8 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import { AppError } from '../errors/AppError.js'
 import { getAuth } from './auth.js'
-import { getBusinessById } from '../../features/auth/dynamodb-repository.js'
-import { getStaffById } from '../../features/auth/dynamodb-repository.js'
+import { getBusinessById, getStaffById } from '../../features/auth/dynamodb-repository.js'
 import type { BusinessMemberRole } from '../../features/business/types.js'
 import { hasPermission } from '../../features/business/types.js'
 
@@ -17,36 +16,41 @@ export interface BusinessRolePayload {
  * Middleware that resolves the authenticated user's role within their business
  * and checks if they have the required permission.
  *
- * Must be used AFTER requireAuth('business').
+ * Must be used AFTER requireAuth('business', 'staff').
  * Attaches `request.businessRole` with the resolved role info.
  *
+ * For owners: auth.userId = businessId (from business Cognito pool)
+ * For managers: auth.userId = staffId (from staff Cognito pool), resolved to businessId via staff record
+ *
  * Usage:
- *   preHandler: [requireAuth('business'), requireBusinessPermission('manage_rewards')]
+ *   preHandler: [requireAuth('business', 'staff'), requireBusinessPermission('manage_rewards')]
  */
 export function requireBusinessPermission(permission: string) {
   return async (request: FastifyRequest, _reply: FastifyReply) => {
     const auth = getAuth(request)
 
     let role: BusinessMemberRole = 'owner'
+    let businessId = auth.userId
 
     if (!DEV_MODE) {
-      // The auth.userId for business tokens is the businessId (owner).
-      // For managers who log in via the business portal, we need to check
-      // if they're the owner or a manager.
-      const business = await getBusinessById(auth.userId)
-      if (business) {
-        // This is the owner — their businessId matches auth.userId
+      if (auth.role === 'business') {
+        // Authenticated via business pool — this is the owner
+        const business = await getBusinessById(auth.userId)
+        if (!business) throw AppError.forbidden('Business account not found.')
         role = 'owner'
-      } else {
-        // Not found as a business — might be a manager (staff with elevated role)
-        // Managers authenticate via the business Cognito pool but their userId
-        // resolves to a manager record, not the business itself.
+        businessId = auth.userId
+      } else if (auth.role === 'staff') {
+        // Authenticated via staff pool — check if they're a manager
         const staff = await getStaffById(auth.userId)
-        if (staff && staff.role === 'manager') {
+        if (!staff) throw AppError.forbidden('Staff account not found.')
+        if (staff.role === 'manager') {
           role = 'manager'
+          businessId = staff.businessId
         } else {
-          throw AppError.forbidden('You do not have access to this business.')
+          throw AppError.forbidden('Staff members must use the staff portal.')
         }
+      } else {
+        throw AppError.forbidden('You do not have access to this business.')
       }
     }
 
@@ -56,7 +60,7 @@ export function requireBusinessPermission(permission: string) {
 
     // Attach role to request for downstream use
     ;(request as FastifyRequest & { businessRole: BusinessRolePayload }).businessRole = {
-      businessId: auth.userId,
+      businessId,
       memberRole: role,
     }
   }
