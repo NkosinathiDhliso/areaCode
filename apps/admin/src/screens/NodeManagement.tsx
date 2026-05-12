@@ -83,7 +83,11 @@ export function NodeManagement() {
           disabled={loading}
           className="px-4 py-2.5 rounded-xl bg-[var(--accent)] text-white text-sm font-medium"
         >
-          {loading ? <Spinner size="sm" className="border-white border-t-transparent" /> : t('admin.nodes.search', 'Search')}
+          {loading ? (
+            <Spinner size="sm" className="border-white border-t-transparent" />
+          ) : (
+            t('admin.nodes.search', 'Search')
+          )}
         </button>
       </div>
 
@@ -91,7 +95,7 @@ export function NodeManagement() {
 
       {!loading && nodes.length === 0 && (
         <p className="text-[var(--text-muted)] text-sm text-center py-8">
-          {t('admin.nodes.noResults', 'No nodes found. Search to get started.')}
+          {t('admin.nodes.noResults', 'No nodes found.')}
         </p>
       )}
 
@@ -105,18 +109,18 @@ export function NodeManagement() {
               <div>
                 <p className="text-[var(--text-primary)] text-sm font-medium">{node.name}</p>
                 <p className="text-[var(--text-muted)] text-xs">
-                  {node.category ?? 'uncategorized'} · {node.businessId ? `biz: ${node.businessId.slice(0, 8)}…` : 'no business'}
+                  {node.category ?? 'uncategorized'} ·{' '}
+                  {node.businessId ? `biz: ${node.businessId.slice(0, 8)}…` : 'no business'}
                 </p>
               </div>
-              <span className={`text-xs px-2 py-0.5 rounded-full ${node.isActive !== false ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+              <span
+                className={`text-xs px-2 py-0.5 rounded-full ${node.isActive !== false ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}
+              >
                 {node.isActive !== false ? 'Active' : 'Inactive'}
               </span>
             </div>
             <div className="flex gap-2 pt-1">
-              <button
-                onClick={() => handleEdit(node)}
-                className="text-xs text-[var(--accent)] font-medium"
-              >
+              <button onClick={() => handleEdit(node)} className="text-xs text-[var(--accent)] font-medium">
                 {t('admin.nodes.edit', 'Edit')}
               </button>
               {node.isActive !== false ? (
@@ -184,7 +188,11 @@ export function NodeManagement() {
                 disabled={actionLoading}
                 className="flex-1 bg-[var(--accent)] text-white rounded-xl py-2.5 text-sm font-medium flex items-center justify-center"
               >
-                {actionLoading ? <Spinner size="sm" className="border-white border-t-transparent" /> : t('common.save', 'Save')}
+                {actionLoading ? (
+                  <Spinner size="sm" className="border-white border-t-transparent" />
+                ) : (
+                  t('common.save', 'Save')
+                )}
               </button>
             </div>
           </div>

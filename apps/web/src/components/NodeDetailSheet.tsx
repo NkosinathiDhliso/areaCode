@@ -90,6 +90,8 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
 
   const isDormant = state === 'dormant' && rewards.length === 0
   const activeRewards = rewards.filter((r) => r.isActive)
+  const cdnUrl = import.meta.env['VITE_CDN_URL'] as string | undefined
+  const headerImageUrl = node.headerImageKey && cdnUrl ? `${cdnUrl}/${node.headerImageKey}` : null
 
   function handleCheckIn() {
     if (!isAuthenticated) {
@@ -119,9 +121,14 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
       }
     }
     // Unknown QR format — tell the user this isn't a valid Area Code QR
-    useErrorStore.getState().showError(
-      t('qr.invalidFormat', 'That QR code isn\'t from Area Code. Look for the poster at the venue entrance or counter.'),
-    )
+    useErrorStore
+      .getState()
+      .showError(
+        t(
+          'qr.invalidFormat',
+          "That QR code isn't from Area Code. Look for the poster at the venue entrance or counter.",
+        ),
+      )
   }
 
   function handleShare() {
@@ -131,7 +138,7 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
     } else {
       void navigator.clipboard.writeText(url).then(
         () => useErrorStore.getState().showError(t('share.copied', 'Link copied to clipboard')),
-        () => useErrorStore.getState().showError(t('share.copyFailed', 'Couldn\'t copy link')),
+        () => useErrorStore.getState().showError(t('share.copyFailed', "Couldn't copy link")),
       )
     }
     setMenuOpen(false)
@@ -236,6 +243,14 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
           )}
         </div>
       </div>
+
+      {headerImageUrl && (
+        <img
+          src={headerImageUrl}
+          alt={node.name}
+          className="w-full h-40 object-cover rounded-2xl border border-[var(--border)] mb-4"
+        />
+      )}
 
       {/* Dormant empty state */}
       {isDormant ? (

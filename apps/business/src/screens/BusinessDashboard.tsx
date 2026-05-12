@@ -1,9 +1,10 @@
-import { useRef, useState, lazy, Suspense } from 'react'
-import { useTranslation } from 'react-i18next'
-
+import { Spinner } from '@area-code/shared/components/Spinner'
+import { api } from '@area-code/shared/lib/api'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import { useBusinessStore, type DashboardPanel } from '@area-code/shared/stores/businessStore'
-import { Spinner } from '@area-code/shared/components/Spinner'
+import type { Node } from '@area-code/shared/types'
+import { useEffect, useRef, useState, lazy, Suspense } from 'react'
+import { useTranslation } from 'react-i18next'
 
 // Lazy-load panels so only the active one mounts (Issue #27)
 const LivePanel = lazy(() => import('./panels/LivePanel').then((m) => ({ default: m.LivePanel })))
@@ -78,17 +79,27 @@ export function BusinessDashboard() {
   const hasPermission = useBusinessAuthStore((s) => s.hasPermission)
   const permissions = useBusinessAuthStore((s) => s.permissions)
   const role = useBusinessAuthStore((s) => s.role)
-  const { currentPanel, setPanel } = useBusinessStore()
+  const { currentPanel, setPanel, nodes, setNodes } = useBusinessStore()
   const navRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [touchStart, setTouchStart] = useState<number | null>(null)
+  const primaryNode = nodes[0] ?? null
+  const cdnUrl = import.meta.env['VITE_CDN_URL'] as string | undefined
+  const headerImageUrl = primaryNode?.headerImageKey && cdnUrl ? `${cdnUrl}/${primaryNode.headerImageKey}` : null
+
+  useEffect(() => {
+    if (nodes.length > 0) return
+    api
+      .get<{ items: Node[] }>('/v1/business/me/nodes')
+      .then((res) => setNodes(res.items ?? []))
+      .catch(() => {})
+  }, [nodes.length, setNodes])
 
   // Filter panels based on user's permissions.
   // If permissions haven't loaded yet (empty array = role endpoint failed or not deployed),
   // show ALL panels. Never hide the nav — that's a worse UX than showing too much.
-  const visiblePanels = permissions.length > 0
-    ? PANELS.filter((panel) => hasPermission(PANEL_PERMISSIONS[panel]))
-    : PANELS
+  const visiblePanels =
+    permissions.length > 0 ? PANELS.filter((panel) => hasPermission(PANEL_PERMISSIONS[panel])) : PANELS
   const currentIdx = visiblePanels.indexOf(currentPanel)
 
   // If current panel is not visible (e.g. role changed), reset to first visible
@@ -143,6 +154,13 @@ export function BusinessDashboard() {
       {/* Header */}
       <header className="flex flex-row items-center justify-between px-5 py-3 border-b border-[var(--border)]">
         <div className="flex flex-row items-center gap-2">
+          {headerImageUrl && (
+            <img
+              src={headerImageUrl}
+              alt={primaryNode?.name ?? 'Business'}
+              className="w-9 h-9 rounded-xl object-cover border border-[var(--border)]"
+            />
+          )}
           <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">Area Code</span>
           {role && role !== 'owner' && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent)]/10 text-[var(--accent)] font-medium capitalize">

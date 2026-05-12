@@ -51,7 +51,7 @@ export function StaffInvite({ token }: StaffInviteProps) {
 
   async function handleGoogleAccept() {
     if (!name.trim()) {
-      setError('Please enter your name.')
+      setError('Name is required.')
       return
     }
     if (!meta || meta.expired || meta.accepted || !meta.hasGoogleOption) return
@@ -71,7 +71,7 @@ export function StaffInvite({ token }: StaffInviteProps) {
 
   async function handleEmailAccept() {
     if (!name.trim() || !email.trim() || password.length < 8) {
-      setError('Please enter your name, email, and a password with at least 8 characters.')
+      setError('Name, email, and an 8+ character password required.')
       return
     }
     setStatus('loading')
@@ -192,9 +192,7 @@ export function StaffInvite({ token }: StaffInviteProps) {
       {status === 'success' && (
         <div className="flex flex-col items-center gap-4 max-w-xs text-center">
           <p className="text-[var(--success)] font-medium text-lg">Account created</p>
-          <p className="text-[var(--text-secondary)] text-sm">
-            Your staff account is ready. You can validate redemptions now.
-          </p>
+          <p className="text-[var(--text-secondary)] text-sm">Your staff account is ready.</p>
           <a
             href="/"
             className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3 px-8 text-sm transition-all active:scale-95"

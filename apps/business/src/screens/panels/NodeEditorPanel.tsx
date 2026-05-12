@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
-
 import { api } from '@area-code/shared/lib/api'
-import type { Node } from '@area-code/shared/types'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
+import type { Node } from '@area-code/shared/types'
+import { useEffect, useRef, useState } from 'react'
 
 export function NodeEditorPanel() {
   const { nodes, setNodes } = useBusinessStore()
@@ -38,6 +37,7 @@ export function NodeEditorPanel() {
   // Photo upload state
   const photoInputRef = useRef<HTMLInputElement>(null)
   const [photoUploading, setPhotoUploading] = useState(false)
+  const [photoDeleting, setPhotoDeleting] = useState(false)
   const [photoMessage, setPhotoMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   // Header image state
@@ -285,43 +285,60 @@ export function NodeEditorPanel() {
     e.target.value = '' // reset so same file can be re-picked
     if (!file || !selected) return
 
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setPhotoMessage({ type: 'error', text: 'Only JPG, PNG or WebP allowed.' })
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      setPhotoMessage({ type: 'error', text: 'Only JPG or PNG allowed.' })
       return
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setPhotoMessage({ type: 'error', text: 'Image must be under 5MB.' })
+    if (file.size > 2 * 1024 * 1024) {
+      setPhotoMessage({ type: 'error', text: 'Image must be under 2MB.' })
       return
     }
 
     setPhotoUploading(true)
     setPhotoMessage(null)
     try {
-      // 1. Get presigned URL
-      const presigned = await api.post<{ uploadUrl: string; s3Key: string }>('/v1/upload/presigned', {
-        fileType: 'node_image',
-        contentType: file.type,
-      })
-      // 2. PUT file directly to S3
+      const presigned = await api.post<{ uploadUrl: string; objectKey: string }>(
+        `/v1/business/nodes/${selected.id}/image/upload-url`,
+        { contentType: file.type },
+      )
       const putRes = await fetch(presigned.uploadUrl, {
         method: 'PUT',
         headers: { 'Content-Type': file.type },
         body: file,
       })
       if (!putRes.ok) throw new Error(`S3 upload failed (${putRes.status})`)
-      // 3. Register the image against the node
-      await api.post(`/v1/nodes/${selected.id}/images`, { s3Key: presigned.s3Key, displayOrder: 0 })
-      // 4. Immediately update the header image preview
       const cdnUrl = import.meta.env['VITE_CDN_URL'] as string | undefined
       if (cdnUrl) {
-        setHeaderImageUrl(`${cdnUrl}/${presigned.s3Key}`)
+        setHeaderImageUrl(`${cdnUrl}/${presigned.objectKey}`)
       }
+      const updated = { ...selected, headerImageKey: presigned.objectKey }
+      setSelected(updated)
+      setNodes(nodes.map((node) => (node.id === selected.id ? updated : node)))
       setPhotoMessage({ type: 'success', text: 'Photo uploaded.' })
       setTimeout(() => setPhotoMessage(null), 3000)
     } catch (err: unknown) {
       setPhotoMessage({ type: 'error', text: (err as { message?: string })?.message || 'Upload failed.' })
     } finally {
       setPhotoUploading(false)
+    }
+  }
+
+  async function handlePhotoDelete() {
+    if (!selected || !headerImageUrl) return
+    setPhotoDeleting(true)
+    setPhotoMessage(null)
+    try {
+      await api.delete(`/v1/business/nodes/${selected.id}/image`)
+      const updated = { ...selected, headerImageKey: null }
+      setHeaderImageUrl(null)
+      setSelected(updated)
+      setNodes(nodes.map((node) => (node.id === selected.id ? updated : node)))
+      setPhotoMessage({ type: 'success', text: 'Photo removed.' })
+      setTimeout(() => setPhotoMessage(null), 3000)
+    } catch (err: unknown) {
+      setPhotoMessage({ type: 'error', text: (err as { message?: string })?.message || 'Delete failed.' })
+    } finally {
+      setPhotoDeleting(false)
     }
   }
 
@@ -420,20 +437,51 @@ export function NodeEditorPanel() {
                 </span>
               </div>
 
-              <div className="flex flex-row gap-2">
+              <div className="flex flex-col gap-2">
+                <label className="text-[var(--text-secondary)] text-xs font-medium">Business Photo</label>
                 <input
                   ref={photoInputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/jpeg,image/png"
                   onChange={(e) => void handlePhotoSelected(e)}
                   className="hidden"
                 />
                 <button
                   onClick={() => photoInputRef.current?.click()}
-                  disabled={photoUploading}
-                  className="flex-1 border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm disabled:opacity-50"
+                  disabled={photoUploading || photoDeleting}
+                  className="relative w-full aspect-square overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-raised)] disabled:opacity-50"
                 >
-                  {photoUploading ? 'Uploading...' : 'Add Photo'}
+                  {headerImageUrl ? (
+                    <img src={headerImageUrl} alt="Header preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="absolute inset-0 flex items-center justify-center px-6 text-center text-[var(--text-muted)] text-sm">
+                      Add business photo
+                    </span>
+                  )}
+                  {(photoUploading || headerImageUrl) && (
+                    <span className="absolute inset-x-0 bottom-0 bg-black/55 text-white text-xs font-medium py-2">
+                      {photoUploading ? 'Uploading...' : 'Replace'}
+                    </span>
+                  )}
+                  {headerImageUrl && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void handlePhotoDelete()
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return
+                        e.preventDefault()
+                        e.stopPropagation()
+                        void handlePhotoDelete()
+                      }}
+                      className="absolute top-3 right-3 rounded-full bg-black/65 text-white text-xs font-semibold px-3 py-1.5"
+                    >
+                      {photoDeleting ? 'Removing...' : 'Remove'}
+                    </span>
+                  )}
                 </button>
               </div>
               {photoMessage && (
@@ -444,18 +492,6 @@ export function NodeEditorPanel() {
                 >
                   {photoMessage.text}
                 </p>
-              )}
-
-              {/* Header Image Preview */}
-              {headerImageUrl && (
-                <div className="flex flex-col gap-2">
-                  <label className="text-[var(--text-secondary)] text-xs font-medium">Header Image</label>
-                  <img
-                    src={headerImageUrl}
-                    alt="Header preview"
-                    className="w-full h-32 object-cover rounded-xl border border-[var(--border)]"
-                  />
-                </div>
               )}
 
               {/* Instagram Handle */}
@@ -519,8 +555,7 @@ export function NodeEditorPanel() {
       {addVenueOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
-            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">Add Your Venue</h3>
-            <p className="text-[var(--text-secondary)] text-sm mb-4">Enter your venue details to add it to the map.</p>
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-4 font-[Syne]">Add Your Venue</h3>
             {addVenueError && <p className="text-[var(--danger)] text-sm mb-4">{addVenueError}</p>}
             <div className="flex flex-col gap-3 mb-4">
               <label className="text-[var(--text-primary)] text-xs font-medium">Venue Name</label>

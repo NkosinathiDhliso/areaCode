@@ -25,15 +25,7 @@ export function FeedScreen() {
   const { t } = useTranslation()
   const sentinelRef = useRef<HTMLDivElement>(null)
 
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-    isError,
-    refetch,
-  } = useInfiniteQuery({
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, refetch } = useInfiniteQuery({
     queryKey: ['feed'],
     queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
       const params = new URLSearchParams({ limit: '20' })
@@ -41,7 +33,7 @@ export function FeedScreen() {
       return api.get<FeedResponse>(`/v1/feed?${params}`)
     },
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage.hasMore ? lastPage.nextCursor : undefined,
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.nextCursor : undefined),
     staleTime: 30_000,
   })
 
@@ -66,9 +58,7 @@ export function FeedScreen() {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4" data-scroll-container>
-      <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-4">
-        {t('feed.title')}
-      </h1>
+      <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-4">{t('feed.title')}</h1>
 
       {isLoading ? (
         <div className="flex flex-col gap-3">
@@ -79,12 +69,9 @@ export function FeedScreen() {
       ) : isError ? (
         <div className="flex flex-col items-center gap-3 py-8">
           <p className="text-[var(--text-muted)] text-sm text-center">
-            {t('feed.loadError', 'Couldn\'t load your feed. Check your connection.')}
+            {t('feed.loadError', "Couldn't load your feed. Check your connection.")}
           </p>
-          <button
-            onClick={() => void refetch()}
-            className="text-[var(--accent)] text-sm font-medium"
-          >
+          <button onClick={() => void refetch()} className="text-[var(--accent)] text-sm font-medium">
             {t('common.retry', 'Retry')}
           </button>
         </div>
@@ -107,9 +94,7 @@ export function FeedScreen() {
                   {' checked in to '}
                   <span className="font-medium">{item.node.name}</span>
                 </p>
-                <p className="text-[var(--text-muted)] text-xs mt-0.5">
-                  {formatRelativeTime(item.checkedInAt)}
-                </p>
+                <p className="text-[var(--text-muted)] text-xs mt-0.5">{formatRelativeTime(item.checkedInAt)}</p>
               </div>
             </div>
           ))}
@@ -126,7 +111,7 @@ export function FeedScreen() {
         <div className="flex flex-col items-center justify-center py-12 gap-3">
           <Users size={32} strokeWidth={1.5} className="text-[var(--text-muted)] opacity-40" />
           <p className="text-[var(--text-muted)] text-sm text-center max-w-xs">
-            {t('feed.emptyState', 'Your feed is empty. Follow friends to see their check-ins here.')}
+            {t('feed.emptyState', 'No activity yet — follow friends to fill this up.')}
           </p>
         </div>
       )}

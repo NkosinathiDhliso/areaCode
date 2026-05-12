@@ -223,7 +223,7 @@ export function PlansPanel() {
       )}
       {!trialIsActive && hasUsedTrial && (
         <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl px-4 py-3 text-[var(--text-secondary)] text-xs">
-          You&apos;ve already used your free trial. Pick a plan below to keep using paid features.
+          Your trial is over — pick a plan.
         </div>
       )}
       {checkoutError && (
@@ -235,7 +235,10 @@ export function PlansPanel() {
       {!plans && !loadError && (
         <div className="flex flex-col gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-5 flex flex-col gap-3">
+            <div
+              key={i}
+              className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-5 flex flex-col gap-3"
+            >
               <div className="h-5 w-24 bg-[var(--bg-raised)] rounded-lg animate-pulse" />
               <div className="h-8 w-32 bg-[var(--bg-raised)] rounded-lg animate-pulse" />
               <div className="h-3 w-48 bg-[var(--bg-raised)] rounded-lg animate-pulse" />
@@ -254,10 +257,7 @@ export function PlansPanel() {
       )}
 
       {currentTier !== 'starter' && (
-        <button
-          onClick={() => setShowCancelConfirm(true)}
-          className="w-full text-[var(--danger)] text-sm mt-4"
-        >
+        <button onClick={() => setShowCancelConfirm(true)} className="w-full text-[var(--danger)] text-sm mt-4">
           {t('biz.plans.cancelSubscription', 'Cancel subscription')}
         </button>
       )}
@@ -269,7 +269,10 @@ export function PlansPanel() {
               {t('biz.plans.cancelTitle', 'Cancel subscription?')}
             </h3>
             <p className="text-[var(--text-secondary)] text-sm mb-4">
-              {t('biz.plans.cancelBody', 'Your plan will be downgraded to Starter immediately. You will lose access to paid features like extra nodes, rewards, and staff slots.')}
+              {t(
+                'biz.plans.cancelBody',
+                'Your plan will be downgraded to Starter immediately. You will lose access to paid features like extra nodes, rewards, and staff slots.',
+              )}
             </p>
             <div className="flex flex-row gap-3">
               <button

@@ -138,7 +138,7 @@ export function QrScannerSheet({ isOpen, onClose, onScanned }: QrScannerSheetPro
           {t('qr.scanTitle', 'Scan the venue QR code')}
         </h2>
         <p className="text-[var(--text-secondary)] text-xs text-center max-w-[280px]">
-          {t('qr.scanHint', 'Point your camera at the QR code on the counter or entrance to check in.')}
+          {t('qr.scanHint', 'QR is usually at the counter or entrance.')}
         </p>
 
         <div className="w-full max-w-xs relative rounded-2xl overflow-hidden bg-black aspect-square">

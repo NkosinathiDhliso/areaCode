@@ -46,9 +46,7 @@ export function StaffRedemptionPanel() {
       setLoading(true)
       setLoadError(null)
       try {
-        const res = await api.get<{ items: StaffRedemption[] }>(
-          `/v1/business/staff/${selectedStaffId}/redemptions`,
-        )
+        const res = await api.get<{ items: StaffRedemption[] }>(`/v1/business/staff/${selectedStaffId}/redemptions`)
         setRedemptions(res.items)
       } catch {
         setRedemptions([])
@@ -75,17 +73,15 @@ export function StaffRedemptionPanel() {
       >
         <option value="">All staff members</option>
         {staff.map((s) => (
-          <option key={s.id} value={s.id}>{s.name}</option>
+          <option key={s.id} value={s.id}>
+            {s.name}
+          </option>
         ))}
       </select>
 
-      {loadError && (
-        <div className="text-[var(--danger)] text-sm text-center py-2">{loadError}</div>
-      )}
+      {loadError && <div className="text-[var(--danger)] text-sm text-center py-2">{loadError}</div>}
 
-      {loading && (
-        <div className="text-[var(--text-muted)] text-sm text-center py-8">Loading...</div>
-      )}
+      {loading && <div className="text-[var(--text-muted)] text-sm text-center py-8">Loading...</div>}
 
       {!loading && selectedStaffId && redemptions.length === 0 && (
         <div className="text-[var(--text-muted)] text-sm text-center py-8">
@@ -94,9 +90,7 @@ export function StaffRedemptionPanel() {
       )}
 
       {!loading && !selectedStaffId && (
-        <div className="text-[var(--text-muted)] text-sm text-center py-8">
-          Select a staff member to view their redemptions
-        </div>
+        <div className="text-[var(--text-muted)] text-sm text-center py-8">Pick a staff member</div>
       )}
 
       <div className="flex flex-col gap-2">
@@ -106,17 +100,15 @@ export function StaffRedemptionPanel() {
             className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 flex flex-row items-center justify-between"
           >
             <div className="flex flex-col gap-1">
-              <span className="text-[var(--text-primary)] font-medium text-sm">
-                {rdm.staffName}
-              </span>
-              <span className="text-[var(--text-secondary)] text-xs">
-                {rdm.rewardTitle}
-              </span>
+              <span className="text-[var(--text-primary)] font-medium text-sm">{rdm.staffName}</span>
+              <span className="text-[var(--text-secondary)] text-xs">{rdm.rewardTitle}</span>
             </div>
             <span className="text-[var(--text-muted)] text-xs">
               {new Date(rdm.redeemedAt).toLocaleString([], {
-                month: 'short', day: 'numeric',
-                hour: '2-digit', minute: '2-digit',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
               })}
             </span>
           </div>

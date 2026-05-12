@@ -35,7 +35,7 @@ export function RewardsPanel() {
       const res = await api.get<{ items: Reward[] }>('/v1/business/rewards')
       setRewards(res.items ?? [])
     } catch {
-      useErrorStore.getState().showError('Couldn\'t refresh rewards. Pull down to try again.')
+      useErrorStore.getState().showError("Couldn't refresh rewards. Try again.")
     }
   }
 
@@ -51,9 +51,7 @@ export function RewardsPanel() {
   return (
     <div className="p-5 flex flex-col gap-4">
       <div className="flex flex-row items-center justify-between">
-        <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">
-          {t('biz.panel.rewards')}
-        </h2>
+        <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('biz.panel.rewards')}</h2>
         <button
           onClick={() => setShowForm(!showForm)}
           className="bg-[var(--accent)] text-white rounded-full w-10 h-10 flex items-center justify-center text-xl"
@@ -74,7 +72,10 @@ export function RewardsPanel() {
               <p className="text-[var(--warning)] text-xs mb-3">{t('biz.rewards.slotWarning')}</p>
               <RewardForm
                 nodes={nodes}
-                onCreated={() => { setShowForm(false); void reload() }}
+                onCreated={() => {
+                  setShowForm(false)
+                  void reload()
+                }}
               />
             </>
           )}
@@ -88,9 +89,7 @@ export function RewardsPanel() {
       )}
 
       {!fetchError && rewards.length === 0 && !showForm && (
-        <p className="text-[var(--text-muted)] text-sm text-center py-8">
-          No rewards yet. Tap + to create your first Get.
-        </p>
+        <p className="text-[var(--text-muted)] text-sm text-center py-8">No rewards yet. Create your first Get.</p>
       )}
 
       <div className="flex flex-col gap-3">
@@ -99,7 +98,10 @@ export function RewardsPanel() {
             {editingId === r.id ? (
               <RewardEditForm
                 reward={r}
-                onSaved={() => { setEditingId(null); void reload() }}
+                onSaved={() => {
+                  setEditingId(null)
+                  void reload()
+                }}
                 onCancel={() => setEditingId(null)}
               />
             ) : (
@@ -148,7 +150,10 @@ function RewardEditForm({ reward, onSaved, onCancel }: { reward: Reward; onSaved
   const [error, setError] = useState<string | null>(null)
 
   async function handleSave() {
-    if (!title.trim()) { setError('Title is required.'); return }
+    if (!title.trim()) {
+      setError('Title is required.')
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -210,8 +215,14 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
   const [error, setError] = useState<string | null>(null)
 
   async function handleSubmit() {
-    if (!nodeId) { setError('Select a node first.'); return }
-    if (!title.trim()) { setError('Enter a reward title.'); return }
+    if (!nodeId) {
+      setError('Select a node first.')
+      return
+    }
+    if (!title.trim()) {
+      setError('Enter a reward title.')
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -237,7 +248,9 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
           className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none appearance-none"
         >
           {nodes.map((n) => (
-            <option key={n.id} value={n.id}>{n.name}</option>
+            <option key={n.id} value={n.id}>
+              {n.name}
+            </option>
           ))}
         </select>
       )}
