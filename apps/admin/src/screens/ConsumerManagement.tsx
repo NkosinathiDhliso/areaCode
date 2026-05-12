@@ -173,6 +173,12 @@ export function ConsumerManagement() {
         ))}
       </div>
 
+      {!loading && results.length === 0 && query.trim().length > 0 && (
+        <p className="text-[var(--text-muted)] text-sm text-center py-8">
+          No consumers found matching &quot;{query}&quot;.
+        </p>
+      )}
+
       {/* Disable confirmation dialog */}
       {confirmDisable && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">

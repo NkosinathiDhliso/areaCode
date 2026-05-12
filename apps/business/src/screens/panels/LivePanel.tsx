@@ -74,9 +74,13 @@ export function LivePanel() {
   return (
     <div className="p-5 flex flex-col gap-6">
       <div className="flex flex-col items-center gap-2 py-8">
-        <span className="text-[var(--text-primary)] text-6xl font-bold font-[Syne] tracking-[-0.03em]">
-          {stats?.checkInsToday ?? 0}
-        </span>
+        {stats === undefined ? (
+          <div className="w-20 h-16 rounded-xl bg-[var(--bg-raised)] animate-pulse" />
+        ) : (
+          <span className="text-[var(--text-primary)] text-6xl font-bold font-[Syne] tracking-[-0.03em]">
+            {stats.checkInsToday}
+          </span>
+        )}
         <span className="text-[var(--text-secondary)] text-sm">{t('biz.live.checkinsToday')}</span>
       </div>
 

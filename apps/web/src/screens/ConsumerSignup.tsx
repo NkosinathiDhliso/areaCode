@@ -96,6 +96,11 @@ export function ConsumerSignup({ onNavigate }: ConsumerSignupProps) {
           placeholder={t('auth.signup.password', 'Password')}
           className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
         />
+        <p className={`text-xs -mt-2 ${password.length > 0 && password.length < 8 ? 'text-[var(--warning)]' : 'text-[var(--text-muted)]'}`}>
+          {password.length > 0 && password.length < 8
+            ? t('auth.signup.passwordTooShort', 'Password must be at least 8 characters')
+            : t('auth.signup.passwordHint', 'Minimum 8 characters')}
+        </p>
         <button
           type="button"
           onClick={() => void handleEmailSignup()}

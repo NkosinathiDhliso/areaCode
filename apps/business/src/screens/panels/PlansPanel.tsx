@@ -232,6 +232,18 @@ export function PlansPanel() {
         </div>
       )}
 
+      {!plans && !loadError && (
+        <div className="flex flex-col gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-5 flex flex-col gap-3">
+              <div className="h-5 w-24 bg-[var(--bg-raised)] rounded-lg animate-pulse" />
+              <div className="h-8 w-32 bg-[var(--bg-raised)] rounded-lg animate-pulse" />
+              <div className="h-3 w-48 bg-[var(--bg-raised)] rounded-lg animate-pulse" />
+            </div>
+          ))}
+        </div>
+      )}
+
       {plans && (
         <div className="flex flex-col gap-4">
           {renderPlanCard('starter', plans.starter)}
