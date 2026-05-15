@@ -8,9 +8,10 @@
  * **Validates: Requirements 3.1, 3.2, 3.3, 3.4**
  */
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import * as fc from 'fast-check'
 import { render, act } from '@testing-library/react'
+import * as fc from 'fast-check'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
 import { StaffValidator } from '../StaffValidator'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -149,7 +150,7 @@ describe('Preservation Property: Native BarcodeDetector used when available', ()
     ;(window as any).BarcodeDetector = class {
       constructor() {}
       detect() {
-        return mockDetect()
+        return (mockDetect as () => Promise<unknown[]>)()
       }
     }
 
@@ -299,7 +300,7 @@ describe('Preservation Property: QR code regex extraction', () => {
         const match = url.match(regex)
         expect(match).not.toBeNull()
         // The extracted code should be alphanumeric
-        const extractedCode = match![1]
+        const extractedCode = match![1]!
         expect(extractedCode).toMatch(/^[a-zA-Z0-9]+$/)
         expect(extractedCode.length).toBeGreaterThan(0)
       }),

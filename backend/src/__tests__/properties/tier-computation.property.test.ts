@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest'
-import * as fc from 'fast-check'
 import { getTier, TIER_LEVELS } from '@area-code/shared/constants/tier-levels'
 import type { TierLevel } from '@area-code/shared/constants/tier-levels'
 import type { Tier } from '@area-code/shared/types'
+import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 // ─── Tier Threshold Table ───────────────────────────────────────────────────
 
@@ -26,8 +26,9 @@ const TIER_THRESHOLDS: Array<{ tier: Tier; min: number; max: number | null }> = 
 
 function expectedTier(checkInCount: number): Tier {
   for (let i = TIER_THRESHOLDS.length - 1; i >= 0; i--) {
-    if (checkInCount >= TIER_THRESHOLDS[i].min) {
-      return TIER_THRESHOLDS[i].tier
+    const t = TIER_THRESHOLDS[i]!
+    if (checkInCount >= t.min) {
+      return t.tier
     }
   }
   return 'local'
@@ -179,7 +180,7 @@ describe('Property 3: Tier computation is correct for any check-in count', () =>
         (tierIdx) => {
           const level = TIER_LEVELS[tierIdx]
           const nextLevel = TIER_LEVELS[tierIdx + 1]
-          if (!nextLevel) return // skip if no next tier
+          if (!level || !nextLevel) return // skip if no next tier
 
           // One below the threshold — still current tier
           const belowThreshold = nextLevel.minCheckIns - 1

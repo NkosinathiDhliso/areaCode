@@ -7,8 +7,8 @@
  * Validates: Requirements 1.3, 1.4, 1.5, 1.6
  */
 // @vitest-environment jsdom
+import { render, act, waitFor as _waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, act, waitFor, fireEvent } from '@testing-library/react'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -184,10 +184,10 @@ describe('Bug Condition Exploration - Photo Preview Not Updating (Test 1d)', () 
 
     // Mock presigned URL response
     mockApi.post.mockImplementation(async (url: string, _body?: any) => {
-      if (url.includes('/v1/upload/presigned')) {
+      if (url.includes('/image/upload-url')) {
         return {
           uploadUrl: 'https://s3.amazonaws.com/bucket/presigned-upload-url',
-          s3Key: mockS3Key,
+          objectKey: mockS3Key,
         }
       }
       if (url.includes('/images')) {

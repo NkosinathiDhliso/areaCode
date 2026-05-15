@@ -8,9 +8,9 @@
  * **Validates: Requirements 3.5, 3.7, 3.8, 3.9**
  */
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import * as fc from 'fast-check'
 import { render, act } from '@testing-library/react'
+import * as fc from 'fast-check'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -137,6 +137,7 @@ const invalidFileTypeArb = fc.constantFrom(
   'image/gif',
   'image/bmp',
   'image/tiff',
+  'image/webp',
   'application/pdf',
   'text/plain',
   'video/mp4',
@@ -144,13 +145,13 @@ const invalidFileTypeArb = fc.constantFrom(
 )
 
 /** File types that should be accepted */
-const validFileTypeArb = fc.constantFrom('image/jpeg', 'image/png', 'image/webp')
+const validFileTypeArb = fc.constantFrom('image/jpeg', 'image/png')
 
-/** File sizes over 5MB (in bytes) */
-const oversizedFileSizeArb = fc.integer({ min: 5 * 1024 * 1024 + 1, max: 50 * 1024 * 1024 })
+/** File sizes over 2MB (in bytes) */
+const oversizedFileSizeArb = fc.integer({ min: 2 * 1024 * 1024 + 1, max: 50 * 1024 * 1024 })
 
-/** File sizes under 5MB (in bytes) */
-const validFileSizeArb = fc.integer({ min: 1, max: 5 * 1024 * 1024 })
+/** File sizes under 2MB (in bytes) */
+const validFileSizeArb = fc.integer({ min: 1, max: 2 * 1024 * 1024 })
 
 /** CDN URL arbitrary */
 const cdnUrlArb = fc.constantFrom('https://cdn.areacode.co.za', 'https://d1234.cloudfront.net')
@@ -217,12 +218,12 @@ describe('Preservation Property: Photo validation rejects invalid files', () => 
   })
 
   /**
-   * For all invalid photo file types (not JPG/PNG/WebP), the error message
-   * "Only JPG, PNG or WebP allowed." is shown and no upload occurs.
+   * For all invalid photo file types (not JPG/PNG), the error message
+   * "Only JPG or PNG allowed." is shown and no upload occurs.
    *
    * **Validates: Requirements 3.8**
    */
-  it('should reject non-JPG/PNG/WebP files with correct error message', async () => {
+  it('should reject non-JPG/PNG files with correct error message', async () => {
     await fc.assert(
       fc.asyncProperty(invalidFileTypeArb, validFileSizeArb, async (fileType, fileSize) => {
         mockApiPost.mockReset()
@@ -254,10 +255,10 @@ describe('Preservation Property: Photo validation rejects invalid files', () => 
         })
 
         // Error message should be shown
-        expect(container.textContent).toContain('Only JPG, PNG or WebP allowed.')
+        expect(container.textContent).toContain('Only JPG or PNG allowed.')
 
         // No API call should have been made for presigned URL
-        expect(mockApiPost).not.toHaveBeenCalledWith('/v1/upload/presigned', expect.anything())
+        expect(mockApiPost).not.toHaveBeenCalledWith(expect.stringContaining('/image/upload-url'), expect.anything())
 
         unmount()
       }),
@@ -266,12 +267,12 @@ describe('Preservation Property: Photo validation rejects invalid files', () => 
   })
 
   /**
-   * For all files over 5MB, the error message "Image must be under 5MB." is shown
+   * For all files over 2MB, the error message "Image must be under 2MB." is shown
    * and no upload occurs.
    *
    * **Validates: Requirements 3.8**
    */
-  it('should reject files over 5MB with correct error message', async () => {
+  it('should reject files over 2MB with correct error message', async () => {
     await fc.assert(
       fc.asyncProperty(validFileTypeArb, oversizedFileSizeArb, async (fileType, fileSize) => {
         mockApiPost.mockReset()
@@ -303,10 +304,10 @@ describe('Preservation Property: Photo validation rejects invalid files', () => 
         })
 
         // Error message should be shown
-        expect(container.textContent).toContain('Image must be under 5MB.')
+        expect(container.textContent).toContain('Image must be under 2MB.')
 
         // No API call should have been made for presigned URL
-        expect(mockApiPost).not.toHaveBeenCalledWith('/v1/upload/presigned', expect.anything())
+        expect(mockApiPost).not.toHaveBeenCalledWith(expect.stringContaining('/image/upload-url'), expect.anything())
 
         unmount()
       }),
@@ -402,8 +403,8 @@ describe('Preservation Property: SettingsPanel renders subscription, staff, and 
     // Subscription section
     expect(container.textContent).toContain('biz.settings.subscription')
 
-    // Staff Members section
-    expect(container.textContent).toContain('Staff Members')
+    // Staff Members section (renders "Team Members" label and zero-state)
+    expect(container.textContent).toContain('No staff members yet')
 
     // QR Code section
     expect(container.textContent).toContain('biz.settings.qr')

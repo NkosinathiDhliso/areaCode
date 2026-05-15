@@ -4,9 +4,9 @@ variable "env" {
 
 variable "schedules" {
   type = map(object({
-    description         = string
-    schedule_expression = string
-    lambda_arn          = string
+    description          = string
+    schedule_expression  = string
+    lambda_arn           = string
     lambda_function_name = string
   }))
   default = {}

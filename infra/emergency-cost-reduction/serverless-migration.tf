@@ -8,7 +8,7 @@
 # Main application data - replaces PostgreSQL tables
 resource "aws_dynamodb_table" "users" {
   name         = "area-code-${local.env}-users"
-  billing_mode = "PAY_PER_REQUEST"  # Serverless - no hourly charges
+  billing_mode = "PAY_PER_REQUEST" # Serverless - no hourly charges
   hash_key     = "userId"
 
   attribute {
@@ -260,7 +260,7 @@ resource "aws_lambda_function" "api_health" {
   role          = aws_iam_role.lambda_api.arn
   runtime       = "nodejs20.x"
   handler       = "index.handler"
-  filename      = "lambda-placeholder.zip"  # Replace with actual build
+  filename      = "lambda-placeholder.zip" # Replace with actual build
   memory_size   = 128
   timeout       = 5
 
@@ -345,7 +345,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "cache_ttl" {
     status = "Enabled"
 
     expiration {
-      days = 1  # Adjust based on cache needs
+      days = 1 # Adjust based on cache needs
     }
 
     noncurrent_version_expiration {
@@ -357,7 +357,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "cache_ttl" {
 resource "aws_s3_bucket_versioning" "cache" {
   bucket = aws_s3_bucket.cache.id
   versioning_configuration {
-    status = "Disabled"  # Save costs - no versioning for cache
+    status = "Disabled" # Save costs - no versioning for cache
   }
 }
 
@@ -393,11 +393,11 @@ data "aws_caller_identity" "current" {}
 
 output "dynamodb_tables" {
   value = {
-    users     = aws_dynamodb_table.users.name
-    nodes     = aws_dynamodb_table.nodes.name
-    checkins  = aws_dynamodb_table.checkins.name
-    rewards   = aws_dynamodb_table.rewards.name
-    app_data  = aws_dynamodb_table.app_data.name
+    users    = aws_dynamodb_table.users.name
+    nodes    = aws_dynamodb_table.nodes.name
+    checkins = aws_dynamodb_table.checkins.name
+    rewards  = aws_dynamodb_table.rewards.name
+    app_data = aws_dynamodb_table.app_data.name
   }
 }
 

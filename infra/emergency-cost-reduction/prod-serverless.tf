@@ -14,31 +14,31 @@ module "vpc" {
 
 # Cognito - User pools (~$0 for < 10,000 MAU)
 module "cognito_consumer" {
-  source    = "../../modules/cognito"
-  env       = local.env
-  pool_name = "consumer"
-  define_auth_challenge_arn  = module.cognito_triggers_consumer.define_auth_arn
-  create_auth_challenge_arn  = module.cognito_triggers_consumer.create_auth_arn
-  verify_auth_challenge_arn  = module.cognito_triggers_consumer.verify_auth_arn
+  source                    = "../../modules/cognito"
+  env                       = local.env
+  pool_name                 = "consumer"
+  define_auth_challenge_arn = module.cognito_triggers_consumer.define_auth_arn
+  create_auth_challenge_arn = module.cognito_triggers_consumer.create_auth_arn
+  verify_auth_challenge_arn = module.cognito_triggers_consumer.verify_auth_arn
 }
 
 module "cognito_business" {
-  source    = "../../modules/cognito"
-  env       = local.env
-  pool_name = "business"
-  define_auth_challenge_arn  = module.cognito_triggers_business.define_auth_arn
-  create_auth_challenge_arn  = module.cognito_triggers_business.create_auth_arn
-  verify_auth_challenge_arn  = module.cognito_triggers_business.verify_auth_arn
+  source                    = "../../modules/cognito"
+  env                       = local.env
+  pool_name                 = "business"
+  define_auth_challenge_arn = module.cognito_triggers_business.define_auth_arn
+  create_auth_challenge_arn = module.cognito_triggers_business.create_auth_arn
+  verify_auth_challenge_arn = module.cognito_triggers_business.verify_auth_arn
 }
 
 module "cognito_staff" {
-  source                 = "../../modules/cognito"
-  env                    = local.env
-  pool_name              = "staff"
-  access_token_ttl_hours = 8
-  define_auth_challenge_arn  = module.cognito_triggers_staff.define_auth_arn
-  create_auth_challenge_arn  = module.cognito_triggers_staff.create_auth_arn
-  verify_auth_challenge_arn  = module.cognito_triggers_staff.verify_auth_arn
+  source                    = "../../modules/cognito"
+  env                       = local.env
+  pool_name                 = "staff"
+  access_token_ttl_hours    = 8
+  define_auth_challenge_arn = module.cognito_triggers_staff.define_auth_arn
+  create_auth_challenge_arn = module.cognito_triggers_staff.create_auth_arn
+  verify_auth_challenge_arn = module.cognito_triggers_staff.verify_auth_arn
 }
 
 module "cognito_admin" {

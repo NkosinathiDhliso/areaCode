@@ -73,9 +73,9 @@ module "cognito_staff" {
 }
 
 module "cognito_admin" {
-  source    = "../../modules/cognito"
-  env       = local.env
-  pool_name = "admin"
+  source              = "../../modules/cognito"
+  env                 = local.env
+  pool_name           = "admin"
   username_attributes = ["email"]
   explicit_auth_flows = [
     "ALLOW_ADMIN_USER_PASSWORD_AUTH",
@@ -391,9 +391,9 @@ module "lambda_api" {
     AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
     AREA_CODE_S3_MEDIA_BUCKET               = module.s3_media.bucket_name
     # MEDIA_BUCKET kept as an alias for any code paths that still read the short name.
-    MEDIA_BUCKET                            = module.s3_media.bucket_name
-    AREA_CODE_SQS_PUSH_QUEUE_URL            = module.sqs_push_sender.queue_url
-    AREA_CODE_CONSENT_VERSION               = "v1.0"
+    MEDIA_BUCKET                 = module.s3_media.bucket_name
+    AREA_CODE_SQS_PUSH_QUEUE_URL = module.sqs_push_sender.queue_url
+    AREA_CODE_CONSENT_VERSION    = "v1.0"
   }
 }
 
@@ -503,10 +503,10 @@ module "lambda_report_dispatcher" {
   vpc_subnet_ids         = module.vpc.private_subnet_ids
   vpc_security_group_ids = module.vpc.lambda_security_group_ids
   environment_variables = {
-    AREA_CODE_ENV    = local.env
-    BUSINESSES_TABLE = aws_dynamodb_table.businesses.name
-    NODES_TABLE      = aws_dynamodb_table.nodes.name
-    CHECKINS_TABLE   = aws_dynamodb_table.checkins.name
+    AREA_CODE_ENV              = local.env
+    BUSINESSES_TABLE           = aws_dynamodb_table.businesses.name
+    NODES_TABLE                = aws_dynamodb_table.nodes.name
+    CHECKINS_TABLE             = aws_dynamodb_table.checkins.name
     AREA_CODE_REPORT_QUEUE_URL = module.sqs_report_generation.queue_url
   }
 }
@@ -522,16 +522,16 @@ module "lambda_report_generator" {
   vpc_subnet_ids         = module.vpc.private_subnet_ids
   vpc_security_group_ids = module.vpc.lambda_security_group_ids
   environment_variables = {
-    AREA_CODE_ENV          = local.env
-    USERS_TABLE            = aws_dynamodb_table.users.name
-    NODES_TABLE            = aws_dynamodb_table.nodes.name
-    CHECKINS_TABLE         = aws_dynamodb_table.checkins.name
-    REWARDS_TABLE          = aws_dynamodb_table.rewards.name
-    BUSINESSES_TABLE       = aws_dynamodb_table.businesses.name
-    APP_DATA_TABLE         = aws_dynamodb_table.app_data.name
-    AREA_CODE_REPORT_QUEUE_URL    = module.sqs_report_generation.queue_url
-    AREA_CODE_SQS_PUSH_QUEUE_URL  = module.sqs_push_sender.queue_url
-    AREA_CODE_ANONYMIZATION_SALT  = "report-anonymization-salt-dev"
+    AREA_CODE_ENV                = local.env
+    USERS_TABLE                  = aws_dynamodb_table.users.name
+    NODES_TABLE                  = aws_dynamodb_table.nodes.name
+    CHECKINS_TABLE               = aws_dynamodb_table.checkins.name
+    REWARDS_TABLE                = aws_dynamodb_table.rewards.name
+    BUSINESSES_TABLE             = aws_dynamodb_table.businesses.name
+    APP_DATA_TABLE               = aws_dynamodb_table.app_data.name
+    AREA_CODE_REPORT_QUEUE_URL   = module.sqs_report_generation.queue_url
+    AREA_CODE_SQS_PUSH_QUEUE_URL = module.sqs_push_sender.queue_url
+    AREA_CODE_ANONYMIZATION_SALT = "report-anonymization-salt-dev"
   }
 }
 

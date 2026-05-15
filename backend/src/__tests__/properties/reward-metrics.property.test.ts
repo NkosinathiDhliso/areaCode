@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 // ─── Arbitraries ────────────────────────────────────────────────────────────
 
@@ -245,7 +245,7 @@ describe('Property 9: Reward summary is sorted by claim rate', () => {
 
         // Verify descending order: each item's claim rate >= next item's claim rate
         for (let i = 0; i < summary.length - 1; i++) {
-          expect(summary[i].claimRate).toBeGreaterThanOrEqual(summary[i + 1].claimRate)
+          expect(summary[i]!.claimRate).toBeGreaterThanOrEqual(summary[i + 1]!.claimRate)
         }
       }),
       { numRuns: 500 },
@@ -312,7 +312,7 @@ describe('Property 9: Reward summary is sorted by claim rate', () => {
         const summary = computeRewardsSummary([reward])
 
         expect(summary.length).toBe(1)
-        expect(summary[0].claimRate).toBe(computeClaimRate(reward.claimedCount, reward.totalSlots))
+        expect(summary[0]!.claimRate).toBe(computeClaimRate(reward.claimedCount, reward.totalSlots))
       }),
       { numRuns: 200 },
     )
@@ -344,7 +344,7 @@ describe('Property 9: Reward summary is sorted by claim rate', () => {
 
         // Still sorted (all equal, so any order is valid)
         for (let i = 0; i < summary.length - 1; i++) {
-          expect(summary[i].claimRate).toBeGreaterThanOrEqual(summary[i + 1].claimRate)
+          expect(summary[i]!.claimRate).toBeGreaterThanOrEqual(summary[i + 1]!.claimRate)
         }
       }),
       { numRuns: 200 },

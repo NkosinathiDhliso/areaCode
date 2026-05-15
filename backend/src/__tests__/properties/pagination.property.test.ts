@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 // ─── Arbitraries ────────────────────────────────────────────────────────────
 
@@ -134,8 +134,8 @@ describe('Property 1: Pagination preserves ordering and completeness', () => {
 
           // Verify descending order: each item's date >= next item's date
           for (let i = 0; i < allCollected.length - 1; i++) {
-            const currentDate = new Date(allCollected[i].checkedInAt as string).getTime()
-            const nextDate = new Date(allCollected[i + 1].checkedInAt as string).getTime()
+            const currentDate = new Date(allCollected[i]!.checkedInAt as string).getTime()
+            const nextDate = new Date(allCollected[i + 1]!.checkedInAt as string).getTime()
             expect(currentDate).toBeGreaterThanOrEqual(nextDate)
           }
         },
@@ -189,8 +189,8 @@ describe('Property 1: Pagination preserves ordering and completeness', () => {
 
             // Within each page, items must be in descending date order
             for (let i = 0; i < page.items.length - 1; i++) {
-              const currentDate = new Date(page.items[i].checkedInAt as string).getTime()
-              const nextDate = new Date(page.items[i + 1].checkedInAt as string).getTime()
+              const currentDate = new Date(page.items[i]!.checkedInAt as string).getTime()
+              const nextDate = new Date(page.items[i + 1]!.checkedInAt as string).getTime()
               expect(currentDate).toBeGreaterThanOrEqual(nextDate)
             }
 
