@@ -172,6 +172,38 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
             {t('landing.hasAccount', 'Already have an account? Sign in')}
           </button>
           <p className="text-[11px] text-[var(--text-muted)]">Cape Town · Johannesburg · Durban</p>
+          {/* Legal footer — required for Google OAuth verification.
+              Renders a discoverable privacy policy link on the public home page. */}
+          <nav aria-label="Legal" className="mt-3 flex items-center gap-3 text-[11px] text-[var(--text-muted)]">
+            <a
+              href="/legal/privacy"
+              onClick={(e) => {
+                e.preventDefault()
+                go('legal-privacy', '/legal/privacy')
+              }}
+              className="hover:text-[var(--accent)] underline-offset-2 hover:underline"
+            >
+              Privacy Policy
+            </a>
+            <span aria-hidden="true">·</span>
+            <a
+              href="/legal/terms"
+              onClick={(e) => {
+                e.preventDefault()
+                go('legal-terms', '/legal/terms')
+              }}
+              className="hover:text-[var(--accent)] underline-offset-2 hover:underline"
+            >
+              Terms
+            </a>
+            <span aria-hidden="true">·</span>
+            <a
+              href="mailto:support@areacode.co.za"
+              className="hover:text-[var(--accent)] underline-offset-2 hover:underline"
+            >
+              Contact
+            </a>
+          </nav>
         </div>
       </div>
     </div>

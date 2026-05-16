@@ -25,6 +25,8 @@ import { AuthLanding } from './screens/AuthLanding'
 import { ForgotPassword } from './screens/ForgotPassword'
 import { FirstGetPrompt } from './screens/FirstGetPrompt'
 import { QrCheckIn } from './screens/QrCheckIn'
+import { PrivacyPolicyScreen } from './screens/PrivacyPolicyScreen'
+import { TermsScreen } from './screens/TermsScreen'
 import { BottomNav } from './components/BottomNav'
 import { ConnectivityBanner } from './components/ConnectivityBanner'
 import type { AppRoute } from './types'
@@ -55,6 +57,8 @@ const ROUTE_PATHS: Record<AppRoute, string> = {
   profile: '/profile',
   privacy: '/privacy',
   history: '/history',
+  'legal-privacy': '/legal/privacy',
+  'legal-terms': '/legal/terms',
 }
 
 function pathToRoute(path: string): AppRoute {
@@ -70,6 +74,8 @@ function pathToRoute(path: string): AppRoute {
   if (path === '/profile') return 'profile'
   if (path === '/privacy') return 'privacy'
   if (path === '/history') return 'history'
+  if (path === '/legal/privacy') return 'legal-privacy'
+  if (path === '/legal/terms') return 'legal-terms'
   return 'landing'
 }
 
@@ -194,6 +200,15 @@ function AppContent() {
   // OAuth callback is the only screen rendered without the shell
   if (window.location.pathname.startsWith('/auth/callback')) {
     return <ConsumerOAuthCallback onNavigate={setRoute} />
+  }
+
+  // Public legal pages — must be reachable without login (Google OAuth
+  // verification fetches these URLs) and without the bottom nav.
+  if (window.location.pathname === '/legal/privacy') {
+    return <PrivacyPolicyScreen onNavigate={setRoute} />
+  }
+  if (window.location.pathname === '/legal/terms') {
+    return <TermsScreen onNavigate={setRoute} />
   }
 
   // Venue-printed QR deep link: /qr/{nodeId}/{token}

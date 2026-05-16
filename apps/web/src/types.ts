@@ -13,3 +13,5 @@ export type AppRoute =
   | 'forgot-password'
   | 'landing'
   | 'first-get-prompt'
+  | 'legal-privacy'
+  | 'legal-terms'

@@ -28,6 +28,16 @@ These prove the platform is alive end-to-end.
 - [ ] **CORS works** — login on each portal does not throw a CORS error in the network tab
 - [ ] **WebSocket connects** — open the consumer web; in DevTools network tab, the WSS connection establishes (status 101)
 
+### Public legal pages & contact aliases (Google OAuth verification depends on these)
+
+- [ ] **Privacy policy renders without login** — open an incognito window and visit `https://areacode.co.za/legal/privacy`. Document loads, no auth gate.
+- [ ] **Terms of service renders without login** — same for `https://areacode.co.za/legal/terms`.
+- [ ] **Privacy link visible on the home page** — `https://areacode.co.za` shows a "Privacy Policy" link in the footer of the unauthenticated landing page.
+- [ ] **`privacy@areacode.co.za`** receives mail (test by sending one). Cited in the privacy policy.
+- [ ] **`legal@areacode.co.za`** receives mail. Cited in the terms.
+- [ ] **`support@areacode.co.za`** receives mail. Cited in the landing footer and Google OAuth consent screen.
+- [ ] **Search Console domain verification** for `areacode.co.za` is in the "Verified" state under the Google account that owns the OAuth project (`reelagents91@gmail.com`).
+
 ---
 
 ## 1. Consumer Web (`https://areacode.co.za`)
