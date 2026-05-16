@@ -3,8 +3,8 @@
 # Uses xargs so we don't blow the Windows command-line length limit when
 # many files are staged at once.
 
-prettier_files="$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx|json|css|md|yml|yaml)$')"
-eslint_files="$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx)$')"
+prettier_files="$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx|json|css|md|yml|yaml)$' || true)"
+eslint_files="$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx)$' || true)"
 
 if [ -n "$prettier_files" ]; then
   echo "$prettier_files" | xargs -d '\n' -n 50 pnpm exec prettier --check
