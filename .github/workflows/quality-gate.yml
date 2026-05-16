@@ -23,6 +23,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Architecture lock — serverless only
+        shell: pwsh
+        run: pwsh ./scripts/assert-serverless-only.ps1
+
+      - name: Architecture lock — phone-OTP / SMS permanently disabled
+        shell: pwsh
+        run: pwsh ./scripts/assert-phone-otp-disabled.ps1
+
       - name: TypeScript check (monorepo)
         run: pnpm exec tsc --noEmit
 

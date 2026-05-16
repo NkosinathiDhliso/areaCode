@@ -27,7 +27,10 @@ infra             Terraform modules and environments
 - Frontend: React 18, Vite, Tailwind (CSS variables only), Zustand, i18next
 - Backend: Fastify 5, DynamoDB, AWS Cognito (4 pools), SQS, SNS
 - Infra: Lambda nodejs20.x arm64, API Gateway v2 (HTTP + WebSocket), S3, Amplify
-- Auth: Cognito CUSTOM_AUTH phone OTP for consumer/business/staff, password auth for admin
+- Auth: **Email/password and Google OAuth via Cognito Hosted UI for all four pools.**
+  Phone-OTP code paths exist as dead code only and return `410 Gone` in prod.
+  See `.kiro/steering/no-sms-no-phone-auth.md` — this is a hard architectural
+  rule, do not revive phone auth without explicit founder approval.
 
 ## Commands
 
@@ -175,5 +178,6 @@ Frontend (Amplify): VITE_API_URL, VITE_WEBSOCKET_URL, VITE_VAPID_PUBLIC_KEY.
 - API Gateway WebSocket route keys cannot contain colons
 - PowerShell mangles JSON for AWS CLI. Use file-based JSON
 - Amplify builds from git. Local changes need push to take effect
-- SNS SMS sandbox: new accounts only send to verified numbers
 - Cognito custom attributes need app client read/write permissions
+- **Phone-OTP routes exist as dead code.** They return `410 Gone` in prod.
+  Do not "fix", "complete", or "modernise" them. See `.kiro/steering/no-sms-no-phone-auth.md`.

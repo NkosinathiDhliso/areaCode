@@ -1,3 +1,18 @@
+/**
+ * Cognito client wrapper.
+ *
+ * ⚠️  Some functions in this file (signUpUser, initiateAuth,
+ * respondToAuthChallenge) wire the Cognito CUSTOM_AUTH challenge flow
+ * used for phone-OTP authentication. Phone-OTP is permanently disabled
+ * in prod (returns 410 Gone via the auth handler). These functions are
+ * preserved only because dev-mode fixture tests still exercise them.
+ *
+ * Email/password auth (createEmailPasswordUser, passwordAuth) and
+ * federated OAuth (Hosted UI) are the supported live paths.
+ *
+ * Read `.kiro/steering/no-sms-no-phone-auth.md` before extending or
+ * removing anything in this file.
+ */
 import {
   CognitoIdentityProviderClient,
   AdminCreateUserCommand,

@@ -1,0 +1,24 @@
+# Code owners.
+#
+# GitHub uses this file to auto-request review when a PR touches
+# matching paths. The hard-locked auth + SMS paths require explicit
+# founder review because they are intentionally dead code; an AI tool
+# or contributor "cleaning them up" must be caught.
+#
+# Replace @founder with the actual GitHub handle once the repo has more
+# than one human collaborator.
+
+# Hard-locked dead code (no-SMS / no-phone-auth decision)
+# See .kiro/steering/no-sms-no-phone-auth.md
+backend/src/features/auth/handler.ts                   @NkosinathiDhliso
+backend/src/features/auth/service.ts                   @NkosinathiDhliso
+backend/src/shared/cognito/client.ts                   @NkosinathiDhliso
+backend/src/shared/sms/                                @NkosinathiDhliso
+.kiro/steering/no-sms-no-phone-auth.md                 @NkosinathiDhliso
+
+# Steering files in general should always be reviewed by a human
+.kiro/steering/                                        @NkosinathiDhliso
+
+# Infra changes affect production cost & reliability
+infra/                                                 @NkosinathiDhliso
+.github/workflows/                                     @NkosinathiDhliso

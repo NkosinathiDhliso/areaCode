@@ -1,13 +1,21 @@
 /**
  * SMS Message Feedback tracking for OTP delivery monitoring.
  *
- * Uses AWS End User Messaging v2 PutMessageFeedback API to report
- * whether OTP messages were successfully received and used by end users.
- * This provides first-party conversion data that is more reliable than
- * carrier-provided delivery receipts.
+ * ⚠️  DEAD CODE — DO NOT REVIVE OR EXTEND.
  *
- * The create-auth Lambda stores the message ID in DynamoDB when sending.
- * This module retrieves it and reports feedback after OTP verification.
+ * SMS authentication is permanently disabled platform-wide. Pilot
+ * testing (May 2026) showed unreliable delivery to South African
+ * carriers. This module is preserved only because the corresponding
+ * Cognito CUSTOM_AUTH challenge handlers are still wired in dev mode
+ * for legacy fixture tests.
+ *
+ * Read `.kiro/steering/no-sms-no-phone-auth.md` before touching this
+ * file. If a task seems to require this module, stop and confirm with
+ * the user.
+ *
+ * Original purpose (kept for context only):
+ * Uses AWS End User Messaging v2 PutMessageFeedback API to report
+ * whether OTP messages were successfully received and used.
  */
 
 import { DynamoDBClient, GetItemCommand, DeleteItemCommand } from '@aws-sdk/client-dynamodb'

@@ -24,6 +24,24 @@ import {
   adminLoginBodySchema,
 } from './types.js'
 
+/**
+ * Auth route handlers.
+ *
+ * ⚠️  Phone-OTP routes (signup / login / verify-otp for consumer,
+ * business, staff) are PERMANENTLY DISABLED in prod via the
+ * `PHONE_OTP_DISABLED` flag below. They return 410 Gone. The routes
+ * remain wired so that dev-mode tests continue to pass without removing
+ * the Cognito CUSTOM_AUTH challenge logic.
+ *
+ * **DO NOT lift the gate. DO NOT add new phone-based routes.**
+ *
+ * Email/password and Google OAuth (via Hosted UI + oauth-sync) are the
+ * only supported live auth paths. See:
+ *
+ *   - `.kiro/steering/no-sms-no-phone-auth.md`
+ *   - `docs/CHURN_DEFENSES.md` §1.6
+ */
+
 export async function authRoutes(app: FastifyInstance) {
   // Phone-OTP signup/login is permanently disabled in prod (per ops decision —
   // SMS delivery to SA carriers proved unreliable in pilot). The routes still

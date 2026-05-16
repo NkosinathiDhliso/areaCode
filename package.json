@@ -16,6 +16,8 @@
     "test:e2e": "vitest run backend/src/__tests__/e2e.test.ts",
     "test:data-integrity": "vitest run backend/src/__tests__/data-integrity.test.ts",
     "guard:serverless": "powershell -ExecutionPolicy Bypass -File scripts/assert-serverless-only.ps1",
+    "guard:no-sms": "powershell -ExecutionPolicy Bypass -File scripts/assert-phone-otp-disabled.ps1",
+    "guard:all": "pnpm guard:serverless && pnpm guard:no-sms",
     "prepare": "husky"
   },
   "pnpm": {
