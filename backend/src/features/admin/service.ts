@@ -529,7 +529,7 @@ export async function nodeAction(
       await updateNode(nodeId, { isActive: true })
       await createAuditLog(adminId, adminRole, 'node_activate', nodeId, { before: { isActive: false }, after: { isActive: true } })
       return { success: true }
-    case 'update':
+    case 'update': {
       if (!body) throw AppError.badRequest('Body required')
       const node = await getNodeById(nodeId)
       const allowedFields: Record<string, unknown> = {}
@@ -538,6 +538,7 @@ export async function nodeAction(
       await updateNode(nodeId, allowedFields as any)
       await createAuditLog(adminId, adminRole, 'node_update', nodeId, { before: node, after: allowedFields })
       return { success: true }
+    }
     default:
       throw AppError.badRequest(`Unknown action: ${action}`)
   }

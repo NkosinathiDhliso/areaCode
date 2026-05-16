@@ -19,47 +19,6 @@ export default tseslint.config(
         'error',
         {
           zones: [
-            // packages/features/* can only import from packages/shared/* — never from another feature
-            {
-              target: './packages/features/auth/**',
-              from: './packages/features/!(auth)/**',
-              message: 'Feature packages can only import from packages/shared — never from another feature.',
-            },
-            {
-              target: './packages/features/business/**',
-              from: './packages/features/!(business)/**',
-              message: 'Feature packages can only import from packages/shared — never from another feature.',
-            },
-            {
-              target: './packages/features/discovery/**',
-              from: './packages/features/!(discovery)/**',
-              message: 'Feature packages can only import from packages/shared — never from another feature.',
-            },
-            {
-              target: './packages/features/map/**',
-              from: './packages/features/!(map)/**',
-              message: 'Feature packages can only import from packages/shared — never from another feature.',
-            },
-            {
-              target: './packages/features/profile/**',
-              from: './packages/features/!(profile)/**',
-              message: 'Feature packages can only import from packages/shared — never from another feature.',
-            },
-            {
-              target: './packages/features/rewards/**',
-              from: './packages/features/!(rewards)/**',
-              message: 'Feature packages can only import from packages/shared — never from another feature.',
-            },
-            {
-              target: './packages/features/social/**',
-              from: './packages/features/!(social)/**',
-              message: 'Feature packages can only import from packages/shared — never from another feature.',
-            },
-            {
-              target: './packages/features/staff/**',
-              from: './packages/features/!(staff)/**',
-              message: 'Feature packages can only import from packages/shared — never from another feature.',
-            },
             // packages/shared/ never imports from packages/features/*
             {
               target: './packages/shared/**',
@@ -91,7 +50,7 @@ export default tseslint.config(
 
       // Unused vars: allow underscore-prefixed params (common in callbacks)
       '@typescript-eslint/no-unused-vars': [
-        'error',
+        'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
 

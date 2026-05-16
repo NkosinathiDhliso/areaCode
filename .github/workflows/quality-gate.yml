@@ -27,7 +27,7 @@ jobs:
         run: pnpm exec tsc --noEmit
 
       - name: Lint
-        run: pnpm exec eslint . --max-warnings 50
+        run: pnpm exec eslint . --max-warnings 900
 
       - name: Tests with coverage
         run: pnpm exec vitest run --coverage

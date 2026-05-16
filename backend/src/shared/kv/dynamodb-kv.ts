@@ -71,7 +71,6 @@ export async function kvIncr(key: string, ttlSeconds?: number): Promise<number> 
   }
 
   if (ttlSeconds) {
-    (params['UpdateExpression'] as string) // need to rebuild
     params['UpdateExpression'] =
       'SET #val = if_not_exists(#val, :zero) + :inc, #ttl = if_not_exists(#ttl, :ttl)'
     ;(params['ExpressionAttributeNames'] as Record<string, string>)['#ttl'] = 'ttl'
