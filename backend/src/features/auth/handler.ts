@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
 import { validate } from '../../shared/middleware/validation.js'
+import { originGuard } from '../../shared/middleware/origin-guard.js'
 
 import * as service from './service.js'
 import {
@@ -161,10 +162,14 @@ export async function authRoutes(app: FastifyInstance) {
   )
 
   // POST /v1/auth/consumer/refresh
-  app.post('/v1/auth/consumer/refresh', { preHandler: [validate({ body: refreshBodySchema })] }, async (request) => {
-    const body = request.body as z.infer<typeof refreshBodySchema>
-    return service.refreshToken(body.refreshToken, 'consumer')
-  })
+  app.post(
+    '/v1/auth/consumer/refresh',
+    { preHandler: [originGuard, validate({ body: refreshBodySchema })] },
+    async (request) => {
+      const body = request.body as z.infer<typeof refreshBodySchema>
+      return service.refreshToken(body.refreshToken, 'consumer')
+    },
+  )
 
   // ─── Business Auth ────────────────────────────────────────────────────
 
@@ -291,10 +296,14 @@ export async function authRoutes(app: FastifyInstance) {
   )
 
   // POST /v1/auth/business/refresh
-  app.post('/v1/auth/business/refresh', { preHandler: [validate({ body: refreshBodySchema })] }, async (request) => {
-    const body = request.body as z.infer<typeof refreshBodySchema>
-    return service.refreshToken(body.refreshToken, 'business')
-  })
+  app.post(
+    '/v1/auth/business/refresh',
+    { preHandler: [originGuard, validate({ body: refreshBodySchema })] },
+    async (request) => {
+      const body = request.body as z.infer<typeof refreshBodySchema>
+      return service.refreshToken(body.refreshToken, 'business')
+    },
+  )
 
   // ─── Staff Auth ───────────────────────────────────────────────────────
 
@@ -385,10 +394,14 @@ export async function authRoutes(app: FastifyInstance) {
   )
 
   // POST /v1/auth/staff/refresh
-  app.post('/v1/auth/staff/refresh', { preHandler: [validate({ body: refreshBodySchema })] }, async (request) => {
-    const body = request.body as z.infer<typeof refreshBodySchema>
-    return service.refreshToken(body.refreshToken, 'staff')
-  })
+  app.post(
+    '/v1/auth/staff/refresh',
+    { preHandler: [originGuard, validate({ body: refreshBodySchema })] },
+    async (request) => {
+      const body = request.body as z.infer<typeof refreshBodySchema>
+      return service.refreshToken(body.refreshToken, 'staff')
+    },
+  )
 
   // ─── Admin Auth ─────────────────────────────────────────────────────────
 
@@ -420,10 +433,14 @@ export async function authRoutes(app: FastifyInstance) {
   )
 
   // POST /v1/auth/admin/refresh
-  app.post('/v1/auth/admin/refresh', { preHandler: [validate({ body: refreshBodySchema })] }, async (request) => {
-    const body = request.body as z.infer<typeof refreshBodySchema>
-    return service.refreshToken(body.refreshToken, 'admin')
-  })
+  app.post(
+    '/v1/auth/admin/refresh',
+    { preHandler: [originGuard, validate({ body: refreshBodySchema })] },
+    async (request) => {
+      const body = request.body as z.infer<typeof refreshBodySchema>
+      return service.refreshToken(body.refreshToken, 'admin')
+    },
+  )
 
   // ─── User Profile & Consent ───────────────────────────────────────────
   // Profile, tier-progress, streak, consent, history routes are in profile-handler.ts

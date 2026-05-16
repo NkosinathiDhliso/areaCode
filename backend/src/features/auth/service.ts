@@ -8,7 +8,19 @@ import { updateBusiness } from './dynamodb-repository.js'
 import * as repo from './repository.js'
 import { createLoginSession } from './session-service.js'
 
+import { LEGAL_CLAUSES_VERSION } from '@area-code/shared/constants/legal'
+
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
+
+/**
+ * Canonical consent version. Falls back to `LEGAL_CLAUSES_VERSION` from
+ * the shared constants module if the env var isn't set, so a misconfigured
+ * deploy still records consent under the version that matches the clauses
+ * the user was actually shown.
+ */
+function currentConsentVersion(): string {
+  return process.env['AREA_CODE_CONSENT_VERSION'] ?? LEGAL_CLAUSES_VERSION
+}
 
 /**
  * Redeem a guest-claim token (Churn-defences spec, Req 6) for a newly
@@ -96,7 +108,7 @@ export async function consumerSignup(data: {
   })
 
   // Insert initial consent record with analytics preference from signup
-  const consentVersion = process.env['AREA_CODE_CONSENT_VERSION'] ?? 'v1.0'
+  const consentVersion = currentConsentVersion()
   await repo.insertConsentRecord(user.userId, consentVersion, data.consentAnalytics ?? false)
 
   // Initiate auth to send OTP
@@ -185,7 +197,7 @@ export async function consumerOAuthSync(opts: { cognitoSub: string; email?: stri
       cognitoSub,
     })
 
-    const consentVersion = process.env['AREA_CODE_CONSENT_VERSION'] ?? 'v1.0'
+    const consentVersion = currentConsentVersion()
     await repo.insertConsentRecord(user.userId, consentVersion, false)
   }
 
@@ -302,7 +314,7 @@ export async function consumerEmailSignup(data: {
     citySlug: 'johannesburg',
   })
 
-  const consentVersion = process.env['AREA_CODE_CONSENT_VERSION'] ?? 'v1.0'
+  const consentVersion = currentConsentVersion()
   await repo.insertConsentRecord(user.userId, consentVersion, data.consentAnalytics ?? false)
 
   const tokens = await cognito.passwordAuth('consumer', email, data.password)
@@ -943,8 +955,17 @@ export async function adminLogin(email: string, password: string) {
 
     // Extract admin role from ID token claims
     const cognitoUser = await cognito.getCognitoUser('admin', email)
-    const role = cognitoUser?.attributes['custom:admin_role'] ?? 'support_agent'
-    const adminId = cognitoUser?.sub ?? ''
+
+    // Defence in depth: Cognito's password auth runs before we look up the
+    // user, so a deactivated admin could still get tokens. If the lookup
+    // returns nothing (deactivated, deleted, or not in the admin pool) we
+    // refuse the login outright. Tokens issued in the previous call lapse
+    // naturally — we don't have a way to revoke them inline.
+    if (!cognitoUser?.sub) {
+      throw AppError.unauthorized('Account not found or has been disabled')
+    }
+    const role = cognitoUser.attributes['custom:admin_role'] ?? 'support_agent'
+    const adminId = cognitoUser.sub
 
     return {
       accessToken: tokens.accessToken,
@@ -952,7 +973,8 @@ export async function adminLogin(email: string, password: string) {
       adminId,
       role,
     }
-  } catch {
+  } catch (err) {
+    if (err instanceof AppError) throw err
     throw AppError.unauthorized('Invalid credentials')
   }
 }

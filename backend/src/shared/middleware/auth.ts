@@ -136,6 +136,28 @@ async function verifyToken(token: string, role: AuthRole): Promise<AuthPayload> 
 }
 
 /**
+ * Decode the JWT (no verification) just to read the issuer, so we can
+ * route the verification to the right Cognito pool. This is purely a
+ * routing optimisation; verification still validates the issuer claim
+ * against the expected pool, so a forged token can't slip through here.
+ */
+function poolFromIssuer(token: string, candidates: AuthRole[]): AuthRole | null {
+  try {
+    const decoded = jwt.decode(token) as jwt.JwtPayload | null
+    const iss = decoded?.iss
+    if (typeof iss !== 'string') return null
+    for (const role of candidates) {
+      const config = getPoolConfig(role)
+      const expected = `https://cognito-idp.${config.region}.amazonaws.com/${config.poolId}`
+      if (iss === expected) return role
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Creates a Fastify preHandler that verifies JWT for the given role(s).
  * Attaches `request.auth` with the verified payload.
  */
@@ -163,13 +185,17 @@ export function requireAuth(...roles: AuthRole[]) {
     }
 
     const token = authHeader.slice(7)
-    let lastError: Error | null = null
 
-    // Try each allowed role's pool
-    for (const role of roles) {
+    // Route to the matching pool based on the issuer claim, falling back
+    // to trying every allowed pool if the issuer doesn't match anything
+    // (e.g. token from an unknown source — verification will reject it).
+    const matchedRole = poolFromIssuer(token, roles)
+    const orderedRoles = matchedRole ? [matchedRole] : roles
+
+    let lastError: Error | null = null
+    for (const role of orderedRoles) {
       try {
         const payload = await verifyToken(token, role)
-        // Attach to request
         ;(request as FastifyRequest & { auth: AuthPayload }).auth = payload
         return
       } catch (err) {
