@@ -46,7 +46,7 @@ Implementation language: **TypeScript** throughout (React 18 + Vite frontend, Fa
     - Create `packages/shared/lib/featureGating.ts` — consumer and business tier feature gates
     - _Requirements: 8.9, 18.10, 34.2, 34.5_
 
-  - [x]*  1.6 Write property tests for shared types and utilities
+  - [x]\* 1.6 Write property tests for shared types and utilities
     - **Property 1: Haversine distance symmetry** — `haversine(a, b) === haversine(b, a)` for all coordinate pairs
     - **Validates: Requirements 8.9**
     - **Property 2: Tier assignment monotonicity** — higher check-in counts always produce equal or higher tiers
@@ -94,7 +94,7 @@ Implementation language: **TypeScript** throughout (React 18 + Vite frontend, Fa
     - Create `backend/src/shared/db/migration-runner.ts` — Lambda-compatible migration runner
     - _Requirements: 30.7_
 
-  - [x]*  3.6 Write property tests for schema constraints
+  - [x]\* 3.6 Write property tests for schema constraints
     - **Property 3: Reward redemption idempotency** — inserting the same (reward_id, user_id) pair twice never creates a duplicate row
     - **Validates: Requirements 7.3, 30.4**
 
@@ -128,7 +128,7 @@ Implementation language: **TypeScript** throughout (React 18 + Vite frontend, Fa
     - Support `business:{businessId}` room: business dashboard clients join on auth, receive check-in and reward claim events for their nodes
     - _Requirements: 18.1, 18.2, 18.3, 18.4, 18.5, 18.6, 18.7, 18.8, 18.9, 18.13, 61.1, 61.2, 61.3_
 
-  - [x]*  4.6 Write property tests for Redis key helpers
+  - [x]\* 4.6 Write property tests for Redis key helpers
     - **Property 4: Redis key uniqueness** — different input combinations always produce different key strings
     - **Validates: Requirements 18.11**
 
@@ -163,7 +163,7 @@ Implementation language: **TypeScript** throughout (React 18 + Vite frontend, Fa
     - `GET /v1/auth/account-type?phone={e164}` — return `consumer | business | staff | not_found`; rate-limited 5 req/min/IP; never distinguish wrong pool from no account
     - _Requirements: 2.9, 2.10, 49.11, 49.12_
 
-  - [x]*  6.5 Write property tests for auth service
+  - [x]\* 6.5 Write property tests for auth service
     - **Property 5: Account-type endpoint never leaks pool information** — for any phone number, response is always one of the 4 allowed values
     - **Validates: Requirements 2.9**
     - **Property 6: OTP rate limiting is enforced** — more than 3 OTP requests per phone per hour always returns 429
@@ -201,7 +201,7 @@ Implementation language: **TypeScript** throughout (React 18 + Vite frontend, Fa
     - Reporter identity never revealed to node owner; admin can see reporter_id
     - _Requirements: 22.1, 22.2, 22.3, 22.4, 22.5, 22.6, 22.7_
 
-  - [x]*  7.4 Write property tests for node search
+  - [x]\* 7.4 Write property tests for node search
     - **Property 7: Search results are always sorted by proximity × pulseScore** — for any query, results maintain sort invariant
     - **Validates: Requirements 16.3**
 
@@ -239,7 +239,7 @@ Implementation language: **TypeScript** throughout (React 18 + Vite frontend, Fa
     - Store flags in `abuse_flags` table with type, entity_id, entity_type, evidence_json, reviewed status, auto_actioned flag
     - _Requirements: 29.1, 29.2, 29.3, 29.4, 29.5_
 
-  - [x]*  8.4 Write property tests for check-in service
+  - [x]\* 8.4 Write property tests for check-in service
     - **Property 8: Check-in cooldown enforcement** — a reward check-in within 4 hours of a previous one at the same node always returns 429
     - **Validates: Requirements 5.4**
     - **Property 9: Location coordinates are never persisted** — after any check-in, the check_ins table row contains no lat/lng data
@@ -270,7 +270,7 @@ Implementation language: **TypeScript** throughout (React 18 + Vite frontend, Fa
     - Staff endpoint never returns user data (privacy constraint)
     - _Requirements: 7.4, 13.3, 13.4_
 
-  - [x]*  9.4 Write property tests for reward engine
+  - [x]\* 9.4 Write property tests for reward engine
     - **Property 10: Reward claim idempotency** — claiming the same reward for the same user twice never creates duplicate redemptions
     - **Validates: Requirements 7.3**
     - **Property 11: Slot count never exceeds total_slots** — claimed_count is always ≤ total_slots
@@ -337,7 +337,7 @@ Implementation language: **TypeScript** throughout (React 18 + Vite frontend, Fa
     - Response: `{ entries: [...], userRank: { rank, checkInCount } }`
     - _Requirements: 14.1, 14.2, 14.3_
 
-  - [x]*  12.5 Write property tests for leaderboard
+  - [x]\* 12.5 Write property tests for leaderboard
     - **Property 12: Leaderboard is always sorted descending by check-in count** — for any city, returned entries maintain sort invariant
     - **Validates: Requirements 14.1**
 
@@ -466,7 +466,7 @@ Implementation language: **TypeScript** throughout (React 18 + Vite frontend, Fa
     - All stores use Zustand + immer middleware; node states and user profile persisted to `localStorage`/`AsyncStorage` via Zustand persist middleware for offline fallback
     - _Requirements: 2.2, 2.3, 26.1, 26.2, 26.3, 26.4, 27.5_
 
-  - [x]*  16.5 Write property tests for toast queue management
+  - [x]\* 16.5 Write property tests for toast queue management
     - **Property 13: Toast queue never exceeds 3 items** — after any sequence of toast additions, queue length is always ≤ 3
     - **Validates: Requirements 8.4**
     - **Property 14: Surge toasts always preempt lower-priority toasts** — a surge toast is always at the front of the queue
@@ -569,7 +569,7 @@ Implementation language: **TypeScript** throughout (React 18 + Vite frontend, Fa
 
   - [x] 18.11 Implement onboarding hints
     - First open: fade in "Tap any dot to explore" pill at map centre after 1.5s, dismiss on [×] or first node tap
-    - First layer-swipe attempt: "← Social  Trending  Rewards →" hint at map edge, fades after 3s or first successful swipe
+    - First layer-swipe attempt: "← Social Trending Rewards →" hint at map edge, fades after 3s or first successful swipe
     - First check-in: quiet toast "You're on the map." — no confetti, no particle effects
     - Track `OnboardingState` in userStore (`hintSeen`, `layerHintSeen`, `firstCheckIn`), persisted to `localStorage`/`AsyncStorage`; hints never shown twice
     - Design rules: no tutorial screens, no modals, no overlays blocking interaction
@@ -806,7 +806,7 @@ Implementation language: **TypeScript** throughout (React 18 + Vite frontend, Fa
     - "Not now" → defer 7 days via Redis key `notif:deferred:{userId}` EX 604800
     - _Requirements: 23.4, 23.5, 53.1, 53.2, 53.3_
 
-  - [x]*  27.5 Write integration tests for core flows
+  - [x]\* 27.5 Write integration tests for core flows
     - Test check-in → reward evaluation → socket notification flow
     - Test business reward creation → toast emission flow
     - Test leaderboard update on check-in

@@ -82,11 +82,16 @@ export function NodeDetailSheet({ node, pulseScore, isOpen, onClose, onCheckIn }
 
 function stateColor(state: string): string {
   switch (state) {
-    case 'popping': return '#ef4444'
-    case 'buzzing': return '#f59e0b'
-    case 'active': return '#10b981'
-    case 'quiet': return '#6b7280'
-    default: return '#374151'
+    case 'popping':
+      return '#ef4444'
+    case 'buzzing':
+      return '#f59e0b'
+    case 'active':
+      return '#10b981'
+    case 'quiet':
+      return '#6b7280'
+    default:
+      return '#374151'
   }
 }
 

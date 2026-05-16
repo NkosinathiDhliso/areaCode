@@ -108,9 +108,7 @@ export function CheckInDetailPanel() {
       )}
 
       {!loading && !loadError && entries.length === 0 && (
-        <div className="text-[var(--text-muted)] text-sm text-center py-8">
-          No check-ins for this date
-        </div>
+        <div className="text-[var(--text-muted)] text-sm text-center py-8">No check-ins for this date</div>
       )}
 
       <div className="flex flex-col gap-2">
@@ -120,9 +118,7 @@ export function CheckInDetailPanel() {
             className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 flex flex-row items-center justify-between"
           >
             <div className="flex flex-col gap-1">
-              <span className="text-[var(--text-primary)] font-medium text-sm">
-                {entry.displayName}
-              </span>
+              <span className="text-[var(--text-primary)] font-medium text-sm">{entry.displayName}</span>
               <div className="flex flex-row items-center gap-2">
                 <span className="text-[var(--text-muted)] text-xs capitalize">{entry.tier}</span>
                 <span

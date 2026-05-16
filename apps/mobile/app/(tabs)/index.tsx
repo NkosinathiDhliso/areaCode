@@ -129,12 +129,15 @@ export default function MapScreen() {
     setShowSearchResults(false)
   }, [])
 
-  const handleNodePress = useCallback((node: Node) => {
-    setSelectedNode(node)
-    setSheetOpen(true)
-    resetQrFallback()
-    if (!onboarding.hintSeen) markHintSeen('hintSeen')
-  }, [onboarding.hintSeen, markHintSeen, resetQrFallback])
+  const handleNodePress = useCallback(
+    (node: Node) => {
+      setSelectedNode(node)
+      setSheetOpen(true)
+      resetQrFallback()
+      if (!onboarding.hintSeen) markHintSeen('hintSeen')
+    },
+    [onboarding.hintSeen, markHintSeen, resetQrFallback],
+  )
 
   async function handleCheckIn() {
     if (!selectedNode) return
@@ -154,9 +157,7 @@ export default function MapScreen() {
     }
   }
 
-  const filteredNodes = nodeList?.filter(
-    (n) => !categoryFilter || n.category === categoryFilter,
-  ) ?? []
+  const filteredNodes = nodeList?.filter((n) => !categoryFilter || n.category === categoryFilter) ?? []
 
   const showPermissionPrompt = permissionState === 'denied' && !browseOnly
 
@@ -164,16 +165,10 @@ export default function MapScreen() {
     return (
       <View style={styles.permissionContainer}>
         <Text style={styles.permissionTitle}>{t('location.permissionTitle')}</Text>
-        <TouchableOpacity
-          style={styles.primaryButton}
-          onPress={() => void requestLocation()}
-        >
+        <TouchableOpacity style={styles.primaryButton} onPress={() => void requestLocation()}>
           <Text style={styles.primaryButtonText}>{t('location.enable')}</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={() => setBrowseOnly(true)}
-        >
+        <TouchableOpacity style={styles.secondaryButton} onPress={() => setBrowseOnly(true)}>
           <Text style={styles.secondaryButtonText}>{t('location.browseOnly')}</Text>
         </TouchableOpacity>
       </View>
@@ -229,9 +224,7 @@ export default function MapScreen() {
               </View>
             ) : searchResults.length === 0 ? (
               <View style={styles.searchResultItem}>
-                <Text style={styles.searchResultMuted}>
-                  {t('map.noResults', { defaultValue: 'No results found' })}
-                </Text>
+                <Text style={styles.searchResultMuted}>{t('map.noResults', { defaultValue: 'No results found' })}</Text>
               </View>
             ) : (
               <FlatList
@@ -240,10 +233,7 @@ export default function MapScreen() {
                 keyboardShouldPersistTaps="handled"
                 style={styles.searchResultsList}
                 renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.searchResultItem}
-                    onPress={() => handleSearchResultTap(item)}
-                  >
+                  <TouchableOpacity style={styles.searchResultItem} onPress={() => handleSearchResultTap(item)}>
                     <Text style={styles.searchResultName}>{item.name}</Text>
                     <Text style={styles.searchResultCategory}>{item.category}</Text>
                   </TouchableOpacity>
@@ -279,7 +269,6 @@ export default function MapScreen() {
     </View>
   )
 }
-
 
 const styles = StyleSheet.create({
   container: { flex: 1 },

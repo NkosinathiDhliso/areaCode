@@ -9,9 +9,7 @@ export function ConnectivityBanner() {
 
   if (state === 'online') return null
 
-  const relativeTime = lastUpdated
-    ? `${Math.round((Date.now() - new Date(lastUpdated).getTime()) / 60000)}m`
-    : ''
+  const relativeTime = lastUpdated ? `${Math.round((Date.now() - new Date(lastUpdated).getTime()) / 60000)}m` : ''
 
   return (
     <View style={[styles.banner, state === 'offline' ? styles.offline : styles.apiOnly]}>

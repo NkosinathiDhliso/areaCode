@@ -21,23 +21,26 @@ import { scanForPii } from '../pii-scanner'
 const uuidArb = fc.uuid()
 
 /** Generate a South African phone number (+27...) */
-const saPhoneArb = fc.array(
-  fc.constantFrom('0', '1', '2', '3', '4', '5', '6', '7', '8', '9'),
-  { minLength: 9, maxLength: 9 },
-).map((digits) => `+27${digits.join('')}`)
+const saPhoneArb = fc
+  .array(fc.constantFrom('0', '1', '2', '3', '4', '5', '6', '7', '8', '9'), { minLength: 9, maxLength: 9 })
+  .map((digits) => `+27${digits.join('')}`)
 
 /** Generate a valid email address */
-const emailArb = fc.tuple(
-  fc.stringMatching(/^[a-z][a-z0-9]{1,10}$/),
-  fc.stringMatching(/^[a-z][a-z0-9]{1,8}$/),
-  fc.constantFrom('com', 'co.za', 'org', 'net'),
-).map(([local, domain, tld]) => `${local}@${domain}.${tld}`)
+const emailArb = fc
+  .tuple(
+    fc.stringMatching(/^[a-z][a-z0-9]{1,10}$/),
+    fc.stringMatching(/^[a-z][a-z0-9]{1,8}$/),
+    fc.constantFrom('com', 'co.za', 'org', 'net'),
+  )
+  .map(([local, domain, tld]) => `${local}@${domain}.${tld}`)
 
 /** Generate a URL (avatarUrl pattern) */
-const urlArb = fc.tuple(
-  fc.constantFrom('https://s3.amazonaws.com', 'https://cdn.example.com', 'https://images.areacode.co.za'),
-  fc.stringMatching(/^\/[a-z]{3,10}\/[a-z]{3,10}\.(jpg|png)$/),
-).map(([base, path]) => `${base}${path}`)
+const urlArb = fc
+  .tuple(
+    fc.constantFrom('https://s3.amazonaws.com', 'https://cdn.example.com', 'https://images.areacode.co.za'),
+    fc.stringMatching(/^\/[a-z]{3,10}\/[a-z]{3,10}\.(jpg|png)$/),
+  )
+  .map(([base, path]) => `${base}${path}`)
 
 /** Generate a clean aggregated-data-only document (no PII) */
 const cleanDocArb = fc.record({
@@ -112,15 +115,12 @@ describe('Feature: venue-intelligence-reports, Property 5: PII Scanner Correctne
 
   it('documents containing a displayName PII field are flagged as not clean', () => {
     fc.assert(
-      fc.property(
-        fc.string({ minLength: 1, maxLength: 50 }),
-        (name) => {
-          const doc = JSON.stringify({ displayName: name, totalCheckIns: 10 })
-          const result = scanForPii(doc)
-          expect(result.clean).toBe(false)
-          expect(result.violations.some((v) => v.includes('displayName'))).toBe(true)
-        },
-      ),
+      fc.property(fc.string({ minLength: 1, maxLength: 50 }), (name) => {
+        const doc = JSON.stringify({ displayName: name, totalCheckIns: 10 })
+        const result = scanForPii(doc)
+        expect(result.clean).toBe(false)
+        expect(result.violations.some((v) => v.includes('displayName'))).toBe(true)
+      }),
       { numRuns: 100 },
     )
   })
@@ -143,9 +143,7 @@ describe('Feature: venue-intelligence-reports, Property 5: PII Scanner Correctne
         const doc = JSON.stringify({
           report: {
             sections: {
-              visitors: [
-                { userId: uuid, count: 1 },
-              ],
+              visitors: [{ userId: uuid, count: 1 }],
             },
           },
         })

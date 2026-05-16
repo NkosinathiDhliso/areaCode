@@ -109,10 +109,7 @@ export function resolveArchetype(
 /**
  * Check if a score vector meets all dimension thresholds for an archetype.
  */
-export function matchesArchetype(
-  scores: DimensionScoreVector,
-  archetype: PersonalityArchetype,
-): boolean
+export function matchesArchetype(scores: DimensionScoreVector, archetype: PersonalityArchetype): boolean
 ```
 
 ### New Constants
@@ -128,6 +125,7 @@ Exports `ARCHETYPE_CATALOG: PersonalityArchetype[]` — the 15 seed archetypes f
 #### `packages/shared/constants/index.ts` (updated)
 
 Add re-exports:
+
 ```typescript
 export { GENRE_WEIGHT_MATRIX, MUSIC_GENRES, PERSONALITY_DIMENSIONS } from './genre-weights'
 export { ARCHETYPE_CATALOG } from './archetype-catalog'
@@ -237,12 +235,21 @@ Inline tool within `ArchetypeManagement`. Accepts genre selections, shows resolv
 ```typescript
 // Music genres — 12 South African-relevant genres
 export type MusicGenre =
-  | 'amapiano' | 'deep_house' | 'afrobeats' | 'hip_hop' | 'rnb'
-  | 'kwaito' | 'gqom' | 'jazz' | 'rock' | 'pop' | 'gospel' | 'maskandi'
+  | 'amapiano'
+  | 'deep_house'
+  | 'afrobeats'
+  | 'hip_hop'
+  | 'rnb'
+  | 'kwaito'
+  | 'gqom'
+  | 'jazz'
+  | 'rock'
+  | 'pop'
+  | 'gospel'
+  | 'maskandi'
 
 // Personality dimensions — 5 scoring axes
-export type PersonalityDimension =
-  | 'energy' | 'cultural_rootedness' | 'sophistication' | 'edge' | 'spirituality'
+export type PersonalityDimension = 'energy' | 'cultural_rootedness' | 'sophistication' | 'edge' | 'spirituality'
 
 // Dimension score vector — maps each dimension to 0.0–1.0
 export type DimensionScoreVector = Record<PersonalityDimension, number>
@@ -339,6 +346,7 @@ CREATE TABLE genre_weight_matrix (
 ```
 
 User table additions (future migration):
+
 ```sql
 ALTER TABLE users
   ADD COLUMN music_genres TEXT[] DEFAULT '{}',
@@ -355,16 +363,16 @@ ALTER TABLE users
 
 All new endpoints follow the existing `AppError` pattern. Errors return `{ error: string, message: string, statusCode: number }`.
 
-| Scenario | Status | Error Code | Message |
-|----------|--------|------------|---------|
-| Node not found for crowd vibe | 404 | `not_found` | "Node not found" |
-| Invalid genre in PATCH | 400 | `validation_error` | "Invalid genre: {value}" |
-| More than 5 manual genres | 400 | `validation_error` | "Maximum 5 genres allowed" |
-| Zero genres in manual save | 400 | `validation_error` | "At least 1 genre required" |
-| Invalid weight value (not 0.0–1.0) | 400 | `validation_error` | "Weight must be between 0.0 and 1.0" |
-| Streaming OAuth failure | 502 | `streaming_error` | "Failed to connect streaming service" |
-| Archetype not found for update | 404 | `not_found` | "Archetype not found" |
-| Unauthorized admin action | 403 | `forbidden` | "Insufficient permissions" |
+| Scenario                           | Status | Error Code         | Message                               |
+| ---------------------------------- | ------ | ------------------ | ------------------------------------- |
+| Node not found for crowd vibe      | 404    | `not_found`        | "Node not found"                      |
+| Invalid genre in PATCH             | 400    | `validation_error` | "Invalid genre: {value}"              |
+| More than 5 manual genres          | 400    | `validation_error` | "Maximum 5 genres allowed"            |
+| Zero genres in manual save         | 400    | `validation_error` | "At least 1 genre required"           |
+| Invalid weight value (not 0.0–1.0) | 400    | `validation_error` | "Weight must be between 0.0 and 1.0"  |
+| Streaming OAuth failure            | 502    | `streaming_error`  | "Failed to connect streaming service" |
+| Archetype not found for update     | 404    | `not_found`        | "Archetype not found"                 |
+| Unauthorized admin action          | 403    | `forbidden`        | "Insufficient permissions"            |
 
 ### Frontend Error Handling
 
@@ -454,9 +462,9 @@ register('POST', '/v1/admin/archetypes/test', ({ body }) => {
   const { genres } = (body ?? {}) as { genres?: MusicGenre[] }
   const scores = computeDimensionScores(genres ?? [], GENRE_WEIGHT_MATRIX)
   const resolved = resolveArchetype(scores, ARCHETYPE_CATALOG)
-  const allMatches = ARCHETYPE_CATALOG
-    .filter(a => a.isActive && scores && matchesArchetype(scores, a))
-    .sort((a, b) => b.priority - a.priority)
+  const allMatches = ARCHETYPE_CATALOG.filter((a) => a.isActive && scores && matchesArchetype(scores, a)).sort(
+    (a, b) => b.priority - a.priority,
+  )
   return { dimensionScores: scores, resolvedArchetype: resolved, allMatches }
 })
 

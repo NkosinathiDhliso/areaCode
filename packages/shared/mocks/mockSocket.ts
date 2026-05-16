@@ -34,14 +34,23 @@ export class MockSocket {
     const fns = this.listeners.get(event)
     if (fns) {
       for (const fn of fns) {
-        try { fn(...args) } catch (e) { console.error('[MockSocket] Handler error:', e) }
+        try {
+          fn(...args)
+        } catch (e) {
+          console.error('[MockSocket] Handler error:', e)
+        }
       }
     }
     return this
   }
 
-  disconnect(): void { this.connected = false }
-  connect(): this { this.connected = true; return this }
+  disconnect(): void {
+    this.connected = false
+  }
+  connect(): this {
+    this.connected = true
+    return this
+  }
 }
 
 /** Factory function for creating a MockSocket instance. */
@@ -71,8 +80,10 @@ export function startConsumerEmitter(socket: MockSocket): () => void {
       const score = scores[node.id]!
 
       socket.emit('node:pulse_update', {
-        nodeId: node.id, pulseScore: score,
-        checkInCount: Math.floor(score / 3), state: getNodeState(score),
+        nodeId: node.id,
+        pulseScore: score,
+        checkInCount: Math.floor(score / 3),
+        state: getNodeState(score),
       })
 
       // Alternate between toast and state_change
@@ -82,7 +93,9 @@ export function startConsumerEmitter(socket: MockSocket): () => void {
         socket.emit('toast:new', {
           type: toastTypes[idx % toastTypes.length],
           message: `${user.displayName} just checked in at ${node.name}`,
-          nodeId: node.id, nodeLat: node.lat, nodeLng: node.lng,
+          nodeId: node.id,
+          nodeLat: node.lat,
+          nodeLng: node.lng,
           avatarUrl: user.avatarUrl,
           musicGenres: musicData?.genres ?? [],
           dimensionScores: musicData?.dimensionScores ?? null,
@@ -100,7 +113,10 @@ export function startConsumerEmitter(socket: MockSocket): () => void {
 
   const schedule = () => {
     const delay = randomBetween(8000, 20000)
-    return setTimeout(() => { tick(); timerId = schedule() }, delay)
+    return setTimeout(() => {
+      tick()
+      timerId = schedule()
+    }, delay)
   }
   let timerId = schedule()
 
@@ -119,16 +135,20 @@ export function startBusinessEmitter(socket: MockSocket, _businessId?: string): 
 
       if (idx % 2 === 0) {
         socket.emit('business:checkin', {
-          nodeId: node.id, nodeName: node.name,
+          nodeId: node.id,
+          nodeName: node.name,
           checkInCount: randomBetween(10, 50),
-          avatarUrl: user.avatarUrl, username: user.username,
+          avatarUrl: user.avatarUrl,
+          username: user.username,
           timestamp: new Date().toISOString(),
         })
       } else {
         const reward = `Mock reward at ${node.name}`
         socket.emit('business:reward_claimed', {
-          nodeId: node.id, nodeName: node.name,
-          rewardId: `mock-reward-${idx}`, rewardTitle: reward,
+          nodeId: node.id,
+          nodeName: node.name,
+          rewardId: `mock-reward-${idx}`,
+          rewardTitle: reward,
           timestamp: new Date().toISOString(),
         })
       }
@@ -140,7 +160,10 @@ export function startBusinessEmitter(socket: MockSocket, _businessId?: string): 
 
   const schedule = () => {
     const delay = randomBetween(15000, 45000)
-    return setTimeout(() => { tick(); timerId = schedule() }, delay)
+    return setTimeout(() => {
+      tick()
+      timerId = schedule()
+    }, delay)
   }
   let timerId = schedule()
 

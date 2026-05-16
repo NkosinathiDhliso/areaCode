@@ -122,7 +122,7 @@ async function getAllBusinesses(): Promise<Business[]> {
         TableName: TableNames.businesses,
         ProjectionExpression: 'businessId',
         ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
-      })
+      }),
     )
 
     for (const item of result.Items || []) {
@@ -148,12 +148,10 @@ async function getNodeIdsForBusiness(businessId: string): Promise<string[]> {
       KeyConditionExpression: 'businessId = :businessId',
       ProjectionExpression: 'nodeId',
       ExpressionAttributeValues: { ':businessId': businessId },
-    })
+    }),
   )
 
-  return (result.Items || [])
-    .map((item) => (item['nodeId'] as string) ?? (item['id'] as string))
-    .filter(Boolean)
+  return (result.Items || []).map((item) => (item['nodeId'] as string) ?? (item['id'] as string)).filter(Boolean)
 }
 
 /**
@@ -161,11 +159,7 @@ async function getNodeIdsForBusiness(businessId: string): Promise<string[]> {
  * Uses the NodeIndex GSI on the checkins table with a timestamp filter.
  * Returns true as soon as any check-in is found (short-circuits).
  */
-async function hasActivityInPeriod(
-  nodeIds: string[],
-  periodStart: string,
-  periodEnd: string,
-): Promise<boolean> {
+async function hasActivityInPeriod(nodeIds: string[], periodStart: string, periodEnd: string): Promise<boolean> {
   for (const nodeId of nodeIds) {
     const result = await documentClient.send(
       new QueryCommand({
@@ -179,7 +173,7 @@ async function hasActivityInPeriod(
           ':end': periodEnd,
         },
         Limit: 1,
-      })
+      }),
     )
 
     if (result.Items && result.Items.length > 0) {
@@ -209,7 +203,7 @@ async function sendGenerationMessage(
     new SendMessageCommand({
       QueueUrl: queueUrl,
       MessageBody: JSON.stringify(message),
-    })
+    }),
   )
 }
 

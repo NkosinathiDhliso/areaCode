@@ -12,12 +12,23 @@ import { colors } from '../src/theme'
 type Tab = 'friends' | 'following' | 'followers' | 'search'
 
 interface FriendEntry {
-  userId: string; username: string; displayName: string
-  avatarUrl: string | null; tier: Tier; totalCheckIns?: number
+  userId: string
+  username: string
+  displayName: string
+  avatarUrl: string | null
+  tier: Tier
+  totalCheckIns?: number
 }
-interface FollowingEntry extends FriendEntry { isMutual: boolean }
-interface FollowerEntry extends FriendEntry { isFollowingBack: boolean }
-interface SearchEntry extends FriendEntry { isFollowing: boolean; isMutual: boolean }
+interface FollowingEntry extends FriendEntry {
+  isMutual: boolean
+}
+interface FollowerEntry extends FriendEntry {
+  isFollowingBack: boolean
+}
+interface SearchEntry extends FriendEntry {
+  isFollowing: boolean
+  isMutual: boolean
+}
 
 export default function FriendsScreen() {
   const { t } = useTranslation()
@@ -30,11 +41,7 @@ export default function FriendsScreen() {
 
       <View style={styles.tabBar}>
         {(['friends', 'following', 'followers', 'search'] as Tab[]).map((tb) => (
-          <TouchableOpacity
-            key={tb}
-            style={[styles.tab, tab === tb && styles.tabActive]}
-            onPress={() => setTab(tb)}
-          >
+          <TouchableOpacity key={tb} style={[styles.tab, tab === tb && styles.tabActive]} onPress={() => setTab(tb)}>
             <Text style={[styles.tabText, tab === tb && styles.tabTextActive]}>
               {tb === 'search' ? 'Search' : tb.charAt(0).toUpperCase() + tb.slice(1)}
             </Text>
@@ -79,7 +86,10 @@ function FollowingTab() {
   })
   const unfollow = useMutation({
     mutationFn: (id: string) => api.delete(`/v1/users/${id}/follow`),
-    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['following'] }); void qc.invalidateQueries({ queryKey: ['friends'] }) },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['following'] })
+      void qc.invalidateQueries({ queryKey: ['friends'] })
+    },
   })
   if (isLoading) return <LoadingSkeleton />
   if (!data?.users.length) return <EmptyState message={t('friends.notFollowingAnyone')} />
@@ -112,7 +122,10 @@ function FollowersTab() {
   })
   const follow = useMutation({
     mutationFn: (id: string) => api.post(`/v1/users/${id}/follow`, {}),
-    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['followers'] }); void qc.invalidateQueries({ queryKey: ['friends'] }) },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['followers'] })
+      void qc.invalidateQueries({ queryKey: ['friends'] })
+    },
   })
   if (isLoading) return <LoadingSkeleton />
   if (!data?.users.length) return <EmptyState message={t('friends.noFollowers')} />
@@ -188,12 +201,8 @@ function SearchTab({ search, setSearch }: { search: string; setSearch: (s: strin
           )}
         </View>
       ))}
-      {search.length >= 2 && !isLoading && data?.users?.length === 0 && (
-        <EmptyState message={t('friends.noResults')} />
-      )}
-      {search.length < 2 && (
-        <Text style={styles.mutedSmall}>{t('friends.searchHint')}</Text>
-      )}
+      {search.length >= 2 && !isLoading && data?.users?.length === 0 && <EmptyState message={t('friends.noResults')} />}
+      {search.length < 2 && <Text style={styles.mutedSmall}>{t('friends.searchHint')}</Text>}
     </View>
   )
 }
@@ -222,13 +231,18 @@ function UserRow({ user, badge }: { user: FriendEntry; badge?: string }) {
 }
 
 function LoadingSkeleton({ count = 5 }: { count?: number }) {
-  return <View style={{ gap: 8 }}>{Array.from({ length: count }).map((_, i) => <SkeletonBox key={i} height={56} />)}</View>
+  return (
+    <View style={{ gap: 8 }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <SkeletonBox key={i} height={56} />
+      ))}
+    </View>
+  )
 }
 
 function EmptyState({ message }: { message: string }) {
   return <Text style={styles.emptyText}>{message}</Text>
 }
-
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bgBase },

@@ -38,11 +38,7 @@ export default function FeedScreen() {
       ) : data?.items && data.items.length > 0 ? (
         data.items.map((item) => (
           <View key={item.id} style={styles.row}>
-            <AvatarCircle
-              url={item.user.avatarUrl}
-              displayName={item.user.displayName}
-              size={32}
-            />
+            <AvatarCircle url={item.user.avatarUrl} displayName={item.user.displayName} size={32} />
             <View style={{ flex: 1 }}>
               <Text style={styles.feedText}>
                 <Text style={styles.bold}>{item.user.username}</Text>

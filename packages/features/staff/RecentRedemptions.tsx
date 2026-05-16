@@ -47,12 +47,8 @@ export function RecentRedemptions() {
               key={r.code + r.redeemedAt}
               className="items-center justify-between bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3"
             >
-              <Text className="text-[var(--text-primary)] font-mono text-sm tracking-wider">
-                {r.code}
-              </Text>
-              <Text className="text-[var(--text-muted)] text-xs">
-                {formatRelativeTime(r.redeemedAt)}
-              </Text>
+              <Text className="text-[var(--text-primary)] font-mono text-sm tracking-wider">{r.code}</Text>
+              <Text className="text-[var(--text-muted)] text-xs">{formatRelativeTime(r.redeemedAt)}</Text>
             </Row>
           ))}
         </Box>

@@ -6,9 +6,7 @@ import type {
   PersonalityDimension,
 } from '../types'
 
-const DIMENSIONS: PersonalityDimension[] = [
-  'energy', 'cultural_rootedness', 'sophistication', 'edge', 'spirituality',
-]
+const DIMENSIONS: PersonalityDimension[] = ['energy', 'cultural_rootedness', 'sophistication', 'edge', 'spirituality']
 
 /**
  * Compute dimension scores by averaging genre weights across all user genres.
@@ -42,10 +40,7 @@ export function computeDimensionScores(
  * Check if a score vector meets all dimension thresholds for an archetype.
  * Special case: "The Smooth Operator" also requires energy < 0.5.
  */
-export function matchesArchetype(
-  scores: DimensionScoreVector,
-  archetype: PersonalityArchetype,
-): boolean {
+export function matchesArchetype(scores: DimensionScoreVector, archetype: PersonalityArchetype): boolean {
   for (const [dim, threshold] of Object.entries(archetype.dimensionThresholds)) {
     const score = scores[dim as PersonalityDimension]
     if (score === undefined || score < threshold!) return false
@@ -71,7 +66,17 @@ export function resolveArchetype(
   const eclectic = archetypes.find((a) => a.name === 'The Eclectic')
 
   if (!scores) {
-    return uncharted ?? { id: 'archetype-uncharted', name: 'The Uncharted', iconId: 'uncharted', description: '', dimensionThresholds: {}, priority: 1, isActive: true }
+    return (
+      uncharted ?? {
+        id: 'archetype-uncharted',
+        name: 'The Uncharted',
+        iconId: 'uncharted',
+        description: '',
+        dimensionThresholds: {},
+        priority: 1,
+        isActive: true,
+      }
+    )
   }
 
   const active = archetypes
@@ -84,5 +89,15 @@ export function resolveArchetype(
     }
   }
 
-  return eclectic ?? { id: 'archetype-eclectic', name: 'The Eclectic', iconId: 'eclectic', description: '', dimensionThresholds: {}, priority: 2, isActive: true }
+  return (
+    eclectic ?? {
+      id: 'archetype-eclectic',
+      name: 'The Eclectic',
+      iconId: 'eclectic',
+      description: '',
+      dimensionThresholds: {},
+      priority: 2,
+      isActive: true,
+    }
+  )
 }

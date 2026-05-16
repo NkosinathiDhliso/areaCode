@@ -20,11 +20,7 @@ export function CategoryFilterBar({ onFilter }: CategoryFilterBarProps) {
   }
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.container}
-    >
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.container}>
       {NODE_CATEGORIES.map((cat) => (
         <TouchableOpacity
           key={cat.value}

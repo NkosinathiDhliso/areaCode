@@ -3,14 +3,7 @@
 //   users      → PK: userId  (no SK)     GSIs: EmailIndex, CognitoIndex
 //   businesses → PK: businessId (no SK)  GSI: OwnerIndex
 //   app-data   → PK: pk, SK: sk          GSI: GSI1(gsi1pk, gsi1sk)
-import {
-  GetCommand,
-  QueryCommand,
-  PutCommand,
-  UpdateCommand,
-  DeleteCommand,
-  ScanCommand,
-} from '@aws-sdk/lib-dynamodb'
+import { GetCommand, QueryCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
 import type { User, BusinessAccount, StaffAccount } from './types.js'
@@ -20,9 +13,7 @@ import type { User, BusinessAccount, StaffAccount } from './types.js'
 // ============================================================================
 
 export async function getUserById(userId: string): Promise<User | null> {
-  const result = await documentClient.send(
-    new GetCommand({ TableName: TableNames.users, Key: { userId } })
-  )
+  const result = await documentClient.send(new GetCommand({ TableName: TableNames.users, Key: { userId } }))
   return result.Item ? mapUser(result.Item) : null
 }
 
@@ -34,7 +25,7 @@ export async function getUserByCognitoSub(cognitoSub: string): Promise<User | nu
       KeyConditionExpression: 'cognitoSub = :sub',
       ExpressionAttributeValues: { ':sub': cognitoSub },
       Limit: 1,
-    })
+    }),
   )
   return result.Items?.[0] ? mapUser(result.Items[0]) : null
 }
@@ -49,7 +40,7 @@ export async function getUserByPhone(phone: string): Promise<User | null> {
         FilterExpression: 'phone = :phone',
         ExpressionAttributeValues: { ':phone': phone },
         ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
-      })
+      }),
     )
     if (result.Items?.[0]) return mapUser(result.Items[0])
     lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
@@ -65,7 +56,7 @@ export async function getUserByEmail(email: string): Promise<User | null> {
       KeyConditionExpression: 'email = :email',
       ExpressionAttributeValues: { ':email': email },
       Limit: 1,
-    })
+    }),
   )
   return result.Items?.[0] ? mapUser(result.Items[0]) : null
 }
@@ -73,7 +64,7 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 export async function createUser(data: Omit<User, 'userId' | 'createdAt'>): Promise<User> {
   const userId = generateId()
   const now = new Date().toISOString()
-  
+
   const item: Record<string, unknown> = {
     userId,
     ...data,
@@ -88,33 +79,33 @@ export async function createUser(data: Omit<User, 'userId' | 'createdAt'>): Prom
     updatedAt: now,
   }
 
-  await documentClient.send(
-    new PutCommand({ TableName: TableNames.users, Item: item })
-  )
+  await documentClient.send(new PutCommand({ TableName: TableNames.users, Item: item }))
 
   return mapUser(item)
 }
 
 export async function updateUser(
   userId: string,
-  data: Partial<Omit<User, 'userId' | 'createdAt'>>
+  data: Partial<Omit<User, 'userId' | 'createdAt'>>,
 ): Promise<User | null> {
   const keys = Object.keys(data).filter((k) => data[k as keyof typeof data] !== undefined)
   if (keys.length === 0) return getUserById(userId)
 
-  const updateExpression = keys
-    .map((key) => `#${key} = :${key}`)
-    .join(', ')
-  
+  const updateExpression = keys.map((key) => `#${key} = :${key}`).join(', ')
+
   const expressionAttributeNames: Record<string, string> = {
     '#updatedAt': 'updatedAt',
   }
-  keys.forEach((key) => { expressionAttributeNames[`#${key}`] = key })
-  
+  keys.forEach((key) => {
+    expressionAttributeNames[`#${key}`] = key
+  })
+
   const expressionAttributeValues: Record<string, unknown> = {
     ':updatedAt': new Date().toISOString(),
   }
-  keys.forEach((key) => { expressionAttributeValues[`:${key}`] = data[key as keyof typeof data] })
+  keys.forEach((key) => {
+    expressionAttributeValues[`:${key}`] = data[key as keyof typeof data]
+  })
 
   const result = await documentClient.send(
     new UpdateCommand({
@@ -124,7 +115,7 @@ export async function updateUser(
       ExpressionAttributeNames: expressionAttributeNames,
       ExpressionAttributeValues: expressionAttributeValues,
       ReturnValues: 'ALL_NEW',
-    })
+    }),
   )
 
   return result.Attributes ? mapUser(result.Attributes) : null
@@ -143,9 +134,7 @@ function mapUser(item: Record<string, unknown>): User {
 // ============================================================================
 
 export async function getBusinessById(businessId: string): Promise<BusinessAccount | null> {
-  const result = await documentClient.send(
-    new GetCommand({ TableName: TableNames.businesses, Key: { businessId } })
-  )
+  const result = await documentClient.send(new GetCommand({ TableName: TableNames.businesses, Key: { businessId } }))
   return result.Item ? mapBiz(result.Item) : null
 }
 
@@ -158,7 +147,7 @@ export async function getBusinessByCognitoSub(cognitoSub: string): Promise<Busin
         FilterExpression: 'cognitoSub = :sub',
         ExpressionAttributeValues: { ':sub': cognitoSub },
         ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
-      })
+      }),
     )
     if (result.Items?.[0]) return mapBiz(result.Items[0])
     lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
@@ -175,7 +164,7 @@ export async function getBusinessByEmail(email: string): Promise<BusinessAccount
         FilterExpression: 'email = :email',
         ExpressionAttributeValues: { ':email': email },
         ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
-      })
+      }),
     )
     if (result.Items?.[0]) return mapBiz(result.Items[0])
     lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
@@ -191,13 +180,13 @@ export async function getBusinessByOwnerId(ownerId: string): Promise<BusinessAcc
       KeyConditionExpression: 'ownerId = :ownerId',
       ExpressionAttributeValues: { ':ownerId': ownerId },
       Limit: 1,
-    })
+    }),
   )
   return result.Items?.[0] ? mapBiz(result.Items[0]) : null
 }
 
 export async function createBusiness(
-  data: Omit<BusinessAccount, 'businessId' | 'createdAt'>
+  data: Omit<BusinessAccount, 'businessId' | 'createdAt'>,
 ): Promise<BusinessAccount> {
   const businessId = generateId()
   const now = new Date().toISOString()
@@ -212,16 +201,14 @@ export async function createBusiness(
     updatedAt: now,
   }
 
-  await documentClient.send(
-    new PutCommand({ TableName: TableNames.businesses, Item: item })
-  )
+  await documentClient.send(new PutCommand({ TableName: TableNames.businesses, Item: item }))
 
   return mapBiz(item)
 }
 
 export async function updateBusiness(
   businessId: string,
-  data: Partial<Omit<BusinessAccount, 'businessId' | 'createdAt'>>
+  data: Partial<Omit<BusinessAccount, 'businessId' | 'createdAt'>>,
 ): Promise<BusinessAccount | null> {
   const keys = Object.keys(data).filter((k) => data[k as keyof typeof data] !== undefined)
   if (keys.length === 0) return getBusinessById(businessId)
@@ -241,7 +228,7 @@ export async function updateBusiness(
       ExpressionAttributeNames: expressionAttributeNames,
       ExpressionAttributeValues: expressionAttributeValues,
       ReturnValues: 'ALL_NEW',
-    })
+    }),
   )
 
   return result.Attributes ? mapBiz(result.Attributes) : null
@@ -264,7 +251,7 @@ export async function getStaffById(staffId: string): Promise<StaffAccount | null
     new GetCommand({
       TableName: TableNames.appData,
       Key: { pk: `STAFF#${staffId}`, sk: `PROFILE#${staffId}` },
-    })
+    }),
   )
   return result.Item ? mapStaff(result.Item) : null
 }
@@ -277,7 +264,7 @@ export async function getStaffByCognitoSub(cognitoSub: string): Promise<StaffAcc
       KeyConditionExpression: 'gsi1pk = :pk',
       ExpressionAttributeValues: { ':pk': `COGNITO#${cognitoSub}` },
       Limit: 1,
-    })
+    }),
   )
   return result.Items?.[0] ? mapStaff(result.Items[0]) : null
 }
@@ -290,14 +277,12 @@ export async function getStaffByPhone(phone: string): Promise<StaffAccount | nul
       KeyConditionExpression: 'gsi1pk = :pk',
       ExpressionAttributeValues: { ':pk': `STAFF_PHONE#${phone}` },
       Limit: 1,
-    })
+    }),
   )
   return result.Items?.[0] ? mapStaff(result.Items[0]) : null
 }
 
-export async function createStaff(
-  data: Omit<StaffAccount, 'staffId' | 'createdAt'>
-): Promise<StaffAccount> {
+export async function createStaff(data: Omit<StaffAccount, 'staffId' | 'createdAt'>): Promise<StaffAccount> {
   if (!data.cognitoSub && !data.phone) {
     throw new Error('createStaff requires cognitoSub or phone')
   }
@@ -313,9 +298,7 @@ export async function createStaff(
     isActive: data.isActive ?? true,
   }
 
-  const gsi1pk = data.cognitoSub
-    ? `COGNITO#${data.cognitoSub}`
-    : `STAFF_PHONE#${data.phone as string}`
+  const gsi1pk = data.cognitoSub ? `COGNITO#${data.cognitoSub}` : `STAFF_PHONE#${data.phone as string}`
 
   await documentClient.send(
     new PutCommand({
@@ -327,7 +310,7 @@ export async function createStaff(
         gsi1sk: `BUSINESS#${data.businessId}`,
         ...staff,
       },
-    })
+    }),
   )
 
   // Write phone→staff lookup entry
@@ -344,7 +327,7 @@ export async function createStaff(
           businessId: data.businessId,
           phone: data.phone,
         },
-      })
+      }),
     )
   }
 
@@ -362,7 +345,7 @@ export async function createStaff(
         isActive: staff.isActive,
         role: (data as any).role ?? 'staff',
       },
-    })
+    }),
   )
 
   return staff
@@ -375,15 +358,13 @@ export async function getStaffByBusinessId(businessId: string): Promise<StaffAcc
       IndexName: 'GSI1',
       KeyConditionExpression: 'gsi1pk = :pk',
       ExpressionAttributeValues: { ':pk': `BIZ_STAFF#${businessId}` },
-    })
+    }),
   )
   return (result.Items || []).map((i) => mapStaff(i))
 }
 
 export async function deleteUser(userId: string): Promise<void> {
-  await documentClient.send(
-    new DeleteCommand({ TableName: TableNames.users, Key: { userId } })
-  )
+  await documentClient.send(new DeleteCommand({ TableName: TableNames.users, Key: { userId } }))
 }
 
 function mapStaff(item: Record<string, unknown>): StaffAccount {

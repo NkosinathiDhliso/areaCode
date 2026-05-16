@@ -42,7 +42,7 @@ export async function evaluateCityNodes(cityId: string, citySlug: string) {
       TableName: TableNames.nodes,
       FilterExpression: 'cityId = :cityId AND isActive = :active',
       ExpressionAttributeValues: { ':cityId': cityId, ':active': true },
-    })
+    }),
   )
 
   let surgeCount = 0
@@ -82,7 +82,7 @@ async function getCities() {
       TableName: TableNames.appData,
       FilterExpression: 'begins_with(pk, :prefix) AND sk = pk',
       ExpressionAttributeValues: { ':prefix': 'CITY#' },
-    })
+    }),
   )
   return (result.Items || []).map((c) => ({ id: (c['cityId'] ?? c['pk']) as string, slug: c['slug'] as string }))
 }
@@ -96,14 +96,17 @@ export async function startEvaluatorLoop() {
   async function tick() {
     for (let i = 0; i < cities.length; i++) {
       const city = cities[i]!
-      setTimeout(async () => {
-        try {
-          await evaluateCityNodes(city.id, city.slug)
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          console.error(`[node-state-evaluator] ${city.slug}: ${msg}`)
-        }
-      }, i * (30_000 / cities.length))
+      setTimeout(
+        async () => {
+          try {
+            await evaluateCityNodes(city.id, city.slug)
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            console.error(`[node-state-evaluator] ${city.slug}: ${msg}`)
+          }
+        },
+        i * (30_000 / cities.length),
+      )
     }
   }
 

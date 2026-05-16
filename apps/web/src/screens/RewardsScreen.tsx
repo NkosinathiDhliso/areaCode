@@ -6,6 +6,8 @@ import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { Skeleton } from '@area-code/shared/components/Skeleton'
 import { EmptyState } from '@area-code/shared/components/EmptyState'
+import { CountdownBadge } from '@area-code/shared/components/CountdownBadge'
+import { REWARD_EXPIRY_NOTICE } from '@area-code/shared/constants/legal'
 
 interface NearbyReward {
   id: string
@@ -66,7 +68,8 @@ export function RewardsScreen() {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4" data-scroll-container>
-      <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-4">{t('rewards.nearYou')}</h1>
+      <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-1">{t('rewards.nearYou')}</h1>
+      <p className="text-[var(--text-muted)] text-xs mb-4">{REWARD_EXPIRY_NOTICE}</p>
 
       {isLoading ? (
         <div className="flex flex-col gap-3">
@@ -75,34 +78,75 @@ export function RewardsScreen() {
           <Skeleton className="h-20 rounded-2xl" />
         </div>
       ) : rewards && rewards.length > 0 ? (
-        <div className="flex flex-col gap-3">
-          {rewards.map((r) => {
-            const slotsLeft = r.totalSlots ? r.totalSlots - r.claimedCount : null
-            const isLow = slotsLeft !== null && slotsLeft <= 5
-            return (
-              <div key={r.id} className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
-                <div className="flex flex-row items-start justify-between">
-                  <div className="flex-1">
-                    <p className="text-[var(--text-primary)] text-sm font-medium">{r.title}</p>
-                    <p className="text-[var(--text-muted)] text-xs mt-1">
-                      {r.nodeName} · {Math.round(r.distance)}m away
-                    </p>
-                  </div>
-                  {slotsLeft !== null && (
-                    <span
-                      className={`text-xs font-medium ${isLow ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'}`}
-                    >
-                      {slotsLeft} {t('node.left')}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
+        <RewardsList rewards={rewards} t={t} />
       ) : (
         <EmptyState icon="reward" message={t('rewards.noneNearby')} />
       )}
+    </div>
+  )
+}
+
+function RewardsList({ rewards, t }: { rewards: NearbyReward[]; t: (k: string) => string }) {
+  const now = Date.now()
+  const live: NearbyReward[] = []
+  const expired: NearbyReward[] = []
+  for (const r of rewards) {
+    if (r.expiresAt && Date.parse(r.expiresAt) <= now) expired.push(r)
+    else live.push(r)
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      {live.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {live.map((r) => (
+            <RewardCard key={r.id} reward={r} t={t} />
+          ))}
+        </div>
+      )}
+      {expired.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <h2 className="text-[var(--text-muted)] text-xs uppercase tracking-wide">{t('rewards.expiredHeading')}</h2>
+          {expired.map((r) => (
+            <RewardCard key={r.id} reward={r} t={t} expired />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RewardCard({
+  reward: r,
+  t,
+  expired = false,
+}: {
+  reward: NearbyReward
+  t: (k: string) => string
+  expired?: boolean
+}) {
+  const slotsLeft = r.totalSlots ? r.totalSlots - r.claimedCount : null
+  const isLow = slotsLeft !== null && slotsLeft <= 5
+  return (
+    <div
+      className={`bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 ${expired ? 'opacity-60' : ''}`}
+    >
+      <div className="flex flex-row items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-[var(--text-primary)] text-sm font-medium">{r.title}</p>
+          <p className="text-[var(--text-muted)] text-xs mt-1">
+            {r.nodeName} · {Math.round(r.distance)}m away
+          </p>
+        </div>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <CountdownBadge expiresAt={r.expiresAt} />
+          {slotsLeft !== null && !expired && (
+            <span className={`text-xs font-medium ${isLow ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'}`}>
+              {slotsLeft} {t('node.left')}
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

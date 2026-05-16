@@ -13,6 +13,7 @@ import { StreakDisplay } from '@area-code/shared/components/StreakDisplay'
 import { Avatar } from '@area-code/shared/components/Avatar'
 import { PrivacyIndicator } from '@area-code/shared/components/PrivacyIndicator'
 import { Spinner } from '@area-code/shared/components/Spinner'
+import { TIER_PERMANENCE_SHORT } from '@area-code/shared/constants/legal'
 import type { User, PrivacyLevel } from '@area-code/shared/types'
 import type { AppRoute } from '../types'
 import { StreamingSection } from '../components/StreamingSection'
@@ -127,6 +128,8 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
         <TierBadge tier={tier} />
       </div>
 
+      <p className="text-[var(--text-muted)] text-xs mb-6">{TIER_PERMANENCE_SHORT}</p>
+
       <div className="flex flex-row gap-4 mb-6">
         <StatCard value={totalCheckIns} label={t('profile.totalCheckIns')} />
         <StatCard value={streakCount} label={t('profile.currentStreak')} />
@@ -217,17 +220,20 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
         {/* Full data export (POPIA compliance) */}
         <button
           onClick={() => {
-            void api.get<Record<string, unknown>>('/v1/users/me/data-export').then((data) => {
-              const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = `area-code-data-export-${new Date().toISOString().slice(0, 10)}.json`
-              a.click()
-              URL.revokeObjectURL(url)
-            }).catch(() => {
-              useErrorStore.getState().showError(t('profile.exportFailed', 'Couldn\'t download your data. Try again.'))
-            })
+            void api
+              .get<Record<string, unknown>>('/v1/users/me/data-export')
+              .then((data) => {
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `area-code-data-export-${new Date().toISOString().slice(0, 10)}.json`
+                a.click()
+                URL.revokeObjectURL(url)
+              })
+              .catch(() => {
+                useErrorStore.getState().showError(t('profile.exportFailed', "Couldn't download your data. Try again."))
+              })
           }}
           className="w-full text-left text-[var(--text-primary)] text-sm py-2"
         >
@@ -316,13 +322,16 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
               <button
                 onClick={() => {
                   setDeletingAccount(true)
-                  void api.delete('/v1/users/me').then(() => {
-                    logout()
-                    onNavigate('landing')
-                  }).catch(() => {
-                    setDeletingAccount(false)
-                    setShowDeleteAccountConfirm(false)
-                  })
+                  void api
+                    .delete('/v1/users/me')
+                    .then(() => {
+                      logout()
+                      onNavigate('landing')
+                    })
+                    .catch(() => {
+                      setDeletingAccount(false)
+                      setShowDeleteAccountConfirm(false)
+                    })
                 }}
                 disabled={deletingAccount}
                 className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2"

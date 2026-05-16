@@ -29,15 +29,7 @@ export function CheckInHistoryScreen({ onNavigate }: CheckInHistoryScreenProps) 
   const { t } = useTranslation()
   const sentinelRef = useRef<HTMLDivElement>(null)
 
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-    isError,
-    refetch,
-  } = useInfiniteQuery({
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, refetch } = useInfiniteQuery({
     queryKey: ['check-in-history'],
     queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
       const params = new URLSearchParams({ limit: '20' })
@@ -45,7 +37,7 @@ export function CheckInHistoryScreen({ onNavigate }: CheckInHistoryScreenProps) 
       return api.get<CheckInHistoryResponse>(`/v1/users/me/check-in-history?${params}`)
     },
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage.hasMore ? lastPage.nextCursor : undefined,
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.nextCursor : undefined),
   })
 
   const handleIntersect = useCallback(
@@ -104,7 +96,10 @@ export function CheckInHistoryScreen({ onNavigate }: CheckInHistoryScreenProps) 
       {isLoading && (
         <div className="flex flex-col gap-3">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-2">
+            <div
+              key={i}
+              className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-2"
+            >
               <Skeleton className="h-4 w-3/4" />
               <Skeleton className="h-3 w-1/2" />
               <Skeleton className="h-3 w-1/3" />
@@ -140,15 +135,18 @@ export function CheckInHistoryScreen({ onNavigate }: CheckInHistoryScreenProps) 
             >
               {(() => {
                 const Icon = CATEGORY_ICONS[item.node.category] ?? MapPin
-                return <Icon size={20} strokeWidth={1.5} className="text-[var(--text-secondary)] shrink-0" aria-hidden="true" />
+                return (
+                  <Icon
+                    size={20}
+                    strokeWidth={1.5}
+                    className="text-[var(--text-secondary)] shrink-0"
+                    aria-hidden="true"
+                  />
+                )
               })()}
               <div className="flex-1 min-w-0">
-                <p className="text-[var(--text-primary)] text-sm font-medium truncate">
-                  {item.node.name}
-                </p>
-                <p className="text-[var(--text-muted)] text-xs capitalize">
-                  {item.node.category}
-                </p>
+                <p className="text-[var(--text-primary)] text-sm font-medium truncate">{item.node.name}</p>
+                <p className="text-[var(--text-muted)] text-xs capitalize">{item.node.category}</p>
               </div>
               <div className="text-right shrink-0">
                 <p className="text-[var(--text-secondary)] text-xs">{formatDate(item.checkedInAt)}</p>

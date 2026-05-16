@@ -4,9 +4,18 @@ import { api } from '@area-code/shared/lib/api'
 import type { BusinessMusicAudience, MusicGenre } from '@area-code/shared/types'
 
 const GENRE_LABELS: Record<MusicGenre, string> = {
-  amapiano: 'Amapiano', deep_house: 'Deep House', afrobeats: 'Afrobeats',
-  hip_hop: 'Hip Hop', rnb: 'R&B', kwaito: 'Kwaito', gqom: 'Gqom',
-  jazz: 'Jazz', rock: 'Rock', pop: 'Pop', gospel: 'Gospel', maskandi: 'Maskandi',
+  amapiano: 'Amapiano',
+  deep_house: 'Deep House',
+  afrobeats: 'Afrobeats',
+  hip_hop: 'Hip Hop',
+  rnb: 'R&B',
+  kwaito: 'Kwaito',
+  gqom: 'Gqom',
+  jazz: 'Jazz',
+  rock: 'Rock',
+  pop: 'Pop',
+  gospel: 'Gospel',
+  maskandi: 'Maskandi',
 }
 
 export function MusicInsightsSection() {
@@ -16,16 +25,25 @@ export function MusicInsightsSection() {
 
   useEffect(() => {
     let cancelled = false
-    api.get<BusinessMusicAudience>('/v1/business/me/audience/music')
-      .then((res) => { if (!cancelled) setData(res) })
-      .catch(() => { if (!cancelled) setLoadError(true) })
-    return () => { cancelled = true }
+    api
+      .get<BusinessMusicAudience>('/v1/business/me/audience/music')
+      .then((res) => {
+        if (!cancelled) setData(res)
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError(true)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   if (loadError) {
     return (
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
-        <p className="text-[var(--text-muted)] text-sm text-center">{t('biz.audience.loadError', 'Couldn\'t load music insights.')}</p>
+        <p className="text-[var(--text-muted)] text-sm text-center">
+          {t('biz.audience.loadError', "Couldn't load music insights.")}
+        </p>
       </div>
     )
   }
@@ -41,12 +59,13 @@ export function MusicInsightsSection() {
     return null
   }
 
-  const genreEntries = Object.entries(data.genreDistribution)
-    .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0)) as [MusicGenre, number][]
+  const genreEntries = Object.entries(data.genreDistribution).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0)) as [
+    MusicGenre,
+    number,
+  ][]
   const maxGenre = genreEntries[0]?.[1] ?? 1
 
-  const archetypeEntries = Object.entries(data.archetypeBreakdown)
-    .sort((a, b) => b[1] - a[1])
+  const archetypeEntries = Object.entries(data.archetypeBreakdown).sort((a, b) => b[1] - a[1])
 
   return (
     <div className="flex flex-col gap-4">
@@ -58,9 +77,7 @@ export function MusicInsightsSection() {
         <div className="flex flex-col gap-2">
           {genreEntries.map(([genre, count]) => (
             <div key={genre} className="flex flex-row items-center gap-3">
-              <span className="text-[var(--text-primary)] text-xs w-20 shrink-0">
-                {GENRE_LABELS[genre] ?? genre}
-              </span>
+              <span className="text-[var(--text-primary)] text-xs w-20 shrink-0">{GENRE_LABELS[genre] ?? genre}</span>
               <div className="flex-1 bg-[var(--bg-raised)] rounded-xl h-5 overflow-hidden">
                 <div
                   className="h-full bg-[var(--accent)] rounded-xl transition-all"
@@ -80,7 +97,10 @@ export function MusicInsightsSection() {
         </h3>
         <div className="flex flex-row flex-wrap gap-2">
           {archetypeEntries.map(([name, pct]) => (
-            <div key={name} className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-2xl px-3 py-2 flex flex-row items-center gap-2">
+            <div
+              key={name}
+              className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-2xl px-3 py-2 flex flex-row items-center gap-2"
+            >
               <span className="text-[var(--text-primary)] text-sm font-medium">{pct}%</span>
               <span className="text-[var(--text-secondary)] text-xs">{name}</span>
             </div>

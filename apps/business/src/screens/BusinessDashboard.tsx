@@ -22,6 +22,9 @@ const RewardMetricsPanel = lazy(() =>
 const StaffRedemptionPanel = lazy(() =>
   import('./panels/StaffRedemptionPanel').then((m) => ({ default: m.StaffRedemptionPanel })),
 )
+const StaffLeaderboardPanel = lazy(() =>
+  import('./panels/StaffLeaderboardPanel').then((m) => ({ default: m.StaffLeaderboardPanel })),
+)
 const ReportsPanel = lazy(() => import('./panels/ReportsPanel').then((m) => ({ default: m.ReportsPanel })))
 
 const PANELS: DashboardPanel[] = [
@@ -31,6 +34,7 @@ const PANELS: DashboardPanel[] = [
   'reward-metrics',
   'audience',
   'boost',
+  'staff-leaderboard',
   'staff-redemptions',
   'reports',
   'plans',
@@ -44,6 +48,7 @@ const PANEL_LABELS: Record<DashboardPanel, string> = {
   'reward-metrics': 'biz.panel.rewardMetrics',
   audience: 'biz.panel.audience',
   boost: 'biz.panel.boost',
+  'staff-leaderboard': 'biz.panel.staffLeaderboard',
   'staff-redemptions': 'biz.panel.staffRedemptions',
   reports: 'biz.panel.reports',
   plans: 'biz.panel.plans',
@@ -59,6 +64,7 @@ const PANEL_PERMISSIONS: Record<DashboardPanel, string> = {
   'reward-metrics': 'view_metrics',
   audience: 'view_audience',
   boost: 'manage_boost',
+  'staff-leaderboard': 'view_staff',
   'staff-redemptions': 'view_staff',
   reports: 'view_reports',
   plans: 'view_plans',
@@ -138,6 +144,8 @@ export function BusinessDashboard() {
         return <BoostPanel />
       case 'staff-redemptions':
         return <StaffRedemptionPanel />
+      case 'staff-leaderboard':
+        return <StaffLeaderboardPanel />
       case 'reports':
         return <ReportsPanel />
       case 'plans':

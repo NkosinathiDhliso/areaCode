@@ -1,0 +1,72 @@
+name: E2E (full)
+
+# Full Playwright suite. Targets staging by default. Hits Cognito to seed
+# test users, so it needs AWS credentials — kept in repo secrets.
+#
+# Triggers: nightly schedule + manual dispatch.
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # 02:00 UTC daily
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Which env to test (staging|prod)'
+        required: false
+        default: 'staging'
+
+concurrency:
+  group: e2e-${{ github.event.inputs.target || 'staging' }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      E2E_ENV: ${{ github.event.inputs.target || 'staging' }}
+      E2E_API_URL: ${{ secrets.E2E_API_URL }}
+      E2E_CONSUMER_URL: ${{ secrets.E2E_CONSUMER_URL }}
+      E2E_BUSINESS_URL: ${{ secrets.E2E_BUSINESS_URL }}
+      E2E_STAFF_URL: ${{ secrets.E2E_STAFF_URL }}
+      E2E_ADMIN_URL: ${{ secrets.E2E_ADMIN_URL }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.E2E_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.E2E_AWS_SECRET_ACCESS_KEY }}
+      AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID: ${{ secrets.E2E_COGNITO_CONSUMER_POOL_ID }}
+      AREA_CODE_COGNITO_CONSUMER_CLIENT_ID: ${{ secrets.E2E_COGNITO_CONSUMER_CLIENT_ID }}
+      AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID: ${{ secrets.E2E_COGNITO_BUSINESS_POOL_ID }}
+      AREA_CODE_COGNITO_BUSINESS_CLIENT_ID: ${{ secrets.E2E_COGNITO_BUSINESS_CLIENT_ID }}
+      AREA_CODE_COGNITO_STAFF_USER_POOL_ID: ${{ secrets.E2E_COGNITO_STAFF_POOL_ID }}
+      AREA_CODE_COGNITO_STAFF_CLIENT_ID: ${{ secrets.E2E_COGNITO_STAFF_CLIENT_ID }}
+      AREA_CODE_COGNITO_ADMIN_USER_POOL_ID: ${{ secrets.E2E_COGNITO_ADMIN_POOL_ID }}
+      AREA_CODE_COGNITO_ADMIN_CLIENT_ID: ${{ secrets.E2E_COGNITO_ADMIN_CLIENT_ID }}
+      E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @area-code/e2e exec playwright install --with-deps chromium
+
+      - name: Run e2e suite
+        run: pnpm --filter @area-code/e2e test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: tests/e2e/playwright-report
+          retention-days: 14

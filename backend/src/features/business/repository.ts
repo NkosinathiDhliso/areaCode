@@ -47,7 +47,12 @@ export async function countStaffForBusiness(businessId: string) {
   return staff.filter((s: any) => s.isActive !== false).length
 }
 
-export async function createStaffInvite(businessId: string, phone?: string, email?: string, role: 'manager' | 'staff' = 'staff') {
+export async function createStaffInvite(
+  businessId: string,
+  phone?: string,
+  email?: string,
+  role: 'manager' | 'staff' = 'staff',
+) {
   const inviteToken = randomBytes(32).toString('hex')
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
   const inviteId = generateId()

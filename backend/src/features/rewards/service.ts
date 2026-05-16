@@ -87,6 +87,7 @@ export async function createReward(
     triggerValue?: number | undefined
     totalSlots?: number | undefined
     expiresAt?: string | undefined
+    isFirstGet?: boolean | undefined
   },
 ) {
   // Verify the node belongs to this business
@@ -96,11 +97,19 @@ export async function createReward(
   }
 
   const business = await findBusinessById(businessId)
-  const effectiveTier = getEffectiveTier(business as any ?? { tier: 'free' })
+  const effectiveTier = getEffectiveTier((business as any) ?? { tier: 'free' })
   const count = await repo.countActiveRewardsForBusiness(businessId)
   const limit = TIER_REWARD_LIMITS[effectiveTier] ?? TIER_REWARD_LIMITS['free']
   if (limit !== undefined && limit !== null && count >= limit) {
     throw AppError.forbidden('Active reward limit reached for your tier')
+  }
+
+  // Enforce one First-Get per venue (Churn-defences spec, Req 6.1).
+  if (data.isFirstGet) {
+    const existing = await repo.getActiveRewardsByNodeId(data.nodeId)
+    if (existing.some((r) => (r as { isFirstGet?: boolean }).isFirstGet)) {
+      throw AppError.badRequest('first_get_already_set')
+    }
   }
 
   const createData: Parameters<typeof repo.createReward>[0] = {
@@ -112,6 +121,7 @@ export async function createReward(
   if (data.triggerValue !== undefined) createData.triggerValue = data.triggerValue
   if (data.totalSlots !== undefined) createData.totalSlots = data.totalSlots
   if (data.expiresAt !== undefined) createData.expiresAt = data.expiresAt
+  if (data.isFirstGet !== undefined) (createData as { isFirstGet?: boolean }).isFirstGet = data.isFirstGet
 
   const reward = await repo.createReward(createData)
 
@@ -133,12 +143,26 @@ export async function updateReward(
     description?: string | undefined
     isActive?: boolean | undefined
     expiresAt?: string | null | undefined
+    isFirstGet?: boolean | undefined
   },
 ) {
   const reward = await repo.getRewardById(rewardId)
   if (!reward) throw AppError.notFound('Reward not found')
   if (reward.node?.businessId !== businessId) {
     throw AppError.forbidden('You do not own this reward')
+  }
+
+  // Enforce uniqueness if promoting this reward to First-Get.
+  if (data.isFirstGet === true && (reward as { isFirstGet?: boolean }).isFirstGet !== true) {
+    const existing = await repo.getActiveRewardsByNodeId(reward.nodeId)
+    if (
+      existing.some((r) => {
+        const id = (r as { rewardId?: string; id?: string }).rewardId ?? (r as { id?: string }).id
+        return (r as { isFirstGet?: boolean }).isFirstGet && id !== rewardId
+      })
+    ) {
+      throw AppError.badRequest('first_get_already_set')
+    }
   }
 
   const updateData: Parameters<typeof repo.updateReward>[1] = {}
@@ -150,6 +174,7 @@ export async function updateReward(
   } else if (data.expiresAt !== undefined) {
     updateData.expiresAt = data.expiresAt
   }
+  if (data.isFirstGet !== undefined) (updateData as { isFirstGet?: boolean }).isFirstGet = data.isFirstGet
 
   return repo.updateReward(rewardId, updateData)
 }
@@ -220,6 +245,13 @@ export async function redeemReward(code: string, staffId?: string) {
   }
 
   await repo.markRedeemed(redemption.id as string, staffId, staffName)
+  // Invalidate leaderboard cache so the new redemption shows up immediately.
+  try {
+    const { clearLeaderboardCache } = await import('../business/staff-leaderboard.js')
+    clearLeaderboardCache()
+  } catch {
+    // Non-fatal: stale cache resolves itself in 5 minutes.
+  }
   return {
     success: true,
     rewardTitle: redemption.reward?.title ?? '',

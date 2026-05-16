@@ -355,9 +355,7 @@ export async function adminPasswordAuth(email: string, password: string) {
 
 export async function listAdminUsers(): Promise<Array<{ sub: string; email: string; role: string; enabled: boolean }>> {
   const pool = getPool('admin')
-  const result = await cognitoClient.send(
-    new ListUsersCommand({ UserPoolId: pool.userPoolId, Limit: 60 }),
-  )
+  const result = await cognitoClient.send(new ListUsersCommand({ UserPoolId: pool.userPoolId, Limit: 60 }))
   return (result.Users ?? []).map((u) => {
     const attrs: Record<string, string> = {}
     for (const a of u.Attributes ?? []) {

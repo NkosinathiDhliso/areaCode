@@ -211,6 +211,7 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
   const [type, setType] = useState('nth_checkin')
   const [triggerValue, setTriggerValue] = useState('')
   const [slots, setSlots] = useState('')
+  const [isFirstGet, setIsFirstGet] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -228,6 +229,7 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
     try {
       const body: Record<string, unknown> = { nodeId, title: title.trim(), type }
       if (triggerValue) body['triggerValue'] = parseInt(triggerValue, 10)
+      if (isFirstGet) body['isFirstGet'] = true
       if (slots) body['totalSlots'] = parseInt(slots, 10)
       await api.post('/v1/business/rewards', body)
       onCreated()
@@ -272,13 +274,18 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
         <option value="milestone">Milestone</option>
       </select>
       {(type === 'nth_checkin' || type === 'streak' || type === 'milestone') && (
-        <input
-          type="number"
-          value={triggerValue}
-          onChange={(e) => setTriggerValue(e.target.value)}
-          placeholder={type === 'nth_checkin' ? 'Every N check-ins (e.g. 5)' : 'Trigger count'}
-          className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-        />
+        <>
+          <input
+            type="number"
+            value={triggerValue}
+            onChange={(e) => setTriggerValue(e.target.value)}
+            placeholder={type === 'nth_checkin' ? 'Every N check-ins (e.g. 5)' : 'Trigger count'}
+            className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+          />
+          <p className="text-[var(--text-muted)] text-[11px] -mt-1">
+            Existing customers stay on their original visit count. Only new customers see the new threshold.
+          </p>
+        </>
       )}
       <input
         type="number"
@@ -287,6 +294,21 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
         placeholder="Total slots (leave empty for unlimited)"
         className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
       />
+      <label className="flex flex-row items-start gap-3 bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl px-4 py-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={isFirstGet}
+          onChange={(e) => setIsFirstGet(e.target.checked)}
+          className="mt-0.5"
+        />
+        <span className="flex-1">
+          <span className="block text-[var(--text-primary)] text-sm font-medium">Make this the venue's First-Get</span>
+          <span className="block text-[var(--text-muted)] text-[11px] mt-0.5">
+            Walk-ins without an account can claim this once with their phone number, no signup required. Only one
+            First-Get allowed per venue.
+          </span>
+        </span>
+      </label>
       <button
         onClick={() => void handleSubmit()}
         disabled={loading || !title.trim() || !nodeId}

@@ -274,7 +274,12 @@ const STAFF_LIMITS: Record<string, number | null> = {
   payg: 2,
 }
 
-export async function inviteStaff(businessId: string, phone?: string, email?: string, role: 'manager' | 'staff' = 'staff') {
+export async function inviteStaff(
+  businessId: string,
+  phone?: string,
+  email?: string,
+  role: 'manager' | 'staff' = 'staff',
+) {
   if (DEV_MODE) {
     return { id: `dev-invite-${Date.now()}`, businessId, phone, email, role, inviteToken: 'dev-token', accepted: false }
   }
@@ -492,6 +497,39 @@ export async function getCheckInDetails(businessId: string, date?: string, curso
     }
   }
   return repo.getCheckInDetails(businessId, date, cursor)
+}
+
+// ─── Staff Leaderboard ──────────────────────────────────────────────────────
+
+export async function getStaffLeaderboard(businessId: string, period: 'week' | 'month' | 'all') {
+  if (DEV_MODE) {
+    return {
+      period,
+      generatedAt: new Date().toISOString(),
+      entries: [
+        {
+          staffId: 'dev-staff-1',
+          staffName: 'Thandi (dev)',
+          redemptions: 24,
+          prevRedemptions: 18,
+          delta: 6,
+          attributedReturnVisits: 11,
+          uniqueConsumersServed: 19,
+        },
+        {
+          staffId: 'dev-staff-2',
+          staffName: 'Sipho (dev)',
+          redemptions: 14,
+          prevRedemptions: 16,
+          delta: -2,
+          attributedReturnVisits: 4,
+          uniqueConsumersServed: 12,
+        },
+      ],
+    }
+  }
+  const { getStaffLeaderboard } = await import('./staff-leaderboard.js')
+  return getStaffLeaderboard(businessId, period)
 }
 
 // ─── Reward Metrics ─────────────────────────────────────────────────────────

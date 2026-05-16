@@ -148,88 +148,88 @@ Build a shared mock data package at `packages/shared/mocks/` that intercepts the
 - [x] 6. Checkpoint — Verify mock layer activates in all four apps
   - Ensure all tests pass, ask the user if questions arise.
 
-- [x]* 7. Property-based tests
-  - [x]* 7.1 Write property test for referential integrity
+- [x]\* 7. Property-based tests
+  - [x]\* 7.1 Write property test for referential integrity
     - **Property 1: Mock data referential integrity**
     - Verify all foreign key references resolve across entity arrays (rewards→nodes, redemptions→rewards+users, reports→users+nodes, consent→users, leaderboard→users with matching fields)
     - **Validates: Requirements 1.6, 23.2, 23.3, 23.4, 23.5, 23.6**
 
-  - [x]* 7.2 Write property test for route resolution
+  - [x]\* 7.2 Write property test for route resolution
     - **Property 2: All registered mock routes resolve without error**
     - Call `resolve(method, path)` for every registered route pattern and verify non-null response
     - **Validates: Requirements 2.2, 2.3**
 
-  - [x]* 7.3 Write property test for mock delay bounds
+  - [x]\* 7.3 Write property test for mock delay bounds
     - **Property 3: Mock API delay is within bounds**
     - Measure delay across multiple calls and verify 100–400ms range
     - **Validates: Requirements 2.4**
 
-  - [x]* 7.4 Write property test for auth acceptance
+  - [x]\* 7.4 Write property test for auth acceptance
     - **Property 4: Any phone number or credential succeeds at all auth endpoints**
     - Generate random phone numbers, emails, passwords and verify success responses
     - **Validates: Requirements 3.1, 3.3, 10.1, 15.1, 20.1**
 
-  - [x]* 7.5 Write property test for OTP verification
+  - [x]\* 7.5 Write property test for OTP verification
     - **Property 5: Any 6-digit OTP returns valid auth tokens**
     - Generate random 6-digit strings and verify token responses with correct identity fields
     - **Validates: Requirements 3.2, 10.2, 20.2**
 
-  - [x]* 7.6 Write property test for node search
+  - [x]\* 7.6 Write property test for node search
     - **Property 6: Node search returns only matching results**
     - Generate random substrings of node names and verify filtered results contain query
     - **Validates: Requirements 4.4**
 
-  - [x]* 7.7 Write property test for check-in state mutation
+  - [x]\* 7.7 Write property test for check-in state mutation
     - **Property 7: Check-in updates pulse score and user count**
     - Generate random node IDs and verify pulse +5, totalCheckIns +1, cooldownUntil ~4h
     - **Validates: Requirements 5.2, 5.3, 5.4**
 
-  - [x]* 7.8 Write property test for node detail reward filtering
+  - [x]\* 7.8 Write property test for node detail reward filtering
     - **Property 8: Node detail includes only rewards belonging to that node**
     - Generate random node IDs and verify all returned rewards have matching nodeId
     - **Validates: Requirements 6.3**
 
-  - [x]* 7.9 Write property test for leaderboard sort order
+  - [x]\* 7.9 Write property test for leaderboard sort order
     - **Property 9: Leaderboard is sorted by check-in count descending**
     - Verify consecutive pairs have non-increasing checkInCount
     - **Validates: Requirements 7.1**
 
-  - [x]* 7.10 Write property test for feed timestamp ordering
+  - [x]\* 7.10 Write property test for feed timestamp ordering
     - **Property 10: Feed entries are sorted by timestamp descending and within 12 hours**
     - Verify descending order and all timestamps within 12-hour window
     - **Validates: Requirements 8.2**
 
-  - [x]* 7.11 Write property test for admin user search
+  - [x]\* 7.11 Write property test for admin user search
     - **Property 11: Admin user search filters by substring match**
     - Generate random substrings and verify returned users match by username or phone
     - **Validates: Requirements 16.3**
 
-  - [x]* 7.12 Write property test for mutation endpoint success
+  - [x]\* 7.12 Write property test for mutation endpoint success
     - **Property 12: Mutation endpoints return success**
     - Generate random mutation requests and verify success responses
     - **Validates: Requirements 14.4, 16.4, 17.3**
 
-  - [x]* 7.13 Write property test for report status persistence
+  - [x]\* 7.13 Write property test for report status persistence
     - **Property 13: Report status updates persist in mock state**
     - Generate random report actions and verify state updates persist
     - **Validates: Requirements 18.3**
 
-  - [x]* 7.14 Write property test for re-consent export filtering
+  - [x]\* 7.14 Write property test for re-consent export filtering
     - **Property 14: Re-consent export returns only outdated consent versions**
     - Verify all exported records have outdated versions
     - **Validates: Requirements 19.3**
 
-  - [x]* 7.15 Write property test for staff code validation
+  - [x]\* 7.15 Write property test for staff code validation
     - **Property 15: Staff redemption validates code length**
     - Generate strings of various lengths and verify success for 6-char, error for shorter
     - **Validates: Requirements 21.1, 21.3**
 
-  - [x]* 7.16 Write property test for DEV_MODE flag
+  - [x]\* 7.16 Write property test for DEV_MODE flag
     - **Property 16: DEV_MODE flag correctly reads environment variable**
     - Generate random strings and verify flag is true only for "true"
     - **Validates: Requirements 2.1**
 
-  - [x]* 7.17 Write property test for reward creation persistence
+  - [x]\* 7.17 Write property test for reward creation persistence
     - **Property 17: Reward creation adds to mock state**
     - Generate random reward payloads and verify they appear in subsequent queries
     - **Validates: Requirements 12.2**

@@ -9,10 +9,19 @@ const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CO
 export async function getUserProfile(cognitoSub: string) {
   if (DEV_MODE) {
     return {
-      id: 'dev-user-1', username: 'dev_user', displayName: 'Dev User',
-      phone: '+27000000000', tier: 'explorer', cityId: null, neighbourhoodId: null,
-      totalCheckIns: 8, streakCount: 3, avatarUrl: null, cognitoSub,
-      createdAt: new Date().toISOString(), onboardingComplete: false,
+      id: 'dev-user-1',
+      username: 'dev_user',
+      displayName: 'Dev User',
+      phone: '+27000000000',
+      tier: 'explorer',
+      cityId: null,
+      neighbourhoodId: null,
+      totalCheckIns: 8,
+      streakCount: 3,
+      avatarUrl: null,
+      cognitoSub,
+      createdAt: new Date().toISOString(),
+      onboardingComplete: false,
     }
   }
   const user = await repo.getUserByCognitoSub(cognitoSub)
@@ -44,22 +53,65 @@ export async function updateProfile(
   )
 }
 
-export async function getCheckInHistory(
-  userId: string,
-  cursor: string | undefined,
-  limit: number,
-) {
+export async function getCheckInHistory(userId: string, cursor: string | undefined, limit: number) {
   if (DEV_MODE) {
     return {
       items: [
-        { id: 'ci-1', nodeId: 'dev-1', checkedInAt: new Date(Date.now() - 3600000).toISOString(), node: { name: 'Father Coffee', slug: 'father-coffee', category: 'coffee' } },
-        { id: 'ci-2', nodeId: 'dev-3', checkedInAt: new Date(Date.now() - 86400000).toISOString(), node: { name: "Kitchener's Bar", slug: 'kitcheners-bar', category: 'nightlife' } },
+        {
+          id: 'ci-1',
+          nodeId: 'dev-1',
+          checkedInAt: new Date(Date.now() - 3600000).toISOString(),
+          node: { name: 'Father Coffee', slug: 'father-coffee', category: 'coffee' },
+        },
+        {
+          id: 'ci-2',
+          nodeId: 'dev-3',
+          checkedInAt: new Date(Date.now() - 86400000).toISOString(),
+          node: { name: "Kitchener's Bar", slug: 'kitcheners-bar', category: 'nightlife' },
+        },
       ],
       nextCursor: null,
       hasMore: false,
     }
   }
   return repo.getUserCheckInHistory(userId, cursor, limit)
+}
+
+/**
+ * Lightweight subset of check-in history used by the consumer client to
+ * power the GPS-proximity nudge (Churn-defences spec, Requirement 4).
+ *
+ * Returns deduplicated venue coordinates only — no timestamps, no PII.
+ * Lat/lng are public information (already exposed via /v1/nodes), so this
+ * doesn't surface any new sensitive data. The proximity comparison
+ * happens entirely client-side so user coordinates never reach our
+ * servers for this feature.
+ */
+export async function getVisitedNodes(userId: string) {
+  if (DEV_MODE) {
+    return {
+      items: [{ nodeId: 'dev-1', lat: -26.2041, lng: 28.0473, radiusM: 80 }],
+    }
+  }
+  const { getCheckInsByUser } = await import('../check-in/dynamodb-repository.js')
+  const { getNodeById } = await import('../nodes/dynamodb-repository.js')
+  const result = await getCheckInsByUser(userId, { limit: 200 })
+  const seen = new Set<string>()
+  const items: Array<{ nodeId: string; lat: number; lng: number; radiusM: number }> = []
+  for (const ci of result.checkIns) {
+    if (seen.has(ci.nodeId)) continue
+    seen.add(ci.nodeId)
+    const node = await getNodeById(ci.nodeId)
+    if (!node || node.isActive === false) continue
+    if (typeof node.lat !== 'number' || typeof node.lng !== 'number') continue
+    items.push({
+      nodeId: node.nodeId,
+      lat: node.lat,
+      lng: node.lng,
+      radiusM: 80,
+    })
+  }
+  return { items }
 }
 
 export async function deleteCheckInHistory(userId: string) {
@@ -69,15 +121,14 @@ export async function deleteCheckInHistory(userId: string) {
 
 // ─── Consent ────────────────────────────────────────────────────────────────
 
-export async function updateConsent(
-  userId: string,
-  consentVersion: string,
-  analyticsOptIn: boolean,
-) {
+export async function updateConsent(userId: string, consentVersion: string, analyticsOptIn: boolean) {
   if (DEV_MODE) {
     return {
-      id: `consent-${Date.now()}`, userId, consentVersion,
-      analyticsOptIn, consentedAt: new Date().toISOString(),
+      id: `consent-${Date.now()}`,
+      userId,
+      consentVersion,
+      analyticsOptIn,
+      consentedAt: new Date().toISOString(),
     }
   }
   const record = await repo.insertConsentRecord(userId, consentVersion, analyticsOptIn)

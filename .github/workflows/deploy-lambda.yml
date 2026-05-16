@@ -50,7 +50,60 @@ jobs:
           terraform_version: 1.9.0
 
       - name: Build and deploy
+        id: deploy
         env:
           SKIP_BUILD: 'false'
           SKIP_TERRAFORM: ${{ github.event.inputs.skip_terraform }}
         run: ./scripts/deploy-serverless.sh us-east-1 ${{ github.event.inputs.environment }}
+
+      # Capture the Lambda version we just promoted to `live` and the version
+      # it replaced so the release-health gate can roll back if needed.
+      - name: Ensure live-prev alias + capture Lambda alias versions
+        id: alias-versions
+        if: ${{ github.event.inputs.environment == 'prod' }}
+        run: |
+          set -e
+          FN="area-code-${{ github.event.inputs.environment }}-api"
+          CURRENT_VERSION=$(aws lambda get-alias --function-name "$FN" --name live --query FunctionVersion --output text)
+
+          # Idempotent bootstrap: create live-prev pointing at the current
+          # version on first deploy. Subsequent deploys preserve the pointer
+          # to whatever version was live before this deploy.
+          if ! aws lambda get-alias --function-name "$FN" --name live-prev >/dev/null 2>&1; then
+            aws lambda create-alias \
+              --function-name "$FN" \
+              --name live-prev \
+              --function-version "$CURRENT_VERSION" \
+              --description "Set automatically by deploy-lambda.yml for release-health-gate rollback" >/dev/null
+            echo "Bootstrapped live-prev → $CURRENT_VERSION"
+            PREV_VERSION="$CURRENT_VERSION"
+          else
+            PREV_VERSION=$(aws lambda get-alias --function-name "$FN" --name live-prev --query FunctionVersion --output text)
+          fi
+
+          echo "current=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "previous=$PREV_VERSION" >> "$GITHUB_OUTPUT"
+          echo "function=$FN" >> "$GITHUB_OUTPUT"
+
+      - name: Record Sentry release
+        if: ${{ github.event.inputs.environment == 'prod' && env.SENTRY_AUTH_TOKEN != '' }}
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: |
+          npx --yes @sentry/cli releases new "${{ github.sha }}"
+          npx --yes @sentry/cli releases set-commits "${{ github.sha }}" --auto || true
+          npx --yes @sentry/cli releases finalize "${{ github.sha }}"
+          npx --yes @sentry/cli releases deploys "${{ github.sha }}" new --env prod
+
+  trigger-health-gate:
+    needs: deploy
+    if: ${{ github.event.inputs.environment == 'prod' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trigger release-health gate
+        run: gh workflow run release-health-gate.yml -f sha=${{ github.sha }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

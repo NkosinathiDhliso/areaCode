@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
 
 const ALLOWED_RESPONSES = ['consumer', 'business', 'staff', 'not_found'] as const
-type AccountType = typeof ALLOWED_RESPONSES[number]
+type AccountType = (typeof ALLOWED_RESPONSES)[number]
 
 /**
  * Property 5: Account-type endpoint never leaks pool information.
@@ -11,10 +11,7 @@ type AccountType = typeof ALLOWED_RESPONSES[number]
  *
  * Simulates the getAccountType service function behaviour.
  */
-function simulateGetAccountType(
-  phone: string,
-  db: Map<string, AccountType>,
-): AccountType {
+function simulateGetAccountType(phone: string, db: Map<string, AccountType>): AccountType {
   return db.get(phone) ?? 'not_found'
 }
 

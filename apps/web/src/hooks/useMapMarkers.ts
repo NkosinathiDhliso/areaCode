@@ -4,19 +4,20 @@ import { useMapStore } from '@area-code/shared/stores/mapStore'
 import type { Node, NodeCategory, NodeState } from '@area-code/shared/types'
 import { getNodeState, getCategoryColour } from '../lib/mapHelpers'
 
-const STATE_CONFIG: Record<NodeState, { animation: string; speed: string; haloOpacity: number; ringOpacity: number }> = {
-  dormant: { animation: 'breathe', speed: '4s',   haloOpacity: 0.12, ringOpacity: 0.08 },
-  quiet:   { animation: 'breathe', speed: '3s',   haloOpacity: 0.2,  ringOpacity: 0.25 },
-  active:  { animation: 'pulse',   speed: '1.5s', haloOpacity: 0.3,  ringOpacity: 0.5 },
-  buzzing: { animation: 'pulse',   speed: '0.8s', haloOpacity: 0.4,  ringOpacity: 0.6 },
-  popping: { animation: 'pulse',   speed: '0.4s', haloOpacity: 0.5,  ringOpacity: 0.7 },
-}
+const STATE_CONFIG: Record<NodeState, { animation: string; speed: string; haloOpacity: number; ringOpacity: number }> =
+  {
+    dormant: { animation: 'breathe', speed: '4s', haloOpacity: 0.12, ringOpacity: 0.08 },
+    quiet: { animation: 'breathe', speed: '3s', haloOpacity: 0.2, ringOpacity: 0.25 },
+    active: { animation: 'pulse', speed: '1.5s', haloOpacity: 0.3, ringOpacity: 0.5 },
+    buzzing: { animation: 'pulse', speed: '0.8s', haloOpacity: 0.4, ringOpacity: 0.6 },
+    popping: { animation: 'pulse', speed: '0.4s', haloOpacity: 0.5, ringOpacity: 0.7 },
+  }
 
 // Bigger base sizes so nodes are actually visible on the map
 const CORE_SIZE: Record<NodeState, number> = {
   dormant: 12,
-  quiet:   16,
-  active:  22,
+  quiet: 16,
+  active: 22,
   buzzing: 30,
   popping: 40,
 }
@@ -100,7 +101,10 @@ function buildMarkerElement(
   ring.dataset.layer = 'ring'
   ring.addEventListener('mousedown', (e) => e.stopPropagation())
   ring.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true })
-  ring.addEventListener('click', (e) => { e.stopPropagation(); onTap() })
+  ring.addEventListener('click', (e) => {
+    e.stopPropagation()
+    onTap()
+  })
   container.appendChild(ring)
 
   if (state === 'buzzing' || state === 'popping') {
@@ -127,9 +131,7 @@ function buildMarkerElement(
     borderRadius: '50%',
     background: `radial-gradient(circle at 35% 35%, ${colour}ff, ${colour}cc 60%, ${colour}88)`,
     animation: `${cfg.animation} ${cfg.speed} ease-in-out infinite`,
-    boxShadow: state === 'dormant'
-      ? 'none'
-      : `0 0 ${glowSpread}px ${colour}60, 0 0 ${glowSpread * 2}px ${colour}30`,
+    boxShadow: state === 'dormant' ? 'none' : `0 0 ${glowSpread}px ${colour}60, 0 0 ${glowSpread * 2}px ${colour}30`,
     cursor: 'pointer',
     pointerEvents: 'auto',
   })
@@ -137,7 +139,10 @@ function buildMarkerElement(
   // Stop mousedown/touchstart so Mapbox doesn't interpret it as a drag
   core.addEventListener('mousedown', (e) => e.stopPropagation())
   core.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true })
-  core.addEventListener('click', (e) => { e.stopPropagation(); onTap() })
+  core.addEventListener('click', (e) => {
+    e.stopPropagation()
+    onTap()
+  })
   container.appendChild(core)
 
   // ── Layer 4: Live count badge ──
@@ -166,13 +171,7 @@ function buildMarkerElement(
   return container
 }
 
-function updateMarkerElement(
-  el: HTMLElement,
-  coreSize: number,
-  colour: string,
-  state: NodeState,
-  score: number,
-): void {
+function updateMarkerElement(el: HTMLElement, coreSize: number, colour: string, state: NodeState, score: number): void {
   const cfg = STATE_CONFIG[state]
   const totalSize = coreSize * 4
   el.style.width = `${totalSize}px`
@@ -183,7 +182,8 @@ function updateMarkerElement(
   const halo = el.querySelector('[data-layer="halo"]') as HTMLElement | null
   if (halo) {
     Object.assign(halo.style, {
-      width: `${haloSize}px`, height: `${haloSize}px`,
+      width: `${haloSize}px`,
+      height: `${haloSize}px`,
       background: `radial-gradient(circle, ${colour} 0%, transparent 70%)`,
       opacity: String(cfg.haloOpacity),
       filter: `blur(${blurRadius}px)`,
@@ -194,8 +194,10 @@ function updateMarkerElement(
   const ring = el.querySelector('[data-layer="ring"]') as HTMLElement | null
   if (ring) {
     Object.assign(ring.style, {
-      width: `${coreSize * 1.7}px`, height: `${coreSize * 1.7}px`,
-      borderColor: colour, opacity: String(cfg.ringOpacity),
+      width: `${coreSize * 1.7}px`,
+      height: `${coreSize * 1.7}px`,
+      borderColor: colour,
+      opacity: String(cfg.ringOpacity),
     })
   }
 
@@ -203,11 +205,11 @@ function updateMarkerElement(
   const core = el.querySelector('[data-layer="core"]') as HTMLElement | null
   if (core) {
     Object.assign(core.style, {
-      width: `${coreSize}px`, height: `${coreSize}px`,
+      width: `${coreSize}px`,
+      height: `${coreSize}px`,
       background: `radial-gradient(circle at 35% 35%, ${colour}ff, ${colour}cc 60%, ${colour}88)`,
       animation: `${cfg.animation} ${cfg.speed} ease-in-out infinite`,
-      boxShadow: state === 'dormant' ? 'none'
-        : `0 0 ${glowSpread}px ${colour}60, 0 0 ${glowSpread * 2}px ${colour}30`,
+      boxShadow: state === 'dormant' ? 'none' : `0 0 ${glowSpread}px ${colour}60, 0 0 ${glowSpread * 2}px ${colour}30`,
     })
   }
 
@@ -216,11 +218,19 @@ function updateMarkerElement(
     if (!badge) {
       badge = document.createElement('div')
       Object.assign(badge.style, {
-        position: 'absolute', top: `${totalSize * 0.15}px`, right: `${totalSize * 0.15}px`,
-        background: '#1e1e2e', border: '1px solid rgba(255,255,255,0.08)',
-        borderRadius: '9999px', padding: '2px 6px', fontSize: '11px',
-        fontWeight: '600', color: '#f0f0f5', lineHeight: '1.3',
-        whiteSpace: 'nowrap', pointerEvents: 'none',
+        position: 'absolute',
+        top: `${totalSize * 0.15}px`,
+        right: `${totalSize * 0.15}px`,
+        background: '#1e1e2e',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: '9999px',
+        padding: '2px 6px',
+        fontSize: '11px',
+        fontWeight: '600',
+        color: '#f0f0f5',
+        lineHeight: '1.3',
+        whiteSpace: 'nowrap',
+        pointerEvents: 'none',
       })
       badge.dataset.layer = 'badge'
       el.appendChild(badge)
@@ -261,9 +271,7 @@ export function useMapMarkers(
       if (cancelled) return
 
       const nodeArray = Object.values(nodes)
-      const filtered = categoryFilter
-        ? nodeArray.filter((n) => n.category === categoryFilter)
-        : nodeArray
+      const filtered = categoryFilter ? nodeArray.filter((n) => n.category === categoryFilter) : nodeArray
 
       const filteredIds = new Set(filtered.map((n) => n.id))
 
@@ -291,9 +299,7 @@ export function useMapMarkers(
           onNodeTapRef.current(node)
         })
 
-        const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
-          .setLngLat([node.lng, node.lat])
-          .addTo(map)
+        const marker = new mapboxgl.Marker({ element: el, anchor: 'center' }).setLngLat([node.lng, node.lat]).addTo(map)
 
         markersRef.current.set(node.id, marker)
       }

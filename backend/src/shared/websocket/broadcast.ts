@@ -1,14 +1,8 @@
 // WebSocket Broadcast Helper for Backend Lambdas
 // Allows any Lambda function to broadcast real-time events to connected clients
 
-import {
-  ApiGatewayManagementApiClient,
-  PostToConnectionCommand,
-} from '@aws-sdk/client-apigatewaymanagementapi'
-import {
-  DynamoDBClient,
-  QueryCommand,
-} from '@aws-sdk/client-dynamodb'
+import { ApiGatewayManagementApiClient, PostToConnectionCommand } from '@aws-sdk/client-apigatewaymanagementapi'
+import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb'
 import { unmarshall } from '@aws-sdk/util-dynamodb'
 
 const ddbClient = new DynamoDBClient({ region: process.env['AWS_REGION'] || 'us-east-1' })
@@ -34,10 +28,7 @@ async function getApiClient(): Promise<ApiGatewayManagementApiClient> {
   })
 }
 
-async function sendToConnection(
-  connectionId: string,
-  message: BroadcastMessage
-): Promise<void> {
+async function sendToConnection(connectionId: string, message: BroadcastMessage): Promise<void> {
   const client = await getApiClient()
 
   try {
@@ -45,7 +36,7 @@ async function sendToConnection(
       new PostToConnectionCommand({
         ConnectionId: connectionId,
         Data: JSON.stringify(message),
-      })
+      }),
     )
   } catch (error: any) {
     if (error.name === 'GoneException') {
@@ -64,10 +55,7 @@ async function sendToConnection(
 /**
  * Broadcast a message to all connections in a room (e.g., city:capetown)
  */
-export async function broadcastToRoom(
-  roomId: string,
-  message: BroadcastMessage
-): Promise<void> {
+export async function broadcastToRoom(roomId: string, message: BroadcastMessage): Promise<void> {
   const result = await ddbClient.send(
     new QueryCommand({
       TableName: CONNECTIONS_TABLE,
@@ -76,14 +64,12 @@ export async function broadcastToRoom(
       ExpressionAttributeValues: {
         ':roomId': { S: roomId },
       },
-    })
+    }),
   )
 
   const connections = result.Items?.map((item) => unmarshall(item)) || []
 
-  await Promise.all(
-    connections.map((conn) => sendToConnection(conn.connectionId, message))
-  )
+  await Promise.all(connections.map((conn) => sendToConnection(conn.connectionId, message)))
 
   console.log(`Broadcasted to ${connections.length} connections in room ${roomId}`)
 }
@@ -91,10 +77,7 @@ export async function broadcastToRoom(
 /**
  * Broadcast a message to all connections for a specific user
  */
-export async function broadcastToUser(
-  userId: string,
-  message: BroadcastMessage
-): Promise<void> {
+export async function broadcastToUser(userId: string, message: BroadcastMessage): Promise<void> {
   const result = await ddbClient.send(
     new QueryCommand({
       TableName: CONNECTIONS_TABLE,
@@ -103,14 +86,12 @@ export async function broadcastToUser(
       ExpressionAttributeValues: {
         ':userId': { S: userId },
       },
-    })
+    }),
   )
 
   const connections = result.Items?.map((item) => unmarshall(item)) || []
 
-  await Promise.all(
-    connections.map((conn) => sendToConnection(conn.connectionId, message))
-  )
+  await Promise.all(connections.map((conn) => sendToConnection(conn.connectionId, message)))
 
   console.log(`Broadcasted to ${connections.length} connections for user ${userId}`)
 }
@@ -123,7 +104,7 @@ export async function broadcastPulseUpdate(
   nodeId: string,
   pulseScore: number,
   state: string,
-  checkInCount: number
+  checkInCount: number,
 ): Promise<void> {
   await broadcastToRoom(`city:${citySlug}`, {
     type: 'node:pulse_update',
@@ -143,7 +124,7 @@ export async function broadcastStateSurge(
   citySlug: string,
   nodeId: string,
   fromState: string,
-  toState: string
+  toState: string,
 ): Promise<void> {
   await broadcastToRoom(`city:${citySlug}`, {
     type: 'node:state_surge',
@@ -167,7 +148,7 @@ export async function broadcastToast(
     nodeLat?: number
     nodeLng?: number
     avatarUrl?: string
-  }
+  },
 ): Promise<void> {
   await broadcastToRoom(`city:${citySlug}`, {
     type: 'toast:new',
@@ -185,7 +166,7 @@ export async function broadcastRewardClaimed(
     rewardTitle: string
     redemptionCode: string
     codeExpiresAt: string
-  }
+  },
 ): Promise<void> {
   await broadcastToRoom(`city:${citySlug}`, {
     type: 'reward:claimed',
@@ -199,7 +180,7 @@ export async function broadcastRewardClaimed(
 export async function broadcastRewardSlotsUpdate(
   citySlug: string,
   rewardId: string,
-  slotsRemaining: number
+  slotsRemaining: number,
 ): Promise<void> {
   await broadcastToRoom(`city:${citySlug}`, {
     type: 'reward:slots_update',
@@ -213,11 +194,7 @@ export async function broadcastRewardSlotsUpdate(
 /**
  * Broadcast leaderboard update to a specific user
  */
-export async function broadcastLeaderboardUpdate(
-  userId: string,
-  rank: number,
-  delta: number
-): Promise<void> {
+export async function broadcastLeaderboardUpdate(userId: string, rank: number, delta: number): Promise<void> {
   await broadcastToUser(userId, {
     type: 'leaderboard:update',
     payload: {
@@ -239,7 +216,7 @@ export async function broadcastBusinessCheckin(
     checkInCount: number
     avatarUrl?: string
     username?: string
-  }
+  },
 ): Promise<void> {
   await broadcastToRoom(`business:${businessId}`, {
     type: 'business:checkin',
@@ -257,7 +234,7 @@ export async function broadcastBusinessRewardClaimed(
     nodeName: string
     rewardId: string
     rewardTitle: string
-  }
+  },
 ): Promise<void> {
   await broadcastToRoom(`business:${businessId}`, {
     type: 'business:reward_claimed',
@@ -274,7 +251,7 @@ export async function broadcastFriendCheckin(
     message: string
     nodeId?: string
     avatarUrl?: string
-  }
+  },
 ): Promise<void> {
   await broadcastToUser(userId, {
     type: 'toast:friend_checkin',

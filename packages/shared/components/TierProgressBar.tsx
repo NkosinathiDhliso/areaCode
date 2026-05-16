@@ -36,11 +36,7 @@ export function TierProgressBar({
         <Text className="text-[var(--text-primary)] text-sm font-semibold capitalize">
           {currentLevel?.label ?? currentTier}
         </Text>
-        {nextLevel && (
-          <Text className="text-[var(--text-muted)] text-xs">
-            → {nextLevel.label}
-          </Text>
-        )}
+        {nextLevel && <Text className="text-[var(--text-muted)] text-xs">→ {nextLevel.label}</Text>}
       </Box>
 
       <Box className="w-full h-2 bg-[var(--bg-raised)] rounded-full overflow-hidden mb-2">
@@ -54,17 +50,13 @@ export function TierProgressBar({
       </Box>
 
       <Box className="flex items-center justify-between">
-        <Text className="text-[var(--text-muted)] text-xs">
-          {currentCheckIns} check-ins
-        </Text>
+        <Text className="text-[var(--text-muted)] text-xs">{currentCheckIns} check-ins</Text>
         {nextTierThreshold !== null && checkInsRemaining > 0 ? (
           <Text className="text-[var(--text-secondary)] text-xs font-medium">
             {checkInsRemaining} more to {nextLevel?.label}
           </Text>
         ) : (
-          <Text className="text-[var(--text-secondary)] text-xs font-medium">
-            Max tier reached
-          </Text>
+          <Text className="text-[var(--text-secondary)] text-xs font-medium">Max tier reached</Text>
         )}
       </Box>
     </Box>

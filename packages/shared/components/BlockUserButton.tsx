@@ -44,9 +44,7 @@ export function BlockUserButton({ targetUserId, isBlocked, onToggle }: BlockUser
   if (confirming) {
     return (
       <div className="flex flex-row items-center gap-2">
-        <span className="text-[var(--text-muted)] text-xs">
-          {t('privacy.block.confirm')}
-        </span>
+        <span className="text-[var(--text-muted)] text-xs">{t('privacy.block.confirm')}</span>
         <button
           onClick={handleBlock}
           disabled={loading}

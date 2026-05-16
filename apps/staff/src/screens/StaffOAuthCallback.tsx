@@ -72,15 +72,9 @@ export function StaffOAuthCallback() {
         const inviteToken = sessionStorage.getItem('staff_oauth_invite_token')
         const inviteName = sessionStorage.getItem('staff_oauth_invite_name')
 
-        const path =
-          inviteToken && inviteName
-            ? '/v1/auth/staff/oauth-accept-invite'
-            : '/v1/auth/staff/oauth-sync'
+        const path = inviteToken && inviteName ? '/v1/auth/staff/oauth-accept-invite' : '/v1/auth/staff/oauth-sync'
 
-        const body =
-          inviteToken && inviteName
-            ? JSON.stringify({ inviteToken, name: inviteName.trim() })
-            : undefined
+        const body = inviteToken && inviteName ? JSON.stringify({ inviteToken, name: inviteName.trim() }) : undefined
 
         const syncRes = await fetch(`${apiBase()}${path}`, {
           method: 'POST',

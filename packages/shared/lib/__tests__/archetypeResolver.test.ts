@@ -6,8 +6,18 @@ import { ARCHETYPE_CATALOG } from '../../constants/archetype-catalog'
 import type { MusicGenre, DimensionScoreVector, PersonalityArchetype } from '../../types'
 
 const ALL_GENRES: MusicGenre[] = [
-  'amapiano', 'deep_house', 'afrobeats', 'hip_hop', 'rnb',
-  'kwaito', 'gqom', 'jazz', 'rock', 'pop', 'gospel', 'maskandi',
+  'amapiano',
+  'deep_house',
+  'afrobeats',
+  'hip_hop',
+  'rnb',
+  'kwaito',
+  'gqom',
+  'jazz',
+  'rock',
+  'pop',
+  'gospel',
+  'maskandi',
 ]
 
 const genreArb = fc.constantFrom(...ALL_GENRES)
@@ -77,10 +87,18 @@ describe('computeDimensionScores', () => {
 
 describe('matchesArchetype', () => {
   const highScores: DimensionScoreVector = {
-    energy: 0.9, cultural_rootedness: 0.9, sophistication: 0.9, edge: 0.9, spirituality: 0.9,
+    energy: 0.9,
+    cultural_rootedness: 0.9,
+    sophistication: 0.9,
+    edge: 0.9,
+    spirituality: 0.9,
   }
   const lowScores: DimensionScoreVector = {
-    energy: 0.1, cultural_rootedness: 0.1, sophistication: 0.1, edge: 0.1, spirituality: 0.1,
+    energy: 0.1,
+    cultural_rootedness: 0.1,
+    sophistication: 0.1,
+    edge: 0.1,
+    spirituality: 0.1,
   }
 
   it('returns true when all thresholds are met', () => {
@@ -97,13 +115,21 @@ describe('matchesArchetype', () => {
     const smoothOp = ARCHETYPE_CATALOG.find((a) => a.name === 'The Smooth Operator')!
     // High sophistication but high energy → should NOT match
     const highEnergy: DimensionScoreVector = {
-      energy: 0.8, cultural_rootedness: 0.1, sophistication: 0.9, edge: 0.1, spirituality: 0.1,
+      energy: 0.8,
+      cultural_rootedness: 0.1,
+      sophistication: 0.9,
+      edge: 0.1,
+      spirituality: 0.1,
     }
     expect(matchesArchetype(highEnergy, smoothOp)).toBe(false)
 
     // High sophistication and low energy → should match
     const lowEnergy: DimensionScoreVector = {
-      energy: 0.3, cultural_rootedness: 0.1, sophistication: 0.9, edge: 0.1, spirituality: 0.1,
+      energy: 0.3,
+      cultural_rootedness: 0.1,
+      sophistication: 0.9,
+      edge: 0.1,
+      spirituality: 0.1,
     }
     expect(matchesArchetype(lowEnergy, smoothOp)).toBe(true)
   })
@@ -124,7 +150,11 @@ describe('resolveArchetype', () => {
 
   it('returns The Eclectic when no thresholds match', () => {
     const lowScores: DimensionScoreVector = {
-      energy: 0.1, cultural_rootedness: 0.1, sophistication: 0.1, edge: 0.1, spirituality: 0.1,
+      energy: 0.1,
+      cultural_rootedness: 0.1,
+      sophistication: 0.1,
+      edge: 0.1,
+      spirituality: 0.1,
     }
     const result = resolveArchetype(lowScores, ARCHETYPE_CATALOG)
     expect(result.name).toBe('The Eclectic')
@@ -133,18 +163,24 @@ describe('resolveArchetype', () => {
   it('returns highest-priority matching archetype', () => {
     // Scores that match Festival Spirit (priority 15): energy >= 0.7, cultural_rootedness >= 0.6, edge >= 0.4
     const scores: DimensionScoreVector = {
-      energy: 0.9, cultural_rootedness: 0.9, sophistication: 0.9, edge: 0.9, spirituality: 0.9,
+      energy: 0.9,
+      cultural_rootedness: 0.9,
+      sophistication: 0.9,
+      edge: 0.9,
+      spirituality: 0.9,
     }
     const result = resolveArchetype(scores, ARCHETYPE_CATALOG)
     expect(result.name).toBe('The Festival Spirit')
   })
 
   it('skips inactive archetypes', () => {
-    const modified = ARCHETYPE_CATALOG.map((a) =>
-      a.name === 'The Festival Spirit' ? { ...a, isActive: false } : a,
-    )
+    const modified = ARCHETYPE_CATALOG.map((a) => (a.name === 'The Festival Spirit' ? { ...a, isActive: false } : a))
     const scores: DimensionScoreVector = {
-      energy: 0.9, cultural_rootedness: 0.9, sophistication: 0.9, edge: 0.9, spirituality: 0.9,
+      energy: 0.9,
+      cultural_rootedness: 0.9,
+      sophistication: 0.9,
+      edge: 0.9,
+      spirituality: 0.9,
     }
     const result = resolveArchetype(scores, modified)
     expect(result.name).not.toBe('The Festival Spirit')
@@ -153,7 +189,11 @@ describe('resolveArchetype', () => {
 
   it('resolves The Smooth Operator for high sophistication + low energy', () => {
     const scores: DimensionScoreVector = {
-      energy: 0.3, cultural_rootedness: 0.1, sophistication: 0.8, edge: 0.1, spirituality: 0.1,
+      energy: 0.3,
+      cultural_rootedness: 0.1,
+      sophistication: 0.8,
+      edge: 0.1,
+      spirituality: 0.1,
     }
     const result = resolveArchetype(scores, ARCHETYPE_CATALOG)
     expect(result.name).toBe('The Smooth Operator')

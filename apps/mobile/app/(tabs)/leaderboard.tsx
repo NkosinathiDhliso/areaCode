@@ -36,11 +36,7 @@ export default function LeaderboardScreen() {
             <View key={entry.userId} style={styles.row}>
               <Text style={styles.rank}>{entry.rank}</Text>
               {entry.isFriend ? (
-                <AvatarCircle
-                  url={entry.avatarUrl}
-                  displayName={entry.displayName ?? ''}
-                  size={32}
-                />
+                <AvatarCircle url={entry.avatarUrl} displayName={entry.displayName ?? ''} size={32} />
               ) : (
                 <View style={styles.anonAvatar}>
                   <NativeTierBadge tier={entry.tier as Tier} compact />

@@ -1,11 +1,6 @@
 // DynamoDB-backed key-value store replacing Redis
 // Uses app-data table with TTL for automatic expiration
-import {
-  GetCommand,
-  PutCommand,
-  DeleteCommand,
-  UpdateCommand,
-} from '@aws-sdk/lib-dynamodb'
+import { GetCommand, PutCommand, DeleteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../db/dynamodb.js'
 
 /**
@@ -16,7 +11,7 @@ export async function kvGet(key: string): Promise<string | null> {
     new GetCommand({
       TableName: TableNames.appData,
       Key: { pk: `KV#${key}`, sk: 'VALUE' },
-    })
+    }),
   )
   if (!result.Item) return null
   // Check if expired (TTL may not have cleaned it up yet)
@@ -39,9 +34,7 @@ export async function kvSet(key: string, value: string, ttlSeconds?: number): Pr
   if (ttlSeconds) {
     item['ttl'] = Math.floor(Date.now() / 1000) + ttlSeconds
   }
-  await documentClient.send(
-    new PutCommand({ TableName: TableNames.appData, Item: item })
-  )
+  await documentClient.send(new PutCommand({ TableName: TableNames.appData, Item: item }))
 }
 
 /**
@@ -52,7 +45,7 @@ export async function kvDel(key: string): Promise<void> {
     new DeleteCommand({
       TableName: TableNames.appData,
       Key: { pk: `KV#${key}`, sk: 'VALUE' },
-    })
+    }),
   )
 }
 
@@ -71,8 +64,7 @@ export async function kvIncr(key: string, ttlSeconds?: number): Promise<number> 
   }
 
   if (ttlSeconds) {
-    params['UpdateExpression'] =
-      'SET #val = if_not_exists(#val, :zero) + :inc, #ttl = if_not_exists(#ttl, :ttl)'
+    params['UpdateExpression'] = 'SET #val = if_not_exists(#val, :zero) + :inc, #ttl = if_not_exists(#ttl, :ttl)'
     ;(params['ExpressionAttributeNames'] as Record<string, string>)['#ttl'] = 'ttl'
     ;(params['ExpressionAttributeValues'] as Record<string, unknown>)[':ttl'] =
       Math.floor(Date.now() / 1000) + ttlSeconds
@@ -90,7 +82,7 @@ export async function kvTtl(key: string): Promise<number> {
     new GetCommand({
       TableName: TableNames.appData,
       Key: { pk: `KV#${key}`, sk: 'VALUE' },
-    })
+    }),
   )
   if (!result.Item) return -2
   const ttl = result.Item['ttl'] as number | undefined

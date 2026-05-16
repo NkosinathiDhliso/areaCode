@@ -10,7 +10,7 @@ async function getCities() {
       TableName: TableNames.appData,
       FilterExpression: 'begins_with(pk, :prefix) AND sk = pk',
       ExpressionAttributeValues: { ':prefix': 'CITY#' },
-    })
+    }),
   )
   return (result.Items || []).map((c) => ({ id: (c['cityId'] ?? c['pk']) as string, slug: c['slug'] as string }))
 }
@@ -34,7 +34,7 @@ export async function handler() {
         ExpressionAttributeValues: { ':pk': `LEADERBOARD#${city.id}` },
         ScanIndexForward: false,
         Limit: 50,
-      })
+      }),
     )
     const entries = (result.Items || []).map((item, i) => ({
       userId: item['userId'] as string,
@@ -50,10 +50,13 @@ export async function handler() {
           Item: {
             pk: `LB_HISTORY#${city.id}`,
             sk: `${weekEnding}#${e.userId}`,
-            cityId: city.id, weekEnding, userId: e.userId,
-            rank: e.rank, checkInCount: e.checkInCount,
+            cityId: city.id,
+            weekEnding,
+            userId: e.userId,
+            rank: e.rank,
+            checkInCount: e.checkInCount,
           },
-        })
+        }),
       )
     }
 
@@ -63,7 +66,7 @@ export async function handler() {
         new DeleteCommand({
           TableName: TableNames.appData,
           Key: { pk: item['pk'] as string, sk: item['sk'] as string },
-        })
+        }),
       )
     }
 
@@ -92,7 +95,7 @@ export async function preResetHandler() {
         ExpressionAttributeValues: { ':pk': `LEADERBOARD#${city.id}` },
         ScanIndexForward: false,
         Limit: 50,
-      })
+      }),
     )
 
     for (let i = 0; i < (result.Items || []).length; i++) {

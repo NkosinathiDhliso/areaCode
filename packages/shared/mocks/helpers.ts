@@ -17,7 +17,7 @@ export function mockDelay(): Promise<void> {
 export function generateId(): string {
   const hex = () => randomBetween(0, 15).toString(16)
   const seg = (len: number) => Array.from({ length: len }, hex).join('')
-  return `${seg(8)}-${seg(4)}-4${seg(3)}-${(randomBetween(8, 11)).toString(16)}${seg(3)}-${seg(12)}`
+  return `${seg(8)}-${seg(4)}-4${seg(3)}-${randomBetween(8, 11).toString(16)}${seg(3)}-${seg(12)}`
 }
 
 /** Returns a redemption code in "AC-XXXXX-NNNN" format (X = uppercase letter, N = digit). */

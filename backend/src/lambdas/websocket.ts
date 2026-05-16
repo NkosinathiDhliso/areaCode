@@ -6,13 +6,7 @@ import {
   PostToConnectionCommand,
   DeleteConnectionCommand,
 } from '@aws-sdk/client-apigatewaymanagementapi'
-import {
-  DynamoDBClient,
-  PutItemCommand,
-  DeleteItemCommand,
-  QueryCommand,
-  ScanCommand,
-} from '@aws-sdk/client-dynamodb'
+import { DynamoDBClient, PutItemCommand, DeleteItemCommand, QueryCommand, ScanCommand } from '@aws-sdk/client-dynamodb'
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb'
 
 const ddbClient = new DynamoDBClient({ region: process.env['AWS_REGION'] || 'us-east-1' })
@@ -94,7 +88,7 @@ async function handleConnect(connectionId: string, event: WebSocketEvent): Promi
         connectedAt: new Date().toISOString(),
         ttl,
       }),
-    })
+    }),
   )
 
   return { statusCode: 200, body: 'Connected' }
@@ -105,7 +99,7 @@ async function handleDisconnect(connectionId: string): Promise<any> {
     new DeleteItemCommand({
       TableName: CONNECTIONS_TABLE,
       Key: marshall({ connectionId }),
-    })
+    }),
   )
 
   return { statusCode: 200, body: 'Disconnected' }
@@ -137,7 +131,7 @@ async function handleJoinRoom(connectionId: string, event: WebSocketEvent): Prom
         joinedAt: new Date().toISOString(),
         ttl,
       }),
-    })
+    }),
   )
 
   // Acknowledge
@@ -164,7 +158,7 @@ async function handleLeaveRoom(connectionId: string, event: WebSocketEvent): Pro
         roomId: null,
         leftAt: new Date().toISOString(),
       }),
-    })
+    }),
   )
 
   await sendToConnection(connectionId, {
@@ -194,7 +188,7 @@ async function handlePresenceJoin(connectionId: string, event: WebSocketEvent): 
         nodeId,
         presenceAt: new Date().toISOString(),
       }),
-    })
+    }),
   )
 
   return { statusCode: 200, body: 'Presence joined' }
@@ -209,7 +203,7 @@ async function handlePresenceLeave(connectionId: string, event: WebSocketEvent):
         nodeId: null,
         presenceLeftAt: new Date().toISOString(),
       }),
-    })
+    }),
   )
 
   return { statusCode: 200, body: 'Presence left' }
@@ -250,7 +244,7 @@ async function sendToConnection(connectionId: string, message: BroadcastMessage)
       new PostToConnectionCommand({
         ConnectionId: connectionId,
         Data: JSON.stringify(message),
-      })
+      }),
     )
   } catch (error: any) {
     if (error.name === 'GoneException') {
@@ -259,7 +253,7 @@ async function sendToConnection(connectionId: string, message: BroadcastMessage)
         new DeleteItemCommand({
           TableName: CONNECTIONS_TABLE,
           Key: marshall({ connectionId }),
-        })
+        }),
       )
     } else {
       throw error
@@ -276,15 +270,13 @@ export async function broadcastToRoom(roomId: string, message: BroadcastMessage)
       IndexName: 'RoomIndex',
       KeyConditionExpression: 'roomId = :roomId',
       ExpressionAttributeValues: marshall({ ':roomId': roomId }),
-    })
+    }),
   )
 
   const connections = result.Items?.map((item) => unmarshall(item)) || []
 
   // Send to all connections in parallel
-  await Promise.all(
-    connections.map((conn) => sendToConnection(conn.connectionId, message))
-  )
+  await Promise.all(connections.map((conn) => sendToConnection(conn.connectionId, message)))
 
   console.log(`Broadcasted to ${connections.length} connections in room ${roomId}`)
 }
@@ -297,14 +289,12 @@ export async function broadcastToUser(userId: string, message: BroadcastMessage)
       IndexName: 'UserIndex',
       KeyConditionExpression: 'userId = :userId',
       ExpressionAttributeValues: marshall({ ':userId': userId }),
-    })
+    }),
   )
 
   const connections = result.Items?.map((item) => unmarshall(item)) || []
 
-  await Promise.all(
-    connections.map((conn) => sendToConnection(conn.connectionId, message))
-  )
+  await Promise.all(connections.map((conn) => sendToConnection(conn.connectionId, message)))
 
   console.log(`Broadcasted to ${connections.length} connections for user ${userId}`)
 }
@@ -314,14 +304,12 @@ export async function broadcastToAll(message: BroadcastMessage): Promise<void> {
   const result = await ddbClient.send(
     new ScanCommand({
       TableName: CONNECTIONS_TABLE,
-    })
+    }),
   )
 
   const connections = result.Items?.map((item) => unmarshall(item)) || []
 
-  await Promise.all(
-    connections.map((conn) => sendToConnection(conn.connectionId, message))
-  )
+  await Promise.all(connections.map((conn) => sendToConnection(conn.connectionId, message)))
 
   console.log(`Broadcasted to ${connections.length} total connections`)
 }

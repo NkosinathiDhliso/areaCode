@@ -1,10 +1,15 @@
-prettier_files="$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx|json|css|md|yml|yaml)$' | tr '\n' ' ')"
-eslint_files="$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx)$' | tr '\n' ' ')"
+#!/usr/bin/env sh
+# Husky pre-commit. Runs prettier --check and eslint on staged files.
+# Uses xargs so we don't blow the Windows command-line length limit when
+# many files are staged at once.
+
+prettier_files="$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx|json|css|md|yml|yaml)$')"
+eslint_files="$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx)$')"
 
 if [ -n "$prettier_files" ]; then
-  pnpm exec prettier --check $prettier_files
+  echo "$prettier_files" | xargs -d '\n' -n 50 pnpm exec prettier --check
 fi
 
 if [ -n "$eslint_files" ]; then
-  pnpm exec eslint $eslint_files
+  echo "$eslint_files" | xargs -d '\n' -n 50 pnpm exec eslint
 fi

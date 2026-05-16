@@ -8,6 +8,13 @@ export const createRewardBodySchema = z.object({
   triggerValue: z.number().int().positive().optional(),
   totalSlots: z.number().int().positive().optional(),
   expiresAt: z.string().datetime().optional(),
+  /**
+   * Marks this reward as the venue's introductory "First-Get" — claimable
+   * by walk-in customers who don't yet have an account.
+   * Churn-defences spec, Requirement 6. Only one reward per node may have
+   * this set; the service layer enforces uniqueness.
+   */
+  isFirstGet: z.boolean().optional(),
 })
 
 export const updateRewardBodySchema = z.object({
@@ -15,6 +22,7 @@ export const updateRewardBodySchema = z.object({
   description: z.string().max(500).optional(),
   isActive: z.boolean().optional(),
   expiresAt: z.string().datetime().nullable().optional(),
+  isFirstGet: z.boolean().optional(),
 })
 
 export const rewardIdParamsSchema = z.object({
@@ -46,6 +54,8 @@ export interface Reward {
   slotsLocked: boolean
   isActive: boolean
   expiresAt?: string
+  /** See createRewardBodySchema.isFirstGet. */
+  isFirstGet?: boolean
   createdAt: string
   updatedAt: string
 }

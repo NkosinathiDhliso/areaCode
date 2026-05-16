@@ -2,7 +2,30 @@
 
 For the live-incident playbook, see `RUNBOOK.md`. This doc covers the rollback mechanics in more detail.
 
-## Lambda Functions
+## Automatic Rollback (Release-Health Gate)
+
+Every prod deploy via `deploy-lambda.yml` triggers `release-health-gate.yml`. After 30 minutes of soak time it queries Sentry and rolls back automatically when:
+
+- Crash-free user rate dropped > 1 percentage point compared to the 7-day baseline, or
+- Error count over the last 30 minutes exceeded 5x the per-30m baseline.
+
+Rollback re-aliases `live` to whatever `live-prev` points to. A `rollback-{ts}` git tag is created. A Slack alert lands in the ops channel.
+
+**To override / dismiss:**
+
+1. Manually push a new release that fixes the regression.
+2. Delete the `rollback-{ts}` tag once acknowledged.
+3. If the gate fired in error, run `release-health-gate.yml` with `dryRun=true` against the same SHA to confirm calibration before re-deploying.
+
+**To dry-run the gate against the latest release:**
+
+```bash
+gh workflow run release-health-gate.yml -f sha=$(git rev-parse HEAD) -f dryRun=true
+```
+
+The summary on the workflow run shows the metrics it considered. Use this to calibrate the thresholds against your traffic.
+
+## Lambda Functions (manual)
 
 Every deploy via `scripts/deploy-serverless.{ps1,sh}` calls `aws lambda update-function-code ... --publish`, which mints an immutable version. To roll back:
 

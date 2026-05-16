@@ -13,6 +13,7 @@ type DashboardPanel =
   | 'check-ins'
   | 'reward-metrics'
   | 'staff-redemptions'
+  | 'staff-leaderboard'
   | 'reports'
 
 interface BusinessState {

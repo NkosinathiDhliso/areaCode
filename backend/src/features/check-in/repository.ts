@@ -5,9 +5,7 @@ import * as dynamo from './dynamodb-repository.js'
 import { getUserById, updateUser } from '../auth/dynamodb-repository.js'
 
 export async function getNodeWithCity(nodeId: string) {
-  const result = await documentClient.send(
-    new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } })
-  )
+  const result = await documentClient.send(new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } }))
   if (!result.Item) return null
   const node = result.Item
   // Look up city from app-data if cityId exists
@@ -17,7 +15,7 @@ export async function getNodeWithCity(nodeId: string) {
       new GetCommand({
         TableName: TableNames.appData,
         Key: { pk: `CITY#${node['cityId']}`, sk: `CITY#${node['cityId']}` },
-      })
+      }),
     )
     city = cityResult.Item ? { id: cityResult.Item['cityId'] ?? node['cityId'], slug: cityResult.Item['slug'] } : null
   }
@@ -33,13 +31,9 @@ export async function getNodeWithCity(nodeId: string) {
   }
 }
 
-export async function checkProximity(
-  nodeId: string, lat: number, lng: number, radiusMetres: number,
-): Promise<boolean> {
+export async function checkProximity(nodeId: string, lat: number, lng: number, radiusMetres: number): Promise<boolean> {
   // Haversine check since we no longer have PostGIS
-  const node = await documentClient.send(
-    new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } })
-  )
+  const node = await documentClient.send(new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } }))
   if (!node.Item) return false
   const nodeLat = node.Item['lat'] as number
   const nodeLng = node.Item['lng'] as number
@@ -48,15 +42,12 @@ export async function checkProximity(
   const dLng = ((nodeLng - lng) * Math.PI) / 180
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat * Math.PI) / 180) * Math.cos((nodeLat * Math.PI) / 180) *
-    Math.sin(dLng / 2) ** 2
+    Math.cos((lat * Math.PI) / 180) * Math.cos((nodeLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
   const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
   return distance <= radiusMetres
 }
 
-export async function insertCheckIn(data: {
-  userId: string; nodeId: string; type: string; neighbourhoodId?: string;
-}) {
+export async function insertCheckIn(data: { userId: string; nodeId: string; type: string; neighbourhoodId?: string }) {
   return dynamo.createCheckIn({
     userId: data.userId,
     nodeId: data.nodeId,
@@ -90,7 +81,7 @@ export async function incrementTotalCheckIns(userId: string) {
       UpdateExpression: 'SET totalCheckIns = if_not_exists(totalCheckIns, :zero) + :inc',
       ExpressionAttributeValues: { ':zero': 0, ':inc': 1 },
       ReturnValues: 'ALL_NEW',
-    })
+    }),
   )
   const totalCheckIns = (result.Attributes?.['totalCheckIns'] as number) ?? 0
   const currentTier = (result.Attributes?.['tier'] as string) ?? 'local'

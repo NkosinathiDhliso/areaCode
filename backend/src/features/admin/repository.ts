@@ -56,6 +56,21 @@ export async function getUserCheckInHistory(userId: string, take = 50) {
 }
 
 export async function updateUserTier(userId: string, tier: string) {
+  // Tier-permanence guard (churn-defences spec, Requirement 3).
+  // Reject any attempt to demote a user below the tier implied by their
+  // accumulated visit count. Promotions and equal moves are allowed.
+  const { getTier, TIER_LEVELS } = await import('@area-code/shared/constants/tier-levels')
+  const user = await getDynamoUser(userId)
+  if (!user) throw new Error('User not found')
+
+  const tierRank = (t: string) => TIER_LEVELS.findIndex((lvl) => lvl.tier === t)
+  const minAllowedTier = getTier(user.totalCheckIns ?? 0)
+  if (tierRank(tier) < tierRank(minAllowedTier)) {
+    throw new Error(
+      `tier_downgrade_not_allowed: cannot demote user with ${user.totalCheckIns} check-ins from ${minAllowedTier} to ${tier}`,
+    )
+  }
+
   return updateUser(userId, { tier })
 }
 

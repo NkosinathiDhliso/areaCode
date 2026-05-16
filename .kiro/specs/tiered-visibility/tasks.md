@@ -21,18 +21,18 @@ Replace the opt-in `broadcast_location` privacy toggle with a structural friends
     - Must be idempotent
     - _Requirements: 2.1, 2.2, 2.5, 2.6, 9.2, 9.3, 9.5_
 
-  - [ ]* 1.3 Write property test for `applyFriendVisibility` — Property 3
+  - [ ]\* 1.3 Write property test for `applyFriendVisibility` — Property 3
     - **Property 3: Identity filter — friends see names, non-friends don't**
     - Generate random entry lists and friend sets with `fast-check`
     - Verify friend entries preserve identity, non-friend entries are nulled
     - **Validates: Requirements 2.1, 2.2, 2.5, 2.6, 7.1, 9.2, 9.3**
 
-  - [ ]* 1.4 Write property test for idempotence — Property 9
+  - [ ]\* 1.4 Write property test for idempotence — Property 9
     - **Property 9: Identity filter is idempotent**
     - Apply `applyFriendVisibility` twice, verify result equals single application
     - **Validates: Requirements 9.5**
 
-  - [ ]* 1.5 Write property test for mutual follow bidirectionality — Property 7
+  - [ ]\* 1.5 Write property test for mutual follow bidirectionality — Property 7
     - **Property 7: Mutual follow is bidirectional**
     - Generate random follow graphs, verify `getMutualFollowIds` returns only bidirectional pairs
     - **Validates: Requirements 5.1**
@@ -53,12 +53,12 @@ Replace the opt-in `broadcast_location` privacy toggle with a structural friends
     - Never emits to any city room
     - _Requirements: 4.3, 4.4_
 
-  - [ ]* 3.3 Write property test for city toast anonymity — Property 2
+  - [ ]\* 3.3 Write property test for city toast anonymity — Property 2
     - **Property 2: City toast never contains identity**
     - Generate random toast payloads from check-in flow, verify no identity fields
     - **Validates: Requirements 1.8, 4.1, 4.2, 9.4, 9.6**
 
-  - [ ]* 3.4 Write property test for friend toast routing — Property 6
+  - [ ]\* 3.4 Write property test for friend toast routing — Property 6
     - **Property 6: Friend toasts route to user rooms only**
     - Verify friend toasts emit to user rooms, never city rooms, and contain displayName
     - **Validates: Requirements 4.3, 4.4**
@@ -79,7 +79,7 @@ Replace the opt-in `broadcast_location` privacy toggle with a structural friends
     - Update DEV_MODE block in service to reflect friends-only feed
     - _Requirements: 2.3, 2.4_
 
-  - [ ]* 5.2 Write property test for feed mutual-follow constraint — Property 4
+  - [ ]\* 5.2 Write property test for feed mutual-follow constraint — Property 4
     - **Property 4: Feed only contains mutual follows**
     - Verify all feed entries are mutual follows of the viewer
     - **Validates: Requirements 2.3, 2.4**
@@ -97,7 +97,7 @@ Replace the opt-in `broadcast_location` privacy toggle with a structural friends
     - Anonymous viewers get empty `friends` array but always get `totalCount` and `tierDistribution`
     - _Requirements: 2.1, 2.2, 3.1, 3.2, 3.3_
 
-  - [ ]* 6.3 Write property test for crowd metadata presence — Property 5
+  - [ ]\* 6.3 Write property test for crowd metadata presence — Property 5
     - **Property 5: Crowd metadata always present**
     - Verify `totalCount` and `tierDistribution` always present regardless of viewer auth status
     - **Validates: Requirements 3.1, 3.2, 3.3, 3.5**
@@ -135,7 +135,7 @@ Replace the opt-in `broadcast_location` privacy toggle with a structural friends
     - Add the new event type for personalised friend check-in toasts
     - _Requirements: 4.3_
 
-  - [ ]* 8.7 Write property test for consent schema rejection — Property 8
+  - [ ]\* 8.7 Write property test for consent schema rejection — Property 8
     - **Property 8: Consent schema rejects broadcastLocation**
     - Generate random consent payloads with `broadcastLocation`, verify Zod rejects them
     - **Validates: Requirements 7.4, 8.2**
@@ -180,7 +180,7 @@ Replace the opt-in `broadcast_location` privacy toggle with a structural friends
   - All tests pass (1 pre-existing flaky timeout unrelated to this feature).
 
 - [ ] 12. Property-based test for check-in contribution
-  - [ ]* 12.1 Write property test for check-in always contributes — Property 1
+  - [ ]\* 12.1 Write property test for check-in always contributes — Property 1
     - **Property 1: Check-in always contributes**
     - Generate random check-in inputs, mock Redis/socket, verify pulse score recalculated, counters incremented, socket events emitted
     - No user relationship or consent value suppresses any update

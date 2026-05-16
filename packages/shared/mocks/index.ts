@@ -9,8 +9,9 @@ import { MOCK_PULSE_SCORES } from './data/pulseScores'
 import { MOCK_NODES } from './data/nodes'
 import type { NodeState } from '../types'
 
-export const IS_DEV_MOCK = typeof import.meta !== 'undefined'
-  && (import.meta as unknown as Record<string, Record<string, string>>).env?.VITE_DEV_MOCK === 'true'
+export const IS_DEV_MOCK =
+  typeof import.meta !== 'undefined' &&
+  (import.meta as unknown as Record<string, Record<string, string>>).env?.VITE_DEV_MOCK === 'true'
 
 let mockSocket: MockSocket | null = null
 

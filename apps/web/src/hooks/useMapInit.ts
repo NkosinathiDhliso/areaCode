@@ -25,19 +25,30 @@ function buildMapInstance(map: mapboxgl.Map): MapInstance {
     },
     setFeatureState: () => {},
     getZoom: () => {
-      try { return map.getZoom() } catch { return DEFAULT_ZOOM }
+      try {
+        return map.getZoom()
+      } catch {
+        return DEFAULT_ZOOM
+      }
     },
     getBounds: () => ({
       toArray: (): [[number, number], [number, number]] => {
         try {
           const b = map.getBounds()
-          if (!b) return [[0, 0], [0, 0]]
+          if (!b)
+            return [
+              [0, 0],
+              [0, 0],
+            ]
           return [
             [b.getWest(), b.getSouth()],
             [b.getEast(), b.getNorth()],
           ]
         } catch {
-          return [[0, 0], [0, 0]]
+          return [
+            [0, 0],
+            [0, 0],
+          ]
         }
       },
     }),
@@ -64,7 +75,11 @@ export function useMapInit() {
   const retryMap = useCallback(() => {
     // Force cleanup and re-init
     if (singletonMap) {
-      try { singletonMap.remove() } catch { /* already removed */ }
+      try {
+        singletonMap.remove()
+      } catch {
+        /* already removed */
+      }
       singletonMap = null
       singletonContainer = null
       singletonLoaded = false
@@ -87,13 +102,21 @@ export function useMapInit() {
       setMapInstance(buildMapInstance(singletonMap))
       setMapReadyKey((k) => k + 1)
       requestAnimationFrame(() => {
-        try { singletonMap?.resize() } catch { /* ignore */ }
+        try {
+          singletonMap?.resize()
+        } catch {
+          /* ignore */
+        }
       })
       return
     }
 
     if (singletonMap) {
-      try { singletonMap.remove() } catch { /* already removed */ }
+      try {
+        singletonMap.remove()
+      } catch {
+        /* already removed */
+      }
       singletonMap = null
       singletonContainer = null
       singletonLoaded = false
@@ -149,9 +172,7 @@ export function useMapInit() {
           })
 
           const layers = map.getStyle().layers
-          const labelLayer = layers?.find(
-            (l) => l.type === 'symbol' && l.layout?.['text-field'],
-          )
+          const labelLayer = layers?.find((l) => l.type === 'symbol' && l.layout?.['text-field'])
 
           map.addLayer(
             {
@@ -179,7 +200,11 @@ export function useMapInit() {
       map.dragPan.enable()
 
       const ro = new ResizeObserver(() => {
-        try { map.resize() } catch { /* ignore */ }
+        try {
+          map.resize()
+        } catch {
+          /* ignore */
+        }
       })
       ro.observe(container)
 

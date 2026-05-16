@@ -42,7 +42,7 @@ export async function initSentry(): Promise<void> {
 
 export function captureError(err: unknown, context?: Record<string, unknown>): void {
   if (!sentryInitialized || !Sentry) return
-  Sentry.captureException(err, context ? { extra: context } as Record<string, unknown> : undefined)
+  Sentry.captureException(err, context ? ({ extra: context } as Record<string, unknown>) : undefined)
 }
 
 export function captureMessage(msg: string, level: 'info' | 'warning' | 'error' = 'info'): void {

@@ -6,6 +6,8 @@ import { api } from '@area-code/shared/lib/api'
 import { useStaffAuthStore } from '../stores/staffAuthStore'
 import { StaffValidator } from '../components/StaffValidator'
 import { RecentRedemptions } from '../components/RecentRedemptions'
+import { MyRank } from '../components/MyRank'
+import { FirstGetIssuer } from '../components/FirstGetIssuer'
 
 export function StaffHome() {
   const { t } = useTranslation()
@@ -56,6 +58,8 @@ export function StaffHome() {
       </header>
 
       <StaffValidator />
+      <FirstGetIssuer />
+      <MyRank />
       <RecentRedemptions />
     </div>
   )

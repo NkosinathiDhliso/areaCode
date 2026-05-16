@@ -127,10 +127,7 @@ export function ForgotPassword({ onNavigate }: ForgotPasswordProps) {
         )}
 
         {phase !== 'success' && (
-          <button
-            onClick={() => onNavigate('login')}
-            className="text-[var(--text-muted)] text-sm text-center mt-2"
-          >
+          <button onClick={() => onNavigate('login')} className="text-[var(--text-muted)] text-sm text-center mt-2">
             {t('auth.backToLogin', 'Back to sign in')}
           </button>
         )}

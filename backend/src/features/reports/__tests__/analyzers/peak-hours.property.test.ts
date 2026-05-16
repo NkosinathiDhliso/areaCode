@@ -11,25 +11,25 @@ import type { AnonymizedCheckIn } from '../../types.js'
 
 // ─── Custom Arbitraries ─────────────────────────────────────────────────────
 
-const DAYS_OF_WEEK = [
-  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
-] as const
+const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const
 
 const TIERS = ['local', 'regular', 'fixture', 'institution', 'legend'] as const
 
 /** Generate a 64-char hex string (SHA-256 hash format) */
-const hexTokenArb = fc.uint8Array({ minLength: 32, maxLength: 32 }).map(
-  (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(''),
-)
+const hexTokenArb = fc
+  .uint8Array({ minLength: 32, maxLength: 32 })
+  .map((bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(''))
 
 const anonymizedCheckInArb: fc.Arbitrary<AnonymizedCheckIn> = fc.record({
   visitorToken: hexTokenArb,
   nodeId: fc.uuid(),
   tier: fc.constantFrom(...TIERS),
-  checkedInAt: fc.integer({
-    min: new Date('2024-01-01').getTime(),
-    max: new Date('2026-12-31').getTime(),
-  }).map((ts) => new Date(ts).toISOString()),
+  checkedInAt: fc
+    .integer({
+      min: new Date('2024-01-01').getTime(),
+      max: new Date('2026-12-31').getTime(),
+    })
+    .map((ts) => new Date(ts).toISOString()),
   hourOfDay: fc.integer({ min: 0, max: 23 }),
   dayOfWeek: fc.constantFrom(...DAYS_OF_WEEK),
 })
@@ -86,17 +86,14 @@ describe('Feature: venue-intelligence-reports, Property 2: Peak Hours Distributi
     /**
      * **Validates: Requirements 2.1, 2.3, 2.4**
      */
-    const multiNodeCheckInsArb = fc.tuple(
-      fc.uuid(),
-      fc.uuid(),
-    ).chain(([nodeA, nodeB]) =>
+    const multiNodeCheckInsArb = fc.tuple(fc.uuid(), fc.uuid()).chain(([nodeA, nodeB]) =>
       fc.array(
         anonymizedCheckInArb.map((ci) => ({
           ...ci,
           nodeId: fc.sample(fc.constantFrom(nodeA, nodeB), 1)[0] ?? nodeA,
         })),
         { minLength: 2, maxLength: 200 },
-      )
+      ),
     )
 
     fc.assert(
@@ -106,16 +103,11 @@ describe('Feature: venue-intelligence-reports, Property 2: Peak Hours Distributi
 
         // Per-node results
         const nodeIds = [...new Set(checkIns.map((ci) => ci.nodeId))]
-        const perNodeResults = nodeIds.map((nodeId) =>
-          analyzePeakHours(checkIns.filter((ci) => ci.nodeId === nodeId))
-        )
+        const perNodeResults = nodeIds.map((nodeId) => analyzePeakHours(checkIns.filter((ci) => ci.nodeId === nodeId)))
 
         // For each hour, aggregate should equal sum of per-node
         for (let hour = 0; hour < 24; hour++) {
-          const perNodeSum = perNodeResults.reduce(
-            (sum, r) => sum + (r.hourlyDistribution[hour] ?? 0),
-            0,
-          )
+          const perNodeSum = perNodeResults.reduce((sum, r) => sum + (r.hourlyDistribution[hour] ?? 0), 0)
           expect(aggregateResult.hourlyDistribution[hour]).toBe(perNodeSum)
         }
       }),
@@ -167,9 +159,10 @@ describe('Feature: venue-intelligence-reports, Property 3: Peak Hours Top Window
 
         for (const topWindow of result.topWindows) {
           // Compute the length of this window (wrapping around midnight)
-          const windowLen = topWindow.startHour <= topWindow.endHour
-            ? topWindow.endHour - topWindow.startHour + 1
-            : 24 - topWindow.startHour + topWindow.endHour + 1
+          const windowLen =
+            topWindow.startHour <= topWindow.endHour
+              ? topWindow.endHour - topWindow.startHour + 1
+              : 24 - topWindow.startHour + topWindow.endHour + 1
 
           // Compute the actual count for this window from the distribution
           let actualCount = 0
@@ -221,9 +214,10 @@ describe('Feature: venue-intelligence-reports, Property 3: Peak Hours Top Window
         const usedHours = new Set<number>()
 
         for (const window of result.topWindows) {
-          const windowLen = window.startHour <= window.endHour
-            ? window.endHour - window.startHour + 1
-            : 24 - window.startHour + window.endHour + 1
+          const windowLen =
+            window.startHour <= window.endHour
+              ? window.endHour - window.startHour + 1
+              : 24 - window.startHour + window.endHour + 1
 
           for (let offset = 0; offset < windowLen; offset++) {
             const hour = (window.startHour + offset) % 24

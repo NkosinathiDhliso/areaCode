@@ -16,9 +16,28 @@ export function ConsumerSignup({ onNavigate }: ConsumerSignupProps) {
   const setAuth = useConsumerAuthStore((s) => s.setAuth)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showTokenField, setShowTokenField] = useState(false)
+  const [firstGetToken, setFirstGetToken] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  /**
+   * After a successful signup, redeem any First-Get token the user
+   * entered. Failure is non-fatal — they still get an account.
+   * Churn-defences spec, Requirement 6.
+   */
+  async function maybeRedeemFirstGetToken() {
+    const token = firstGetToken.trim().toUpperCase()
+    if (!token) return
+    try {
+      await api.post('/v1/users/me/redeem-guest-token', { token })
+    } catch {
+      // Surface a soft error so the user knows the token didn't apply,
+      // but don't block them from using the app.
+      setError(t('auth.signup.tokenInvalid', "Couldn't apply that code, but your account is ready."))
+    }
+  }
 
   async function handleEmailSignup() {
     setLoading(true)
@@ -31,6 +50,7 @@ export function ConsumerSignup({ onNavigate }: ConsumerSignupProps) {
         user: { id: string }
       }>('/v1/auth/consumer/email-signup', { email, password })
       setAuth(res.accessToken, res.refreshToken, res.user.id, res.sessionId)
+      await maybeRedeemFirstGetToken()
       onNavigate('map')
     } catch {
       setError(t('auth.signup.emailFailed', 'Could not create your account. Check your details.'))
@@ -96,11 +116,32 @@ export function ConsumerSignup({ onNavigate }: ConsumerSignupProps) {
           placeholder={t('auth.signup.password', 'Password')}
           className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
         />
-        <p className={`text-xs -mt-2 ${password.length > 0 && password.length < 8 ? 'text-[var(--warning)]' : 'text-[var(--text-muted)]'}`}>
+        <p
+          className={`text-xs -mt-2 ${password.length > 0 && password.length < 8 ? 'text-[var(--warning)]' : 'text-[var(--text-muted)]'}`}
+        >
           {password.length > 0 && password.length < 8
             ? t('auth.signup.passwordTooShort', 'Password must be at least 8 characters')
             : t('auth.signup.passwordHint', 'Minimum 8 characters')}
         </p>
+        {!showTokenField && (
+          <button
+            type="button"
+            onClick={() => setShowTokenField(true)}
+            className="text-[var(--text-muted)] text-xs underline self-center"
+          >
+            {t('auth.signup.haveToken', 'Got a code from a venue?')}
+          </button>
+        )}
+        {showTokenField && (
+          <input
+            type="text"
+            value={firstGetToken}
+            onChange={(e) => setFirstGetToken(e.target.value.toUpperCase().replace(/[^0-9A-HJKMNP-TV-Z]/g, ''))}
+            maxLength={8}
+            placeholder={t('auth.signup.tokenPlaceholder', 'First-Get code (8 chars)')}
+            className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none uppercase tracking-[0.3em]"
+          />
+        )}
         <button
           type="button"
           onClick={() => void handleEmailSignup()}

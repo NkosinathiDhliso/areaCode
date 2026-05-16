@@ -60,8 +60,8 @@ await Promise.all(
       ...sharedBuildOptions,
       entryPoints: [`src/workers/${worker}.ts`],
       outfile: `dist/workers/${worker}/index.mjs`,
-    })
-  )
+    }),
+  ),
 )
 
 console.log(`✓ Built monolith Lambda + WebSocket Lambda + ${workers.length} worker Lambdas`)

@@ -193,6 +193,14 @@ export interface User {
   streamingProvider?: StreamingProvider | null
   genresUpdatedAt?: string | null
   onboardingComplete?: boolean
+  privacyLevel?: PrivacyLevel
+  /**
+   * Per-user opt-out for the GPS-proximity check-in nudge.
+   * (Churn-defences spec, Requirement 4.6)
+   * Defaults to true; the nudge is suppressed for `private` privacyLevel
+   * regardless of this flag.
+   */
+  proximityNudgesEnabled?: boolean
 }
 
 export interface BusinessAccount {

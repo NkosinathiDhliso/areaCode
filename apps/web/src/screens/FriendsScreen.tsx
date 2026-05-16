@@ -73,7 +73,8 @@ function FriendsTab() {
   })
 
   if (isLoading) return <LoadingSkeleton />
-  if (isError) return <ErrorState message={t('friends.loadError', 'Couldn\'t load friends.')} onRetry={() => void refetch()} />
+  if (isError)
+    return <ErrorState message={t('friends.loadError', "Couldn't load friends.")} onRetry={() => void refetch()} />
 
   if (!data?.friends.length) {
     return <EmptyState message={t('friends.noFriends')} />
@@ -106,12 +107,13 @@ function FollowingTab() {
       void queryClient.invalidateQueries({ queryKey: ['friends'] })
     },
     onError: () => {
-      useErrorStore.getState().showError(t('friends.unfollowError', 'Couldn\'t unfollow. Try again.'))
+      useErrorStore.getState().showError(t('friends.unfollowError', "Couldn't unfollow. Try again."))
     },
   })
 
   if (isLoading) return <LoadingSkeleton />
-  if (isError) return <ErrorState message={t('friends.loadError', 'Couldn\'t load following.')} onRetry={() => void refetch()} />
+  if (isError)
+    return <ErrorState message={t('friends.loadError', "Couldn't load following.")} onRetry={() => void refetch()} />
 
   if (!data?.users.length) {
     return <EmptyState message={t('friends.notFollowingAnyone')} />
@@ -165,12 +167,13 @@ function FollowersTab() {
       void queryClient.invalidateQueries({ queryKey: ['following'] })
     },
     onError: () => {
-      useErrorStore.getState().showError(t('friends.followError', 'Couldn\'t follow. Try again.'))
+      useErrorStore.getState().showError(t('friends.followError', "Couldn't follow. Try again."))
     },
   })
 
   if (isLoading) return <LoadingSkeleton />
-  if (isError) return <ErrorState message={t('friends.loadError', 'Couldn\'t load followers.')} onRetry={() => void refetch()} />
+  if (isError)
+    return <ErrorState message={t('friends.loadError', "Couldn't load followers.")} onRetry={() => void refetch()} />
 
   if (!data?.users.length) {
     return <EmptyState message={t('friends.noFollowers')} />
@@ -226,7 +229,7 @@ function SearchTab({ search, setSearch }: { search: string; setSearch: (s: strin
       void queryClient.invalidateQueries({ queryKey: ['following'] })
     },
     onError: () => {
-      useErrorStore.getState().showError(t('friends.followError', 'Couldn\'t follow. Try again.'))
+      useErrorStore.getState().showError(t('friends.followError', "Couldn't follow. Try again."))
     },
   })
 
@@ -238,7 +241,7 @@ function SearchTab({ search, setSearch }: { search: string; setSearch: (s: strin
       void queryClient.invalidateQueries({ queryKey: ['following'] })
     },
     onError: () => {
-      useErrorStore.getState().showError(t('friends.unfollowError', 'Couldn\'t unfollow. Try again.'))
+      useErrorStore.getState().showError(t('friends.unfollowError', "Couldn't unfollow. Try again."))
     },
   })
 

@@ -50,9 +50,7 @@ export async function unblockUserAction(blockerId: string, blockedId: string): P
   await unblockUser(blockerId, blockedId)
 }
 
-export async function listBlockedUsers(
-  blockerId: string,
-): Promise<Array<{ blockedId: string; createdAt: string }>> {
+export async function listBlockedUsers(blockerId: string): Promise<Array<{ blockedId: string; createdAt: string }>> {
   return getBlockedUsers(blockerId)
 }
 

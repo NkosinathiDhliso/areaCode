@@ -431,11 +431,12 @@ Test each portal at common viewport sizes:
 
 ## Issues Log
 
-| # | Severity | Portal | Section | Description | Status |
-|---|----------|--------|---------|-------------|--------|
-|   |          |        |         |             |        |
+| #   | Severity | Portal | Section | Description | Status |
+| --- | -------- | ------ | ------- | ----------- | ------ |
+|     |          |        |         |             |        |
 
 **Severity guide:**
+
 - **S1 (blocker):** Core flow broken (signup, check-in, redemption, payment). Fix before launch.
 - **S2 (major):** Important feature broken or missing UX feedback. Fix before launch if possible, otherwise day-1 hotfix.
 - **S3 (minor):** Cosmetic, edge-case, or nice-to-have. Backlog.
@@ -445,7 +446,7 @@ Test each portal at common viewport sizes:
 ## Tester Sign-off
 
 | Tester | Role | Date | Signature |
-|--------|------|------|-----------|
+| ------ | ---- | ---- | --------- |
 |        |      |      |           |
 |        |      |      |           |
 

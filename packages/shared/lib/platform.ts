@@ -12,11 +12,12 @@ export function getDeviceInfo(): { platform: 'web' | 'ios' | 'android'; cores: n
   }
 
   const ua = navigator.userAgent.toLowerCase()
-  const platform = ua.includes('iphone') || ua.includes('ipad')
-    ? 'ios' as const
-    : ua.includes('android')
-      ? 'android' as const
-      : 'web' as const
+  const platform =
+    ua.includes('iphone') || ua.includes('ipad')
+      ? ('ios' as const)
+      : ua.includes('android')
+        ? ('android' as const)
+        : ('web' as const)
 
   return {
     platform,

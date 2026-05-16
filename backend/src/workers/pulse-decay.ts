@@ -40,14 +40,14 @@ async function getCities() {
       TableName: TableNames.appData,
       FilterExpression: 'begins_with(pk, :prefix) AND sk = pk',
       ExpressionAttributeValues: { ':prefix': 'CITY#' },
-    })
+    }),
   )
   return (result.Items || []).map((c) => ({ id: (c['cityId'] ?? c['pk']) as string, slug: c['slug'] as string }))
 }
 
 export async function handler() {
   console.log('[pulse-decay] Starting pulse decay worker')
-  const decayFactor = isPeakHour() ? 0.95 : 0.90
+  const decayFactor = isPeakHour() ? 0.95 : 0.9
 
   const cities = await getCities()
   let totalProcessed = 0
@@ -59,7 +59,7 @@ export async function handler() {
         TableName: TableNames.nodes,
         FilterExpression: 'cityId = :cityId AND isActive = :active',
         ExpressionAttributeValues: { ':cityId': city.id, ':active': true },
-      })
+      }),
     )
 
     for (const n of nodesResult.Items || []) {

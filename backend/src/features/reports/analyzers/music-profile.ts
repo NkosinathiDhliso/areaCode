@@ -4,13 +4,7 @@ import type { MusicPrefs, MusicProfileResult } from '../types.js'
 // Constants
 // ============================================================================
 
-const ARCHETYPE_DIMENSIONS = [
-  'energy',
-  'cultural_rootedness',
-  'sophistication',
-  'edge',
-  'spirituality',
-] as const
+const ARCHETYPE_DIMENSIONS = ['energy', 'cultural_rootedness', 'sophistication', 'edge', 'spirituality'] as const
 
 /** Minimum number of visitors with music preferences for sufficient data */
 const MIN_VISITORS_FOR_DATA = 5
@@ -32,10 +26,7 @@ const MAX_TOP_GENRES = 5
  *
  * Uses only anonymized data — visitorIds are hashed tokens, not userIds.
  */
-export function analyzeMusicProfile(
-  visitorIds: string[],
-  musicPrefsMap: Map<string, MusicPrefs>,
-): MusicProfileResult {
+export function analyzeMusicProfile(visitorIds: string[], musicPrefsMap: Map<string, MusicPrefs>): MusicProfileResult {
   // Collect visitors that have music preferences
   const visitorsWithPrefs: MusicPrefs[] = []
   for (const visitorId of visitorIds) {

@@ -89,30 +89,22 @@ export function PrivacySettingsPicker() {
             {/* Radio indicator */}
             <div
               className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                isSelected
-                  ? 'border-[var(--accent)]'
-                  : 'border-[var(--border-strong)]'
+                isSelected ? 'border-[var(--accent)]' : 'border-[var(--border-strong)]'
               }`}
             >
-              {isSelected && (
-                <div className="w-2.5 h-2.5 rounded-full bg-[var(--accent)]" />
-              )}
+              {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-[var(--accent)]" />}
             </div>
 
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <span className="text-[var(--text-primary)] text-sm font-medium">
-                  {t(option.titleKey)}
-                </span>
+                <span className="text-[var(--text-primary)] text-sm font-medium">{t(option.titleKey)}</span>
                 {option.recommended && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent)]/10 text-[var(--accent)] font-medium">
                     {t('privacy.recommended')}
                   </span>
                 )}
               </div>
-              <p className="text-[var(--text-muted)] text-xs mt-1">
-                {t(option.descriptionKey)}
-              </p>
+              <p className="text-[var(--text-muted)] text-xs mt-1">{t(option.descriptionKey)}</p>
             </div>
 
             {saving && isSelected && (

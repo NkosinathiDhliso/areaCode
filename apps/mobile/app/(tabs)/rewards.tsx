@@ -27,9 +27,7 @@ export default function RewardsScreen() {
   const { data: rewards, isLoading } = useQuery({
     queryKey: ['rewards', 'near-me', pos?.lat, pos?.lng],
     queryFn: () =>
-      api.get<NearbyReward[]>(
-        `/v1/rewards/near-me?lat=${pos?.lat ?? -26.2041}&lng=${pos?.lng ?? 28.0473}`,
-      ),
+      api.get<NearbyReward[]>(`/v1/rewards/near-me?lat=${pos?.lat ?? -26.2041}&lng=${pos?.lng ?? 28.0473}`),
     enabled: connectivity !== 'offline',
     staleTime: 30_000,
   })

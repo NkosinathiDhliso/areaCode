@@ -9,27 +9,22 @@ import * as fc from 'fast-check'
 describe('reward claim idempotency', () => {
   it('duplicate claims produce exactly one redemption', () => {
     fc.assert(
-      fc.property(
-        fc.uuid(),
-        fc.uuid(),
-        fc.integer({ min: 2, max: 20 }),
-        (rewardId, userId, claimAttempts) => {
-          const redemptions = new Map<string, { code: string; claimedAt: string }>()
-          const key = `${rewardId}:${userId}`
+      fc.property(fc.uuid(), fc.uuid(), fc.integer({ min: 2, max: 20 }), (rewardId, userId, claimAttempts) => {
+        const redemptions = new Map<string, { code: string; claimedAt: string }>()
+        const key = `${rewardId}:${userId}`
 
-          for (let i = 0; i < claimAttempts; i++) {
-            // ON CONFLICT DO NOTHING
-            if (!redemptions.has(key)) {
-              redemptions.set(key, {
-                code: Math.random().toString(36).slice(2, 8).toUpperCase(),
-                claimedAt: new Date().toISOString(),
-              })
-            }
+        for (let i = 0; i < claimAttempts; i++) {
+          // ON CONFLICT DO NOTHING
+          if (!redemptions.has(key)) {
+            redemptions.set(key, {
+              code: Math.random().toString(36).slice(2, 8).toUpperCase(),
+              claimedAt: new Date().toISOString(),
+            })
           }
+        }
 
-          expect(redemptions.size).toBe(1)
-        },
-      ),
+        expect(redemptions.size).toBe(1)
+      }),
       { numRuns: 300 },
     )
   })
@@ -58,20 +53,16 @@ describe('reward slot count invariant', () => {
 
   it('claimed_count never exceeds total_slots after any sequence of claims', () => {
     fc.assert(
-      fc.property(
-        fc.integer({ min: 1, max: 100 }),
-        fc.integer({ min: 1, max: 200 }),
-        (totalSlots, claimAttempts) => {
-          let reward: Reward = { totalSlots, claimedCount: 0 }
+      fc.property(fc.integer({ min: 1, max: 100 }), fc.integer({ min: 1, max: 200 }), (totalSlots, claimAttempts) => {
+        let reward: Reward = { totalSlots, claimedCount: 0 }
 
-          for (let i = 0; i < claimAttempts; i++) {
-            const result = claimSlot(reward)
-            reward = result.reward
-          }
+        for (let i = 0; i < claimAttempts; i++) {
+          const result = claimSlot(reward)
+          reward = result.reward
+        }
 
-          expect(reward.claimedCount).toBeLessThanOrEqual(reward.totalSlots)
-        },
-      ),
+        expect(reward.claimedCount).toBeLessThanOrEqual(reward.totalSlots)
+      }),
       { numRuns: 300 },
     )
   })

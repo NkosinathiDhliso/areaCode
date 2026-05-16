@@ -21,7 +21,7 @@ export async function handler() {
       FilterExpression: 'begins_with(pk, :prefix) AND #status = :pending AND requestedAt < :cutoff',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':prefix': 'ERASURE#', ':pending': 'pending', ':cutoff': thirtyDaysAgo },
-    })
+    }),
   )
 
   let erasedCount = 0
@@ -37,14 +37,14 @@ export async function handler() {
           TableName: TableNames.appData,
           FilterExpression: 'contains(pk, :uid) OR contains(sk, :uid)',
           ExpressionAttributeValues: { ':uid': userId },
-        })
+        }),
       )
       for (const item of userItems.Items || []) {
         await documentClient.send(
           new DeleteCommand({
             TableName: TableNames.appData,
             Key: { pk: item['pk'] as string, sk: item['sk'] as string },
-          })
+          }),
         )
       }
 
@@ -56,7 +56,7 @@ export async function handler() {
           UpdateExpression: 'SET #status = :completed, processedAt = :now',
           ExpressionAttributeNames: { '#status': 'status' },
           ExpressionAttributeValues: { ':completed': 'completed', ':now': new Date().toISOString() },
-        })
+        }),
       )
       erasedCount++
     } catch (err) {
@@ -67,6 +67,16 @@ export async function handler() {
 
   // ─── Expired staff invites and old webhooks are handled by DynamoDB TTL ──
 
-  console.log(`[cleanup] Erased: ${erasedCount}`)
-  return { erasedCount, expiredInvites: 0, oldWebhooks: 0 }
+  // ─── Threshold-locks: drop any whose reward was deleted ─────────────────
+  let orphanedLocks = 0
+  try {
+    const { cleanupOrphanedLocks } = await import('../features/rewards/threshold-lock.js')
+    const result = await cleanupOrphanedLocks()
+    orphanedLocks = result.deleted
+  } catch (err) {
+    console.warn(`[cleanup] threshold-lock sweep failed: ${String(err)}`)
+  }
+
+  console.log(`[cleanup] Erased: ${erasedCount}, orphaned locks deleted: ${orphanedLocks}`)
+  return { erasedCount, expiredInvites: 0, oldWebhooks: 0, orphanedLocks }
 }

@@ -14,9 +14,7 @@ export function LiveToast({ toast, onDismiss }: LiveToastProps) {
       role="status"
       aria-live="polite"
     >
-      {toast.avatarUrl && (
-        <img src={toast.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
-      )}
+      {toast.avatarUrl && <img src={toast.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />}
       <Text className="text-[var(--text-primary)] text-sm flex-1">{toast.message}</Text>
     </Row>
   )

@@ -26,14 +26,14 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Return `{ clean: boolean, violations: string[] }` with field paths of any PII found
     - _Requirements: 13.2, 13.3_
 
-  - [x]* 1.4 Write property test for report serialization round-trip
+  - [x]\* 1.4 Write property test for report serialization round-trip
     - **Property 13: Report Serialization Round-Trip**
     - Create `backend/src/features/reports/__tests__/report-serialization.property.test.ts`
     - Use fast-check to generate arbitrary valid `Report` objects conforming to v1 schema
     - Assert: `JSON.parse(JSON.stringify(report))` deeply equals original
     - **Validates: Requirements 14.1, 14.4**
 
-  - [x]* 1.5 Write property test for PII scanner correctness
+  - [x]\* 1.5 Write property test for PII scanner correctness
     - **Property 5: PII Scanner Correctness**
     - Create `backend/src/features/reports/__tests__/pii-scanner.property.test.ts`
     - Generate JSON documents with/without injected PII patterns (UUID, email, phone, displayName, avatarUrl)
@@ -53,13 +53,13 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Support per-node and aggregate computation when multiple nodes exist
     - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
-  - [x]* 3.2 Write property test for peak hours distribution invariant
+  - [x]\* 3.2 Write property test for peak hours distribution invariant
     - **Property 2: Peak Hours Distribution and Aggregation Invariant**
     - Create `backend/src/features/reports/__tests__/analyzers/peak-hours.property.test.ts`
     - Assert: sum of hourly distribution = total check-ins, sum of daily distribution = total check-ins, peak day = day with max count, aggregate hourly = sum of per-node hourly
     - **Validates: Requirements 2.1, 2.3, 2.4**
 
-  - [x]* 3.3 Write property test for peak hours top windows correctness
+  - [x]\* 3.3 Write property test for peak hours top windows correctness
     - **Property 3: Peak Hours Top Windows Correctness**
     - In same test file as 3.2
     - Assert: each top-3 window has combined count ≥ any other contiguous window of same length not in top 3
@@ -73,7 +73,7 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Use only anonymized data (visitorToken, not userId)
     - _Requirements: 3.1, 3.2, 3.3_
 
-  - [x]* 3.5 Write property test for crowd composition invariant
+  - [x]\* 3.5 Write property test for crowd composition invariant
     - **Property 4: Crowd Composition Invariant**
     - Create `backend/src/features/reports/__tests__/analyzers/crowd-composition.property.test.ts`
     - Assert: tier percentages sum to 100 (±1% rounding), each percentage = (tier count / total) × 100, sum of unique per-tier = total unique
@@ -88,7 +88,7 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Return `hasInsufficientData: true` when fewer than 5 visitors have music preferences
     - _Requirements: 4.1, 4.2, 4.3_
 
-  - [x]* 4.2 Write property test for music profile aggregation
+  - [x]\* 4.2 Write property test for music profile aggregation
     - **Property 6: Music Profile Aggregation Correctness**
     - Create `backend/src/features/reports/__tests__/analyzers/music-profile.property.test.ts`
     - Assert: each dimension = average across visitors, top genres sorted descending by count with length ≤ 5, insufficient data when < 5 visitors
@@ -101,7 +101,7 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Compute first-time visitor count as |current| − |intersection|
     - _Requirements: 5.1, 5.2, 5.3_
 
-  - [x]* 4.4 Write property test for repeat visitor rate
+  - [x]\* 4.4 Write property test for repeat visitor rate
     - **Property 7: Repeat Visitor Rate Computation**
     - Create `backend/src/features/reports/__tests__/analyzers/repeat-visitors.property.test.ts`
     - Assert: repeatRate = |intersection(current, previous)| / |current| × 100, firstTimeCount = |current| − |intersection|
@@ -115,7 +115,7 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Return `hasPriorData: false` when previousMetrics is null
     - _Requirements: 6.1, 6.2, 6.3_
 
-  - [x]* 4.6 Write property test for trend computation
+  - [x]\* 4.6 Write property test for trend computation
     - **Property 8: Trend Computation Correctness**
     - Create `backend/src/features/reports/__tests__/analyzers/trends.property.test.ts`
     - Assert: percentChange = (current − previous) / previous × 100, direction labels correct per ±1% threshold, hasPriorData false when previous is null
@@ -133,7 +133,7 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Return `hasInsufficientData: true` when fewer than 3 venues in same city+category
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-  - [x]* 6.2 Write property test for benchmark computation
+  - [x]\* 6.2 Write property test for benchmark computation
     - **Property 9: Benchmark Computation Correctness**
     - Create `backend/src/features/reports/__tests__/analyzers/benchmarks.property.test.ts`
     - Assert: average = sum / count, percentAboveBelow = (venue − avg) / avg × 100, insufficient data when < 3 venues
@@ -149,7 +149,7 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Reference other venues by name only — no individual visitor paths
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
 
-  - [x]* 6.4 Write property test for journey analysis
+  - [x]\* 6.4 Write property test for journey analysis
     - **Property 11: Journey Analysis Correctness**
     - Create `backend/src/features/reports/__tests__/analyzers/journey.property.test.ts`
     - Assert: top venues sorted descending by overlap count, length ≤ 5, overlap % = overlapCount / venueUnique × 100, partnerships ≤ 2, insufficient data when < 10 visitors
@@ -165,7 +165,7 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Each recommendation is a single sentence with specific numbers
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
-  - [x]* 6.6 Write property test for recommendation bounds and conditions
+  - [x]\* 6.6 Write property test for recommendation bounds and conditions
     - **Property 10: Recommendation Generation Bounds and Conditions**
     - Create `backend/src/features/reports/__tests__/analyzers/recommendations.property.test.ts`
     - Assert: 1–5 recommendations, each is single sentence with ≥1 number, peak-hours rec present when top window > 2× avg, retention alert when drop > 10pp
@@ -184,7 +184,7 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - Skip businesses with zero check-ins in the period
     - _Requirements: 1.1, 1.2, 1.4_
 
-  - [ ]* 8.2 Write property test for business activity filtering
+  - [ ]\* 8.2 Write property test for business activity filtering
     - **Property 1: Business Activity Filtering**
     - Create `backend/src/features/reports/__tests__/dispatcher.property.test.ts`
     - Assert: messages produced for exactly the businesses with ≥1 check-in, no messages for zero-activity businesses
@@ -229,13 +229,13 @@ This plan implements automated weekly and monthly intelligence reports for busin
     - When business upgrades, previously generated full reports become immediately accessible (no re-generation needed — full reports are always stored)
     - _Requirements: 10.1, 10.2, 10.3, 10.4_
 
-  - [x]* 9.3 Write property test for tier gating correctness
+  - [x]\* 9.3 Write property test for tier gating correctness
     - **Property 12: Tier Gating Correctness**
     - Create `backend/src/features/reports/__tests__/tier-gating.property.test.ts`
     - Assert: growth/pro → all sections present, starter/payg → only summary + upgradeMessage
     - **Validates: Requirements 10.1, 10.2, 10.3**
 
-  - [x]* 9.4 Write integration tests for report API routes
+  - [x]\* 9.4 Write integration tests for report API routes
     - Create `backend/src/features/reports/__tests__/handler.integration.test.ts`
     - Test auth requirement, pagination, tier gating response shape, 404 for missing reports, 403 for wrong business
     - _Requirements: 11.1, 11.2, 11.4, 10.1, 10.2_

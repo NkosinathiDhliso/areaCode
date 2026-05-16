@@ -62,7 +62,7 @@ export async function getBusinessAudienceMusicData(businessId: string) {
       IndexName: 'BusinessIndex',
       KeyConditionExpression: 'businessId = :bid',
       ExpressionAttributeValues: { ':bid': businessId },
-    })
+    }),
   )
   const nodeIds = (nodesResult.Items || []).map((n) => (n['nodeId'] ?? n['id']) as string)
 

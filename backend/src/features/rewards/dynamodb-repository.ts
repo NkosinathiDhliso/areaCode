@@ -1,12 +1,5 @@
 // DynamoDB Repository for Rewards Feature
-import {
-  GetCommand,
-  QueryCommand,
-  PutCommand,
-  UpdateCommand,
-  DeleteCommand,
-  ScanCommand,
-} from '@aws-sdk/lib-dynamodb'
+import { GetCommand, QueryCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
 import type { Reward, RewardRedemption } from './types.js'
@@ -20,7 +13,7 @@ export async function getRewardById(rewardId: string): Promise<Reward | null> {
     new GetCommand({
       TableName: TableNames.rewards,
       Key: { rewardId },
-    })
+    }),
   )
   return result.Item ? mapReward(result.Item) : null
 }
@@ -32,7 +25,7 @@ export async function getRewardsByNodeId(nodeId: string): Promise<Reward[]> {
       IndexName: 'NodeIndex',
       KeyConditionExpression: 'nodeId = :nodeId',
       ExpressionAttributeValues: { ':nodeId': nodeId },
-    })
+    }),
   )
   return (result.Items || []).map((i) => mapReward(i))
 }
@@ -49,7 +42,7 @@ export async function getActiveRewardsByNodeId(nodeId: string): Promise<Reward[]
         ':isActive': true,
         ':now': new Date().toISOString(),
       },
-    })
+    }),
   )
   return (result.Items || []).map((i) => mapReward(i))
 }
@@ -72,7 +65,7 @@ export async function createReward(data: Omit<Reward, 'rewardId' | 'createdAt'>)
     new PutCommand({
       TableName: TableNames.rewards,
       Item: { ...reward, id: rewardId },
-    })
+    }),
   )
 
   return mapReward(reward as unknown as Record<string, unknown>)
@@ -80,7 +73,7 @@ export async function createReward(data: Omit<Reward, 'rewardId' | 'createdAt'>)
 
 export async function updateReward(
   rewardId: string,
-  data: Partial<Omit<Reward, 'rewardId' | 'createdAt'>>
+  data: Partial<Omit<Reward, 'rewardId' | 'createdAt'>>,
 ): Promise<Reward | null> {
   const updateExpr = Object.keys(data)
     .map((key) => `#${key} = :${key}`)
@@ -100,7 +93,7 @@ export async function updateReward(
         ':updatedAt': new Date().toISOString(),
       },
       ReturnValues: 'ALL_NEW',
-    })
+    }),
   )
 
   return result.Attributes ? mapReward(result.Attributes) : null
@@ -113,14 +106,12 @@ export async function incrementRewardClaimCount(rewardId: string): Promise<void>
       Key: { rewardId },
       UpdateExpression: 'SET claimedCount = claimedCount + :inc',
       ExpressionAttributeValues: { ':inc': 1 },
-    })
+    }),
   )
 }
 
 export async function deleteReward(rewardId: string): Promise<void> {
-  await documentClient.send(
-    new DeleteCommand({ TableName: TableNames.rewards, Key: { rewardId } })
-  )
+  await documentClient.send(new DeleteCommand({ TableName: TableNames.rewards, Key: { rewardId } }))
 }
 
 // ============================================================================
@@ -132,7 +123,7 @@ export async function getRedemptionById(redemptionId: string): Promise<RewardRed
     new GetCommand({
       TableName: TableNames.appData,
       Key: { pk: `REDEMPTION#${redemptionId}`, sk: `REDEMPTION#${redemptionId}` },
-    })
+    }),
   )
   return result.Item ? (result.Item as RewardRedemption) : null
 }
@@ -144,7 +135,7 @@ export async function getRedemptionsByRewardId(rewardId: string): Promise<Reward
       IndexName: 'GSI1',
       KeyConditionExpression: 'gsi1pk = :rewardId',
       ExpressionAttributeValues: { ':rewardId': `REWARD#${rewardId}` },
-    })
+    }),
   )
   return (result.Items || []) as RewardRedemption[]
 }
@@ -156,15 +147,12 @@ export async function getRedemptionsByUserId(userId: string): Promise<RewardRede
       IndexName: 'GSI2',
       KeyConditionExpression: 'gsi2pk = :userId',
       ExpressionAttributeValues: { ':userId': `USER#${userId}` },
-    })
+    }),
   )
   return (result.Items || []) as RewardRedemption[]
 }
 
-export async function getRedemptionByRewardAndUser(
-  rewardId: string,
-  userId: string
-): Promise<RewardRedemption | null> {
+export async function getRedemptionByRewardAndUser(rewardId: string, userId: string): Promise<RewardRedemption | null> {
   const result = await documentClient.send(
     new QueryCommand({
       TableName: TableNames.appData,
@@ -176,13 +164,13 @@ export async function getRedemptionByRewardAndUser(
         ':userId': userId,
       },
       Limit: 1,
-    })
+    }),
   )
   return result.Items?.[0] ? (result.Items[0] as RewardRedemption) : null
 }
 
 export async function createRedemption(
-  data: Omit<RewardRedemption, 'redemptionId' | 'createdAt'>
+  data: Omit<RewardRedemption, 'redemptionId' | 'createdAt'>,
 ): Promise<RewardRedemption> {
   const redemptionId = generateId()
   const now = new Date().toISOString()
@@ -205,7 +193,7 @@ export async function createRedemption(
         gsi2sk: now,
         ...redemption,
       },
-    })
+    }),
   )
 
   return redemption
@@ -235,7 +223,7 @@ export async function markRedemptionAsRedeemed(
       Key: { pk: `REDEMPTION#${redemptionId}`, sk: `REDEMPTION#${redemptionId}` },
       UpdateExpression: updateExpr,
       ExpressionAttributeValues: exprValues,
-    })
+    }),
   )
 }
 
@@ -253,7 +241,7 @@ export async function getRewardsNeedingEvaluation(): Promise<Reward[]> {
         ':locked': false,
         ':active': true,
       },
-    })
+    }),
   )
   return (result.Items || []).map((i) => mapReward(i))
 }
@@ -267,7 +255,7 @@ function mapReward(item: Record<string, unknown>): Reward {
 
 export async function getRewardEligibility(
   userId: string,
-  rewardId: string
+  rewardId: string,
 ): Promise<{ currentCheckIns: number; requiredCheckIns: number; eligible: boolean }> {
   const reward = await getRewardById(rewardId)
   if (!reward || !reward.triggerValue) {
@@ -285,13 +273,25 @@ export async function getRewardEligibility(
         ':nodeId': reward.nodeId,
         ':userId': userId,
       },
-    })
+    }),
   )
 
   const currentCheckIns = result.Count || 0
+
+  // Apply threshold-lock: a user halfway to a reward keeps their original
+  // target if the venue raises the threshold (Churn-defences spec, Req 1).
+  let requiredCheckIns = reward.triggerValue
+  try {
+    const { getEffectiveThreshold } = await import('./threshold-lock.js')
+    requiredCheckIns = await getEffectiveThreshold(userId, rewardId)
+    if (requiredCheckIns === 0) requiredCheckIns = reward.triggerValue
+  } catch {
+    // Lock lookup failure is non-fatal — fall back to current threshold
+  }
+
   return {
     currentCheckIns,
-    requiredCheckIns: reward.triggerValue,
-    eligible: currentCheckIns >= reward.triggerValue,
+    requiredCheckIns,
+    eligible: currentCheckIns >= requiredCheckIns,
   }
 }

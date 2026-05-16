@@ -1,6 +1,9 @@
 import type {
-  MusicGenre, DimensionScoreVector, CrowdVibeSnapshot,
-  BusinessMusicAudience, NodeCategory,
+  MusicGenre,
+  DimensionScoreVector,
+  CrowdVibeSnapshot,
+  BusinessMusicAudience,
+  NodeCategory,
 } from '../../types'
 import { ARCHETYPE_CATALOG } from '../../constants/archetype-catalog'
 import { MOCK_USERS } from './users'
@@ -55,9 +58,7 @@ function pickCheckedInUsers(nodeId: string, category: NodeCategory) {
 
   const scored = MOCK_USERS.map((u) => {
     const entry = MOCK_USER_MUSIC_DATA.get(u.id)
-    const overlap = entry
-      ? entry.genres.filter((g) => preferred.includes(g)).length
-      : 0
+    const overlap = entry ? entry.genres.filter((g) => preferred.includes(g)).length : 0
     return { user: u, overlap }
   })
 
@@ -81,7 +82,11 @@ export function buildCrowdVibeSnapshot(nodeId: string): CrowdVibeSnapshot {
   const genreCounts: Partial<Record<MusicGenre, number>> = {}
   const archetypeCounts: Record<string, number> = {}
   const dimSums: Record<string, number> = {
-    energy: 0, cultural_rootedness: 0, sophistication: 0, edge: 0, spirituality: 0,
+    energy: 0,
+    cultural_rootedness: 0,
+    sophistication: 0,
+    edge: 0,
+    spirituality: 0,
   }
   let dimCount = 0
 
@@ -124,15 +129,16 @@ export function buildCrowdVibeSnapshot(nodeId: string): CrowdVibeSnapshot {
     archetypePercentages[key] = (archetypePercentages[key] ?? 0) + (100 - pctSum)
   }
 
-  const aggregateDimensionScores: DimensionScoreVector | null = dimCount > 0
-    ? {
-        energy: Math.round((dimSums['energy']! / dimCount) * 1000) / 1000,
-        cultural_rootedness: Math.round((dimSums['cultural_rootedness']! / dimCount) * 1000) / 1000,
-        sophistication: Math.round((dimSums['sophistication']! / dimCount) * 1000) / 1000,
-        edge: Math.round((dimSums['edge']! / dimCount) * 1000) / 1000,
-        spirituality: Math.round((dimSums['spirituality']! / dimCount) * 1000) / 1000,
-      } as DimensionScoreVector
-    : null
+  const aggregateDimensionScores: DimensionScoreVector | null =
+    dimCount > 0
+      ? ({
+          energy: Math.round((dimSums['energy']! / dimCount) * 1000) / 1000,
+          cultural_rootedness: Math.round((dimSums['cultural_rootedness']! / dimCount) * 1000) / 1000,
+          sophistication: Math.round((dimSums['sophistication']! / dimCount) * 1000) / 1000,
+          edge: Math.round((dimSums['edge']! / dimCount) * 1000) / 1000,
+          spirituality: Math.round((dimSums['spirituality']! / dimCount) * 1000) / 1000,
+        } as DimensionScoreVector)
+      : null
 
   return { genreCounts, archetypePercentages, aggregateDimensionScores, totalCheckedIn: total }
 }
@@ -140,7 +146,12 @@ export function buildCrowdVibeSnapshot(nodeId: string): CrowdVibeSnapshot {
 /** Build mock BusinessMusicAudience data with realistic distributions */
 export function buildBusinessMusicAudience(): BusinessMusicAudience {
   const genreDistribution: Partial<Record<MusicGenre, number>> = {
-    amapiano: 35, deep_house: 22, hip_hop: 18, jazz: 12, afrobeats: 8, rnb: 5,
+    amapiano: 35,
+    deep_house: 22,
+    hip_hop: 18,
+    jazz: 12,
+    afrobeats: 8,
+    rnb: 5,
   }
 
   const archetypeBreakdown: Record<string, number> = {

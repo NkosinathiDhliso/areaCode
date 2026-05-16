@@ -18,21 +18,19 @@ export function StreakDisplay({ streakCount, streakStartDate, atRisk }: StreakDi
       <Box className="flex items-center gap-3 mb-2">
         <Box className="w-8 h-8 rounded-full flex items-center justify-center bg-[var(--bg-raised)]" aria-hidden="true">
           {streakCount > 0 ? (
-            atRisk
-              ? <AlertTriangle size={18} className="text-[var(--warning)]" />
-              : <Flame size={18} className="text-[var(--danger)]" />
+            atRisk ? (
+              <AlertTriangle size={18} className="text-[var(--warning)]" />
+            ) : (
+              <Flame size={18} className="text-[var(--danger)]" />
+            )
           ) : (
             <Moon size={18} className="text-[var(--text-muted)]" />
           )}
         </Box>
         <Box>
-          <Text className="text-[var(--text-primary)] text-sm font-semibold">
-            {streakCount} day streak
-          </Text>
+          <Text className="text-[var(--text-primary)] text-sm font-semibold">{streakCount} day streak</Text>
           {streakStartDate && (
-            <Text className="text-[var(--text-muted)] text-xs">
-              Since {formatDate(streakStartDate)}
-            </Text>
+            <Text className="text-[var(--text-muted)] text-xs">Since {formatDate(streakStartDate)}</Text>
           )}
         </Box>
       </Box>

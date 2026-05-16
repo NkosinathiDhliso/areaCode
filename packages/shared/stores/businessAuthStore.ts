@@ -49,6 +49,13 @@ export const useBusinessAuthStore = create<BusinessAuthState>()((set, get) => ({
     storage.remove('business:businessId')
     storage.remove('business:role')
     storage.remove('business:permissions')
-    set({ accessToken: null, refreshToken: null, businessId: null, role: null, permissions: [], isAuthenticated: false })
+    set({
+      accessToken: null,
+      refreshToken: null,
+      businessId: null,
+      role: null,
+      permissions: [],
+      isAuthenticated: false,
+    })
   },
 }))

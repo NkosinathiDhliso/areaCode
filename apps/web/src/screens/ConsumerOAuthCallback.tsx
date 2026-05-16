@@ -91,13 +91,20 @@ export function ConsumerOAuthCallback({ onNavigate }: ConsumerOAuthCallbackProps
           sessionId?: string
           username: string
           displayName: string
+          isNewUser?: boolean
         }
 
         if (cancelled) return
 
         setAuth(tokens.access_token, tokens.refresh_token, sync.userId, sync.sessionId)
-        window.history.replaceState({}, '', '/map')
-        onNavigate('map')
+        // Route new users through the First-Get prompt; everyone else lands on the map.
+        if (sync.isNewUser) {
+          window.history.replaceState({}, '', '/first-get-prompt')
+          onNavigate('first-get-prompt')
+        } else {
+          window.history.replaceState({}, '', '/map')
+          onNavigate('map')
+        }
       } catch {
         if (!cancelled) setError(t('auth.oauth.failed', 'Google sign-in failed. Try again.'))
       }

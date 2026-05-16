@@ -25,11 +25,7 @@ export function Avatar({ url, displayName, tier, size = 'md' }: AvatarProps) {
   return (
     <Box className={`relative inline-flex items-center justify-center rounded-full ${sizeClass}`}>
       {url ? (
-        <img
-          src={url}
-          alt={displayName}
-          className={`rounded-full object-cover ${sizeClass}`}
-        />
+        <img src={url} alt={displayName} className={`rounded-full object-cover ${sizeClass}`} />
       ) : (
         <Box
           className={`flex items-center justify-center rounded-full bg-[var(--bg-raised)] text-[var(--text-secondary)] font-medium ${sizeClass}`}

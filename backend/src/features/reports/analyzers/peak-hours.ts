@@ -6,9 +6,7 @@ import type { AnonymizedCheckIn, PeakHoursResult } from '../types.js'
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i)
 
-const DAYS_OF_WEEK = [
-  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
-] as const
+const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const
 
 // ============================================================================
 // Peak Hours Analyzer

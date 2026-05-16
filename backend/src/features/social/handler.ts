@@ -36,10 +36,7 @@ export async function socialRoutes(app: FastifyInstance) {
   app.delete(
     '/v1/users/:id/follow',
     {
-      preHandler: [
-        requireAuth('consumer'),
-        validate({ params: followParamsSchema }),
-      ],
+      preHandler: [requireAuth('consumer'), validate({ params: followParamsSchema })],
     },
     async (request, reply) => {
       const auth = getAuth(request)
@@ -53,10 +50,7 @@ export async function socialRoutes(app: FastifyInstance) {
   app.get(
     '/v1/feed',
     {
-      preHandler: [
-        requireAuth('consumer'),
-        validate({ query: feedQuerySchema }),
-      ],
+      preHandler: [requireAuth('consumer'), validate({ query: feedQuerySchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -77,12 +71,7 @@ export async function socialRoutes(app: FastifyInstance) {
     },
     async (request) => {
       const query = request.query as z.infer<typeof nearbyRecentQuerySchema>
-      return service.getNearbyRecentEvent(
-        query.lat,
-        query.lng,
-        query.radiusMetres,
-        query.withinMinutes,
-      )
+      return service.getNearbyRecentEvent(query.lat, query.lng, query.radiusMetres, query.withinMinutes)
     },
   )
 
@@ -90,10 +79,7 @@ export async function socialRoutes(app: FastifyInstance) {
   app.get(
     '/v1/leaderboard/:citySlug',
     {
-      preHandler: [
-        optionalAuth('consumer'),
-        validate({ params: leaderboardParamsSchema }),
-      ],
+      preHandler: [optionalAuth('consumer'), validate({ params: leaderboardParamsSchema })],
     },
     async (request) => {
       const auth = getOptionalAuth(request)
@@ -106,10 +92,7 @@ export async function socialRoutes(app: FastifyInstance) {
   app.get(
     '/v1/nodes/:id/who-is-here/summary',
     {
-      preHandler: [
-        optionalAuth('consumer'),
-        validate({ params: whoIsHereParamsSchema }),
-      ],
+      preHandler: [optionalAuth('consumer'), validate({ params: whoIsHereParamsSchema })],
     },
     async (request) => {
       const auth = getOptionalAuth(request)
@@ -119,34 +102,22 @@ export async function socialRoutes(app: FastifyInstance) {
   )
 
   // GET /v1/users/me/friends
-  app.get(
-    '/v1/users/me/friends',
-    { preHandler: [requireAuth('consumer')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return service.getFriendsList(auth.userId)
-    },
-  )
+  app.get('/v1/users/me/friends', { preHandler: [requireAuth('consumer')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.getFriendsList(auth.userId)
+  })
 
   // GET /v1/users/me/following
-  app.get(
-    '/v1/users/me/following',
-    { preHandler: [requireAuth('consumer')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return service.getFollowingList(auth.userId)
-    },
-  )
+  app.get('/v1/users/me/following', { preHandler: [requireAuth('consumer')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.getFollowingList(auth.userId)
+  })
 
   // GET /v1/users/me/followers
-  app.get(
-    '/v1/users/me/followers',
-    { preHandler: [requireAuth('consumer')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return service.getFollowersList(auth.userId)
-    },
-  )
+  app.get('/v1/users/me/followers', { preHandler: [requireAuth('consumer')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.getFollowersList(auth.userId)
+  })
 
   // GET /v1/users/search
   app.get(

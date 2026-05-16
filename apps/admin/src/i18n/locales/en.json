@@ -4,6 +4,7 @@
   "admin.login.password": "Password",
   "admin.login.submit": "Sign In",
   "admin.nav.dashboard": "Dashboard",
+  "admin.nav.retention": "Retention",
   "admin.nav.consumers": "Consumers",
   "admin.nav.businesses": "Businesses",
   "admin.nav.reports": "Reports",

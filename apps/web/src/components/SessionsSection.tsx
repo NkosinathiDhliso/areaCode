@@ -32,16 +32,14 @@ export function SessionsSection({ currentSessionId }: SessionsSectionProps) {
   })
 
   const revokeMutation = useMutation({
-    mutationFn: (sessionId: string) =>
-      api.delete(`/v1/users/me/sessions/${sessionId}`),
+    mutationFn: (sessionId: string) => api.delete(`/v1/users/me/sessions/${sessionId}`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['sessions'] })
     },
   })
 
   const revokeAllMutation = useMutation({
-    mutationFn: () =>
-      api.post('/v1/users/me/sessions/revoke-all', { currentSessionId }),
+    mutationFn: () => api.post('/v1/users/me/sessions/revoke-all', { currentSessionId }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['sessions'] })
     },
@@ -79,9 +77,7 @@ export function SessionsSection({ currentSessionId }: SessionsSectionProps) {
           >
             <div className="flex flex-col gap-0.5 flex-1 min-w-0">
               <div className="flex flex-row items-center gap-2">
-                <span className="text-[var(--text-primary)] text-sm font-medium truncate">
-                  {session.deviceInfo}
-                </span>
+                <span className="text-[var(--text-primary)] text-sm font-medium truncate">{session.deviceInfo}</span>
                 {session.isCurrent && (
                   <span className="text-[var(--accent)] text-xs font-medium shrink-0">
                     {t('profile.thisDevice', 'This device')}
@@ -89,8 +85,7 @@ export function SessionsSection({ currentSessionId }: SessionsSectionProps) {
                 )}
               </div>
               <span className="text-[var(--text-muted)] text-xs">
-                {t('profile.lastActive', 'Last active')}{' '}
-                {formatRelativeTime(session.lastActiveAt)}
+                {t('profile.lastActive', 'Last active')} {formatRelativeTime(session.lastActiveAt)}
               </span>
             </div>
 

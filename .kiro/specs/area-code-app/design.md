@@ -7,6 +7,7 @@ Area Code is a map-first social discovery platform for South African urban consu
 The architecture is a pnpm monorepo with a web-first strategy and a clean Expo extraction path. Frontend apps (consumer web, mobile, business, staff, admin) share feature modules and a common shared package. The backend is Fastify + TypeScript with PostgreSQL (PostGIS), Redis, and Socket.io. Infrastructure is AWS (Lambda, API Gateway V2, ECS Fargate, RDS, ElastiCache, S3, SES, 4 Cognito pools) managed entirely by Terraform.
 
 Key design decisions:
+
 - **Web-first with mobile extraction path**: Business logic, hooks, stores, and types live in `packages/` and are framework-agnostic. Platform-specific rendering is isolated to thin adapter layers.
 - **Async reward evaluation**: Check-in returns immediately; reward evaluation happens via SQS → Lambda, with results delivered via Socket.io. This keeps the check-in moment fast.
 - **Redis for all real-time state**: Pulse scores, cooldowns, presence, toast queues, consent cache. DB is never queried for live state. If Redis is down, nodes render dormant.
@@ -162,7 +163,7 @@ graph LR
     FEAT -.->|NEVER| FEAT2["other features/*"]
     SHARED -.->|NEVER| FEAT
     PACKAGES -.->|NEVER| APPS
-    
+
     ROUTES["backend routes"] -->|calls| SERVICES["services"]
     SERVICES -->|calls| REPOS["repositories"]
     ROUTES -.->|NEVER| REPOS
@@ -172,6 +173,7 @@ graph LR
 ### Backend Layer Architecture
 
 Every Fastify route handler follows this strict order:
+
 1. JWT verify (middleware) → 401
 2. Role check (consumer/business/staff/admin) → 403
 3. Zod input validation → 400
@@ -190,75 +192,75 @@ Services contain all business logic — never access `req`/`reply`. Repositories
 
 #### Map Feature (`packages/features/map/`)
 
-| Component | Responsibility |
-|-----------|---------------|
-| `LiveMap` | Full-viewport map container. Mounts Mapbox once, persists across navigation. Manages category chips, toast strip, layer switching. |
-| `NodeMarker` | SVG-layered node marker: blur halo → outer ring → core dot → live count badge. Driven by `pulseScore` from `mapStore`. |
-| `NodePulse` | Animates node state transitions: breathe, pulse, surge. Uses Framer Motion (web) / Reanimated (mobile). |
-| `CheckInSheet` | Bottom sheet for check-in flow. GPS acquisition → API call → animation → reward display. |
-| `ToastOverlay` | FOMO toast strip. Priority queue, 1 visible at a time, 4s display, spring slide animations. Hidden when bottom sheet open. |
-| `CategoryFilterBar` | Horizontally scrollable category chips. Absolutely positioned over map. |
+| Component           | Responsibility                                                                                                                     |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `LiveMap`           | Full-viewport map container. Mounts Mapbox once, persists across navigation. Manages category chips, toast strip, layer switching. |
+| `NodeMarker`        | SVG-layered node marker: blur halo → outer ring → core dot → live count badge. Driven by `pulseScore` from `mapStore`.             |
+| `NodePulse`         | Animates node state transitions: breathe, pulse, surge. Uses Framer Motion (web) / Reanimated (mobile).                            |
+| `CheckInSheet`      | Bottom sheet for check-in flow. GPS acquisition → API call → animation → reward display.                                           |
+| `ToastOverlay`      | FOMO toast strip. Priority queue, 1 visible at a time, 4s display, spring slide animations. Hidden when bottom sheet open.         |
+| `CategoryFilterBar` | Horizontally scrollable category chips. Absolutely positioned over map.                                                            |
 
 #### Discovery Feature (`packages/features/discovery/`)
 
-| Component | Responsibility |
-|-----------|---------------|
-| `NodeDetail` | Node detail bottom sheet: header, social section, rewards section, CTA. 4 sections max. |
-| `TrendingGrid` | Trending nodes grid for the Trending map layer. |
-| `CategoryFilter` | Category filtering logic for map layer switching. |
-| `SearchSheet` | Search bottom sheet with "Nearby" and "Trending in {city}" sections. 300ms debounce, 2-char minimum. |
+| Component        | Responsibility                                                                                       |
+| ---------------- | ---------------------------------------------------------------------------------------------------- |
+| `NodeDetail`     | Node detail bottom sheet: header, social section, rewards section, CTA. 4 sections max.              |
+| `TrendingGrid`   | Trending nodes grid for the Trending map layer.                                                      |
+| `CategoryFilter` | Category filtering logic for map layer switching.                                                    |
+| `SearchSheet`    | Search bottom sheet with "Nearby" and "Trending in {city}" sections. 300ms debounce, 2-char minimum. |
 
 #### Business Feature (`packages/features/business/`)
 
-| Component | Responsibility |
-|-----------|---------------|
-| `BusinessDashboard` | Horizontal swipe container. 6 panels, spring physics, pill indicator. Each panel = `100dvh`. |
-| `LivePanel` | Real-time check-in counter, avatars, pulse graph, context benchmarks. Zero-state checklist for new nodes. |
-| `RewardsPanel` | Reward cards (claimed/slots/expiry), "+" create button, slot lock warning. |
-| `AudiencePanel` | Anonymised aggregates: age range, tier distribution, repeat vs new. Min 20 users per data point. |
-| `NodeEditorPanel` | Node customisation: colour, icon, name, category, photos carousel, pulse state preview. |
-| `BoostPanel` | Tiered ZAR pricing (R25/2hr, R50/6hr, R150/24hr), Yoco checkout. Prices from API. |
-| `SettingsPanel` | Profile, contact, hours, subscription, staff management, QR code display/download/regenerate, flag appeals. |
+| Component           | Responsibility                                                                                              |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `BusinessDashboard` | Horizontal swipe container. 6 panels, spring physics, pill indicator. Each panel = `100dvh`.                |
+| `LivePanel`         | Real-time check-in counter, avatars, pulse graph, context benchmarks. Zero-state checklist for new nodes.   |
+| `RewardsPanel`      | Reward cards (claimed/slots/expiry), "+" create button, slot lock warning.                                  |
+| `AudiencePanel`     | Anonymised aggregates: age range, tier distribution, repeat vs new. Min 20 users per data point.            |
+| `NodeEditorPanel`   | Node customisation: colour, icon, name, category, photos carousel, pulse state preview.                     |
+| `BoostPanel`        | Tiered ZAR pricing (R25/2hr, R50/6hr, R150/24hr), Yoco checkout. Prices from API.                           |
+| `SettingsPanel`     | Profile, contact, hours, subscription, staff management, QR code display/download/regenerate, flag appeals. |
 
 #### Shared Components (`packages/shared/components/`)
 
-| Component | Responsibility |
-|-----------|---------------|
-| `MapView` | Platform abstraction: Mapbox GL JS (web) / `@rnmapbox/maps` (mobile). Identical props interface. |
-| `AnimatedNode` | Animation wrapper for node markers. Abstracts Framer Motion / Reanimated. |
-| `LiveToast` | Single toast renderer with spring slide animation. |
-| `BottomSheet` | Reusable bottom sheet: `rounded-t-3xl`, spring slide, backdrop overlay. |
-| `Avatar` | User avatar with tier badge overlay. |
-| `TierBadge` | Tier indicator: Local (grey), Regular (bronze), Fixture (silver), Institution (gold), Legend (animated gradient). |
-| `primitives` | `Box` → div/View, `Text` → span/Text, `Row` → div(flex-row)/View(flexDirection:row). |
+| Component      | Responsibility                                                                                                    |
+| -------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `MapView`      | Platform abstraction: Mapbox GL JS (web) / `@rnmapbox/maps` (mobile). Identical props interface.                  |
+| `AnimatedNode` | Animation wrapper for node markers. Abstracts Framer Motion / Reanimated.                                         |
+| `LiveToast`    | Single toast renderer with spring slide animation.                                                                |
+| `BottomSheet`  | Reusable bottom sheet: `rounded-t-3xl`, spring slide, backdrop overlay.                                           |
+| `Avatar`       | User avatar with tier badge overlay.                                                                              |
+| `TierBadge`    | Tier indicator: Local (grey), Regular (bronze), Fixture (silver), Institution (gold), Legend (animated gradient). |
+| `primitives`   | `Box` → div/View, `Text` → span/Text, `Row` → div(flex-row)/View(flexDirection:row).                              |
 
 ### Shared Hooks
 
-| Hook | Responsibility |
-|------|---------------|
-| `useCheckIn` | React Query mutation for `POST /v1/check-in`. Invalidates node queries on success. |
-| `useNodePulse` | Subscribes to `node:pulse_update` socket events. Updates `mapStore.pulseScores`. |
+| Hook               | Responsibility                                                                                        |
+| ------------------ | ----------------------------------------------------------------------------------------------------- |
+| `useCheckIn`       | React Query mutation for `POST /v1/check-in`. Invalidates node queries on success.                    |
+| `useNodePulse`     | Subscribes to `node:pulse_update` socket events. Updates `mapStore.pulseScores`.                      |
 | `useRealtimeToast` | Subscribes to `toast:new` socket events. Client-side haversine filtering (≤2km). Manages toast queue. |
-| `useGeolocation` | GPS acquisition with timeout (8s), accuracy check, permission state management. |
-| `useRewards` | React Query for reward data. Handles reward proximity ("one more visit" line). |
-| `useSocketRoom` | Join/leave socket rooms with symmetric cleanup on unmount. |
-| `useCooldownTimer` | Countdown timer for check-in cooldown display. |
+| `useGeolocation`   | GPS acquisition with timeout (8s), accuracy check, permission state management.                       |
+| `useRewards`       | React Query for reward data. Handles reward proximity ("one more visit" line).                        |
+| `useSocketRoom`    | Join/leave socket rooms with symmetric cleanup on unmount.                                            |
+| `useCooldownTimer` | Countdown timer for check-in cooldown display.                                                        |
 
 ### Shared Stores (Zustand + immer)
 
-| Store | State |
-|-------|-------|
-| `mapStore` | `nodes: Record<string, Node>`, `pulseScores: Record<string, number>`, `mapInstance: MapInstance \| null` |
-| `userStore` | `user`, `tier`, `totalCheckIns`, `streakCount`, onboarding flags |
-| `toastStore` | `queue: Toast[]`, `isBottomSheetOpen: boolean` |
-| `rewardStore` | `activeRewards`, `unclaimedRewards` |
-| `businessStore` | `business`, `nodes`, `currentPanel` |
-| `locationStore` | `lastKnownPosition`, `accuracy`, `permissionState` |
-| `navigationStore` | `activeDefaultTab` (time-based: Rewards 00:00–17:00, Leaderboard 17:00–23:59) |
-| `consumerAuthStore` | Consumer auth state, tokens (`consumer:` namespace) |
-| `businessAuthStore` | Business auth state, tokens (`business:` namespace) |
-| `staffAuthStore` | Staff auth state, tokens (`staff:` namespace) |
-| `adminAuthStore` | Admin auth state, tokens (`admin:` namespace) |
+| Store               | State                                                                                                    |
+| ------------------- | -------------------------------------------------------------------------------------------------------- |
+| `mapStore`          | `nodes: Record<string, Node>`, `pulseScores: Record<string, number>`, `mapInstance: MapInstance \| null` |
+| `userStore`         | `user`, `tier`, `totalCheckIns`, `streakCount`, onboarding flags                                         |
+| `toastStore`        | `queue: Toast[]`, `isBottomSheetOpen: boolean`                                                           |
+| `rewardStore`       | `activeRewards`, `unclaimedRewards`                                                                      |
+| `businessStore`     | `business`, `nodes`, `currentPanel`                                                                      |
+| `locationStore`     | `lastKnownPosition`, `accuracy`, `permissionState`                                                       |
+| `navigationStore`   | `activeDefaultTab` (time-based: Rewards 00:00–17:00, Leaderboard 17:00–23:59)                            |
+| `consumerAuthStore` | Consumer auth state, tokens (`consumer:` namespace)                                                      |
+| `businessAuthStore` | Business auth state, tokens (`business:` namespace)                                                      |
+| `staffAuthStore`    | Staff auth state, tokens (`staff:` namespace)                                                            |
+| `adminAuthStore`    | Admin auth state, tokens (`admin:` namespace)                                                            |
 
 ### Backend Feature Modules
 
@@ -379,8 +381,20 @@ interface ServerToClientEvents {
   'node:pulse_update': (payload: { nodeId: string; pulseScore: number; checkInCount: number; state: NodeState }) => void
   'node:state_surge': (payload: { nodeId: string; fromState: NodeState; toState: NodeState }) => void
   'node:state_change': (payload: { nodeId: string; state: NodeState }) => void
-  'toast:new': (payload: { type: ToastType; message: string; nodeId?: string; nodeLat?: number; nodeLng?: number; avatarUrl?: string }) => void
-  'reward:claimed': (payload: { rewardId: string; rewardTitle: string; redemptionCode: string; codeExpiresAt: string }) => void
+  'toast:new': (payload: {
+    type: ToastType
+    message: string
+    nodeId?: string
+    nodeLat?: number
+    nodeLng?: number
+    avatarUrl?: string
+  }) => void
+  'reward:claimed': (payload: {
+    rewardId: string
+    rewardTitle: string
+    redemptionCode: string
+    codeExpiresAt: string
+  }) => void
   'reward:slots_update': (payload: { rewardId: string; slotsRemaining: number }) => void
   'leaderboard:update': (payload: { userId: string; rank: number; delta: number }) => void
 }
@@ -396,33 +410,33 @@ interface ClientToServerEvents {
 
 ### Socket Room Strategy
 
-| Room Pattern | Subscribers | Events |
-|-------------|------------|--------|
-| `city:{citySlug}` | All clients in city (incl. anonymous) | `node:pulse_update`, `toast:new`, `node:state_surge` |
-| `node:{nodeId}` | Clients with node detail sheet open | `reward:slots_update` |
-| `user:{userId}` | Authenticated user only | `reward:claimed`, `leaderboard:update` |
-| `business:{businessId}` | Business dashboard clients | Live check-in events, reward claim events |
+| Room Pattern            | Subscribers                           | Events                                               |
+| ----------------------- | ------------------------------------- | ---------------------------------------------------- |
+| `city:{citySlug}`       | All clients in city (incl. anonymous) | `node:pulse_update`, `toast:new`, `node:state_surge` |
+| `node:{nodeId}`         | Clients with node detail sheet open   | `reward:slots_update`                                |
+| `user:{userId}`         | Authenticated user only               | `reward:claimed`, `leaderboard:update`               |
+| `business:{businessId}` | Business dashboard clients            | Live check-in events, reward claim events            |
 
 ### Webhook Endpoints
 
 ```typescript
-POST /v1/webhooks/yoco  // Yoco payment events (signature verified)
+POST / v1 / webhooks / yoco // Yoco payment events (signature verified)
 ```
 
 ### Infrastructure Interfaces
 
 #### Terraform Module Interfaces
 
-| Module | Key Inputs | Key Outputs |
-|--------|-----------|-------------|
-| `lambda` | `function_name`, `handler`, `runtime`, `memory`, `timeout`, `env_vars`, `provisioned_concurrency` | `function_arn`, `invoke_url` |
-| `cognito` | `pool_name`, `access_token_validity`, `refresh_token_validity`, `explicit_auth_flows` | `pool_id`, `client_id`, `pool_arn` |
-| `rds` | `instance_class`, `multi_az`, `backup_retention`, `postgis_enabled` | `endpoint`, `read_replica_endpoint` |
-| `elasticache` | `node_type`, `num_replicas`, `replication_group_id` | `primary_endpoint`, `reader_endpoint` |
-| `ecs-service` | `image`, `cpu`, `memory`, `desired_count`, `health_check_path` | `service_arn`, `alb_dns` |
-| `api-gateway` | `name`, `routes`, `stage_name`, `waf_acl_arn` | `api_endpoint`, `stage_url` |
-| `s3` | `bucket_name`, `cors_rules`, `lifecycle_rules` | `bucket_arn`, `bucket_domain` |
-| `waf` | `scope`, `rate_limit_rules`, `managed_rules` | `acl_arn` |
+| Module        | Key Inputs                                                                                        | Key Outputs                           |
+| ------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `lambda`      | `function_name`, `handler`, `runtime`, `memory`, `timeout`, `env_vars`, `provisioned_concurrency` | `function_arn`, `invoke_url`          |
+| `cognito`     | `pool_name`, `access_token_validity`, `refresh_token_validity`, `explicit_auth_flows`             | `pool_id`, `client_id`, `pool_arn`    |
+| `rds`         | `instance_class`, `multi_az`, `backup_retention`, `postgis_enabled`                               | `endpoint`, `read_replica_endpoint`   |
+| `elasticache` | `node_type`, `num_replicas`, `replication_group_id`                                               | `primary_endpoint`, `reader_endpoint` |
+| `ecs-service` | `image`, `cpu`, `memory`, `desired_count`, `health_check_path`                                    | `service_arn`, `alb_dns`              |
+| `api-gateway` | `name`, `routes`, `stage_name`, `waf_acl_arn`                                                     | `api_endpoint`, `stage_url`           |
+| `s3`          | `bucket_name`, `cors_rules`, `lifecycle_rules`                                                    | `bucket_arn`, `bucket_domain`         |
+| `waf`         | `scope`, `rate_limit_rules`, `managed_rules`                                                      | `acl_arn`                             |
 
 ## Data Models
 
@@ -791,13 +805,13 @@ pulseScore = (checkInsLast30min × 5) + (uniqueUsersToday × 2) + (activeRewards
 nodeSize   = base + (pulseScore × 0.4px), max base × 2.5
 ```
 
-| State | Score Range | Base Size | Animation |
-|-------|-----------|-----------|-----------|
-| `dormant` | 0 | 8px | 0.02 opacity outer ring, 4s breathe |
-| `quiet` | 1–10 | 10px | accent ring 20% opacity, 3s breathe |
-| `active` | 11–30 | 14px | coloured ring, inner glow, 1.5s pulse |
-| `buzzing` | 31–60 | 20px | double ring, blur halo, 0.8s pulse, live count badge |
-| `popping` | 61+ | 28px | triple-layer glow, blur 12px, 0.4s pulse, avatar stack |
+| State     | Score Range | Base Size | Animation                                              |
+| --------- | ----------- | --------- | ------------------------------------------------------ |
+| `dormant` | 0           | 8px       | 0.02 opacity outer ring, 4s breathe                    |
+| `quiet`   | 1–10        | 10px      | accent ring 20% opacity, 3s breathe                    |
+| `active`  | 11–30       | 14px      | coloured ring, inner glow, 1.5s pulse                  |
+| `buzzing` | 31–60       | 20px      | double ring, blur halo, 0.8s pulse, live count badge   |
+| `popping` | 61+         | 28px      | triple-layer glow, blur 12px, 0.4s pulse, avatar stack |
 
 ### Pulse Decay
 
@@ -887,7 +901,7 @@ All colours defined in `tokens.css`. Never hardcoded hex in components.
   --bg-base: #0f0f17;
   --bg-surface: #161622;
   --bg-raised: #1e1e2e;
-  --bg-overlay: rgba(10,10,15,0.85);
+  --bg-overlay: rgba(10, 10, 15, 0.85);
   --text-primary: #f0f0f5;
   --text-secondary: #a0a0b8;
   --text-muted: #606078;
@@ -910,8 +924,8 @@ All colours defined in `tokens.css`. Never hardcoded hex in components.
   --tier-regular: #cd7f32;
   --tier-fixture: #c0c0c0;
   --tier-institution: #ffd700;
-  --border: rgba(255,255,255,0.08);
-  --border-strong: rgba(255,255,255,0.16);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
   --nav-height: 56px;
   --bottom-sheet-radius: 20px;
 }
@@ -923,9 +937,9 @@ Typography: `Syne` (700, 800) for headings, `DM Sans` (400, 500) for body. 4px b
 
 ### Component: `StaffValidator` (`packages/features/staff/`)
 
-| Component | Responsibility |
-|-----------|---------------|
-| `StaffValidator` | Code input field + validation result display. Single-purpose interface at `/staff`. |
+| Component           | Responsibility                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| `StaffValidator`    | Code input field + validation result display. Single-purpose interface at `/staff`.   |
 | `RecentRedemptions` | Scrollable list of recent redemptions: code + timestamp only. No user identity shown. |
 
 ### Staff Auth Flow
@@ -1013,6 +1027,7 @@ Requires `CREATE EXTENSION IF NOT EXISTS pg_trgm` in the first migration.
 ### Sign-Up Consent
 
 Two explicit opt-ins presented at sign-up:
+
 - "Contribute anonymised check-in data to city insights" — OFF by default.
 - "Show my activity on the map" — ON by default with explanation text.
 
@@ -1024,19 +1039,19 @@ No data point in any report or API response may represent fewer than 20 unique u
 
 ### What Anonymous Users See
 
-| Feature | Access |
-|---------|--------|
-| Map with node markers (colour, size, state) | ✓ |
-| Node pulse state labels | ✓ |
-| Node name, category, address | ✓ |
-| Today's check-in count (number only, no avatars) | ✓ |
-| Reward count ("2 active rewards", no details) | ✓ |
-| Real-time toasts and pulse updates (city room) | ✓ |
-| Check in | Sign-up bottom sheet |
-| "Who's here" avatars | Sign-up bottom sheet |
-| Reward details | Sign-up bottom sheet |
-| Leaderboard | Sign-up bottom sheet |
-| User profiles | Sign-up bottom sheet |
+| Feature                                          | Access               |
+| ------------------------------------------------ | -------------------- |
+| Map with node markers (colour, size, state)      | ✓                    |
+| Node pulse state labels                          | ✓                    |
+| Node name, category, address                     | ✓                    |
+| Today's check-in count (number only, no avatars) | ✓                    |
+| Reward count ("2 active rewards", no details)    | ✓                    |
+| Real-time toasts and pulse updates (city room)   | ✓                    |
+| Check in                                         | Sign-up bottom sheet |
+| "Who's here" avatars                             | Sign-up bottom sheet |
+| Reward details                                   | Sign-up bottom sheet |
+| Leaderboard                                      | Sign-up bottom sheet |
+| User profiles                                    | Sign-up bottom sheet |
 
 ### Anonymous Socket Connection
 
@@ -1050,13 +1065,13 @@ Gated actions trigger a sign-up bottom sheet — never a redirect to `/login`. T
 
 ### Tier Thresholds
 
-| Tier | Check-Ins | Badge | Colour Token |
-|------|-----------|-------|-------------|
-| Local | 0–9 | Grey circle | `--tier-local` |
-| Regular | 10–49 | Bronze circle | `--tier-regular` |
-| Fixture | 50–149 | Silver circle | `--tier-fixture` |
-| Institution | 150–499 | Gold circle | `--tier-institution` |
-| Legend | 500+ | Animated gradient | CSS `linear-gradient(135deg, #f093fb, #f5576c, #fda085)` |
+| Tier        | Check-Ins | Badge             | Colour Token                                             |
+| ----------- | --------- | ----------------- | -------------------------------------------------------- |
+| Local       | 0–9       | Grey circle       | `--tier-local`                                           |
+| Regular     | 10–49     | Bronze circle     | `--tier-regular`                                         |
+| Fixture     | 50–149    | Silver circle     | `--tier-fixture`                                         |
+| Institution | 150–499   | Gold circle       | `--tier-institution`                                     |
+| Legend      | 500+      | Animated gradient | CSS `linear-gradient(135deg, #f093fb, #f5576c, #fda085)` |
 
 Tier is recalculated on each check-in by incrementing `users.total_check_ins` and evaluating thresholds. Tier badges appear on avatars in "who's here" and on the leaderboard.
 
@@ -1082,11 +1097,11 @@ Displays: tier badge, total check-ins, streak count, check-in history, badge col
 
 ### Deep Link Handling
 
-| Link Pattern | Behaviour |
-|-------------|-----------|
-| `areacode.co.za/node/{nodeSlug}` | Open app → fly to node → auto-open detail sheet |
-| `areacode.co.za/qr/{nodeId}/{token}` | Open app → validate QR → process check-in |
-| `areacode.co.za/staff-invite/{token}` | Open staff invite acceptance flow |
+| Link Pattern                          | Behaviour                                       |
+| ------------------------------------- | ----------------------------------------------- |
+| `areacode.co.za/node/{nodeSlug}`      | Open app → fly to node → auto-open detail sheet |
+| `areacode.co.za/qr/{nodeId}/{token}`  | Open app → validate QR → process check-in       |
+| `areacode.co.za/staff-invite/{token}` | Open staff invite acceptance flow               |
 
 - Web: standard URL routing via Expo Router.
 - Mobile: Expo Router universal links. Requires Apple App Site Association and Android Asset Links files served from web app.
@@ -1118,13 +1133,13 @@ Displays: tier badge, total check-ins, streak count, check-in history, badge col
 
 ### Notification Types
 
-| Type | Default | Max Frequency | Delivery |
-|------|---------|--------------|----------|
-| Streak at risk | OFF | 1/day | Push only |
-| Reward activated at regulars | OFF | 2/day | Push only |
-| Leaderboard pre-reset | OFF | 1/week (Sun 20:00 SAST) | Push only |
-| Top 10 result | ON | 1/week (Mon 00:00 SAST) | Push only |
-| Reward claimed | ON | Per-event | Socket primary, 60s push fallback |
+| Type                         | Default | Max Frequency           | Delivery                          |
+| ---------------------------- | ------- | ----------------------- | --------------------------------- |
+| Streak at risk               | OFF     | 1/day                   | Push only                         |
+| Reward activated at regulars | OFF     | 2/day                   | Push only                         |
+| Leaderboard pre-reset        | OFF     | 1/week (Sun 20:00 SAST) | Push only                         |
+| Top 10 result                | ON      | 1/week (Mon 00:00 SAST) | Push only                         |
+| Reward claimed               | ON      | Per-event               | Socket primary, 60s push fallback |
 
 Push is never sent for: toast events, pulse score changes, other users' check-ins.
 
@@ -1139,11 +1154,11 @@ Push is never sent for: toast events, pulse score changes, other users' check-in
 
 ### State Detection and UI
 
-| State | Indicator | Behaviour |
-|-------|-----------|-----------|
-| Fully offline | Banner: "No connection. Check-ins paused." | Cached map tiles, node states show "Last updated Xm ago" |
-| Socket disconnected, API reachable | Dot in nav: "Live updates paused" | Poll at 30s intervals |
-| Restored | Indicators dismissed silently | Resume real-time, replay last 5 min of events only |
+| State                              | Indicator                                  | Behaviour                                                |
+| ---------------------------------- | ------------------------------------------ | -------------------------------------------------------- |
+| Fully offline                      | Banner: "No connection. Check-ins paused." | Cached map tiles, node states show "Last updated Xm ago" |
+| Socket disconnected, API reachable | Dot in nav: "Live updates paused"          | Poll at 30s intervals                                    |
+| Restored                           | Indicators dismissed silently              | Resume real-time, replay last 5 min of events only       |
 
 ### Offline UI Rules
 
@@ -1162,14 +1177,14 @@ Exponential backoff with jitter: `baseDelay: 1000ms, maxDelay: 30000ms, jitter: 
 
 Activated when `navigator.connection.saveData` is true or user enables in Profile → Settings.
 
-| Feature | Normal | Data Saver |
-|---------|--------|-----------|
-| Map tiles | Dynamic | Static |
-| Real-time updates | Socket.io | 30s polling |
-| Avatar images | Loaded | Initials placeholders |
-| Background refetch | Enabled | Disabled |
-| Blur halos / triple-layer glow | Enabled | Disabled |
-| Lottie animations | Enabled | CSS transitions |
+| Feature                        | Normal    | Data Saver            |
+| ------------------------------ | --------- | --------------------- |
+| Map tiles                      | Dynamic   | Static                |
+| Real-time updates              | Socket.io | 30s polling           |
+| Avatar images                  | Loaded    | Initials placeholders |
+| Background refetch             | Enabled   | Disabled              |
+| Blur halos / triple-layer glow | Enabled   | Disabled              |
+| Lottie animations              | Enabled   | CSS transitions       |
 
 Small "D" badge on nav bar when active, tappable to explain and offer disable.
 
@@ -1177,11 +1192,11 @@ Small "D" badge on nav bar when active, tappable to explain and offer disable.
 
 Detected on first map load via `navigator.hardwareConcurrency` + 500ms frame-rate probe.
 
-| Tier | Detection | Adjustments |
-|------|-----------|-------------|
-| High | 4+ cores, 55+ fps | Full visual fidelity |
-| Mid | 2–3 cores, 30–54 fps | Disable 3D buildings, halve blur halo opacity |
-| Low | 1–2 cores, <30 fps | Disable 3D buildings + blur halos, reduce pitch to 20°, Framer Motion `reducedMotion: true` |
+| Tier | Detection            | Adjustments                                                                                 |
+| ---- | -------------------- | ------------------------------------------------------------------------------------------- |
+| High | 4+ cores, 55+ fps    | Full visual fidelity                                                                        |
+| Mid  | 2–3 cores, 30–54 fps | Disable 3D buildings, halve blur halo opacity                                               |
+| Low  | 1–2 cores, <30 fps   | Disable 3D buildings + blur halos, reduce pitch to 20°, Framer Motion `reducedMotion: true` |
 
 Nodes still breathe and pulse at all tiers — reduction is cosmetic depth only.
 
@@ -1189,10 +1204,10 @@ Nodes still breathe and pulse at all tiers — reduction is cosmetic depth only.
 
 ### Time-Based Default Tab
 
-| Time (SAST) | Default Tab | Rationale |
-|-------------|------------|-----------|
-| 00:00–17:00 | Rewards | Discovery mode — users planning where to go |
-| 17:00–23:59 | Leaderboard | Social mode — users competing in real time |
+| Time (SAST) | Default Tab | Rationale                                   |
+| ----------- | ----------- | ------------------------------------------- |
+| 00:00–17:00 | Rewards     | Discovery mode — users planning where to go |
+| 17:00–23:59 | Leaderboard | Social mode — users competing in real time  |
 
 Implementation: `navigationStore.activeDefaultTab` set by `useEffect` reading current hour on mount and on each app foreground event. No server call. User's last-visited tab always wins if they've already navigated — time-based default only on fresh app open.
 
@@ -1200,11 +1215,11 @@ Implementation: `navigationStore.activeDefaultTab` set by `useEffect` reading cu
 
 ### Onboarding Hints (Context-Delivered, Non-Blocking)
 
-| Trigger | Hint | Dismissal |
-|---------|------|-----------|
-| First app open (after 1.5s) | Pill at map centre: "Tap any dot to explore" [×] | Tap any node or [×] |
-| First layer-swipe attempt | Edge hint: "← Social  Trending  Rewards →" | Fades after 3s or first successful swipe |
-| First check-in complete | Quiet toast: "You're on the map." | Auto-dismiss (standard 4s) |
+| Trigger                     | Hint                                             | Dismissal                                |
+| --------------------------- | ------------------------------------------------ | ---------------------------------------- |
+| First app open (after 1.5s) | Pill at map centre: "Tap any dot to explore" [×] | Tap any node or [×]                      |
+| First layer-swipe attempt   | Edge hint: "← Social Trending Rewards →"         | Fades after 3s or first successful swipe |
+| First check-in complete     | Quiet toast: "You're on the map."                | Auto-dismiss (standard 4s)               |
 
 State tracked in `userStore`: `hintSeen`, `layerHintSeen`, `firstCheckIn`. Persisted to storage. Hints never shown twice. No tutorial screens, no modals, no spotlights.
 
@@ -1216,20 +1231,20 @@ Separate React + Vite app at `/admin` with `area-code-admin` Cognito pool.
 
 ### Admin Roles (Cognito `custom:admin_role`)
 
-| Role | Permissions |
-|------|------------|
-| `super_admin` | All actions including impersonation (read-only, mandatory note) |
-| `support_agent` | View + message users, extend trials, view consent. No delete, no impersonate. |
-| `content_moderator` | Node management, report queue, claim review only. |
+| Role                | Permissions                                                                   |
+| ------------------- | ----------------------------------------------------------------------------- |
+| `super_admin`       | All actions including impersonation (read-only, mandatory note)               |
+| `support_agent`     | View + message users, extend trials, view consent. No delete, no impersonate. |
+| `content_moderator` | Node management, report queue, claim review only.                             |
 
 ### Admin Panels
 
-| Panel | Features |
-|-------|---------|
+| Panel               | Features                                                                                                                                                                                                                                                                                      |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Consumer Management | View check-in history, disable/re-enable account (Cognito `AdminDisableUser`), reset abuse flags, recalculate tier, override streak (mandatory reason), process right-to-erasure (soft-delete → hard-delete 30-day queue), view push tokens, view consent history, send in-app admin messages |
-| Business Management | View subscription/payment history, extend trial (logged), view/revoke staff accounts, force-deactivate rewards, override CIPC validation, view/invalidate QR tokens |
-| POPIA Consent Audit | Per-user consent view, re-consent export (users on version < current), erasure request queue with countdown, data access request log |
-| Report Queue | Nodes with 3+ reports of same type surfaced. Review, dismiss, or action. |
+| Business Management | View subscription/payment history, extend trial (logged), view/revoke staff accounts, force-deactivate rewards, override CIPC validation, view/invalidate QR tokens                                                                                                                           |
+| POPIA Consent Audit | Per-user consent view, re-consent export (users on version < current), erasure request queue with countdown, data access request log                                                                                                                                                          |
+| Report Queue        | Nodes with 3+ reports of same type surfaced. Review, dismiss, or action.                                                                                                                                                                                                                      |
 
 ### Audit Logging
 
@@ -1243,13 +1258,13 @@ Socket (primary) with push fallback — never via email.
 
 ### Velocity Checks (Run on Every `POST /v1/check-in`)
 
-| Check | Condition | Action |
-|-------|-----------|--------|
-| Device velocity | Same fingerprint, >3 check-ins at different nodes in 30 min | Flag for review |
-| IP subnet | >3 users from same /28 subnet within 50m in 1 hour | Flag all |
-| Pulse anomaly | Node jumped ≥2 states in <2 min | Auto-suppress + notify admin |
-| Reward drain | Same device claiming >2 rewards at same node in 24h | Auto-block + flag |
-| New account velocity | Account <24h old, >3 check-ins | Rate-limit to 1/hour |
+| Check                | Condition                                                   | Action                       |
+| -------------------- | ----------------------------------------------------------- | ---------------------------- |
+| Device velocity      | Same fingerprint, >3 check-ins at different nodes in 30 min | Flag for review              |
+| IP subnet            | >3 users from same /28 subnet within 50m in 1 hour          | Flag all                     |
+| Pulse anomaly        | Node jumped ≥2 states in <2 min                             | Auto-suppress + notify admin |
+| Reward drain         | Same device claiming >2 rewards at same node in 24h         | Auto-block + flag            |
+| New account velocity | Account <24h old, >3 check-ins                              | Rate-limit to 1/hour         |
 
 ### Auto-Action vs Review
 
@@ -1266,20 +1281,20 @@ Only pulse anomaly and reward drain are auto-suppressed (high confidence). Devic
 
 ### Platform Primitives (`packages/shared/components/primitives/`)
 
-| Primitive | Web | Mobile |
-|-----------|-----|--------|
-| `Box` | `<div>` | `<View>` |
-| `Text` | `<span>` | `<Text>` |
-| `Row` | `<div style="flex-direction:row">` | `<View style={{flexDirection:'row'}}>` |
+| Primitive | Web                                | Mobile                                 |
+| --------- | ---------------------------------- | -------------------------------------- |
+| `Box`     | `<div>`                            | `<View>`                               |
+| `Text`    | `<span>`                           | `<Text>`                               |
+| `Row`     | `<div style="flex-direction:row">` | `<View style={{flexDirection:'row'}}>` |
 
 ### Platform Abstraction Layers
 
-| Abstraction | File | Purpose |
-|-------------|------|---------|
-| Storage | `packages/shared/lib/storage.ts` | Wraps `localStorage` (web) / `AsyncStorage` (mobile) |
-| Platform | `packages/shared/lib/platform.ts` | `isWeb`, `setPageTitle`, `getDeviceInfo` |
-| Map | `packages/shared/components/MapView` | Mapbox GL JS (web) / `@rnmapbox/maps` (mobile) |
-| Animation | Feature-level wrappers | Framer Motion (web) / Reanimated v3 (mobile) |
+| Abstraction | File                                 | Purpose                                              |
+| ----------- | ------------------------------------ | ---------------------------------------------------- |
+| Storage     | `packages/shared/lib/storage.ts`     | Wraps `localStorage` (web) / `AsyncStorage` (mobile) |
+| Platform    | `packages/shared/lib/platform.ts`    | `isWeb`, `setPageTitle`, `getDeviceInfo`             |
+| Map         | `packages/shared/components/MapView` | Mapbox GL JS (web) / `@rnmapbox/maps` (mobile)       |
+| Animation   | Feature-level wrappers               | Framer Motion (web) / Reanimated v3 (mobile)         |
 
 ### Rules
 
@@ -1293,12 +1308,12 @@ Only pulse anomaly and reward drain are auto-suppressed (high confidence). Devic
 
 ### Failure Handling Matrix
 
-| Condition | UI Response |
-|-----------|------------|
-| Location permission denied | Full-screen prompt: "Area Code needs your location to check in." [Enable] [Browse only] |
-| Accuracy > 200m | CHECK IN button text: "Weak signal — move closer to the entrance" |
-| Acquisition timeout (8s) | Message: "Location unavailable. Try moving to an open area." |
-| Backend 422 `accuracy_insufficient` | QR fallback prompt: direct user to scan venue QR code |
+| Condition                           | UI Response                                                                             |
+| ----------------------------------- | --------------------------------------------------------------------------------------- |
+| Location permission denied          | Full-screen prompt: "Area Code needs your location to check in." [Enable] [Browse only] |
+| Accuracy > 200m                     | CHECK IN button text: "Weak signal — move closer to the entrance"                       |
+| Acquisition timeout (8s)            | Message: "Location unavailable. Try moving to an open area."                            |
+| Backend 422 `accuracy_insufficient` | QR fallback prompt: direct user to scan venue QR code                                   |
 
 `useGeolocation` hook manages GPS acquisition with 8s timeout, accuracy check, and permission state. Browse-only mode shows map but disables check-in.
 
@@ -1317,6 +1332,7 @@ Only pulse anomaly and reward drain are auto-suppressed (high confidence). Devic
 ### Rewards Map Layer
 
 When consumer switches to Rewards layer:
+
 1. All nodes without active rewards dim (opacity reduction).
 2. Nodes with active rewards display a reward pill above the marker: "{rewardTitle} · {slotsRemaining} left", spring fade-in.
 3. Tap reward pill → open node detail bottom sheet directly.
@@ -1324,6 +1340,7 @@ When consumer switches to Rewards layer:
 ### Rewards Feed (Bottom Nav)
 
 Two sections:
+
 - "Rewards Near You" — sorted by `proximity × scarcity`. Data from `GET /v1/rewards/near-me?lat=&lng=` (5km radius).
 - "Rewards at Your Regulars" — nodes user has checked into 3+ times.
 
@@ -1473,11 +1490,11 @@ Fastify CORS plugin with explicit allowed origins. Never `origin: '*'` in produc
 
 ### Full-Bleed Screen Rules
 
-| Screen | Viewport | Scrolling |
-|--------|----------|-----------|
-| Map | `100dvh × 100dvw` | No page scroll. Pinch-zoom only. |
+| Screen             | Viewport            | Scrolling                             |
+| ------------------ | ------------------- | ------------------------------------- |
+| Map                | `100dvh × 100dvw`   | No page scroll. Pinch-zoom only.      |
 | Business Dashboard | Each panel `100dvh` | Inner content scrolls, page does not. |
-| Staff Validator | Full viewport | No page scroll. |
+| Staff Validator    | Full viewport       | No page scroll.                       |
 
 - No `max-w-*` wrappers on full-bleed screens.
 - Bottom nav statically positioned — never scrolls with content.
@@ -1488,22 +1505,22 @@ Fastify CORS plugin with explicit allowed origins. Never `origin: '*'` in produc
 
 ### Terraform-Defined Alarms
 
-| Alarm | Threshold |
-|-------|-----------|
+| Alarm                      | Threshold                      |
+| -------------------------- | ------------------------------ |
 | Check-in Lambda error rate | >10 errors in 2 periods of 60s |
-| Lambda duration P95 | >400ms |
-| RDS CPU | >80% |
-| ElastiCache evictions | >0 |
-| ECS task restarts | >2/hour |
+| Lambda duration P95        | >400ms                         |
+| RDS CPU                    | >80%                           |
+| ElastiCache evictions      | >0                             |
+| ECS task restarts          | >2/hour                        |
 
 ### SLO Targets
 
-| Endpoint | P95 Latency | Availability |
-|----------|------------|-------------|
-| `POST /v1/check-in` | ≤500ms | 99.5% |
-| `GET /v1/nodes/{id}/detail` | ≤300ms | 99.9% |
-| Socket city room join | ≤2s | 99.0% |
-| `GET /v1/rewards/near-me` | ≤600ms | 99.5% |
+| Endpoint                    | P95 Latency | Availability |
+| --------------------------- | ----------- | ------------ |
+| `POST /v1/check-in`         | ≤500ms      | 99.5%        |
+| `GET /v1/nodes/{id}/detail` | ≤300ms      | 99.9%        |
+| Socket city room join       | ≤2s         | 99.0%        |
+| `GET /v1/rewards/near-me`   | ≤600ms      | 99.5%        |
 
 Error budget: 0.5% monthly downtime on check-in (~3.6h). Breach triggers blameless post-mortem within 48h.
 
@@ -1554,11 +1571,11 @@ RDS snapshots before migrations touching `check_ins` or `users`. Documented poin
 
 ### EAS Build Profiles (`apps/mobile/eas.json`)
 
-| Profile | Config |
-|---------|--------|
+| Profile       | Config                                           |
+| ------------- | ------------------------------------------------ |
 | `development` | `developmentClient: true`, internal distribution |
-| `preview` | Internal distribution |
-| `production` | Production build |
+| `preview`     | Internal distribution                            |
+| `production`  | Production build                                 |
 
 ### Universal Links
 
@@ -1596,19 +1613,19 @@ When a business accepts a subscription (Growth/Pro), insert into `business_conse
 - Every hook with subscription/interval must clean up in return function.
 - No test files generated during implementation — testing deferred to post-implementation phase.
 
-
 ## Staff Validator Design (Req 13)
 
 ### Component Architecture
 
-| Component | Location | Responsibility |
-|-----------|----------|---------------|
-| `StaffValidator` | `packages/features/staff/StaffValidator.tsx` | Main screen: code input + recent redemptions list |
+| Component           | Location                                        | Responsibility                                     |
+| ------------------- | ----------------------------------------------- | -------------------------------------------------- |
+| `StaffValidator`    | `packages/features/staff/StaffValidator.tsx`    | Main screen: code input + recent redemptions list  |
 | `RecentRedemptions` | `packages/features/staff/RecentRedemptions.tsx` | Scrollable list of validated codes with timestamps |
 
 ### Screen Layout
 
 Full-bleed `100dvh` layout, no page-level scroll. Single column:
+
 1. Business logo + node name header
 2. 6-digit code input (large, centred, auto-focus, numeric keyboard)
 3. Validation result banner (success green / failure red, auto-dismiss 5s)
@@ -1626,13 +1643,14 @@ Response 400: { error: 'invalid_code' | 'expired_code' | 'already_redeemed' }
 ```
 
 ### Privacy Constraint
+
 Recent redemptions display `redemptionCode` + `timestamp` only. No user identity, no avatar, no username. This is enforced at the API level — the staff endpoint never returns user data.
 
 ### Auth Flow
+
 - Staff login at `/staff/login` using `staffAuthStore` (8hr access token TTL)
 - Staff invite acceptance at `/staff-invite/{token}` → OTP verification → account creation
 - Failed route guard → redirect to `/staff/login` (never `/login`)
-
 
 ---
 
@@ -1678,16 +1696,16 @@ ZADD leaderboard:{cityId}:week {checkInCount} {userId}
 
 ### Frontend Component
 
-| Component | Location | Responsibility |
-|-----------|----------|---------------|
-| `Leaderboard` | `packages/features/social/Leaderboard.tsx` | Top 50 list + pinned user rank at bottom |
+| Component          | Location                                        | Responsibility                                                   |
+| ------------------ | ----------------------------------------------- | ---------------------------------------------------------------- |
+| `Leaderboard`      | `packages/features/social/Leaderboard.tsx`      | Top 50 list + pinned user rank at bottom                         |
 | `LeaderboardRecap` | `packages/features/social/LeaderboardRecap.tsx` | Monday recap card: prior week top 3 + user rank, auto-dismiss 8s |
 
 ### Display Rules
+
 - Top 50 shown with rank, avatar, username, tier badge, check-in count
 - User's own rank pinned at bottom if outside top 50 (separator line above)
 - Accessible from bottom nav (trophy icon)
-
 
 ---
 
@@ -1695,8 +1713,8 @@ ZADD leaderboard:{cityId}:week {checkInCount} {userId}
 
 ### Component Architecture
 
-| Component | Location | Responsibility |
-|-----------|----------|---------------|
+| Component     | Location                                      | Responsibility                                    |
+| ------------- | --------------------------------------------- | ------------------------------------------------- |
 | `SearchSheet` | `packages/features/discovery/SearchSheet.tsx` | Bottom sheet with search input + results sections |
 
 ### Search Flow
@@ -1726,7 +1744,6 @@ GET /v1/nodes/search?q={query}&lat={lat}&lng={lng}
 CREATE INDEX idx_nodes_name_trgm ON nodes USING GIN (name gin_trgm_ops);
 ```
 
-
 ---
 
 ## Privacy / POPIA Design (Req 17)
@@ -1747,30 +1764,33 @@ graph LR
 
 ### Consent Fields
 
-| Field | Default | Effect |
-|-------|---------|--------|
-| `broadcast_location` | `true` | Controls: who's here visibility, toast emission, live count increment |
-| `analytics_opt_in` | `false` | Controls: inclusion in anonymised city insights |
+| Field                | Default | Effect                                                                |
+| -------------------- | ------- | --------------------------------------------------------------------- |
+| `broadcast_location` | `true`  | Controls: who's here visibility, toast emission, live count increment |
+| `analytics_opt_in`   | `false` | Controls: inclusion in anonymised city insights                       |
 
 ### Privacy Toggle Behaviour
+
 - Located in Profile → Privacy (top section, single toggle)
 - Changes silently — no confirmation dialog, no notification to followers, no email
 - Immediate effect: Redis cache invalidated, next check-in respects new setting
 
 ### Data Deletion Flow
+
 1. User taps "Delete all check-in history" in Profile → Privacy
 2. Soft-delete: `check_ins` rows marked with `deleted_at` timestamp
 3. Hard-delete: `cleanup` worker processes after 30 days (POPIA Article 14)
 4. Export available as CSV before deletion via `POST /v1/users/me/export-history`
 
 ### Consent Versioning
+
 - Format: `v{major}.{minor}` stored in Lambda env var `AREA_CODE_CONSENT_VERSION`
 - Major version bump → re-consent Bottom_Sheet on next app open
 - Minor version bump → no re-consent required
 
 ### Aggregation Rule
-No data point in any API response or report may represent fewer than 20 unique users. Enforced in the Audience panel service layer.
 
+No data point in any API response or report may represent fewer than 20 unique users. Enforced in the Audience panel service layer.
 
 ---
 
@@ -1778,32 +1798,34 @@ No data point in any API response or report may represent fewer than 20 unique u
 
 ### Access Matrix
 
-| Feature | Anonymous | Authenticated |
-|---------|-----------|---------------|
-| Map browsing | Yes | Yes |
-| Node markers (colour, size, state) | Yes | Yes |
-| Node name, category, address | Yes | Yes |
-| Today's check-in count (number) | Yes | Yes |
-| Reward count ("2 active rewards") | Yes | Yes |
-| Check-in | No → sign-up sheet | Yes |
-| Who's here (avatars) | No → sign-up sheet | Yes |
-| Reward details | No → sign-up sheet | Yes |
-| Leaderboard | No → sign-up sheet | Yes |
-| User profiles | No → sign-up sheet | Yes |
-| Toasts + pulse updates | Yes (city room) | Yes |
+| Feature                            | Anonymous          | Authenticated |
+| ---------------------------------- | ------------------ | ------------- |
+| Map browsing                       | Yes                | Yes           |
+| Node markers (colour, size, state) | Yes                | Yes           |
+| Node name, category, address       | Yes                | Yes           |
+| Today's check-in count (number)    | Yes                | Yes           |
+| Reward count ("2 active rewards")  | Yes                | Yes           |
+| Check-in                           | No → sign-up sheet | Yes           |
+| Who's here (avatars)               | No → sign-up sheet | Yes           |
+| Reward details                     | No → sign-up sheet | Yes           |
+| Leaderboard                        | No → sign-up sheet | Yes           |
+| User profiles                      | No → sign-up sheet | Yes           |
+| Toasts + pulse updates             | Yes (city room)    | Yes           |
 
 ### Socket Behaviour
+
 - Anonymous: joins `city:{citySlug}` only (no `user:` room)
 - Receives `node:pulse_update`, `toast:new`, `node:state_surge`
 - Cannot emit `presence:join` or `presence:leave`
 
 ### Sign-Up Bottom Sheet
+
 Triggered on any gated action. Slides up with:
+
 - "Sign up to check in, earn rewards, and join the leaderboard"
 - "I'm a customer" / "I'm a business" buttons
 - Routes to `/signup/consumer` or `/signup/business`
 - Never redirects to a separate `/login` page
-
 
 ---
 
@@ -1811,15 +1833,16 @@ Triggered on any gated action. Slides up with:
 
 ### Tier Thresholds
 
-| Tier | Check-ins | Badge Colour | Badge Style |
-|------|-----------|-------------|-------------|
-| Local | 0–9 | `--tier-local` (#606078) | Grey, static |
-| Regular | 10–49 | `--tier-regular` (#cd7f32) | Bronze, static |
-| Fixture | 50–149 | `--tier-fixture` (#c0c0c0) | Silver, static |
-| Institution | 150–499 | `--tier-institution` (#ffd700) | Gold, static |
-| Legend | 500+ | Animated gradient | Gradient shimmer animation |
+| Tier        | Check-ins | Badge Colour                   | Badge Style                |
+| ----------- | --------- | ------------------------------ | -------------------------- |
+| Local       | 0–9       | `--tier-local` (#606078)       | Grey, static               |
+| Regular     | 10–49     | `--tier-regular` (#cd7f32)     | Bronze, static             |
+| Fixture     | 50–149    | `--tier-fixture` (#c0c0c0)     | Silver, static             |
+| Institution | 150–499   | `--tier-institution` (#ffd700) | Gold, static               |
+| Legend      | 500+      | Animated gradient              | Gradient shimmer animation |
 
 ### Tier Calculation
+
 ```typescript
 function getTier(totalCheckIns: number): Tier {
   if (totalCheckIns >= 500) return 'legend'
@@ -1834,21 +1857,21 @@ Tier is recalculated on every check-in and stored on `users.tier`. Admin can man
 
 ### Profile Screen Layout
 
-| Section | Content |
-|---------|---------|
-| Header | Avatar + tier badge, username, display name, city |
-| Stats row | Total check-ins, current streak, current tier |
-| Streak badge | Persistent bottom-left above nav when streak > 0 |
-| Check-in history | Paginated list (cursor-based) |
-| Badge collection | Grid of earned tier badges |
+| Section          | Content                                           |
+| ---------------- | ------------------------------------------------- |
+| Header           | Avatar + tier badge, username, display name, city |
+| Stats row        | Total check-ins, current streak, current tier     |
+| Streak badge     | Persistent bottom-left above nav when streak > 0  |
+| Check-in history | Paginated list (cursor-based)                     |
+| Badge collection | Grid of earned tier badges                        |
 
 ### Streak Badge
+
 - SVG flame icon, positioned bottom-left above nav bar
 - Colour: `--warning` when streak ≥ 3, `--text-muted` when 1–2
 - Tap → micro-sheet: "{N}-night streak. Check in today to keep it." + progress dots
 - Pulses once (subtle) after 18:00 local if no check-in today
 - Streak = consecutive days with ≥1 check-in, day boundary 00:00–23:59 SAST
-
 
 ---
 
@@ -1856,13 +1879,13 @@ Tier is recalculated on every check-in and stored on `users.tier`. Admin can man
 
 ### URL Scheme
 
-| Platform | Pattern | Handler |
-|----------|---------|---------|
-| Web | `areacode.co.za/node/{nodeSlug}` | Expo Router web route |
-| Mobile universal link | `areacode.co.za/node/{nodeSlug}` | Apple AASA / Android Asset Links → Expo Router |
-| Mobile custom scheme | `areacode://node/{nodeSlug}` | Expo Router deep link |
-| QR check-in | `areacode.co.za/qr/{nodeId}/{token}` | Check-in handler (bypasses GPS) |
-| Staff invite | `areacode.co.za/staff-invite/{token}` | Staff invite acceptance flow |
+| Platform              | Pattern                               | Handler                                        |
+| --------------------- | ------------------------------------- | ---------------------------------------------- |
+| Web                   | `areacode.co.za/node/{nodeSlug}`      | Expo Router web route                          |
+| Mobile universal link | `areacode.co.za/node/{nodeSlug}`      | Apple AASA / Android Asset Links → Expo Router |
+| Mobile custom scheme  | `areacode://node/{nodeSlug}`          | Expo Router deep link                          |
+| QR check-in           | `areacode.co.za/qr/{nodeId}/{token}`  | Check-in handler (bypasses GPS)                |
+| Staff invite          | `areacode.co.za/staff-invite/{token}` | Staff invite acceptance flow                   |
 
 ### Share Flow
 
@@ -1882,7 +1905,7 @@ Tier is recalculated on every check-in and stored on `users.tier`. Admin can man
 ### OG Tags (Public Endpoint)
 
 ```typescript
-GET /v1/nodes/{nodeSlug}/public
+GET / v1 / nodes / { nodeSlug } / public
 // No auth required
 Response: {
   name: string
@@ -1895,7 +1918,6 @@ Response: {
 ```
 
 Used by web app SSR/meta tags for social sharing previews.
-
 
 ---
 
@@ -1924,20 +1946,23 @@ sequenceDiagram
 ```
 
 ### Report Types
+
 `wrong_location` | `permanently_closed` | `fake_rewards` | `offensive_content` | `other`
 
 ### Auto-Flag Rules
+
 - 5+ fraud reports (`fake_rewards`) in 24 hours → node hidden from trending, pending review
 - Business notified: "Your node has been reported and is under review."
 - Business can appeal via Settings panel (max 500 chars + optional photo)
 
 ### Reporter Ban
+
 - 3 rejected reports in 30 days → reporter banned from submitting further reports
 - Tracked via `reports.status = 'dismissed'` count per `reporter_id`
 
 ### Privacy
-Reporter identity is never revealed to the node owner. Admin can see reporter_id in the admin panel.
 
+Reporter identity is never revealed to the node owner. Admin can see reporter_id in the admin panel.
 
 ---
 
@@ -1945,13 +1970,13 @@ Reporter identity is never revealed to the node owner. Admin can see reporter_id
 
 ### Notification Types and Limits
 
-| Type | Default | Max Frequency | Delivery |
-|------|---------|--------------|----------|
-| Streak at risk | OFF | 1/day | Push only |
-| Reward activated at regulars | OFF | 2/day | Push only |
-| Leaderboard pre-reset | OFF | 1/week (Sun 20:00 SAST) | Push only |
-| Top 10 result | ON | 1/week (Mon 00:00 SAST) | Push only |
-| Reward claimed | ON | Per-event | Socket primary, 60s push fallback |
+| Type                         | Default | Max Frequency           | Delivery                          |
+| ---------------------------- | ------- | ----------------------- | --------------------------------- |
+| Streak at risk               | OFF     | 1/day                   | Push only                         |
+| Reward activated at regulars | OFF     | 2/day                   | Push only                         |
+| Leaderboard pre-reset        | OFF     | 1/week (Sun 20:00 SAST) | Push only                         |
+| Top 10 result                | ON      | 1/week (Mon 00:00 SAST) | Push only                         |
+| Reward claimed               | ON      | Per-event               | Socket primary, 60s push fallback |
 
 ### Delivery Architecture
 
@@ -1966,20 +1991,22 @@ graph LR
 ```
 
 ### Push Token Management
+
 - Stored in `user_push_tokens` table with platform (`expo` | `web`), device_id
 - `DeviceNotRegistered` error → set `is_active = false`
 - Unique constraint on `(user_id, token)` prevents duplicates
 
 ### Permission Priming Flow
+
 1. After first successful check-in, show personalised value hook Bottom_Sheet
 2. Use nearby recent check-in event if available, else fall back to value list
 3. "Not now" → defer 7 days via Redis `notif:deferred:{userId}` EX 604800
 4. Never ask twice in one session
 
 ### Rate Limiting
+
 - Reward push: max 2/day/user via Redis `reward_notifications_today:{userId}` with 86400s TTL
 - Never push for: toast events, pulse changes, other users' check-ins
-
 
 ---
 
@@ -1999,23 +2026,24 @@ stateDiagram-v2
 
 ### UI States
 
-| State | Banner | Check-in | Toasts | Map |
-|-------|--------|----------|--------|-----|
-| Online | None | Enabled | Live | Live |
-| API Only | Dot indicator "Live updates paused" | Enabled | Paused | Cached + 30s poll |
-| Offline | "No connection. Check-ins paused." | Greyed out "Connect to check in" | Hidden | Cached tiles, "Last updated Xm ago" |
+| State    | Banner                              | Check-in                         | Toasts | Map                                 |
+| -------- | ----------------------------------- | -------------------------------- | ------ | ----------------------------------- |
+| Online   | None                                | Enabled                          | Live   | Live                                |
+| API Only | Dot indicator "Live updates paused" | Enabled                          | Paused | Cached + 30s poll                   |
+| Offline  | "No connection. Check-ins paused."  | Greyed out "Connect to check in" | Hidden | Cached tiles, "Last updated Xm ago" |
 
 ### Reconnection Strategy
+
 - Socket.io: exponential backoff with jitter (`baseDelay: 1000ms, maxDelay: 30000ms, jitter: true`)
 - On reconnect: replay last 5 minutes of events only (not full outage backlog)
 - Silently resume, dismiss indicators
 
 ### Caching
+
 - Node states persisted to `localStorage`/`AsyncStorage` via Zustand persist middleware
 - User profile and tier cached indefinitely
 - Rewards never cached (always fresh from API)
 - Redis pub/sub queue capped at 500 events per city
-
 
 ---
 
@@ -2025,29 +2053,28 @@ stateDiagram-v2
 
 Activated when `navigator.connection.saveData === true` or user enables in Profile → Settings.
 
-| Feature | Normal | Data Saver |
-|---------|--------|------------|
-| Map tiles | Vector (live) | Static raster |
-| Real-time | Socket.io | 30s polling |
-| Avatars | Images | Initials placeholders |
-| Background refetch | Enabled | Disabled |
-| Blur halos | Enabled | Disabled |
-| Triple-layer glow | Enabled | Disabled |
-| Lottie animations | Enabled | CSS transitions |
-| Nav indicator | None | "D" badge (tappable) |
+| Feature            | Normal        | Data Saver            |
+| ------------------ | ------------- | --------------------- |
+| Map tiles          | Vector (live) | Static raster         |
+| Real-time          | Socket.io     | 30s polling           |
+| Avatars            | Images        | Initials placeholders |
+| Background refetch | Enabled       | Disabled              |
+| Blur halos         | Enabled       | Disabled              |
+| Triple-layer glow  | Enabled       | Disabled              |
+| Lottie animations  | Enabled       | CSS transitions       |
+| Nav indicator      | None          | "D" badge (tappable)  |
 
 ### Device Performance Tiers
 
 Detection: `navigator.hardwareConcurrency` + 500ms frame-rate probe on first map load.
 
-| Tier | Cores | FPS | Adjustments |
-|------|-------|-----|-------------|
-| High | 4+ | 55+ | Full experience |
-| Mid | 2–3 | 30–54 | Disable 3D buildings, halve blur halo opacity |
-| Low | 1–2 | <30 | Disable 3D buildings + blur halos, reduce pitch to 20°, `reducedMotion: true` |
+| Tier | Cores | FPS   | Adjustments                                                                   |
+| ---- | ----- | ----- | ----------------------------------------------------------------------------- |
+| High | 4+    | 55+   | Full experience                                                               |
+| Mid  | 2–3   | 30–54 | Disable 3D buildings, halve blur halo opacity                                 |
+| Low  | 1–2   | <30   | Disable 3D buildings + blur halos, reduce pitch to 20°, `reducedMotion: true` |
 
 Nodes still breathe and pulse at all tiers — reduction is cosmetic depth only.
-
 
 ---
 
@@ -2055,9 +2082,9 @@ Nodes still breathe and pulse at all tiers — reduction is cosmetic depth only.
 
 ### Time-Based Default Tab
 
-| Time (SAST) | Default Tab | Rationale |
-|-------------|-------------|-----------|
-| 00:00–17:00 | Rewards | Discovery mode — users browsing for deals |
+| Time (SAST) | Default Tab | Rationale                                   |
+| ----------- | ----------- | ------------------------------------------- |
+| 00:00–17:00 | Rewards     | Discovery mode — users browsing for deals   |
 | 17:00–23:59 | Leaderboard | Social mode — evening activity, competition |
 
 ### Implementation
@@ -2079,37 +2106,36 @@ if (!state.hasNavigated) {
 
 No server call required. `hasNavigated` resets on fresh app open (not on foreground resume).
 
-
 ---
 
 ## First-Time Onboarding Design (Req 27)
 
 ### Hint Sequence
 
-| Trigger | Hint | Display | Dismiss |
-|---------|------|---------|---------|
-| First app open | "Tap any dot to explore" pill at map centre | Fade in after 1.5s | [×] button or first node tap |
-| First layer-swipe attempt | "← Social  Trending  Rewards →" at map edge | Immediate | 3s timeout or first successful swipe |
-| First check-in | Toast: "You're on the map." | Standard toast display | 4s auto-dismiss |
+| Trigger                   | Hint                                        | Display                | Dismiss                              |
+| ------------------------- | ------------------------------------------- | ---------------------- | ------------------------------------ |
+| First app open            | "Tap any dot to explore" pill at map centre | Fade in after 1.5s     | [×] button or first node tap         |
+| First layer-swipe attempt | "← Social Trending Rewards →" at map edge   | Immediate              | 3s timeout or first successful swipe |
+| First check-in            | Toast: "You're on the map."                 | Standard toast display | 4s auto-dismiss                      |
 
 ### State Tracking
 
 ```typescript
 // userStore
 interface OnboardingState {
-  hintSeen: boolean      // "Tap any dot" pill
+  hintSeen: boolean // "Tap any dot" pill
   layerHintSeen: boolean // Layer swipe hint
-  firstCheckIn: boolean  // First check-in completed
+  firstCheckIn: boolean // First check-in completed
 }
 ```
 
 Persisted to `localStorage`/`AsyncStorage`. Hints never shown twice.
 
 ### Design Rules
+
 - No tutorial screens, no modals, no overlays blocking interaction
 - No confetti, no particle effects on first check-in
 - Hints are contextual and non-blocking
-
 
 ---
 
@@ -2121,29 +2147,30 @@ Separate React + Vite app at `apps/admin/`, own Cognito pool (`area-code-admin`)
 
 ### Role-Based Access
 
-| Feature | super_admin | support_agent | content_moderator |
-|---------|-------------|---------------|-------------------|
-| Consumer management | Full | View + message | No |
-| Business management | Full | View + extend trial | No |
-| Node management | Full | No | Full |
-| Report queue | Full | No | Full |
-| Claim review | Full | No | Full |
-| POPIA audit | Full | View consent | No |
-| Impersonation | Read-only + mandatory note | No | No |
-| Delete/disable accounts | Yes | No | No |
+| Feature                 | super_admin                | support_agent       | content_moderator |
+| ----------------------- | -------------------------- | ------------------- | ----------------- |
+| Consumer management     | Full                       | View + message      | No                |
+| Business management     | Full                       | View + extend trial | No                |
+| Node management         | Full                       | No                  | Full              |
+| Report queue            | Full                       | No                  | Full              |
+| Claim review            | Full                       | No                  | Full              |
+| POPIA audit             | Full                       | View consent        | No                |
+| Impersonation           | Read-only + mandatory note | No                  | No                |
+| Delete/disable accounts | Yes                        | No                  | No                |
 
 ### Admin Screens
 
-| Screen | Key Actions |
-|--------|-------------|
-| Consumer Users | Search, view history, disable/enable, reset abuse flags, recalculate tier, override streak, process erasure, view push tokens, view consent, send messages |
-| Business Accounts | View subscription/payments, extend trial, view/revoke staff, force-deactivate rewards, CIPC override, QR token management |
-| Report Queue | Nodes with 3+ reports of same type surfaced first, review/dismiss/action |
-| POPIA Audit | Per-user consent view, re-consent export, erasure queue with countdown, data access log |
+| Screen            | Key Actions                                                                                                                                                |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Consumer Users    | Search, view history, disable/enable, reset abuse flags, recalculate tier, override streak, process erasure, view push tokens, view consent, send messages |
+| Business Accounts | View subscription/payments, extend trial, view/revoke staff, force-deactivate rewards, CIPC override, QR token management                                  |
+| Report Queue      | Nodes with 3+ reports of same type surfaced first, review/dismiss/action                                                                                   |
+| POPIA Audit       | Per-user consent view, re-consent export, erasure queue with countdown, data access log                                                                    |
 
 ### Audit Logging
 
 Every admin action inserts into `audit_log`:
+
 ```typescript
 {
   admin_id: UUID,
@@ -2158,11 +2185,11 @@ Every admin action inserts into `audit_log`:
 ```
 
 ### Impersonation
+
 - Super_admin only, read-only access
 - Mandatory `note` field (API rejects without it)
 - Logged to `impersonation_log` with `started_at`, `ended_at`
 - Admin messages delivered via Socket (primary) + push fallback, never email
-
 
 ---
 
@@ -2170,13 +2197,13 @@ Every admin action inserts into `audit_log`:
 
 ### Detection Rules
 
-| Rule | Trigger | Action |
-|------|---------|--------|
-| Device velocity | Same fingerprint, >3 check-ins at different nodes in 30 min | Flag for review |
-| IP subnet | >3 users from same /28 subnet within 50m in 1 hour | Flag all users for review |
-| Pulse anomaly | Node jumped ≥2 states in <2 minutes | Auto-suppress + flag node + notify admin |
-| Reward drain | Same device claiming >2 rewards at same node in 24h | Auto-block + flag |
-| New account velocity | Account <24h old, >3 check-ins | Rate-limit to 1/hour |
+| Rule                 | Trigger                                                     | Action                                   |
+| -------------------- | ----------------------------------------------------------- | ---------------------------------------- |
+| Device velocity      | Same fingerprint, >3 check-ins at different nodes in 30 min | Flag for review                          |
+| IP subnet            | >3 users from same /28 subnet within 50m in 1 hour          | Flag all users for review                |
+| Pulse anomaly        | Node jumped ≥2 states in <2 minutes                         | Auto-suppress + flag node + notify admin |
+| Reward drain         | Same device claiming >2 rewards at same node in 24h         | Auto-block + flag                        |
+| New account velocity | Account <24h old, >3 check-ins                              | Rate-limit to 1/hour                     |
 
 ### Auto-Action vs Review
 
@@ -2184,22 +2211,22 @@ Only pulse anomaly and reward drain are auto-suppressed (high confidence). Devic
 
 ### Device Fingerprinting
 
-| Platform | Method |
-|----------|--------|
-| Web | FingerprintJS Pro → SHA-256 hash |
-| iOS/Android | Device UUID + model hash |
+| Platform    | Method                           |
+| ----------- | -------------------------------- |
+| Web         | FingerprintJS Pro → SHA-256 hash |
+| iOS/Android | Device UUID + model hash         |
 
 Stored in `device_fingerprints` table linked to `user_id`. Multiple accounts sharing a fingerprint are flagged but never auto-blocked (shared devices exist).
 
 ### Check-in Pipeline Integration
 
 Abuse checks run after proximity validation, before DB insert:
+
 ```
 JWT verify → proximity check → cooldown check → ABUSE CHECKS → insert check_in → ...
 ```
 
 If flagged with auto-action: return 429 with generic message. If flagged without auto-action: allow check-in, create `abuse_flags` record asynchronously.
-
 
 ---
 
@@ -2207,15 +2234,16 @@ If flagged with auto-action: return 429 with generic message. If flagged without
 
 ### Primitive Mapping
 
-| Primitive | Web | Mobile |
-|-----------|-----|--------|
-| `Box` | `<div>` | `<View>` |
-| `Text` | `<span>` | `<Text>` |
-| `Row` | `<div style="flexDirection: row">` | `<View style="flexDirection: row">` |
+| Primitive | Web                                | Mobile                              |
+| --------- | ---------------------------------- | ----------------------------------- |
+| `Box`     | `<div>`                            | `<View>`                            |
+| `Text`    | `<span>`                           | `<Text>`                            |
+| `Row`     | `<div style="flexDirection: row">` | `<View style="flexDirection: row">` |
 
 ### Platform Access Rules
 
 No file in `packages/` may import:
+
 - `window`, `document`, `navigator`, `localStorage`, `sessionStorage` directly
 - All access through `packages/shared/lib/storage.ts` and `packages/shared/lib/platform.ts`
 
@@ -2223,28 +2251,28 @@ No shared component uses `<div>`, `<span>`, or `<p>` directly — only primitive
 
 ### Animation Abstraction
 
-| Feature | Web | Mobile |
-|---------|-----|--------|
-| Spring animations | Framer Motion | React Native Reanimated v3 |
-| Wrapper | `AnimatedNode` component | `AnimatedNode` component |
+| Feature           | Web                      | Mobile                     |
+| ----------------- | ------------------------ | -------------------------- |
+| Spring animations | Framer Motion            | React Native Reanimated v3 |
+| Wrapper           | `AnimatedNode` component | `AnimatedNode` component   |
 
 Feature components never import Framer Motion or Reanimated directly.
 
 ### Map Abstraction
 
-| Platform | Engine | Wrapper |
-|----------|--------|---------|
-| Web | Mapbox GL JS | `<MapView>` in `packages/shared/components/` |
-| Mobile | `@rnmapbox/maps` | `<MapView>` with identical props interface |
+| Platform | Engine           | Wrapper                                      |
+| -------- | ---------------- | -------------------------------------------- |
+| Web      | Mapbox GL JS     | `<MapView>` in `packages/shared/components/` |
+| Mobile   | `@rnmapbox/maps` | `<MapView>` with identical props interface   |
 
 Props interface defined in `packages/shared/types/map.ts`.
 
 ### Styling
+
 - NativeWind v4 class names for all styling
 - No CSS grid in shared components (flex only)
 - No inline style objects
 - Expo Router for all navigation (never React Router DOM)
-
 
 ---
 
@@ -2259,12 +2287,12 @@ stateDiagram-v2
     Requesting --> PoorAccuracy: Success (accuracy >200m)
     Requesting --> Timeout: 8s elapsed
     Requesting --> Denied: Permission denied
-    
+
     Acquired --> CheckIn: User taps CHECK IN
     PoorAccuracy --> WeakSignal: "Weak signal — move closer"
     Timeout --> Unavailable: "Location unavailable. Try moving."
     Denied --> BrowseOnly: Full-screen prompt
-    
+
     CheckIn --> Success: Backend 200
     CheckIn --> TooFar: Backend 422
     CheckIn --> QRFallback: Backend 422 accuracy_insufficient
@@ -2272,14 +2300,13 @@ stateDiagram-v2
 
 ### UI Responses
 
-| State | UI Element | Text |
-|-------|-----------|------|
-| Permission denied | Full-screen prompt | "Area Code needs your location to check in." + [Enable] + [Browse only] |
-| Poor accuracy | CHECK IN button label | "Weak signal — move closer to the entrance" |
-| Timeout (8s) | CHECK IN button label | "Location unavailable. Try moving to an open area." |
-| Backend 422 (accuracy) | QR fallback prompt | "Scan the venue's QR code to check in" |
-| Browse only | Map visible, check-in disabled | Map renders normally, CHECK IN greyed out |
-
+| State                  | UI Element                     | Text                                                                    |
+| ---------------------- | ------------------------------ | ----------------------------------------------------------------------- |
+| Permission denied      | Full-screen prompt             | "Area Code needs your location to check in." + [Enable] + [Browse only] |
+| Poor accuracy          | CHECK IN button label          | "Weak signal — move closer to the entrance"                             |
+| Timeout (8s)           | CHECK IN button label          | "Location unavailable. Try moving to an open area."                     |
+| Backend 422 (accuracy) | QR fallback prompt             | "Scan the venue's QR code to check in"                                  |
+| Browse only            | Map visible, check-in disabled | Map renders normally, CHECK IN greyed out                               |
 
 ---
 
@@ -2287,19 +2314,19 @@ stateDiagram-v2
 
 ### Architecture
 
-| Platform | Library | Config Location |
-|----------|---------|----------------|
-| Web | `i18next` + `react-i18next` | `apps/web/src/i18n/` |
-| Mobile | `i18n-js` | `apps/mobile/src/i18n/` |
+| Platform | Library                     | Config Location         |
+| -------- | --------------------------- | ----------------------- |
+| Web      | `i18next` + `react-i18next` | `apps/web/src/i18n/`    |
+| Mobile   | `i18n-js`                   | `apps/mobile/src/i18n/` |
 
 ### Translation Key Convention
 
 ```typescript
 // All user-facing strings use translation keys
-t('check_in.button_label')       // "Check In"
-t('check_in.checking_in')        // "Checking in..."
+t('check_in.button_label') // "Check In"
+t('check_in.checking_in') // "Checking in..."
 t('check_in.cooldown', { time }) // "Available in {time}"
-t('toast.surge', { nodeName })   // "{nodeName} is surging right now"
+t('toast.surge', { nodeName }) // "{nodeName} is surging right now"
 ```
 
 No hardcoded English strings in components. V1 ships English only. V2 Afrikaans support = translation file drop, no component changes.
@@ -2314,7 +2341,6 @@ apps/web/src/i18n/
     // af.json        // V2: Afrikaans
 ```
 
-
 ---
 
 ## Rewards Discovery Layer Design (Req 38)
@@ -2322,6 +2348,7 @@ apps/web/src/i18n/
 ### Map Layer Behaviour
 
 When user swipes to Rewards layer:
+
 1. All nodes without active rewards dim to 20% opacity
 2. Nodes with active rewards render at full brightness
 3. Reward pill appears above each reward node: `"{rewardTitle} · {slotsRemaining} left"`
@@ -2332,10 +2359,10 @@ When user swipes to Rewards layer:
 
 Accessible from bottom nav (rewards icon). Two sections:
 
-| Section | Sort | Filter |
-|---------|------|--------|
-| "Rewards Near You" | proximity × scarcity | Active rewards within 5km |
-| "Rewards at Your Regulars" | recency | Nodes with 3+ user check-ins |
+| Section                    | Sort                 | Filter                       |
+| -------------------------- | -------------------- | ---------------------------- |
+| "Rewards Near You"         | proximity × scarcity | Active rewards within 5km    |
+| "Rewards at Your Regulars" | recency              | Nodes with 3+ user check-ins |
 
 ### API
 
@@ -2347,10 +2374,11 @@ GET /v1/rewards/near-me?lat={lat}&lng={lng}
 ```
 
 ### Push Notification
+
 When a reward activates at a node the user has previously visited:
+
 - Push: "New reward at {nodeName} — {slotsRemaining} slots open now."
 - Max 2 reward pushes/day/user via Redis counter
-
 
 ---
 
@@ -2376,17 +2404,18 @@ sequenceDiagram
 ```
 
 ### S3 Key Format
+
 ```
 {env}/{type}/{ownerId}/{uuid}.{ext}
 // e.g. prod/node_image/abc123/550e8400-e29b.jpeg
 ```
 
 ### Constraints
+
 - Max file size: 5MB (enforced via presigned URL policy)
 - Allowed types: `image/jpeg`, `image/webp`, `image/png`
 - File data never passes through Lambda — direct S3 upload only
 - `fileType`: `node_image` | `avatar` | `business_logo`
-
 
 ---
 
@@ -2415,19 +2444,21 @@ graph LR
 Rollback: prior task definition revision (immutable).
 
 ### Terraform Pipeline
+
 - PR: `terraform plan` (GitHub Actions)
 - Merge to main: `terraform apply`
 - Remote state: S3 + DynamoDB
 
 ### Branch Strategy
 
-| Branch | Deploys to | Protection |
-|--------|-----------|------------|
-| `main` | Production | PR required + passing checks |
-| `develop` | Staging | PR required |
-| `feature/*` | — | Merges to `develop` via PR |
+| Branch      | Deploys to | Protection                   |
+| ----------- | ---------- | ---------------------------- |
+| `main`      | Production | PR required + passing checks |
+| `develop`   | Staging    | PR required                  |
+| `feature/*` | —          | Merges to `develop` via PR   |
 
 ### Quality Gates (CI)
+
 - Code coverage ≥80%
 - Duplicated lines <3%
 - Maintainability rating A or B
@@ -2437,22 +2468,24 @@ Rollback: prior task definition revision (immutable).
 - ESLint + TypeScript `tsc --noEmit` + Vitest
 
 ### Database Rollback
+
 - RDS snapshots before migrations on `check_ins`/`users` tables
 - Named: `area-code-{env}-pre-migration-{date}`
 - Point-in-time restore procedure documented
 
 ### Prerequisites
+
 - AWS SNS SMS sandbox exit (OTP delivery)
 - AWS SES sandbox exit (transactional email)
 - Secrets in AWS Secrets Manager: `area-code/{env}/{service}`
 - Terraform remote state backend created manually before first `terraform init`
-
 
 ---
 
 ## API Standards Design (Req 41)
 
 ### Route Versioning
+
 All routes prefixed with `/v1/`. No unversioned routes. Future breaking changes coexist as `/v2/` alongside `/v1/`.
 
 ### Pagination
@@ -2510,7 +2543,6 @@ Used by ECS ALB target health checks.
 }
 ```
 
-
 ---
 
 ## Expo Mobile Config Design (Req 42)
@@ -2526,72 +2558,74 @@ export default {
     bundleIdentifier: 'co.za.areacode.app',
     infoPlist: {
       NSLocationWhenInUseUsageDescription: 'Area Code uses your location to check in to nearby venues.',
-      NSLocationAlwaysUsageDescription: undefined // Never request always-on
-    }
+      NSLocationAlwaysUsageDescription: undefined, // Never request always-on
+    },
   },
   android: {
     package: 'co.za.areacode.app',
-    permissions: ['ACCESS_FINE_LOCATION']
+    permissions: ['ACCESS_FINE_LOCATION'],
   },
   plugins: [
     ['@rnmapbox/maps', { RNMapboxMapsDownloadToken: process.env.MAPBOX_DOWNLOADS_TOKEN }],
     'expo-location',
-    'expo-notifications'
-  ]
+    'expo-notifications',
+  ],
 }
 ```
 
 ### Deep Link Mapping
 
-| URL | Expo Router Route |
-|-----|-------------------|
-| `areacode://node/{nodeSlug}` | `app/(map)/node/[nodeSlug]` |
-| `areacode://qr/{nodeId}/{token}` | `app/(map)/qr/[nodeId]/[token]` |
-| `areacode://staff-invite/{token}` | `app/staff-invite/[token]` |
+| URL                               | Expo Router Route               |
+| --------------------------------- | ------------------------------- |
+| `areacode://node/{nodeSlug}`      | `app/(map)/node/[nodeSlug]`     |
+| `areacode://qr/{nodeId}/{token}`  | `app/(map)/qr/[nodeId]/[token]` |
+| `areacode://staff-invite/{token}` | `app/staff-invite/[token]`      |
 
 ### Universal Links
+
 - Apple: `.well-known/apple-app-site-association` served from web app
 - Android: `.well-known/assetlinks.json` served from web app
 - Pattern: `areacode.co.za/node/*`
 
 ### EAS Build Profiles (eas.json)
 
-| Profile | Distribution | Dev Client | Use |
-|---------|-------------|------------|-----|
-| `development` | internal | Yes | Local dev with dev client |
-| `preview` | internal | No | Internal testing |
-| `production` | store | No | App Store / Play Store |
-
+| Profile       | Distribution | Dev Client | Use                       |
+| ------------- | ------------ | ---------- | ------------------------- |
+| `development` | internal     | Yes        | Local dev with dev client |
+| `preview`     | internal     | No         | Internal testing          |
+| `production`  | store        | No         | App Store / Play Store    |
 
 ---
 
 ## Platform Safety Design (Req 44)
 
 ### Silent Privacy Toggle
+
 - `broadcast_location` toggle changes silently
 - No confirmation dialog, no "your followers will be notified", no email
 - Immediate effect on next check-in
 
 ### Broadcast Location = false Effects
 
-| Feature | Behaviour |
-|---------|-----------|
-| Who's here avatars | User excluded |
-| Live count badge | Not incremented for this user's check-in |
-| Toast emission | No toast for this user's check-in |
-| Pulse score | Still updated on backend (anonymous contribution) |
-| Check-in record | Still stored (user_id, node_id, type, checked_in_at) |
+| Feature            | Behaviour                                            |
+| ------------------ | ---------------------------------------------------- |
+| Who's here avatars | User excluded                                        |
+| Live count badge   | Not incremented for this user's check-in             |
+| Toast emission     | No toast for this user's check-in                    |
+| Pulse score        | Still updated on backend (anonymous contribution)    |
+| Check-in record    | Still stored (user_id, node_id, type, checked_in_at) |
 
 ### Stalking Guards
+
 - "Who's here" avatars tappable to full profile only on mutual follow
 - Non-mutual: tier badge + initials only
 - `GET /nodes/{nodeId}/who-is-here` rate-limited: 20 req/10min/user, 429 + flag on excess
 
 ### Data Deletion
+
 - "Delete all check-in history" prominently in Profile → Privacy (not buried)
 - Fast flow: one tap to view → one tap to delete
 - Soft-delete immediately, hard-delete after 30 days (POPIA Article 14)
-
 
 ---
 
@@ -2599,38 +2633,40 @@ export default {
 
 ### CloudWatch Alarms (Terraform-defined)
 
-| Alarm | Metric | Threshold | Period |
-|-------|--------|-----------|--------|
-| Check-in Lambda errors | Errors | >10 | 2 × 60s |
-| Lambda duration P95 | Duration | >400ms | 60s |
-| RDS CPU | CPUUtilization | >80% | 300s |
-| ElastiCache evictions | Evictions | >0 | 300s |
-| ECS task restarts | RunningTaskCount delta | >2/hour | 3600s |
+| Alarm                  | Metric                 | Threshold | Period  |
+| ---------------------- | ---------------------- | --------- | ------- |
+| Check-in Lambda errors | Errors                 | >10       | 2 × 60s |
+| Lambda duration P95    | Duration               | >400ms    | 60s     |
+| RDS CPU                | CPUUtilization         | >80%      | 300s    |
+| ElastiCache evictions  | Evictions              | >0        | 300s    |
+| ECS task restarts      | RunningTaskCount delta | >2/hour   | 3600s   |
 
 All alarms notify SNS topic subscribed to engineering team.
 
 ### SLO Targets
 
-| Endpoint | P95 Latency | Availability |
-|----------|-------------|-------------|
-| `POST /v1/check-in` | ≤500ms | 99.5% |
-| `GET /v1/nodes/{id}/detail` | ≤300ms | 99.9% |
-| Socket city room join | ≤2s | 99.0% |
-| `GET /v1/rewards/near-me` | ≤600ms | 99.5% |
+| Endpoint                    | P95 Latency | Availability |
+| --------------------------- | ----------- | ------------ |
+| `POST /v1/check-in`         | ≤500ms      | 99.5%        |
+| `GET /v1/nodes/{id}/detail` | ≤300ms      | 99.9%        |
+| Socket city room join       | ≤2s         | 99.0%        |
+| `GET /v1/rewards/near-me`   | ≤600ms      | 99.5%        |
 
 ### Error Budget
+
 - 0.5% monthly downtime on check-in (~3.6 hours)
 - Breach → blameless post-mortem within 48 hours
 
 ### RDS Backups
+
 - Automated: 7-day retention, 02:00–03:00 UTC window
 - Manual snapshots before migrations on `check_ins`/`users`: `area-code-{env}-pre-migration-{date}`
 
 ### Mapbox Cost Monitoring
+
 - Weekly map load count review in CloudWatch
 - Alert at 80% of monthly Mapbox budget
 - If >$1,000/month → evaluate MapLibre GL JS + self-hosted Maptiler tiles
-
 
 ---
 
@@ -2649,11 +2685,13 @@ graph TD
 ```
 
 ### Design Rules
+
 - `lat`/`lng` is always the source of truth, not the address string
 - Reverse geocoding provides display-friendly suburb/neighbourhood name
 - Handles informal settlements and backyard businesses where formal addresses don't exist
 
 ### Search Integration
+
 - `pg_trgm` trigram fuzzy matching on `nodes.name` in addition to Mapbox text search
 - Handles multilingual variants: "KwaZulu" / "KZN" / "Kwa-Zulu" all match
 - Minimum 2 characters before search executes
@@ -2668,7 +2706,6 @@ WHERE similarity(name, $1) > 0.3
 ORDER BY sim * (1.0 / ST_Distance(location, ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography)) * COALESCE(pulse_score, 1) DESC
 LIMIT 20;
 ```
-
 
 ---
 
@@ -2724,7 +2761,6 @@ LIMIT 1;
 
 Called by the notification permission priming flow after first successful check-in. If `event` is non-null, the priming bottom sheet uses the personalised hook ("Sipho just checked in to Truth Coffee, 0.4km away"). If null, falls back to the generic value list.
 
-
 ---
 
 ## User Profile Update Design (Req 54)
@@ -2755,7 +2791,6 @@ const updateProfileSchema = z.object({
 2. Update `users` row with provided fields only (partial update).
 3. Return updated user profile.
 
-
 ---
 
 ## Push Token Registration Design (Req 55)
@@ -2779,7 +2814,6 @@ DO UPDATE SET last_used_at = NOW(), is_active = true;
 ```
 
 Idempotent: duplicate registrations update `last_used_at` and re-activate the token if it was previously deactivated.
-
 
 ---
 
@@ -2807,20 +2841,21 @@ Response 200: NotificationPreferences   // full object after update
 ### Validation (Zod)
 
 ```typescript
-const updatePreferencesSchema = z.object({
-  streakAtRisk: z.boolean().optional(),
-  rewardActivated: z.boolean().optional(),
-  rewardClaimedPush: z.boolean().optional(),
-  leaderboardPrewarning: z.boolean().optional(),
-  followedUserCheckin: z.boolean().optional(),
-}).strict()  // reject unknown keys
+const updatePreferencesSchema = z
+  .object({
+    streakAtRisk: z.boolean().optional(),
+    rewardActivated: z.boolean().optional(),
+    rewardClaimedPush: z.boolean().optional(),
+    leaderboardPrewarning: z.boolean().optional(),
+    followedUserCheckin: z.boolean().optional(),
+  })
+  .strict() // reject unknown keys
 ```
 
 ### Service Logic
 
 1. GET: `SELECT * FROM notification_preferences WHERE user_id = $userId`. If no row exists, return defaults (all false except `rewardClaimedPush: true`).
 2. PATCH: `INSERT INTO notification_preferences ... ON CONFLICT (user_id) DO UPDATE SET` only the provided fields. Return full row after update.
-
 
 ---
 
@@ -2853,7 +2888,6 @@ if (inserted === 0) {
 }
 // First time — proceed with business logic
 ```
-
 
 ---
 
@@ -2973,7 +3007,6 @@ sonar.typescript.lcov.reportPaths=coverage/lcov.info,backend/coverage/lcov.info
 sonar.javascript.lcov.reportPaths=coverage/lcov.info,backend/coverage/lcov.info
 ```
 
-
 ---
 
 ## Initial Partition and Trigram Index Design (Req 59)
@@ -3001,7 +3034,6 @@ CREATE INDEX IF NOT EXISTS idx_nodes_name_trgm
 
 This index is created in the same migration as the `nodes` table, after the `pg_trgm` extension is enabled.
 
-
 ---
 
 ## Legend Tier Gradient Token Design (Req 60)
@@ -3019,28 +3051,30 @@ This index is created in the same migration as the `nodes` table, after the `pg_
 
 ```tsx
 // TierBadge component
-const badgeStyle = tier === 'legend'
-  ? { background: 'var(--tier-legend)' }  // gradient applied as background
-  : { backgroundColor: `var(--tier-${tier})` }  // solid colour
+const badgeStyle =
+  tier === 'legend'
+    ? { background: 'var(--tier-legend)' } // gradient applied as background
+    : { backgroundColor: `var(--tier-${tier})` } // solid colour
 
 // Legend badge includes shimmer animation
-const legendShimmer = tier === 'legend'
-  ? 'animate-shimmer bg-[length:200%_100%]'
-  : ''
+const legendShimmer = tier === 'legend' ? 'animate-shimmer bg-[length:200%_100%]' : ''
 ```
 
 ### Shimmer Keyframe
 
 ```css
 @keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 .animate-shimmer {
   animation: shimmer 3s ease-in-out infinite;
 }
 ```
-
 
 ---
 
@@ -3069,7 +3103,10 @@ if (payload['custom:accountType'] === 'business') {
 const node = await nodeRepository.findById(nodeId)
 if (node.businessId) {
   io.to(`business:${node.businessId}`).emit('business:checkin', {
-    nodeId, userId, checkedInAt, type
+    nodeId,
+    userId,
+    checkedInAt,
+    type,
   })
 }
 ```
@@ -3082,7 +3119,10 @@ const reward = await rewardRepository.findById(rewardId)
 const node = await nodeRepository.findById(reward.nodeId)
 if (node.businessId) {
   io.to(`business:${node.businessId}`).emit('business:reward_claimed', {
-    rewardId, rewardTitle: reward.title, nodeId, claimedAt
+    rewardId,
+    rewardTitle: reward.title,
+    nodeId,
+    claimedAt,
   })
 }
 ```
@@ -3104,7 +3144,6 @@ useEffect(() => {
 }, [businessId])
 ```
 
-
 ---
 
 ## Universal Link Association Files Design (Req 62)
@@ -3120,11 +3159,7 @@ File: `apps/web/public/.well-known/apple-app-site-association`
     "details": [
       {
         "appID": "TEAMID.co.za.areacode.app",
-        "paths": [
-          "/node/*",
-          "/qr/*",
-          "/staff-invite/*"
-        ]
+        "paths": ["/node/*", "/qr/*", "/staff-invite/*"]
       }
     ]
   }

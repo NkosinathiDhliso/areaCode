@@ -497,9 +497,7 @@ export async function searchNodes(adminRole: AdminRole, query: string) {
   const { ScanCommand } = await import('@aws-sdk/lib-dynamodb')
   const { documentClient, TableNames } = await import('../../shared/db/dynamodb.js')
   const q = query.toLowerCase()
-  const result = await documentClient.send(
-    new ScanCommand({ TableName: TableNames.nodes }),
-  )
+  const result = await documentClient.send(new ScanCommand({ TableName: TableNames.nodes }))
   const nodes = (result.Items ?? [])
     .filter((n) => {
       if (!q) return true
@@ -523,11 +521,17 @@ export async function nodeAction(
   switch (action) {
     case 'deactivate':
       await updateNode(nodeId, { isActive: false })
-      await createAuditLog(adminId, adminRole, 'node_deactivate', nodeId, { before: { isActive: true }, after: { isActive: false } })
+      await createAuditLog(adminId, adminRole, 'node_deactivate', nodeId, {
+        before: { isActive: true },
+        after: { isActive: false },
+      })
       return { success: true }
     case 'activate':
       await updateNode(nodeId, { isActive: true })
-      await createAuditLog(adminId, adminRole, 'node_activate', nodeId, { before: { isActive: false }, after: { isActive: true } })
+      await createAuditLog(adminId, adminRole, 'node_activate', nodeId, {
+        before: { isActive: false },
+        after: { isActive: true },
+      })
       return { success: true }
     case 'update': {
       if (!body) throw AppError.badRequest('Body required')
@@ -544,7 +548,13 @@ export async function nodeAction(
   }
 }
 
-async function createAuditLog(adminId: string, adminRole: AdminRole, action: string, entityId: string, state?: { before?: unknown; after?: unknown }) {
+async function createAuditLog(
+  adminId: string,
+  adminRole: AdminRole,
+  action: string,
+  entityId: string,
+  state?: { before?: unknown; after?: unknown },
+) {
   await repo.createAuditLog({
     adminId,
     adminRole,
@@ -734,6 +744,21 @@ export async function actionAbuseFlag(adminId: string, adminRole: AdminRole, fla
 export async function getDashboardMetrics(adminRole: AdminRole) {
   checkPermission(adminRole, 'view_user')
   return repo.getDashboardMetrics()
+}
+
+export async function getRetentionCohorts(adminRole: AdminRole, weeks = 12) {
+  checkPermission(adminRole, 'view_user')
+  const { computeRetention } = await import('./retention.js')
+  const { getNodeById } = await import('../nodes/dynamodb-repository.js')
+  const payload = await computeRetention(weeks)
+  // Resolve venue names without bloating the retention module.
+  const namedLeaks = await Promise.all(
+    payload.topLeakingVenues.map(async (v) => {
+      const node = await getNodeById(v.nodeId)
+      return { ...v, nodeName: node?.name ?? '(unknown)' }
+    }),
+  )
+  return { ...payload, topLeakingVenues: namedLeaks }
 }
 
 // ─── Audit Logs ─────────────────────────────────────────────────────────────

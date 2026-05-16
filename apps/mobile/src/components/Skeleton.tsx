@@ -7,15 +7,7 @@ interface SkeletonBoxProps {
 }
 
 export function SkeletonBox({ height = 56, width }: SkeletonBoxProps) {
-  return (
-    <View
-      style={[
-        styles.skeleton,
-        { height },
-        width !== undefined ? { width: width as number } : undefined,
-      ]}
-    />
-  )
+  return <View style={[styles.skeleton, { height }, width !== undefined ? { width: width as number } : undefined]} />
 }
 
 const styles = StyleSheet.create({

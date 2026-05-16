@@ -30,12 +30,7 @@ export function AvatarCircle({ url, displayName, size = 40 }: AvatarCircleProps)
   }
 
   return (
-    <View
-      style={[
-        styles.fallback,
-        { width: size, height: size, borderRadius: size / 2 },
-      ]}
-    >
+    <View style={[styles.fallback, { width: size, height: size, borderRadius: size / 2 }]}>
       <Text style={[styles.initials, { fontSize }]}>{getInitials(displayName)}</Text>
     </View>
   )

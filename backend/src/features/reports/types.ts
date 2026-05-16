@@ -5,12 +5,12 @@ import { z } from 'zod'
 // ============================================================================
 
 export interface AnonymizedCheckIn {
-  visitorToken: string   // SHA-256 hash of userId + periodStart + salt
+  visitorToken: string // SHA-256 hash of userId + periodStart + salt
   nodeId: string
   tier: string
-  checkedInAt: string    // ISO 8601
-  hourOfDay: number      // 0-23 SAST
-  dayOfWeek: string      // Monday-Sunday
+  checkedInAt: string // ISO 8601
+  hourOfDay: number // 0-23 SAST
+  dayOfWeek: string // Monday-Sunday
 }
 
 export interface MusicPrefs {
@@ -34,26 +34,26 @@ export interface ReportMetrics {
 // ============================================================================
 
 export interface PeakHoursResult {
-  hourlyDistribution: Record<number, number>  // hour (0-23) -> count
-  dailyDistribution: Record<string, number>   // day name -> count
-  topWindows: Array<{ startHour: number; endHour: number; count: number }>  // top 3
+  hourlyDistribution: Record<number, number> // hour (0-23) -> count
+  dailyDistribution: Record<string, number> // day name -> count
+  topWindows: Array<{ startHour: number; endHour: number; count: number }> // top 3
   peakDay: string
 }
 
 export interface CrowdCompositionResult {
-  tierPercentages: Record<string, number>  // tier -> percentage
+  tierPercentages: Record<string, number> // tier -> percentage
   tierUniqueCounts: Record<string, number> // tier -> unique visitor count
   totalUniqueVisitors: number
 }
 
 export interface MusicProfileResult {
-  archetypeDimensions: Record<string, number>  // dimension -> avg score
-  topGenres: Array<{ genre: string; visitorCount: number }>  // top 5
+  archetypeDimensions: Record<string, number> // dimension -> avg score
+  topGenres: Array<{ genre: string; visitorCount: number }> // top 5
   hasInsufficientData: boolean
 }
 
 export interface RepeatVisitorResult {
-  repeatRate: number           // 0-100 percentage
+  repeatRate: number // 0-100 percentage
   firstTimeVisitorCount: number
   totalUniqueVisitors: number
 }
@@ -78,7 +78,7 @@ export interface BenchmarkComparison {
 
 export interface BenchmarkResult {
   metrics: Record<string, BenchmarkComparison>
-  hasInsufficientData: boolean  // fewer than 3 venues in category
+  hasInsufficientData: boolean // fewer than 3 venues in category
 }
 
 export interface JourneyResult {
@@ -86,16 +86,16 @@ export interface JourneyResult {
     venueName: string
     overlapPercentage: number
     overlapCount: number
-  }>  // top 5
-  partnershipSuggestions: string[]  // up to 2
-  hasInsufficientData: boolean      // fewer than 10 unique visitors
+  }> // top 5
+  partnershipSuggestions: string[] // up to 2
+  hasInsufficientData: boolean // fewer than 10 unique visitors
 }
 
 export interface RecommendationResult {
   recommendations: Array<{
     type: 'peak_hours' | 'music' | 'retention' | 'benchmark' | 'general'
     text: string
-  }>  // 1-5 items
+  }> // 1-5 items
 }
 
 // ============================================================================
@@ -168,8 +168,8 @@ export interface TeaserReport {
 export interface GenerateReportMessage {
   businessId: string
   periodType: 'weekly' | 'monthly'
-  periodStart: string  // ISO 8601
-  periodEnd: string    // ISO 8601
+  periodStart: string // ISO 8601
+  periodEnd: string // ISO 8601
 }
 
 export interface DispatchEvent {
@@ -183,7 +183,7 @@ export interface DispatchEvent {
 
 export interface PiiScanResult {
   clean: boolean
-  violations: string[]  // field paths containing PII
+  violations: string[] // field paths containing PII
 }
 
 // ============================================================================
@@ -200,11 +200,13 @@ const reportSummarySchema = z.object({
 const peakHoursResultSchema = z.object({
   hourlyDistribution: z.record(z.coerce.number(), z.number()),
   dailyDistribution: z.record(z.string(), z.number()),
-  topWindows: z.array(z.object({
-    startHour: z.number().int().min(0).max(23),
-    endHour: z.number().int().min(0).max(23),
-    count: z.number().int().min(0),
-  })),
+  topWindows: z.array(
+    z.object({
+      startHour: z.number().int().min(0).max(23),
+      endHour: z.number().int().min(0).max(23),
+      count: z.number().int().min(0),
+    }),
+  ),
   peakDay: z.string(),
 })
 
@@ -216,10 +218,12 @@ const crowdCompositionResultSchema = z.object({
 
 const musicProfileResultSchema = z.object({
   archetypeDimensions: z.record(z.string(), z.number()),
-  topGenres: z.array(z.object({
-    genre: z.string(),
-    visitorCount: z.number().int().min(0),
-  })),
+  topGenres: z.array(
+    z.object({
+      genre: z.string(),
+      visitorCount: z.number().int().min(0),
+    }),
+  ),
   hasInsufficientData: z.boolean(),
 })
 
@@ -253,20 +257,24 @@ const benchmarkResultSchema = z.object({
 })
 
 const journeyResultSchema = z.object({
-  topOverlapVenues: z.array(z.object({
-    venueName: z.string(),
-    overlapPercentage: z.number(),
-    overlapCount: z.number().int().min(0),
-  })),
+  topOverlapVenues: z.array(
+    z.object({
+      venueName: z.string(),
+      overlapPercentage: z.number(),
+      overlapCount: z.number().int().min(0),
+    }),
+  ),
   partnershipSuggestions: z.array(z.string()),
   hasInsufficientData: z.boolean(),
 })
 
 const recommendationResultSchema = z.object({
-  recommendations: z.array(z.object({
-    type: z.enum(['peak_hours', 'music', 'retention', 'benchmark', 'general']),
-    text: z.string().min(1),
-  })),
+  recommendations: z.array(
+    z.object({
+      type: z.enum(['peak_hours', 'music', 'retention', 'benchmark', 'general']),
+      text: z.string().min(1),
+    }),
+  ),
 })
 
 export const reportSchema = z.object({
@@ -277,10 +285,12 @@ export const reportSchema = z.object({
   periodStart: z.string().min(1),
   periodEnd: z.string().min(1),
   generatedAt: z.string().min(1),
-  nodes: z.array(z.object({
-    nodeId: z.string().min(1),
-    nodeName: z.string().min(1),
-  })),
+  nodes: z.array(
+    z.object({
+      nodeId: z.string().min(1),
+      nodeName: z.string().min(1),
+    }),
+  ),
   summary: reportSummarySchema,
   peakHours: peakHoursResultSchema,
   crowdComposition: crowdCompositionResultSchema,

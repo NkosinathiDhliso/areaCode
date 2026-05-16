@@ -55,7 +55,8 @@ function AppContent() {
   // Fetch role and permissions on auth
   useEffect(() => {
     if (!isAuthenticated) return
-    api.get<{ role: 'owner' | 'manager' | 'staff'; permissions: string[] }>('/v1/business/me/role')
+    api
+      .get<{ role: 'owner' | 'manager' | 'staff'; permissions: string[] }>('/v1/business/me/role')
       .then((res) => {
         setRole(res.role, res.permissions)
         // Managers authenticate via staff Cognito pool — use staff refresh path

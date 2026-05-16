@@ -30,7 +30,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     try {
       const w = window as unknown as Record<string, unknown>
       if (typeof w['__SENTRY__'] !== 'undefined') {
-        (w as Record<string, { captureException?: (e: Error) => void }>)['Sentry']?.captureException?.(error)
+        ;(w as Record<string, { captureException?: (e: Error) => void }>)['Sentry']?.captureException?.(error)
       }
     } catch {
       // Sentry not available, that's fine

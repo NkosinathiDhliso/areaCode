@@ -160,7 +160,8 @@ describe('Property 3: Mock API delay is within bounds', () => {
  * Validates: Requirements 3.1, 3.3, 10.1, 15.1, 20.1
  */
 describe('Property 4: Any phone number succeeds at auth endpoints', () => {
-  const phoneArb = fc.array(fc.constantFrom('0', '1', '2', '3', '4', '5', '6', '7', '8', '9'), { minLength: 10, maxLength: 15 })
+  const phoneArb = fc
+    .array(fc.constantFrom('0', '1', '2', '3', '4', '5', '6', '7', '8', '9'), { minLength: 10, maxLength: 15 })
     .map((digits) => `+27${digits.join('')}`)
 
   it('consumer login accepts any phone', () => {
@@ -206,10 +207,18 @@ describe('Property 4: Any phone number succeeds at auth endpoints', () => {
 
   it('consumer signup accepts any phone/username/displayName', () => {
     fc.assert(
-      fc.property(phoneArb, fc.string({ minLength: 1, maxLength: 20 }), fc.string({ minLength: 1, maxLength: 30 }), (phone, username, displayName) => {
-        const result = resolve('POST', '/v1/auth/consumer/signup', { phone, username, displayName }) as Record<string, unknown>
-        expect(result['userId']).toBeDefined()
-      }),
+      fc.property(
+        phoneArb,
+        fc.string({ minLength: 1, maxLength: 20 }),
+        fc.string({ minLength: 1, maxLength: 30 }),
+        (phone, username, displayName) => {
+          const result = resolve('POST', '/v1/auth/consumer/signup', { phone, username, displayName }) as Record<
+            string,
+            unknown
+          >
+          expect(result['userId']).toBeDefined()
+        },
+      ),
       { numRuns: 100 },
     )
   })
@@ -220,7 +229,8 @@ describe('Property 4: Any phone number succeeds at auth endpoints', () => {
  * Validates: Requirements 3.2, 10.2, 20.2
  */
 describe('Property 5: Any 6-digit OTP returns valid auth tokens', () => {
-  const otpArb = fc.array(fc.constantFrom('0', '1', '2', '3', '4', '5', '6', '7', '8', '9'), { minLength: 6, maxLength: 6 })
+  const otpArb = fc
+    .array(fc.constantFrom('0', '1', '2', '3', '4', '5', '6', '7', '8', '9'), { minLength: 6, maxLength: 6 })
     .map((arr) => arr.join(''))
 
   it('consumer verify-otp returns accessToken and user', () => {
@@ -266,13 +276,12 @@ describe('Property 5: Any 6-digit OTP returns valid auth tokens', () => {
  */
 describe('Property 6: Node search returns only matching results', () => {
   // Generate substrings from actual node names
-  const nodeNameSubstringArb = fc.constantFrom(...MOCK_NODES.map((n) => n.name))
-    .chain((name) => {
-      const len = name.length
-      return fc.integer({ min: 0, max: len - 2 }).chain((start) =>
-        fc.integer({ min: start + 2, max: len }).map((end) => name.slice(start, end)),
-      )
-    })
+  const nodeNameSubstringArb = fc.constantFrom(...MOCK_NODES.map((n) => n.name)).chain((name) => {
+    const len = name.length
+    return fc
+      .integer({ min: 0, max: len - 2 })
+      .chain((start) => fc.integer({ min: start + 2, max: len }).map((end) => name.slice(start, end)))
+  })
 
   it('all returned nodes contain the query as a case-insensitive substring', () => {
     fc.assert(
@@ -396,18 +405,19 @@ describe('Property 10: Feed entries sorted descending and within 12 hours', () =
  * Validates: Requirements 16.3
  */
 describe('Property 11: Admin user search filters by substring match', () => {
-  const usernameSubstringArb = fc.constantFrom(...MOCK_USERS.map((u) => u.username))
-    .chain((name) => {
-      const len = name.length
-      return fc.integer({ min: 0, max: len - 1 }).chain((start) =>
-        fc.integer({ min: start + 1, max: len }).map((end) => name.slice(start, end)),
-      )
-    })
+  const usernameSubstringArb = fc.constantFrom(...MOCK_USERS.map((u) => u.username)).chain((name) => {
+    const len = name.length
+    return fc
+      .integer({ min: 0, max: len - 1 })
+      .chain((start) => fc.integer({ min: start + 1, max: len }).map((end) => name.slice(start, end)))
+  })
 
   it('returned users match by username or phone substring', () => {
     fc.assert(
       fc.property(usernameSubstringArb, (query) => {
-        const result = resolve('GET', `/v1/admin/consumers?q=${encodeURIComponent(query)}`) as { items: Array<{ username: string; phone: string | null }> }
+        const result = resolve('GET', `/v1/admin/consumers?q=${encodeURIComponent(query)}`) as {
+          items: Array<{ username: string; phone: string | null }>
+        }
         for (const user of result.items) {
           const matchesUsername = user.username.toLowerCase().includes(query.toLowerCase())
           const matchesPhone = (user.phone ?? '').includes(query)
@@ -494,9 +504,11 @@ describe('Property 14: Re-consent export returns only outdated versions', () => 
  * Validates: Requirements 21.1, 21.3
  */
 describe('Property 15: Staff redemption validates code length', () => {
-  const validCodeArb = fc.array(fc.constantFrom(...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('')), { minLength: 6, maxLength: 6 })
+  const validCodeArb = fc
+    .array(fc.constantFrom(...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('')), { minLength: 6, maxLength: 6 })
     .map((arr) => arr.join(''))
-  const shortCodeArb = fc.array(fc.constantFrom(...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('')), { minLength: 1, maxLength: 5 })
+  const shortCodeArb = fc
+    .array(fc.constantFrom(...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('')), { minLength: 1, maxLength: 5 })
     .map((arr) => arr.join(''))
 
   it('6-char codes return success', () => {
@@ -530,14 +542,17 @@ describe('Property 16: DEV_MODE flag reads environment variable', () => {
     const checkFlag = (val: string | undefined) => val === 'true'
 
     fc.assert(
-      fc.property(fc.oneof(fc.constant('true'), fc.constant('false'), fc.constant(''), fc.constant('TRUE'), fc.string()), (val) => {
-        const result = checkFlag(val)
-        if (val === 'true') {
-          expect(result).toBe(true)
-        } else {
-          expect(result).toBe(false)
-        }
-      }),
+      fc.property(
+        fc.oneof(fc.constant('true'), fc.constant('false'), fc.constant(''), fc.constant('TRUE'), fc.string()),
+        (val) => {
+          const result = checkFlag(val)
+          if (val === 'true') {
+            expect(result).toBe(true)
+          } else {
+            expect(result).toBe(false)
+          }
+        },
+      ),
       { numRuns: 100 },
     )
   })
@@ -549,14 +564,22 @@ describe('Property 16: DEV_MODE flag reads environment variable', () => {
  */
 describe('Property 17: Reward creation adds to mock state', () => {
   const rewardTitleArb = fc.string({ minLength: 1, maxLength: 50 })
-  const rewardTypeArb = fc.constantFrom('nth_checkin' as const, 'daily_first' as const, 'streak' as const, 'milestone' as const)
+  const rewardTypeArb = fc.constantFrom(
+    'nth_checkin' as const,
+    'daily_first' as const,
+    'streak' as const,
+    'milestone' as const,
+  )
 
   it('created rewards appear in subsequent business rewards query', () => {
     fc.assert(
       fc.property(rewardTitleArb, rewardTypeArb, (title, type) => {
         resetState()
 
-        const createResult = resolve('POST', '/v1/business/rewards', { title, type, nodeId: 'mock-node-2' }) as { id: string; success: boolean }
+        const createResult = resolve('POST', '/v1/business/rewards', { title, type, nodeId: 'mock-node-2' }) as {
+          id: string
+          success: boolean
+        }
         expect(createResult.success).toBe(true)
         expect(createResult.id).toBeDefined()
 

@@ -1,8 +1,5 @@
 // DynamoDB-backed Social Repository (replaces Prisma + Redis)
-import {
-  GetCommand, PutCommand, DeleteCommand,
-  QueryCommand, ScanCommand,
-} from '@aws-sdk/lib-dynamodb'
+import { GetCommand, PutCommand, DeleteCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { getUserById } from '../auth/dynamodb-repository.js'
 import { getCheckInsByNode } from '../check-in/dynamodb-repository.js'
@@ -20,10 +17,11 @@ export async function followUser(followerId: string, followingId: string) {
         sk: `FOLLOWING#${followingId}`,
         gsi1pk: `FOLLOWERS#${followingId}`,
         gsi1sk: `FOLLOWER#${followerId}`,
-        followerId, followingId,
+        followerId,
+        followingId,
         createdAt: now,
       },
-    })
+    }),
   )
   return { followerId, followingId, createdAt: now }
 }
@@ -33,7 +31,7 @@ export async function unfollowUser(followerId: string, followingId: string) {
     new DeleteCommand({
       TableName: TableNames.appData,
       Key: { pk: `FOLLOW#${followerId}`, sk: `FOLLOWING#${followingId}` },
-    })
+    }),
   )
   return { count: 1 }
 }
@@ -43,22 +41,16 @@ export async function isFollowing(followerId: string, followingId: string) {
     new GetCommand({
       TableName: TableNames.appData,
       Key: { pk: `FOLLOW#${followerId}`, sk: `FOLLOWING#${followingId}` },
-    })
+    }),
   )
   return !!result.Item
 }
 
-export async function getMutualFollowIds(
-  viewerId: string,
-  candidateIds: string[],
-): Promise<Set<string>> {
+export async function getMutualFollowIds(viewerId: string, candidateIds: string[]): Promise<Set<string>> {
   if (candidateIds.length === 0) return new Set()
   const mutuals = new Set<string>()
   for (const cid of candidateIds) {
-    const [forward, reverse] = await Promise.all([
-      isFollowing(viewerId, cid),
-      isFollowing(cid, viewerId),
-    ])
+    const [forward, reverse] = await Promise.all([isFollowing(viewerId, cid), isFollowing(cid, viewerId)])
     if (forward && reverse) mutuals.add(cid)
   }
   return mutuals
@@ -73,18 +65,14 @@ export async function getFollowingIds(userId: string): Promise<string[]> {
         ':pk': `FOLLOW#${userId}`,
         ':prefix': 'FOLLOWING#',
       },
-    })
+    }),
   )
   return (result.Items || []).map((i) => i['followingId'] as string)
 }
 
 // ─── Activity Feed ──────────────────────────────────────────────────────────
 
-export async function getActivityFeed(
-  userId: string,
-  cursor: string | undefined,
-  limit: number,
-) {
+export async function getActivityFeed(userId: string, cursor: string | undefined, limit: number) {
   // Get mutual friends
   const followingIds = await getFollowingIds(userId)
   const mutualIds = await getMutualFollowIds(userId, followingIds)
@@ -100,7 +88,7 @@ export async function getActivityFeed(
         ExpressionAttributeValues: { ':uid': fid },
         ScanIndexForward: false,
         Limit: limit,
-      })
+      }),
     )
     for (const ci of result.Items || []) {
       const user = await getUserById(fid)
@@ -108,7 +96,15 @@ export async function getActivityFeed(
       allItems.push({
         ...ci,
         checkedInAt: ci['checkedInAt'] as string,
-        user: user ? { id: user.userId, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl, tier: user.tier } : null,
+        user: user
+          ? {
+              id: user.userId,
+              username: user.username,
+              displayName: user.displayName,
+              avatarUrl: user.avatarUrl,
+              tier: user.tier,
+            }
+          : null,
         node: node ? { id: node.nodeId, name: node.name, slug: node.slug, category: node.category } : null,
       })
     }
@@ -116,9 +112,7 @@ export async function getActivityFeed(
 
   // Sort by checkedInAt descending, apply cursor
   allItems.sort((a, b) => (b.checkedInAt || '').localeCompare(a.checkedInAt || ''))
-  const filtered = cursor
-    ? allItems.filter((i) => i.checkedInAt < cursor)
-    : allItems
+  const filtered = cursor ? allItems.filter((i) => i.checkedInAt < cursor) : allItems
   const sliced = filtered.slice(0, limit)
   const hasMore = filtered.length > limit
   const nextCursor = hasMore ? sliced[sliced.length - 1]?.checkedInAt : null
@@ -128,28 +122,26 @@ export async function getActivityFeed(
 
 // ─── Nearby Recent ──────────────────────────────────────────────────────────
 
-export async function getNearbyRecentEvent(
-  lat: number,
-  lng: number,
-  radiusMetres: number,
-  withinMinutes: number,
-) {
+export async function getNearbyRecentEvent(lat: number, lng: number, radiusMetres: number, withinMinutes: number) {
   // Scan all nodes and check distance, then find recent check-ins
   const nodesResult = await documentClient.send(
     new ScanCommand({
       TableName: TableNames.nodes,
       FilterExpression: 'isActive = :active',
       ExpressionAttributeValues: { ':active': true },
-    })
+    }),
   )
 
   const nearbyNodes: Array<{ nodeId: string; name: string; distance: number }> = []
   for (const n of nodesResult.Items || []) {
-    const nLat = n['lat'] as number; const nLng = n['lng'] as number
+    const nLat = n['lat'] as number
+    const nLng = n['lng'] as number
     const R = 6371000
     const dLat = ((nLat - lat) * Math.PI) / 180
     const dLng = ((nLng - lng) * Math.PI) / 180
-    const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat * Math.PI) / 180) * Math.cos((nLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((lat * Math.PI) / 180) * Math.cos((nLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
     const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
     if (distance <= radiusMetres) {
       nearbyNodes.push({ nodeId: (n['nodeId'] ?? n['id']) as string, name: n['name'] as string, distance })
@@ -201,7 +193,7 @@ export async function getWhoIsHere(nodeId: string) {
 
 export async function getCityBySlug(slug: string) {
   const result = await documentClient.send(
-    new GetCommand({ TableName: TableNames.appData, Key: { pk: `CITY#${slug}`, sk: `CITY#${slug}` } })
+    new GetCommand({ TableName: TableNames.appData, Key: { pk: `CITY#${slug}`, sk: `CITY#${slug}` } }),
   )
   return result.Item ? { id: result.Item['cityId'] ?? slug, slug, name: result.Item['name'] } : null
 }
@@ -215,7 +207,7 @@ export async function getLeaderboardTop50(cityId: string) {
       ExpressionAttributeValues: { ':pk': `LEADERBOARD#${cityId}` },
       ScanIndexForward: false,
       Limit: 50,
-    })
+    }),
   )
   return (result.Items || []).map((item, i) => ({
     userId: item['userId'] as string,
@@ -302,12 +294,10 @@ export async function getFollowersList(userId: string) {
       IndexName: 'GSI1',
       KeyConditionExpression: 'gsi1pk = :pk',
       ExpressionAttributeValues: { ':pk': `FOLLOWERS#${userId}` },
-    })
+    }),
   )
   const followerIds = (result.Items || []).map((i) => i['followerId'] as string)
-  const followingBack = followerIds.length > 0
-    ? await getMutualFollowIds(userId, followerIds)
-    : new Set<string>()
+  const followingBack = followerIds.length > 0 ? await getMutualFollowIds(userId, followerIds) : new Set<string>()
 
   const list = []
   for (const fid of followerIds) {
@@ -330,9 +320,7 @@ export async function getFollowersList(userId: string) {
 export async function searchUsers(query: string, viewerId: string) {
   // Scan users table with filter (no full-text search in DynamoDB)
   const q = query.toLowerCase()
-  const result = await documentClient.send(
-    new ScanCommand({ TableName: TableNames.users })
-  )
+  const result = await documentClient.send(new ScanCommand({ TableName: TableNames.users }))
   const users = (result.Items || [])
     .filter((u) => {
       const uid = (u['userId'] ?? u['id']) as string
@@ -348,9 +336,7 @@ export async function searchUsers(query: string, viewerId: string) {
   for (const uid of userIds) {
     if (await isFollowing(viewerId, uid)) followingSet.add(uid)
   }
-  const mutualIds = userIds.length > 0
-    ? await getMutualFollowIds(viewerId, userIds)
-    : new Set<string>()
+  const mutualIds = userIds.length > 0 ? await getMutualFollowIds(viewerId, userIds) : new Set<string>()
 
   return users.map((u) => {
     const uid = (u['userId'] ?? u['id']) as string

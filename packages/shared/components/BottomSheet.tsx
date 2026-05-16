@@ -70,17 +70,29 @@ export function BottomSheet({ isOpen, onClose, children }: BottomSheetProps) {
     }
   }, [])
 
-  const handleBackdropClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget && backdropMouseDownRef.current) {
-      onClose()
-    }
-    backdropMouseDownRef.current = false
-  }, [onClose])
+  const handleBackdropClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.target === e.currentTarget && backdropMouseDownRef.current) {
+        onClose()
+      }
+      backdropMouseDownRef.current = false
+    },
+    [onClose],
+  )
 
   if (!isOpen) return null
 
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'flex-end',
+      }}
+    >
       {/* Backdrop overlay */}
       <Box
         className="absolute inset-0 bg-[var(--bg-overlay)]"

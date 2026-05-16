@@ -148,9 +148,7 @@ export function AdminIAM() {
       {/* Admin list */}
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
         <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">Admin Accounts</h3>
-        {listError && (
-          <p className="text-[var(--danger)] text-sm mb-3">{listError}</p>
-        )}
+        {listError && <p className="text-[var(--danger)] text-sm mb-3">{listError}</p>}
         {loadingList ? (
           <div className="flex items-center justify-center py-4">
             <Spinner size="md" />
@@ -167,14 +165,15 @@ export function AdminIAM() {
                 <div className="flex flex-col min-w-0 mr-3">
                   <span className="text-[var(--text-primary)] text-sm truncate">{a.email}</span>
                   <span className="text-[var(--text-muted)] text-xs capitalize">{a.role?.replace(/_/g, ' ')}</span>
-                  {!a.enabled && (
-                    <span className="text-[var(--danger)] text-xs">Deactivated</span>
-                  )}
+                  {!a.enabled && <span className="text-[var(--danger)] text-xs">Deactivated</span>}
                 </div>
                 {a.enabled && (
                   <div className="flex flex-row gap-2 flex-shrink-0">
                     <button
-                      onClick={() => { setChangingRoleId(a.sub); setNewRole(a.role as AdminRole) }}
+                      onClick={() => {
+                        setChangingRoleId(a.sub)
+                        setNewRole(a.role as AdminRole)
+                      }}
                       className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-lg px-2.5 py-1 text-xs"
                     >
                       Role

@@ -49,7 +49,7 @@ export function RewardMetricsPanel() {
       setMetrics(res)
     } catch {
       setMetrics(null)
-      useErrorStore.getState().showError('Couldn\'t load reward metrics. Try again.')
+      useErrorStore.getState().showError("Couldn't load reward metrics. Try again.")
     }
   }
 
@@ -70,9 +70,7 @@ export function RewardMetricsPanel() {
         {t('biz.panel.rewardMetrics', 'Reward Metrics')}
       </h2>
 
-      {loading && (
-        <div className="text-[var(--text-muted)] text-sm text-center py-8">Loading...</div>
-      )}
+      {loading && <div className="text-[var(--text-muted)] text-sm text-center py-8">Loading...</div>}
 
       {!loading && loadError && (
         <div className="text-[var(--danger)] text-sm text-center py-8">
@@ -81,9 +79,7 @@ export function RewardMetricsPanel() {
       )}
 
       {!loading && !loadError && summary.length === 0 && (
-        <div className="text-[var(--text-muted)] text-sm text-center py-8">
-          No active rewards to show metrics for
-        </div>
+        <div className="text-[var(--text-muted)] text-sm text-center py-8">No active rewards to show metrics for</div>
       )}
 
       {/* Summary comparison table */}
@@ -105,13 +101,25 @@ export function RewardMetricsPanel() {
             >
               <span className="text-[var(--text-primary)] text-sm font-medium flex items-center gap-1">
                 {item.isLowPerformance && (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Low performance"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--warning)"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-label="Low performance"
+                  >
+                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
                 )}
                 {item.title}
               </span>
-              <span className="text-[var(--text-secondary)] text-sm text-center">
-                {formatPercent(item.claimRate)}
-              </span>
+              <span className="text-[var(--text-secondary)] text-sm text-center">{formatPercent(item.claimRate)}</span>
               <span className="text-[var(--text-secondary)] text-sm text-center">
                 {item.timeToClaimMinutes > 0 ? formatTime(item.timeToClaimMinutes) : '-'}
               </span>
@@ -130,21 +138,13 @@ export function RewardMetricsPanel() {
             {summary.find((s) => s.rewardId === selectedReward)?.title ?? 'Reward'} - Details
           </h3>
           <div className="grid grid-cols-3 gap-4">
-            <MetricCard
-              label="Claim Rate"
-              value={formatPercent(metrics.claimRate)}
-              color="var(--accent)"
-            />
+            <MetricCard label="Claim Rate" value={formatPercent(metrics.claimRate)} color="var(--accent)" />
             <MetricCard
               label="Time to Claim"
               value={metrics.timeToClaimMinutes > 0 ? formatTime(metrics.timeToClaimMinutes) : '-'}
               color="var(--warning)"
             />
-            <MetricCard
-              label="Redemption Rate"
-              value={formatPercent(metrics.redemptionRate)}
-              color="var(--success)"
-            />
+            <MetricCard label="Redemption Rate" value={formatPercent(metrics.redemptionRate)} color="var(--success)" />
           </div>
         </div>
       )}

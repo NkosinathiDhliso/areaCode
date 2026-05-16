@@ -27,9 +27,7 @@ export function NativeTierBadge({ tier, compact }: NativeTierBadgeProps) {
   const color = TIER_COLORS[tier]
 
   if (compact) {
-    return (
-      <View style={[styles.dot, { backgroundColor: color }]} />
-    )
+    return <View style={[styles.dot, { backgroundColor: color }]} />
   }
 
   return (

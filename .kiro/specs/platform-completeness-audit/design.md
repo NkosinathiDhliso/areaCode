@@ -5,6 +5,7 @@
 This design addresses 74 identified gaps across all five Area Code portals (Consumer Web/Mobile, Business, Staff, Admin) and the backend services. The platform is a South African location-based loyalty and check-in system running on a strictly serverless AWS stack: Lambda (Fastify monolith), API Gateway HTTP API, DynamoDB (PAY_PER_REQUEST), SQS, Cognito (4 pools), WebSocket API Gateway, and Amplify-hosted frontends.
 
 The design is organized by implementation tier:
+
 - **Tier 1 (Must-Have for Launch):** Requirements 1–22 — core user journeys, privacy model, cross-portal data flows, and notification pipeline
 - **Tier 2 (Important for Scale):** Requirements 23–46 — settings, social sharing, badges, referrals, offline caching, billing, analytics
 - **Tier 3 (Nice-to-Have):** Requirements 47–74 — crowd vibe, competitor benchmarks, USSD, advanced analytics
@@ -12,6 +13,7 @@ The design is organized by implementation tier:
 The architecture preserves the existing Fastify monolith Lambda pattern with catch-all API Gateway routing. No always-on resources are introduced. All new data lives in DynamoDB using the existing `app-data` table's single-table design (pk/sk/gsi1pk/gsi1sk) or as new attributes on existing tables.
 
 **Key design decisions:**
+
 1. **Privacy as a data-layer concern** — a `PrivacyGuard` middleware intercepts every data flow that exposes user activity, checking the user's `privacyLevel` before any data leaves the service layer. This is not a UI bolt-on.
 2. **Notification pipeline via SQS** — a new `notification-sender` SQS queue decouples notification creation from delivery, enabling rate limiting, preference checking, and multi-channel delivery (WebSocket → push → silent drop).
 3. **Incremental DynamoDB schema evolution** — new features use the existing `app-data` table's flexible pk/sk pattern. Only the `users` table gets new attributes (privacyLevel, onboardingComplete, streakStartDate).
@@ -77,6 +79,7 @@ flowchart TD
 ```
 
 **Data flows that pass through PrivacyGuard:**
+
 - Activity feed (`GET /v1/social/feed`)
 - Leaderboard (`GET /v1/social/leaderboard/:citySlug`)
 - Who's here (`GET /v1/social/who-is-here/:nodeId`)
@@ -110,75 +113,75 @@ All new endpoints are added to the existing Fastify monolith Lambda. Route prefi
 
 #### Consumer Endpoints
 
-| Method | Path | Description | Req |
-|--------|------|-------------|-----|
-| GET | `/v1/users/me/check-in-history` | Paginated check-in history (cursor-based) | 1 |
-| GET | `/v1/users/me/tier-progress` | Current tier, next tier threshold, check-ins remaining | 2 |
-| GET | `/v1/users/me/streak` | Streak count, start date, at-risk status | 3 |
-| GET | `/v1/nodes/search?q=` | Text search for venues by name | 4 |
-| POST | `/v1/auth/consumer/otp/cancel` | Invalidate current OTP session | 5 |
-| POST | `/v1/users/me/onboarding/complete` | Mark onboarding as completed | 6 |
-| GET | `/v1/users/me/privacy` | Get current privacy settings | 22 |
-| PATCH | `/v1/users/me/privacy` | Update privacy level (public/friends_only/private) | 22 |
-| POST | `/v1/users/me/block/:targetUserId` | Block a user | 22 |
-| DELETE | `/v1/users/me/block/:targetUserId` | Unblock a user | 22 |
-| GET | `/v1/users/me/blocks` | List blocked users | 22 |
-| POST | `/v1/reports` | Submit a report (harassment, stalking, etc.) | 22 |
+| Method | Path                               | Description                                            | Req |
+| ------ | ---------------------------------- | ------------------------------------------------------ | --- |
+| GET    | `/v1/users/me/check-in-history`    | Paginated check-in history (cursor-based)              | 1   |
+| GET    | `/v1/users/me/tier-progress`       | Current tier, next tier threshold, check-ins remaining | 2   |
+| GET    | `/v1/users/me/streak`              | Streak count, start date, at-risk status               | 3   |
+| GET    | `/v1/nodes/search?q=`              | Text search for venues by name                         | 4   |
+| POST   | `/v1/auth/consumer/otp/cancel`     | Invalidate current OTP session                         | 5   |
+| POST   | `/v1/users/me/onboarding/complete` | Mark onboarding as completed                           | 6   |
+| GET    | `/v1/users/me/privacy`             | Get current privacy settings                           | 22  |
+| PATCH  | `/v1/users/me/privacy`             | Update privacy level (public/friends_only/private)     | 22  |
+| POST   | `/v1/users/me/block/:targetUserId` | Block a user                                           | 22  |
+| DELETE | `/v1/users/me/block/:targetUserId` | Unblock a user                                         | 22  |
+| GET    | `/v1/users/me/blocks`              | List blocked users                                     | 22  |
+| POST   | `/v1/reports`                      | Submit a report (harassment, stalking, etc.)           | 22  |
 
 #### Business Endpoints
 
-| Method | Path | Description | Req |
-|--------|------|-------------|-----|
-| GET | `/v1/business/check-ins?date=&cursor=` | Individual check-in details for business | 8, 16 |
-| GET | `/v1/business/rewards/:rewardId/metrics` | Reward performance metrics | 9 |
-| GET | `/v1/business/rewards/summary` | All rewards ranked by claim rate | 9 |
-| GET | `/v1/business/staff/:staffId/redemptions` | Redemptions by staff member | 19 |
+| Method | Path                                      | Description                              | Req   |
+| ------ | ----------------------------------------- | ---------------------------------------- | ----- |
+| GET    | `/v1/business/check-ins?date=&cursor=`    | Individual check-in details for business | 8, 16 |
+| GET    | `/v1/business/rewards/:rewardId/metrics`  | Reward performance metrics               | 9     |
+| GET    | `/v1/business/rewards/summary`            | All rewards ranked by claim rate         | 9     |
+| GET    | `/v1/business/staff/:staffId/redemptions` | Redemptions by staff member              | 19    |
 
 #### Staff Endpoints
 
-| Method | Path | Description | Req |
-|--------|------|-------------|-----|
-| POST | `/v1/staff/redeem/scan` | Submit scanned QR redemption code | 10 |
-| GET | `/v1/staff/redeem/:code/preview` | Preview reward details before confirming | 11 |
-| POST | `/v1/staff/redeem/:code/confirm` | Confirm redemption after preview | 12 |
+| Method | Path                             | Description                              | Req |
+| ------ | -------------------------------- | ---------------------------------------- | --- |
+| POST   | `/v1/staff/redeem/scan`          | Submit scanned QR redemption code        | 10  |
+| GET    | `/v1/staff/redeem/:code/preview` | Preview reward details before confirming | 11  |
+| POST   | `/v1/staff/redeem/:code/confirm` | Confirm redemption after preview         | 12  |
 
 #### Admin Endpoints
 
-| Method | Path | Description | Req |
-|--------|------|-------------|-----|
-| GET | `/v1/admin/dashboard` | Dashboard overview metrics | 13 |
-| GET | `/v1/admin/abuse-flags` | List unreviewed abuse flags | 14, 21 |
-| POST | `/v1/admin/abuse-flags/:flagId/review` | Mark flag as reviewed | 14 |
-| POST | `/v1/admin/abuse-flags/:flagId/action` | Take action on flag (disable user, reset) | 14 |
-| GET | `/v1/admin/audit-logs` | Paginated audit trail | 15 |
-| POST | `/v1/admin/users/:userId/disable` | Disable consumer (revoke tokens, block actions) | 18 |
-| POST | `/v1/admin/businesses/:businessId/disable` | Disable business (deactivate nodes) | 18 |
+| Method | Path                                       | Description                                     | Req    |
+| ------ | ------------------------------------------ | ----------------------------------------------- | ------ |
+| GET    | `/v1/admin/dashboard`                      | Dashboard overview metrics                      | 13     |
+| GET    | `/v1/admin/abuse-flags`                    | List unreviewed abuse flags                     | 14, 21 |
+| POST   | `/v1/admin/abuse-flags/:flagId/review`     | Mark flag as reviewed                           | 14     |
+| POST   | `/v1/admin/abuse-flags/:flagId/action`     | Take action on flag (disable user, reset)       | 14     |
+| GET    | `/v1/admin/audit-logs`                     | Paginated audit trail                           | 15     |
+| POST   | `/v1/admin/users/:userId/disable`          | Disable consumer (revoke tokens, block actions) | 18     |
+| POST   | `/v1/admin/businesses/:businessId/disable` | Disable business (deactivate nodes)             | 18     |
 
 #### Notification Endpoints
 
-| Method | Path | Description | Req |
-|--------|------|-------------|-----|
-| GET | `/v1/users/me/notifications` | Notification history (paginated) | T2-23 |
-| POST | `/v1/users/me/notifications/mark-read` | Mark notifications as read | T2-23 |
+| Method | Path                                   | Description                      | Req   |
+| ------ | -------------------------------------- | -------------------------------- | ----- |
+| GET    | `/v1/users/me/notifications`           | Notification history (paginated) | T2-23 |
+| POST   | `/v1/users/me/notifications/mark-read` | Mark notifications as read       | T2-23 |
 
 ### WebSocket Event Changes
 
 #### New Events (Server → Client)
 
-| Event | Room | Payload | Req |
-|-------|------|---------|-----|
-| `business:checkin_detail` | `business:{businessId}` | `{ nodeId, displayName?, tier, visitCount, timestamp }` | 8, 16 |
-| `notification:new` | `user:{userId}` | `{ id, type, title, body, data, createdAt }` | 17, 20, 39, 40 |
-| `tier:changed` | `user:{userId}` | `{ oldTier, newTier, benefits[] }` | 2, 20 |
-| `abuse:new_flag` | `admin:flags` | `{ flagId, type, entityId, createdAt }` | 21 |
+| Event                     | Room                    | Payload                                                 | Req            |
+| ------------------------- | ----------------------- | ------------------------------------------------------- | -------------- |
+| `business:checkin_detail` | `business:{businessId}` | `{ nodeId, displayName?, tier, visitCount, timestamp }` | 8, 16          |
+| `notification:new`        | `user:{userId}`         | `{ id, type, title, body, data, createdAt }`            | 17, 20, 39, 40 |
+| `tier:changed`            | `user:{userId}`         | `{ oldTier, newTier, benefits[] }`                      | 2, 20          |
+| `abuse:new_flag`          | `admin:flags`           | `{ flagId, type, entityId, createdAt }`                 | 21             |
 
 #### Modified Events
 
-| Event | Change | Req |
-|-------|--------|-----|
-| `business:checkin` | Add `displayName`, `tier`, `visitCount` to payload (privacy-filtered) | 16 |
-| `toast:friend_checkin` | Only emit to mutual follows when user privacy is `public` or `friends_only` | 22 |
-| `toast:new` (city-wide) | Exclude check-in identity data when user privacy is `friends_only` or `private` | 22 |
+| Event                   | Change                                                                          | Req |
+| ----------------------- | ------------------------------------------------------------------------------- | --- |
+| `business:checkin`      | Add `displayName`, `tier`, `visitCount` to payload (privacy-filtered)           | 16  |
+| `toast:friend_checkin`  | Only emit to mutual follows when user privacy is `public` or `friends_only`     | 22  |
+| `toast:new` (city-wide) | Exclude check-in identity data when user privacy is `friends_only` or `private` | 22  |
 
 ### Frontend Component Architecture
 
@@ -205,6 +208,7 @@ New shared UI components used across web and mobile:
 #### Consumer Portal (Web + Mobile)
 
 New screens/panels:
+
 - `CheckInHistoryScreen` — paginated history with venue name, category, timestamp
 - `TierProgressionPanel` — tier ladder with thresholds and benefits
 - `StreakInfoPanel` — streak explanation, current count, at-risk warning
@@ -215,6 +219,7 @@ New screens/panels:
 #### Business Portal
 
 New panels within existing dashboard:
+
 - `CheckInDetailPanel` — individual check-in list with real-time WebSocket updates
 - `RewardMetricsPanel` — claim rate, time-to-claim, redemption rate per reward
 - `StaffRedemptionPanel` — redemptions filtered by staff member
@@ -222,16 +227,17 @@ New panels within existing dashboard:
 #### Staff Portal
 
 Modified screens:
+
 - `StaffHome` — add QR scanner button, redemption preview flow
 - `RedemptionFlow` — scan → preview → confirm → result (4-step flow)
 
 #### Admin Portal
 
 New screens:
+
 - `DashboardOverview` — summary metrics with auto-refresh
 - `AbuseFlagDashboard` — flag list with review/action workflow
 - `AuditTrailViewer` — filterable, paginated audit log
-
 
 ## Data Models
 
@@ -241,14 +247,14 @@ New screens:
 
 New attributes added to existing user records:
 
-| Attribute | Type | Default | Description | Req |
-|-----------|------|---------|-------------|-----|
-| `privacyLevel` | S | `"friends_only"` | Privacy visibility: `public`, `friends_only`, `private` | 22 |
-| `onboardingComplete` | BOOL | `false` | Whether consumer completed onboarding flow | 6 |
-| `streakStartDate` | S | `null` | ISO date when current streak began | 3 |
-| `isDisabled` | BOOL | `false` | Whether account is disabled by admin | 18 |
-| `disabledAt` | S | `null` | ISO timestamp of when account was disabled | 18 |
-| `referralCode` | S | `null` | Unique referral code for consumer (Tier 2) | T2-26 |
+| Attribute            | Type | Default          | Description                                             | Req   |
+| -------------------- | ---- | ---------------- | ------------------------------------------------------- | ----- |
+| `privacyLevel`       | S    | `"friends_only"` | Privacy visibility: `public`, `friends_only`, `private` | 22    |
+| `onboardingComplete` | BOOL | `false`          | Whether consumer completed onboarding flow              | 6     |
+| `streakStartDate`    | S    | `null`           | ISO date when current streak began                      | 3     |
+| `isDisabled`         | BOOL | `false`          | Whether account is disabled by admin                    | 18    |
+| `disabledAt`         | S    | `null`           | ISO timestamp of when account was disabled              | 18    |
+| `referralCode`       | S    | `null`           | Unique referral code for consumer (Tier 2)              | T2-26 |
 
 No new GSIs needed on the users table — privacy level is always looked up by userId (primary key).
 
@@ -256,29 +262,29 @@ No new GSIs needed on the users table — privacy level is always looked up by u
 
 New attributes:
 
-| Attribute | Type | Default | Description | Req |
-|-----------|------|---------|-------------|-----|
-| `operatingHours` | M | `null` | Map of day → `{ open, close }` times | T2-30 |
-| `manualStatus` | S | `"open"` | Manual override: `open`, `closed`, `loadshedding` | T2-31 |
-| `isActive` | BOOL | `true` | Whether node is visible on consumer map | 18 |
+| Attribute        | Type | Default  | Description                                       | Req   |
+| ---------------- | ---- | -------- | ------------------------------------------------- | ----- |
+| `operatingHours` | M    | `null`   | Map of day → `{ open, close }` times              | T2-30 |
+| `manualStatus`   | S    | `"open"` | Manual override: `open`, `closed`, `loadshedding` | T2-31 |
+| `isActive`       | BOOL | `true`   | Whether node is visible on consumer map           | 18    |
 
 #### Rewards Table (`area-code-{env}-rewards`)
 
 New attributes:
 
-| Attribute | Type | Default | Description | Req |
-|-----------|------|---------|-------------|-----|
-| `claimedCount` | N | `0` | Number of times reward has been claimed | 9 |
-| `firstClaimedAt` | S | `null` | ISO timestamp of first claim | 9 |
-| `redeemedCount` | N | `0` | Number of times reward has been redeemed | 9 |
+| Attribute        | Type | Default | Description                              | Req |
+| ---------------- | ---- | ------- | ---------------------------------------- | --- |
+| `claimedCount`   | N    | `0`     | Number of times reward has been claimed  | 9   |
+| `firstClaimedAt` | S    | `null`  | ISO timestamp of first claim             | 9   |
+| `redeemedCount`  | N    | `0`     | Number of times reward has been redeemed | 9   |
 
 #### Check-ins Table (`area-code-{env}-checkins`)
 
 New attributes:
 
-| Attribute | Type | Default | Description | Req |
-|-----------|------|---------|-------------|-----|
-| `staffId` | S | `null` | Staff member who redeemed the associated reward | 19 |
+| Attribute | Type | Default | Description                                     | Req |
+| --------- | ---- | ------- | ----------------------------------------------- | --- |
+| `staffId` | S    | `null`  | Staff member who redeemed the associated reward | 19  |
 
 ### New Data Patterns in App-Data Table
 
@@ -295,6 +301,7 @@ blockerId, blockedId, createdAt
 ```
 
 Query patterns:
+
 - "Who has user X blocked?" → Query pk = `BLOCK#{userId}`
 - "Who has blocked user X?" → Query GSI1 gsi1pk = `BLOCKED_BY#{userId}`
 
@@ -311,6 +318,7 @@ createdAt
 ```
 
 Query patterns:
+
 - "Get report queue sorted by priority" → Query GSI1 gsi1pk = `REPORT_QUEUE`, ScanIndexForward = false
 
 #### Notification History (Req 17, 20, 39, 40, T2-23)
@@ -326,6 +334,7 @@ createdAt, ttl (90 days)
 ```
 
 Query patterns:
+
 - "Get user's notification history" → Query pk = `NOTIF#{userId}`, ScanIndexForward = false
 
 #### Business Check-In Detail Cache (Req 8, 16)
@@ -338,6 +347,7 @@ ttl (30 days)
 ```
 
 Query patterns:
+
 - "Get today's check-ins for business" → Query pk = `BIZ_CHECKIN#{businessId}#{today}`
 - "Get check-ins for date range" → Multiple queries by date
 
@@ -361,6 +371,7 @@ Computed by a new EventBridge-triggered Lambda running every 60 seconds (or on-d
 Existing pattern: `pk: AUDIT#{logId}`, `sk: AUDIT#{createdAt}`, `gsi1pk: AUDIT_LOGS`, `gsi1sk: {createdAt}`
 
 New GSI needed for filtering by admin:
+
 ```
 gsi1pk: AUDIT_ADMIN#{adminId}
 gsi1sk: {createdAt}
@@ -371,6 +382,7 @@ This reuses the existing GSI1 by adding a new gsi1pk pattern. Filtering by actio
 #### Notification Rate Limiting (Req 17, 39)
 
 Uses existing KV pattern:
+
 ```
 pk: KV#notif:daily:{userId}:{type}
 sk: VALUE
@@ -384,6 +396,7 @@ Existing redemption records in the rewards flow gain a `staffId` attribute. The 
 ### DynamoDB Capacity Considerations
 
 All tables remain `PAY_PER_REQUEST`. The new data patterns add:
+
 - Block records: O(blocks per user) — typically < 100 per user
 - Notification history: O(notifications per user) with 90-day TTL — self-cleaning
 - Business check-in cache: O(check-ins per day per business) with 30-day TTL
@@ -391,173 +404,171 @@ All tables remain `PAY_PER_REQUEST`. The new data patterns add:
 
 No new DynamoDB tables are needed. All new entities use the existing `app-data` table's single-table design.
 
-
 ## Correctness Properties
 
-*A property is a characteristic or behavior that should hold true across all valid executions of a system — essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
+_A property is a characteristic or behavior that should hold true across all valid executions of a system — essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees._
 
 ### Property 1: Pagination preserves ordering and completeness
 
-*For any* set of check-in records and any page size, paginating through the full set using cursor-based pagination SHALL return every record exactly once, in descending date order, with no duplicates and no omissions.
+_For any_ set of check-in records and any page size, paginating through the full set using cursor-based pagination SHALL return every record exactly once, in descending date order, with no duplicates and no omissions.
 
 **Validates: Requirements 1.1, 1.3**
 
 ### Property 2: Check-in history entries contain required fields
 
-*For any* check-in record returned by the history API, the response entry SHALL contain a non-null venue name, category, and timestamp.
+_For any_ check-in record returned by the history API, the response entry SHALL contain a non-null venue name, category, and timestamp.
 
 **Validates: Requirements 1.2**
 
 ### Property 3: Tier computation is correct for any check-in count
 
-*For any* non-negative check-in count, the computed tier SHALL match the expected tier based on the threshold table (0–9 → local, 10–49 → regular, 50–149 → fixture, 150–499 → institution, 500+ → legend), and the "remaining check-ins to next tier" SHALL equal max(0, nextThreshold - currentCount).
+_For any_ non-negative check-in count, the computed tier SHALL match the expected tier based on the threshold table (0–9 → local, 10–49 → regular, 50–149 → fixture, 150–499 → institution, 500+ → legend), and the "remaining check-ins to next tier" SHALL equal max(0, nextThreshold - currentCount).
 
 **Validates: Requirements 2.4, 2.5**
 
 ### Property 4: Streak at-risk detection
 
-*For any* consumer with a streak count > 0 and a last check-in date, the at-risk flag SHALL be true if and only if the last check-in date (in SAST) is before today's date (in SAST).
+_For any_ consumer with a streak count > 0 and a last check-in date, the at-risk flag SHALL be true if and only if the last check-in date (in SAST) is before today's date (in SAST).
 
 **Validates: Requirements 3.3**
 
 ### Property 5: Venue search returns only matching results
 
-*For any* list of venues and any search query of two or more characters, every venue in the search results SHALL have a name that contains the query string (case-insensitive), and no venue whose name contains the query string SHALL be excluded from the results.
+_For any_ list of venues and any search query of two or more characters, every venue in the search results SHALL have a name that contains the query string (case-insensitive), and no venue whose name contains the query string SHALL be excluded from the results.
 
 **Validates: Requirements 4.2**
 
 ### Property 6: Visit frequency computation
 
-*For any* consumer and node, the visit count returned in the business check-in event SHALL equal the total number of check-in records for that consumer at that specific node.
+_For any_ consumer and node, the visit count returned in the business check-in event SHALL equal the total number of check-in records for that consumer at that specific node.
 
 **Validates: Requirements 8.2, 16.3**
 
 ### Property 7: Business check-in events contain only privacy-safe fields
 
-*For any* consumer profile (regardless of privacy level), the business check-in event payload SHALL contain at most `displayName` and `tier`. The payload SHALL NEVER contain `phone`, `email`, `userId`, `cognitoSub`, `lat`, `lng`, or any field that could enable tracking an individual's movement pattern.
+_For any_ consumer profile (regardless of privacy level), the business check-in event payload SHALL contain at most `displayName` and `tier`. The payload SHALL NEVER contain `phone`, `email`, `userId`, `cognitoSub`, `lat`, `lng`, or any field that could enable tracking an individual's movement pattern.
 
 **Validates: Requirements 8.5, 16.4, 22.6**
 
 ### Property 8: Reward rate metrics are correctly bounded
 
-*For any* reward with totalSlots > 0, the claim rate (claimedCount / totalSlots) SHALL be between 0.0 and 1.0 inclusive. *For any* reward with claimedCount > 0, the redemption rate (redeemedCount / claimedCount) SHALL be between 0.0 and 1.0 inclusive.
+_For any_ reward with totalSlots > 0, the claim rate (claimedCount / totalSlots) SHALL be between 0.0 and 1.0 inclusive. _For any_ reward with claimedCount > 0, the redemption rate (redeemedCount / claimedCount) SHALL be between 0.0 and 1.0 inclusive.
 
 **Validates: Requirements 9.1, 9.3**
 
 ### Property 9: Reward summary is sorted by claim rate
 
-*For any* set of active rewards, the summary comparison SHALL return rewards sorted by claim rate in descending order.
+_For any_ set of active rewards, the summary comparison SHALL return rewards sorted by claim rate in descending order.
 
 **Validates: Requirements 9.5**
 
 ### Property 10: Abuse flags are ordered by creation date descending
 
-*For any* set of unreviewed abuse flags, the API SHALL return them in descending creation date order.
+_For any_ set of unreviewed abuse flags, the API SHALL return them in descending creation date order.
 
 **Validates: Requirements 14.1**
 
 ### Property 11: Audit log filtering returns only matching entries
 
-*For any* set of audit log entries and any combination of filters (adminId, action type, date range), every returned entry SHALL match all active filter criteria, and no matching entry SHALL be excluded.
+_For any_ set of audit log entries and any combination of filters (adminId, action type, date range), every returned entry SHALL match all active filter criteria, and no matching entry SHALL be excluded.
 
 **Validates: Requirements 15.3**
 
 ### Property 12: Audit log pagination preserves completeness
 
-*For any* set of audit log entries and any page size, paginating through the full set SHALL return every entry exactly once with no duplicates.
+_For any_ set of audit log entries and any page size, paginating through the full set SHALL return every entry exactly once with no duplicates.
 
 **Validates: Requirements 15.5**
 
 ### Property 13: Notification recipient targeting within time window
 
-*For any* node and any set of check-in records, the notification recipients for a new reward at that node SHALL be exactly the set of consumers who have at least one check-in at that node within the past 30 days.
+_For any_ node and any set of check-in records, the notification recipients for a new reward at that node SHALL be exactly the set of consumers who have at least one check-in at that node within the past 30 days.
 
 **Validates: Requirements 17.1**
 
 ### Property 14: Notification preference enforcement
 
-*For any* consumer and any notification type, the notification SHALL only be delivered if the consumer's corresponding notification preference is enabled. If the preference is disabled, the notification SHALL be silently dropped.
+_For any_ consumer and any notification type, the notification SHALL only be delivered if the consumer's corresponding notification preference is enabled. If the preference is disabled, the notification SHALL be silently dropped.
 
 **Validates: Requirements 17.3**
 
 ### Property 15: Notification rate limiting
 
-*For any* consumer and any day, the total number of reward-related notifications delivered SHALL not exceed 2.
+_For any_ consumer and any day, the total number of reward-related notifications delivered SHALL not exceed 2.
 
 **Validates: Requirements 17.4**
 
 ### Property 16: Notification channel selection
 
-*For any* notification delivery attempt, if the target consumer has an active WebSocket connection, the delivery channel SHALL be "socket". If the consumer has no active WebSocket connection but has valid push tokens, the delivery channel SHALL be "push". If neither is available, the delivery status SHALL be "no_tokens".
+_For any_ notification delivery attempt, if the target consumer has an active WebSocket connection, the delivery channel SHALL be "socket". If the consumer has no active WebSocket connection but has valid push tokens, the delivery channel SHALL be "push". If neither is available, the delivery status SHALL be "no_tokens".
 
 **Validates: Requirements 17.5, 20.2, 20.3**
 
 ### Property 17: Disabled user is blocked from check-in and reward claims
 
-*For any* consumer with `isDisabled = true`, all check-in attempts and reward claim attempts SHALL be rejected with an appropriate error.
+_For any_ consumer with `isDisabled = true`, all check-in attempts and reward claim attempts SHALL be rejected with an appropriate error.
 
 **Validates: Requirements 18.2**
 
 ### Property 18: Disabling a business deactivates all its nodes
 
-*For any* business with N nodes (N ≥ 0), disabling the business SHALL result in all N nodes having `isActive = false`.
+_For any_ business with N nodes (N ≥ 0), disabling the business SHALL result in all N nodes having `isActive = false`.
 
 **Validates: Requirements 18.3**
 
 ### Property 19: Every admin action produces an audit log entry
 
-*For any* admin action (disable user, disable business, review flag, reset flags, extend trial, etc.), an audit log entry SHALL be created with the correct adminId, action type, target entity, and timestamp.
+_For any_ admin action (disable user, disable business, review flag, reset flags, extend trial, etc.), an audit log entry SHALL be created with the correct adminId, action type, target entity, and timestamp.
 
 **Validates: Requirements 18.4**
 
 ### Property 20: Staff attribution on redemption
 
-*For any* reward redemption performed by a staff member, the persisted redemption record SHALL contain the staff member's identifier.
+_For any_ reward redemption performed by a staff member, the persisted redemption record SHALL contain the staff member's identifier.
 
 **Validates: Requirements 19.1**
 
 ### Property 21: Tier change notification contains correct data
 
-*For any* tier change event (oldTier → newTier), the notification payload SHALL contain the new tier name and the complete list of benefits associated with the new tier.
+_For any_ tier change event (oldTier → newTier), the notification payload SHALL contain the new tier name and the complete list of benefits associated with the new tier.
 
 **Validates: Requirements 20.1**
 
 ### Property 22: New accounts default to friends_only privacy
 
-*For any* newly created consumer account, the `privacyLevel` attribute SHALL be `"friends_only"`.
+_For any_ newly created consumer account, the `privacyLevel` attribute SHALL be `"friends_only"`.
 
 **Validates: Requirements 22.1**
 
 ### Property 23: Privacy level controls visibility in social queries
 
-*For any* consumer with `privacyLevel = "private"`, their check-ins SHALL NOT appear in the activity feed, leaderboard, or "who's here" list for any other consumer. *For any* consumer with `privacyLevel = "friends_only"`, their check-ins SHALL only appear to consumers who are mutual follows.
+_For any_ consumer with `privacyLevel = "private"`, their check-ins SHALL NOT appear in the activity feed, leaderboard, or "who's here" list for any other consumer. _For any_ consumer with `privacyLevel = "friends_only"`, their check-ins SHALL only appear to consumers who are mutual follows.
 
 **Validates: Requirements 22.3, 22.4**
 
 ### Property 24: No GPS coordinates in consumer-facing responses
 
-*For any* API response that returns data about other consumers (feed, leaderboard, who's here, search), the response SHALL NOT contain `lat` or `lng` fields associated with any consumer's check-in activity.
+_For any_ API response that returns data about other consumers (feed, leaderboard, who's here, search), the response SHALL NOT contain `lat` or `lng` fields associated with any consumer's check-in activity.
 
 **Validates: Requirements 22.5**
 
 ### Property 25: Block enforcement across all social queries
 
-*For any* pair of consumers where A has blocked B, all social queries made by B (feed, leaderboard, who's here, search, profile) SHALL NOT return any data about A. Additionally, A SHALL NOT appear in any WebSocket events delivered to B.
+_For any_ pair of consumers where A has blocked B, all social queries made by B (feed, leaderboard, who's here, search, profile) SHALL NOT return any data about A. Additionally, A SHALL NOT appear in any WebSocket events delivered to B.
 
 **Validates: Requirements 22.7**
 
 ### Property 26: Harassment reports create high-priority abuse flags
 
-*For any* report submitted with category "harassment_report" or "stalking", the system SHALL create an abuse flag with `type = "harassment_report"` and `priority = "high"` that appears at the top of the admin abuse flag queue.
+_For any_ report submitted with category "harassment_report" or "stalking", the system SHALL create an abuse flag with `type = "harassment_report"` and `priority = "high"` that appears at the top of the admin abuse flag queue.
 
 **Validates: Requirements 22.9**
 
 ### Property 27: WebSocket privacy enforcement for non-public users
 
-*For any* check-in by a consumer with `privacyLevel` set to `"friends_only"` or `"private"`, the check-in SHALL NOT be included in any city-wide WebSocket event (`toast:new`) with identity information. Friend-specific toasts (`toast:friend_checkin`) SHALL only be emitted to the consumer's mutual follows.
+_For any_ check-in by a consumer with `privacyLevel` set to `"friends_only"` or `"private"`, the check-in SHALL NOT be included in any city-wide WebSocket event (`toast:new`) with identity information. Friend-specific toasts (`toast:friend_checkin`) SHALL only be emitted to the consumer's mutual follows.
 
 **Validates: Requirements 22.10**
-
 
 ## Error Handling
 
@@ -567,50 +578,51 @@ The existing `AppError` class and Fastify error handler provide a solid foundati
 
 #### Consumer-Facing Errors
 
-| Scenario | HTTP Status | Error Code | User Message |
-|----------|-------------|------------|--------------|
-| Check-in history empty | 200 | — | Empty state with "No check-ins yet" |
-| Venue search no results | 200 | — | Empty state with "No venues found" |
-| OTP session expired on cancel | 404 | `otp_not_found` | "No active OTP session" |
-| Privacy update invalid level | 400 | `validation_error` | "Privacy level must be public, friends_only, or private" |
-| Block self | 400 | `bad_request` | "Cannot block yourself" |
-| Block already blocked user | 409 | `conflict` | "User already blocked" |
-| Report missing required fields | 400 | `validation_error` | "Report description is required" |
-| Disabled account check-in | 403 | `account_disabled` | "Your account has been suspended" |
-| Disabled account reward claim | 403 | `account_disabled` | "Your account has been suspended" |
+| Scenario                       | HTTP Status | Error Code         | User Message                                             |
+| ------------------------------ | ----------- | ------------------ | -------------------------------------------------------- |
+| Check-in history empty         | 200         | —                  | Empty state with "No check-ins yet"                      |
+| Venue search no results        | 200         | —                  | Empty state with "No venues found"                       |
+| OTP session expired on cancel  | 404         | `otp_not_found`    | "No active OTP session"                                  |
+| Privacy update invalid level   | 400         | `validation_error` | "Privacy level must be public, friends_only, or private" |
+| Block self                     | 400         | `bad_request`      | "Cannot block yourself"                                  |
+| Block already blocked user     | 409         | `conflict`         | "User already blocked"                                   |
+| Report missing required fields | 400         | `validation_error` | "Report description is required"                         |
+| Disabled account check-in      | 403         | `account_disabled` | "Your account has been suspended"                        |
+| Disabled account reward claim  | 403         | `account_disabled` | "Your account has been suspended"                        |
 
 #### Business-Facing Errors
 
-| Scenario | HTTP Status | Error Code | User Message |
-|----------|-------------|------------|--------------|
-| Check-in details for non-owned node | 403 | `forbidden` | "You do not own this node" |
-| Reward metrics for non-owned reward | 403 | `forbidden` | "You do not own this reward" |
-| Staff redemption for wrong business | 403 | `forbidden` | "Staff member does not belong to your business" |
+| Scenario                            | HTTP Status | Error Code  | User Message                                    |
+| ----------------------------------- | ----------- | ----------- | ----------------------------------------------- |
+| Check-in details for non-owned node | 403         | `forbidden` | "You do not own this node"                      |
+| Reward metrics for non-owned reward | 403         | `forbidden` | "You do not own this reward"                    |
+| Staff redemption for wrong business | 403         | `forbidden` | "Staff member does not belong to your business" |
 
 #### Staff-Facing Errors
 
-| Scenario | HTTP Status | Error Code | User Message |
-|----------|-------------|------------|--------------|
-| Invalid redemption code | 400 | `invalid_code` | "Redemption code not recognized" |
-| Already redeemed | 400 | `already_redeemed` | "This reward has already been redeemed" |
-| Expired code | 400 | `expired_code` | "This redemption code has expired" |
-| Camera permission denied | — | — | Graceful fallback to manual entry (client-side) |
-| Invalid QR format | — | — | "Unrecognized QR code format" (client-side) |
+| Scenario                 | HTTP Status | Error Code         | User Message                                    |
+| ------------------------ | ----------- | ------------------ | ----------------------------------------------- |
+| Invalid redemption code  | 400         | `invalid_code`     | "Redemption code not recognized"                |
+| Already redeemed         | 400         | `already_redeemed` | "This reward has already been redeemed"         |
+| Expired code             | 400         | `expired_code`     | "This redemption code has expired"              |
+| Camera permission denied | —           | —                  | Graceful fallback to manual entry (client-side) |
+| Invalid QR format        | —           | —                  | "Unrecognized QR code format" (client-side)     |
 
 #### Admin-Facing Errors
 
-| Scenario | HTTP Status | Error Code | User Message |
-|----------|-------------|------------|--------------|
-| Insufficient permissions | 403 | `forbidden` | "Role {role} cannot perform {action}" |
-| User not found for disable | 404 | `not_found` | "User not found" |
-| Business not found for disable | 404 | `not_found` | "Business not found" |
-| Abuse flag already reviewed | 409 | `conflict` | "Flag already reviewed" |
+| Scenario                       | HTTP Status | Error Code  | User Message                          |
+| ------------------------------ | ----------- | ----------- | ------------------------------------- |
+| Insufficient permissions       | 403         | `forbidden` | "Role {role} cannot perform {action}" |
+| User not found for disable     | 404         | `not_found` | "User not found"                      |
+| Business not found for disable | 404         | `not_found` | "Business not found"                  |
+| Abuse flag already reviewed    | 409         | `conflict`  | "Flag already reviewed"               |
 
 ### Frontend Error Handling
 
 #### Global Error Boundary (Req 7)
 
 Each portal app wraps its root component in an `ErrorBoundary` that:
+
 1. Catches unhandled React errors
 2. Logs the error to Sentry (existing integration)
 3. Displays a recovery screen with "Reload" button
@@ -619,6 +631,7 @@ Each portal app wraps its root component in an `ErrorBoundary` that:
 #### API Error Interceptor
 
 A shared Axios/fetch interceptor handles:
+
 - **Network errors** → "Connection lost. Check your internet and try again." + retry button
 - **HTTP 5xx** → "Something went wrong. Please try again." + retry button
 - **HTTP 4xx** → Extract `message` from response body and display it
@@ -627,19 +640,20 @@ A shared Axios/fetch interceptor handles:
 #### WebSocket Reconnection
 
 The existing Socket.IO client handles reconnection automatically. New behavior:
+
 - On reconnect, re-subscribe to all active rooms (city, user, business, node)
 - Display a "Reconnecting..." banner during disconnection
 - Queue missed events are not replayed (eventual consistency via API polling)
 
 ### Notification Delivery Failures
 
-| Failure | Handling |
-|---------|----------|
-| Expo push token invalid (DeviceNotRegistered) | Deactivate token, mark as `invalid` |
-| Web push subscription expired (410 Gone) | Deactivate token, mark as `invalid` |
-| Push delivery timeout | Retry once via SQS dead-letter queue |
-| WebSocket room empty | Fall through to push delivery |
-| No push tokens and no socket | Record as `no_tokens`, notification persisted to history but not delivered |
+| Failure                                       | Handling                                                                   |
+| --------------------------------------------- | -------------------------------------------------------------------------- |
+| Expo push token invalid (DeviceNotRegistered) | Deactivate token, mark as `invalid`                                        |
+| Web push subscription expired (410 Gone)      | Deactivate token, mark as `invalid`                                        |
+| Push delivery timeout                         | Retry once via SQS dead-letter queue                                       |
+| WebSocket room empty                          | Fall through to push delivery                                              |
+| No push tokens and no socket                  | Record as `no_tokens`, notification persisted to history but not delivered |
 
 ### Privacy Guard Error Handling
 
@@ -654,6 +668,7 @@ This feature is suitable for property-based testing. The privacy enforcement log
 **Library:** [fast-check](https://github.com/dubzzz/fast-check) (TypeScript PBT library)
 
 **Configuration:**
+
 - Minimum 100 iterations per property test
 - Each property test references its design document property
 - Tag format: `Feature: platform-completeness-audit, Property {number}: {property_text}`
@@ -733,4 +748,3 @@ backend/src/__tests__/
 4. **Tier and streak computation** (Properties 3, 4) — core game mechanics.
 5. **Reward metrics** (Properties 8, 9) — business-facing analytics.
 6. **Admin and disable cascade** (Properties 17–21) — moderation correctness.
-

@@ -16,7 +16,15 @@ import { MOCK_FEED } from './data/feed'
 import { MOCK_REPORTS } from './data/reports'
 import { MOCK_CONSENT, CURRENT_CONSENT_VERSION } from './data/consent'
 import { MOCK_ABUSE_FLAGS } from './data/abuseFlags'
-import { addFollow, removeFollow, isFollowing, isMutualFollow, getMutualFollowIds, getFollowingIds, getFollowerIds } from './data/follows'
+import {
+  addFollow,
+  removeFollow,
+  isFollowing,
+  isMutualFollow,
+  getMutualFollowIds,
+  getFollowingIds,
+  getFollowerIds,
+} from './data/follows'
 import { buildCrowdVibeSnapshot, buildBusinessMusicAudience } from './data/crowdVibe'
 import { ARCHETYPE_CATALOG } from '../constants/archetype-catalog'
 import { GENRE_WEIGHT_MATRIX } from '../constants/genre-weights'
@@ -177,8 +185,11 @@ register('GET', '/v1/nodes/:nodeId/detail', ({ pathParams }) => {
   const count = randomBetween(2, 4)
   const shuffled = [...MOCK_USERS].sort(() => Math.random() - 0.5).slice(0, count)
   const whoIsHere = shuffled.map((u) => ({
-    userId: u.id, username: u.username, displayName: u.displayName,
-    avatarUrl: u.avatarUrl, tier: u.tier,
+    userId: u.id,
+    username: u.username,
+    displayName: u.displayName,
+    avatarUrl: u.avatarUrl,
+    tier: u.tier,
   }))
   return { ...node, pulseScore: score, state: getNodeState(score), rewards, whoIsHere }
 })
@@ -188,7 +199,14 @@ register('GET', '/v1/nodes/:nodeSlug/public', ({ pathParams }) => {
   if (!node) return { error: 'not_found', message: 'Entity not found', statusCode: 404 }
   const score = state.pulseScores[node.id] ?? 0
   const activeRewardCount = state.rewards.filter((r) => r.nodeId === node.id && r.isActive).length
-  return { name: node.name, category: node.category, city: 'Johannesburg', pulseScore: score, activeRewardCount, ogImage: null }
+  return {
+    name: node.name,
+    category: node.category,
+    city: 'Johannesburg',
+    pulseScore: score,
+    activeRewardCount,
+    ogImage: null,
+  }
 })
 
 register('GET', '/v1/nodes/:nodeId/rewards', ({ pathParams }) => {
@@ -222,12 +240,11 @@ register('GET', '/v1/rewards/near-me', () => {
 })
 
 register('GET', '/v1/rewards/unclaimed', () => {
-  return MOCK_REDEMPTIONS.filter((rd) => rd.userId === CURRENT_USER_ID && !rd.redeemedAt)
-    .map((rd) => {
-      const reward = state.rewards.find((r) => r.id === rd.rewardId)
-      const node = reward ? MOCK_NODES.find((n) => n.id === reward.nodeId) : null
-      return { ...rd, rewardTitle: reward?.title ?? 'Reward', nodeName: node?.name ?? 'Unknown' }
-    })
+  return MOCK_REDEMPTIONS.filter((rd) => rd.userId === CURRENT_USER_ID && !rd.redeemedAt).map((rd) => {
+    const reward = state.rewards.find((r) => r.id === rd.rewardId)
+    const node = reward ? MOCK_NODES.find((n) => n.id === reward.nodeId) : null
+    return { ...rd, rewardTitle: reward?.title ?? 'Reward', nodeName: node?.name ?? 'Unknown' }
+  })
 })
 
 register('POST', '/v1/rewards/redeem', ({ body }) => {
@@ -253,7 +270,10 @@ register('POST', '/v1/rewards/:code/redeem', ({ body }) => {
 // ---------------------------------------------------------------------------
 register('GET', '/v1/leaderboard/:citySlug', () => ({
   entries: MOCK_LEADERBOARD,
-  userRank: { rank: CURRENT_USER_RANK, checkInCount: MOCK_LEADERBOARD.find((e) => e.rank === CURRENT_USER_RANK)?.checkInCount ?? 0 },
+  userRank: {
+    rank: CURRENT_USER_RANK,
+    checkInCount: MOCK_LEADERBOARD.find((e) => e.rank === CURRENT_USER_RANK)?.checkInCount ?? 0,
+  },
 }))
 
 register('GET', '/v1/feed', () => ({
@@ -293,60 +313,65 @@ register('DELETE', '/v1/users/:id/follow', ({ pathParams }) => {
 
 register('GET', '/v1/users/me/friends', () => {
   const friendIds = getMutualFollowIds(CURRENT_USER_ID)
-  const friends = friendIds.map((id) => {
-    const u = MOCK_USERS.find((u) => u.id === id)
-    if (!u) return null
-    return {
-      userId: u.id,
-      username: u.username,
-      displayName: u.displayName,
-      avatarUrl: u.avatarUrl,
-      tier: u.tier,
-      totalCheckIns: u.totalCheckIns,
-    }
-  }).filter(Boolean)
+  const friends = friendIds
+    .map((id) => {
+      const u = MOCK_USERS.find((u) => u.id === id)
+      if (!u) return null
+      return {
+        userId: u.id,
+        username: u.username,
+        displayName: u.displayName,
+        avatarUrl: u.avatarUrl,
+        tier: u.tier,
+        totalCheckIns: u.totalCheckIns,
+      }
+    })
+    .filter(Boolean)
   return { friends, count: friends.length }
 })
 
 register('GET', '/v1/users/me/following', () => {
   const ids = getFollowingIds(CURRENT_USER_ID)
-  const users = ids.map((id) => {
-    const u = MOCK_USERS.find((u) => u.id === id)
-    if (!u) return null
-    return {
-      userId: u.id,
-      username: u.username,
-      displayName: u.displayName,
-      avatarUrl: u.avatarUrl,
-      tier: u.tier,
-      isMutual: isMutualFollow(CURRENT_USER_ID, u.id),
-    }
-  }).filter(Boolean)
+  const users = ids
+    .map((id) => {
+      const u = MOCK_USERS.find((u) => u.id === id)
+      if (!u) return null
+      return {
+        userId: u.id,
+        username: u.username,
+        displayName: u.displayName,
+        avatarUrl: u.avatarUrl,
+        tier: u.tier,
+        isMutual: isMutualFollow(CURRENT_USER_ID, u.id),
+      }
+    })
+    .filter(Boolean)
   return { users, count: users.length }
 })
 
 register('GET', '/v1/users/me/followers', () => {
   const ids = getFollowerIds(CURRENT_USER_ID)
-  const users = ids.map((id) => {
-    const u = MOCK_USERS.find((u) => u.id === id)
-    if (!u) return null
-    return {
-      userId: u.id,
-      username: u.username,
-      displayName: u.displayName,
-      avatarUrl: u.avatarUrl,
-      tier: u.tier,
-      isFollowingBack: isFollowing(CURRENT_USER_ID, u.id),
-    }
-  }).filter(Boolean)
+  const users = ids
+    .map((id) => {
+      const u = MOCK_USERS.find((u) => u.id === id)
+      if (!u) return null
+      return {
+        userId: u.id,
+        username: u.username,
+        displayName: u.displayName,
+        avatarUrl: u.avatarUrl,
+        tier: u.tier,
+        isFollowingBack: isFollowing(CURRENT_USER_ID, u.id),
+      }
+    })
+    .filter(Boolean)
   return { users, count: users.length }
 })
 
 register('GET', '/v1/users/search', ({ queryParams }) => {
   const q = (queryParams['q'] ?? '').toLowerCase()
   if (!q || q.length < 2) return { users: [] }
-  const results = MOCK_USERS
-    .filter((u) => u.id !== CURRENT_USER_ID)
+  const results = MOCK_USERS.filter((u) => u.id !== CURRENT_USER_ID)
     .filter((u) => u.username.toLowerCase().includes(q) || u.displayName.toLowerCase().includes(q))
     .slice(0, 10)
     .map((u) => ({
@@ -413,7 +438,9 @@ register('GET', '/v1/business/me/audience', () => ({
   totalUniqueVisitors: 247,
   peakHours: ['12:00-14:00', '18:00-21:00'],
   topRepeatVisitors: MOCK_USERS.slice(0, 5).map((u) => ({
-    displayName: u.displayName, tier: u.tier, visitCount: randomBetween(3, 12),
+    displayName: u.displayName,
+    tier: u.tier,
+    visitCount: randomBetween(3, 12),
   })),
 }))
 
@@ -655,9 +682,9 @@ register('POST', '/v1/admin/archetypes/test', ({ body }) => {
   const scores = computeDimensionScores(genres ?? [], GENRE_WEIGHT_MATRIX)
   const resolved = resolveArchetype(scores, ARCHETYPE_CATALOG)
   const allMatches = scores
-    ? ARCHETYPE_CATALOG
-        .filter((a) => a.isActive && a.name !== 'The Eclectic' && a.name !== 'The Uncharted' && matchesArchetype(scores, a))
-        .sort((a, b) => b.priority - a.priority)
+    ? ARCHETYPE_CATALOG.filter(
+        (a) => a.isActive && a.name !== 'The Eclectic' && a.name !== 'The Uncharted' && matchesArchetype(scores, a),
+      ).sort((a, b) => b.priority - a.priority)
     : []
   return { dimensionScores: scores, resolvedArchetype: resolved, allMatches }
 })

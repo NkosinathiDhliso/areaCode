@@ -462,7 +462,7 @@ The system is a pnpm monorepo with apps/web, apps/mobile, apps/business, apps/st
 
 1. WHEN a new user opens the app for the first time, THE Onboarding_System SHALL load the map normally, then after 1.5 seconds fade in a single hint pill at map centre: "Tap any dot to explore" with a dismiss [×] button.
 2. WHEN the user taps their first node, THE Onboarding_System SHALL permanently dismiss the hint pill.
-3. WHEN the user attempts their first layer-swipe and has never switched layers, THE Onboarding_System SHALL display a one-time gesture hint at the map edge: "← Social  Trending  Rewards →" that fades after 3 seconds or on first successful swipe.
+3. WHEN the user attempts their first layer-swipe and has never switched layers, THE Onboarding_System SHALL display a one-time gesture hint at the map edge: "← Social Trending Rewards →" that fades after 3 seconds or on first successful swipe.
 4. WHEN the user completes their first check-in, THE Onboarding_System SHALL display a quiet toast: "You're on the map." — no confetti, no particle effects.
 5. THE Onboarding_System SHALL track onboarding state (`hintSeen`, `layerHintSeen`, `firstCheckIn`) in `userStore`, persisted to storage, ensuring hints are never shown twice.
 
@@ -610,7 +610,6 @@ The system is a pnpm monorepo with apps/web, apps/mobile, apps/business, apps/st
 5. THE Quality_System SHALL enforce one component per file, no `any` in component props, and TypeScript strict mode with no exceptions.
 6. THE Quality_System SHALL enforce that every hook setting up a subscription or interval cleans up in its return function.
 7. THE Quality_System SHALL NOT generate test files during implementation — testing is deferred to a post-implementation phase.
-
 
 ### Requirement 38: Rewards Discovery Layer and Feed
 

@@ -9,9 +9,18 @@ interface CrowdVibeSectionProps {
 }
 
 const GENRE_LABELS: Record<MusicGenre, string> = {
-  amapiano: 'Amapiano', deep_house: 'Deep House', afrobeats: 'Afrobeats',
-  hip_hop: 'Hip Hop', rnb: 'R&B', kwaito: 'Kwaito', gqom: 'Gqom',
-  jazz: 'Jazz', rock: 'Rock', pop: 'Pop', gospel: 'Gospel', maskandi: 'Maskandi',
+  amapiano: 'Amapiano',
+  deep_house: 'Deep House',
+  afrobeats: 'Afrobeats',
+  hip_hop: 'Hip Hop',
+  rnb: 'R&B',
+  kwaito: 'Kwaito',
+  gqom: 'Gqom',
+  jazz: 'Jazz',
+  rock: 'Rock',
+  pop: 'Pop',
+  gospel: 'Gospel',
+  maskandi: 'Maskandi',
 }
 
 export function CrowdVibeSection({ nodeId }: CrowdVibeSectionProps) {
@@ -20,10 +29,17 @@ export function CrowdVibeSection({ nodeId }: CrowdVibeSectionProps) {
 
   useEffect(() => {
     let cancelled = false
-    api.get<CrowdVibeSnapshot>(`/v1/nodes/${nodeId}/crowd-vibe`)
-      .then((res) => { if (!cancelled) setData(res) })
-      .catch(() => { /* hide silently */ })
-    return () => { cancelled = true }
+    api
+      .get<CrowdVibeSnapshot>(`/v1/nodes/${nodeId}/crowd-vibe`)
+      .then((res) => {
+        if (!cancelled) setData(res)
+      })
+      .catch(() => {
+        /* hide silently */
+      })
+    return () => {
+      cancelled = true
+    }
   }, [nodeId])
 
   if (!data || data.totalCheckedIn === 0) return null

@@ -5,8 +5,12 @@ const mockStore = new Map<string, string>()
 vi.mock('../../../../../packages/shared/lib/storage', () => ({
   storage: {
     get: (key: string) => mockStore.get(key) ?? null,
-    set: (key: string, value: string) => { mockStore.set(key, value) },
-    remove: (key: string) => { mockStore.delete(key) },
+    set: (key: string, value: string) => {
+      mockStore.set(key, value)
+    },
+    remove: (key: string) => {
+      mockStore.delete(key)
+    },
   },
 }))
 

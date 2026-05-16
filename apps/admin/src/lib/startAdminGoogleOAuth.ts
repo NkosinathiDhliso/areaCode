@@ -5,9 +5,7 @@ import {
 } from '@area-code/shared/lib/cognitoHostedUiOAuth'
 
 export async function startAdminGoogleOAuthWeb(): Promise<void> {
-  const domain = (
-    import.meta.env['VITE_COGNITO_HOSTED_UI_DOMAIN_ADMIN'] as string | undefined
-  )?.trim()
+  const domain = (import.meta.env['VITE_COGNITO_HOSTED_UI_DOMAIN_ADMIN'] as string | undefined)?.trim()
   const clientId = (import.meta.env['VITE_COGNITO_CLIENT_ID_ADMIN'] as string | undefined)?.trim()
   if (!domain || !clientId) throw new Error('missing_cognito_oauth_env')
 

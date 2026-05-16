@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import { useAdminAuthStore } from '../stores/adminAuthStore'
 import { DashboardOverview } from './DashboardOverview'
+import { RetentionDashboard } from './RetentionDashboard'
 import { ConsumerManagement } from './ConsumerManagement'
 import { BusinessManagement } from './BusinessManagement'
 import { NodeManagement } from './NodeManagement'
@@ -14,10 +15,23 @@ import { ArchetypeManagement } from '../components/ArchetypeManagement'
 import { GenreWeightEditor } from '../components/GenreWeightEditor'
 import { AdminIAM } from './AdminIAM'
 
-type Tab = 'dashboard' | 'consumers' | 'businesses' | 'nodes' | 'reports' | 'abuse-flags' | 'audit-trail' | 'consent' | 'archetypes' | 'genre-weights' | 'iam'
+type Tab =
+  | 'dashboard'
+  | 'retention'
+  | 'consumers'
+  | 'businesses'
+  | 'nodes'
+  | 'reports'
+  | 'abuse-flags'
+  | 'audit-trail'
+  | 'consent'
+  | 'archetypes'
+  | 'genre-weights'
+  | 'iam'
 
 const TAB_LABELS: Record<Tab, string> = {
   dashboard: 'admin.nav.dashboard',
+  retention: 'admin.nav.retention',
   consumers: 'admin.nav.consumers',
   businesses: 'admin.nav.businesses',
   nodes: 'admin.nav.nodes',
@@ -33,7 +47,20 @@ const TAB_LABELS: Record<Tab, string> = {
 function getVisibleTabs(role: string | null): Tab[] {
   switch (role) {
     case 'super_admin':
-      return ['dashboard', 'consumers', 'businesses', 'nodes', 'reports', 'abuse-flags', 'audit-trail', 'consent', 'archetypes', 'genre-weights', 'iam']
+      return [
+        'dashboard',
+        'retention',
+        'consumers',
+        'businesses',
+        'nodes',
+        'reports',
+        'abuse-flags',
+        'audit-trail',
+        'consent',
+        'archetypes',
+        'genre-weights',
+        'iam',
+      ]
     case 'support_agent':
       return ['consumers', 'businesses']
     case 'content_moderator':
@@ -52,9 +79,7 @@ export function AdminDashboard() {
   return (
     <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
       <header className="flex flex-row items-center justify-between px-5 py-4 border-b border-[var(--border)]">
-        <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">
-          Area Code Admin
-        </span>
+        <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">Area Code Admin</span>
         <div className="flex flex-row items-center gap-4">
           <span className="text-[var(--text-muted)] text-xs capitalize">{role?.replace(/_/g, ' ')}</span>
           <button onClick={logout} className="text-[var(--text-muted)] text-sm">
@@ -81,6 +106,7 @@ export function AdminDashboard() {
 
       <main className="flex-1 overflow-y-auto">
         {activeTab === 'dashboard' && <DashboardOverview />}
+        {activeTab === 'retention' && <RetentionDashboard />}
         {activeTab === 'consumers' && <ConsumerManagement />}
         {activeTab === 'businesses' && <BusinessManagement />}
         {activeTab === 'nodes' && <NodeManagement />}

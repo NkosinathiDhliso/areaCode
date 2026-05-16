@@ -15,6 +15,7 @@ import { useMapSockets } from '../hooks/useMapSockets'
 import { getNodeState } from '../lib/mapHelpers'
 import { CategoryFilterBar } from '../components/CategoryFilterBar'
 import { ToastOverlay } from '../components/ToastOverlay'
+import { ProximityNudgeBanner } from '../components/ProximityNudgeBanner'
 import { NodeDetailSheet } from '../components/NodeDetailSheet'
 import { SignupSheet } from '../components/SignupSheet'
 import { SearchSheet, type SearchResult } from '../components/SearchSheet'
@@ -248,6 +249,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       )}
 
       <ToastOverlay />
+      <ProximityNudgeBanner onNavigate={onNavigate} />
 
       <NodeDetailSheet
         node={selectedNode}

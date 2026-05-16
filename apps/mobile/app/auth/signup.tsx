@@ -29,10 +29,7 @@ export default function ConsumerSignup() {
   }
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.bgBase }}
-      contentContainerStyle={styles.scrollContent}
-    >
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bgBase }} contentContainerStyle={styles.scrollContent}>
       <Text style={styles.title}>{t('auth.signup.title')}</Text>
       <Text style={styles.explainer}>{t('auth.signup.googleExplainer')}</Text>
 

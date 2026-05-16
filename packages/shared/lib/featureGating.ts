@@ -31,25 +31,34 @@ export function canFollowUsers(tier: Tier | null): boolean {
 // Business feature gates
 export function getMaxNodes(tier: BusinessTier): number {
   switch (tier) {
-    case 'pro': return Infinity
-    case 'growth': return 5
-    default: return 1
+    case 'pro':
+      return Infinity
+    case 'growth':
+      return 5
+    default:
+      return 1
   }
 }
 
 export function getMaxActiveRewards(tier: BusinessTier): number {
   switch (tier) {
-    case 'pro': return Infinity
-    case 'growth': return 10
-    default: return 3
+    case 'pro':
+      return Infinity
+    case 'growth':
+      return 10
+    default:
+      return 3
   }
 }
 
 export function getMaxStaffAccounts(tier: BusinessTier): number {
   switch (tier) {
-    case 'pro': return Infinity
-    case 'growth': return 5
-    default: return 2
+    case 'pro':
+      return Infinity
+    case 'growth':
+      return 5
+    default:
+      return 2
   }
 }
 
@@ -63,8 +72,11 @@ export function hasExportAnalytics(tier: BusinessTier): boolean {
 
 export function getIncludedBoosts(tier: BusinessTier): number {
   switch (tier) {
-    case 'pro': return Infinity
-    case 'growth': return 3
-    default: return 0
+    case 'pro':
+      return Infinity
+    case 'growth':
+      return 3
+    default:
+      return 0
   }
 }

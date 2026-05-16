@@ -17,14 +17,7 @@ const EMAIL_PATTERN = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
 const URL_PATTERN = /https?:\/\/[^\s"',}]+/i
 
 // Field names that indicate PII when they contain string values
-const PII_FIELD_NAMES = [
-  'userId',
-  'cognitoSub',
-  'displayName',
-  'phone',
-  'email',
-  'avatarUrl',
-]
+const PII_FIELD_NAMES = ['userId', 'cognitoSub', 'displayName', 'phone', 'email', 'avatarUrl']
 
 // ============================================================================
 // Scanner Implementation

@@ -10,6 +10,40 @@ import { createLoginSession } from './session-service.js'
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
+/**
+ * Redeem a guest-claim token (Churn-defences spec, Req 6) for a newly
+ * signed-up consumer. Token-based — no PII at the till. Idempotent and
+ * non-fatal: callers should swallow errors so signup never fails on
+ * conversion bookkeeping.
+ *
+ * Returns true if a credit was applied, false otherwise.
+ */
+export async function redeemGuestToken(token: string, userId: string): Promise<boolean> {
+  if (DEV_MODE) return false
+  const { redeemTokenForUser, GuestClaimAbuseError } = await import('../rewards/guest-claim.js')
+  try {
+    await redeemTokenForUser(token, userId)
+    const { documentClient, TableNames } = await import('../../shared/db/dynamodb.js')
+    const { UpdateCommand } = await import('@aws-sdk/lib-dynamodb')
+    await documentClient.send(
+      new UpdateCommand({
+        TableName: TableNames.users,
+        Key: { userId },
+        UpdateExpression: 'SET totalCheckIns = if_not_exists(totalCheckIns, :zero) + :one',
+        ExpressionAttributeValues: { ':zero': 0, ':one': 1 },
+      }),
+    )
+    return true
+  } catch (err) {
+    if (err instanceof GuestClaimAbuseError) {
+      // Token invalid / already used / expired — log and move on.
+      console.warn(`[auth] guest-token redemption skipped: ${err.code}`)
+      return false
+    }
+    throw err
+  }
+}
+
 export async function consumerSignup(data: {
   phone: string
   username: string
@@ -115,8 +149,10 @@ export async function consumerOAuthSync(opts: { cognitoSub: string; email?: stri
   }
 
   let user = await repo.getUserByCognitoSub(cognitoSub)
+  let isNewUser = false
 
   if (!user) {
+    isNewUser = true
     let email = rawEmail?.toLowerCase().trim()
     if (!email) email = await cognito.getConsumerVerifiedEmailBySub(cognitoSub)
     if (!email) {
@@ -166,6 +202,7 @@ export async function consumerOAuthSync(opts: { cognitoSub: string; email?: stri
     username: user.username,
     displayName: user.displayName,
     tier: user.tier ?? 'explorer',
+    isNewUser,
   }
 }
 
@@ -196,6 +233,11 @@ export async function consumerVerifyOtp(phone: string, code: string, userAgent?:
 
     // Create device session record
     const loginSession = await createLoginSession(user.userId, userAgent ?? '')
+
+    // Convert any open guest claims now that this phone is a real account.
+    // (Churn-defences spec, Requirement 6.4) — non-fatal on failure.
+    // NOTE: This call is dead code in prod (phone-OTP path is disabled).
+    // Kept here for the dev fixture path only.
 
     return {
       accessToken: tokens.accessToken,
@@ -972,6 +1014,7 @@ export {
   completeOnboarding,
   updateProfile,
   getCheckInHistory,
+  getVisitedNodes,
   deleteCheckInHistory,
   updateConsent,
   getUserConsent,

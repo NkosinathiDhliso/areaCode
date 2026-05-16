@@ -1,11 +1,11 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* Tell Tailwind v4 to scan shared packages for utility classes */
 @source "../../packages/shared";
 @source "../../packages/features";
 
 /* ── Design system tokens ─────────────────────────────────────────────── */
-@import "@area-code/shared/tokens.css";
+@import '@area-code/shared/tokens.css';
 
 /* ── Base styles ──────────────────────────────────────────────────────── */
 @layer base {
@@ -23,7 +23,11 @@
     background-size: 140% 140%;
     animation: gradientDrift 8s ease-in-out infinite;
     color: var(--text-primary);
-    font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+    font-family:
+      'DM Sans',
+      system-ui,
+      -apple-system,
+      sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -31,7 +35,7 @@
   /* Noise texture overlay — adds tactile depth to gradient backgrounds.
      Uses an inlined SVG feTurbulence filter for zero network cost. */
   body::after {
-    content: "";
+    content: '';
     position: fixed;
     inset: 0;
     z-index: 9999;
@@ -78,7 +82,9 @@
     body {
       animation: none;
     }
-    *, *::before, *::after {
+    *,
+    *::before,
+    *::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;

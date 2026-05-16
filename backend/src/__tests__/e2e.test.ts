@@ -276,7 +276,6 @@ describe('5. Admin Auth Flow', () => {
   })
 })
 
-
 // ═════════════════════════════════════════════════════════════════════════════
 // 6. NODE DISCOVERY
 // ═════════════════════════════════════════════════════════════════════════════
@@ -611,7 +610,6 @@ describe('10. Business Dashboard', () => {
     expect([200, 401, 500]).toContain(res.statusCode)
   })
 })
-
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 11. STAFF REDEMPTION VALIDATION
@@ -1159,12 +1157,7 @@ describe('20. CORS & Security Headers', () => {
   })
 
   it('CORS allows localhost origins in dev mode', async () => {
-    const origins = [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'http://localhost:3002',
-      'http://localhost:3003',
-    ]
+    const origins = ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://localhost:3003']
     for (const origin of origins) {
       const res = await app.inject({
         method: 'GET',

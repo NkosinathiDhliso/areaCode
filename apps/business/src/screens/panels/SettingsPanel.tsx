@@ -136,7 +136,7 @@ export function SettingsPanel() {
         await api.delete(`/v1/business/staff/${staffId}`)
         setStaff((prev) => prev.filter((s) => s.id !== staffId))
       } catch {
-        useErrorStore.getState().showError('Couldn\'t remove staff member. Try again.')
+        useErrorStore.getState().showError("Couldn't remove staff member. Try again.")
       }
     })()
   }

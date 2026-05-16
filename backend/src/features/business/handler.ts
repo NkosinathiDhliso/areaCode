@@ -29,7 +29,8 @@ export async function businessRoutes(app: FastifyInstance) {
       // Manager accessing business portal — resolve their business via staff record
       const { getStaffById } = await import('../auth/dynamodb-repository.js')
       const staff = await getStaffById(auth.userId)
-      if (!staff || staff.role !== 'manager') throw (await import('../../shared/errors/AppError.js')).AppError.forbidden('Access denied')
+      if (!staff || staff.role !== 'manager')
+        throw (await import('../../shared/errors/AppError.js')).AppError.forbidden('Access denied')
       const { findBusinessById } = await import('./repository.js')
       const biz = await findBusinessById(staff.businessId)
       if (!biz) throw (await import('../../shared/errors/AppError.js')).AppError.notFound('Business not found')
@@ -111,7 +112,11 @@ export async function businessRoutes(app: FastifyInstance) {
   app.post(
     '/v1/business/checkout',
     {
-      preHandler: [requireAuth('business', 'staff'), requireBusinessPermission('manage_billing'), validate({ body: checkoutBodySchema })],
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('manage_billing'),
+        validate({ body: checkoutBodySchema }),
+      ],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -178,7 +183,11 @@ export async function businessRoutes(app: FastifyInstance) {
   app.post(
     '/v1/business/staff/invite',
     {
-      preHandler: [requireAuth('business', 'staff'), requireBusinessPermission('manage_staff'), validate({ body: staffInviteBodySchema })],
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('manage_staff'),
+        validate({ body: staffInviteBodySchema }),
+      ],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -189,7 +198,9 @@ export async function businessRoutes(app: FastifyInstance) {
         const { getBusinessRole } = await import('../../shared/middleware/business-role.js')
         const bizRole = getBusinessRole(request)
         if (bizRole.memberRole !== 'owner') {
-          throw (await import('../../shared/errors/AppError.js')).AppError.forbidden('Only the owner can invite managers.')
+          throw (await import('../../shared/errors/AppError.js')).AppError.forbidden(
+            'Only the owner can invite managers.',
+          )
         }
       }
       return service.inviteStaff(auth.userId, body.phone, body.email, inviteRole)
@@ -249,6 +260,26 @@ export async function businessRoutes(app: FastifyInstance) {
       return { items }
     },
   )
+
+  // GET /v1/business/staff/leaderboard?period=week|month|all
+  app.get('/v1/business/staff/leaderboard', { preHandler: [requireAuth('business', 'staff')] }, async (request) => {
+    const auth = getAuth(request)
+    const period = ((request.query as Record<string, string>)['period'] ?? 'week') as 'week' | 'month' | 'all'
+    if (!['week', 'month', 'all'].includes(period)) {
+      throw (await import('../../shared/errors/AppError.js')).AppError.badRequest('Invalid period')
+    }
+
+    // Resolve businessId. Owners: auth.userId === businessId. Managers / staff:
+    // resolve via staff record. Anyone else gets a 403 — leaderboard is sensitive.
+    let businessId = auth.userId
+    if (auth.role === 'staff') {
+      const { getStaffById } = await import('../auth/dynamodb-repository.js')
+      const staff = await getStaffById(auth.userId)
+      if (!staff) throw (await import('../../shared/errors/AppError.js')).AppError.forbidden('Access denied')
+      businessId = staff.businessId
+    }
+    return service.getStaffLeaderboard(businessId, period)
+  })
 
   // GET /v1/business/check-ins
   app.get(

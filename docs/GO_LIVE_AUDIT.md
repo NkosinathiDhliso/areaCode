@@ -170,20 +170,20 @@ The CI `terraform.yml` workflow does `terraform apply -auto-approve` on push to 
 
 ### Already Committed (synced during session)
 
-| Commit | Description |
-|--------|-------------|
+| Commit    | Description                                                                 |
+| --------- | --------------------------------------------------------------------------- |
 | `5b8c78d` | Test TS fixes, terraform fmt, eslint ignore globs, test expectation updates |
-| `90288f3` | Auth middleware on image-routes and instagram-routes |
+| `90288f3` | Auth middleware on image-routes and instagram-routes                        |
 
 ### Remaining Unstaged (commit these)
 
-| File | Change |
-|------|--------|
-| `eslint.config.js` | Downgrade `no-explicit-any`/`no-unused-vars` to warn, add SW globals, simplify restricted-paths |
-| `.github/workflows/quality-gate.yml` | Raise `--max-warnings` to 900 |
-| `backend/src/features/admin/service.ts` | Wrap case block in braces |
-| `backend/src/shared/kv/dynamodb-kv.ts` | Remove dead expression |
-| `docs/GO_LIVE_AUDIT.md` | This report |
+| File                                    | Change                                                                                          |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `eslint.config.js`                      | Downgrade `no-explicit-any`/`no-unused-vars` to warn, add SW globals, simplify restricted-paths |
+| `.github/workflows/quality-gate.yml`    | Raise `--max-warnings` to 900                                                                   |
+| `backend/src/features/admin/service.ts` | Wrap case block in braces                                                                       |
+| `backend/src/shared/kv/dynamodb-kv.ts`  | Remove dead expression                                                                          |
+| `docs/GO_LIVE_AUDIT.md`                 | This report                                                                                     |
 
 ---
 

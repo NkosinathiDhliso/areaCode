@@ -10,42 +10,27 @@ export async function notificationRoutes(app: FastifyInstance) {
   app.post(
     '/v1/users/me/push-token',
     {
-      preHandler: [
-        requireAuth('consumer', 'business'),
-        validate({ body: pushTokenBodySchema }),
-      ],
+      preHandler: [requireAuth('consumer', 'business'), validate({ body: pushTokenBodySchema })],
     },
     async (request, reply) => {
       const auth = getAuth(request)
       const body = request.body as z.infer<typeof pushTokenBodySchema>
-      await service.registerPushToken(
-        auth.userId,
-        body.token,
-        body.platform,
-        body.deviceId,
-      )
+      await service.registerPushToken(auth.userId, body.token, body.platform, body.deviceId)
       return reply.status(201).send({ success: true })
     },
   )
 
   // GET /v1/users/me/notification-preferences
-  app.get(
-    '/v1/users/me/notification-preferences',
-    { preHandler: [requireAuth('consumer')] },
-    async (request) => {
-      const auth = getAuth(request)
-      return service.getPreferences(auth.userId)
-    },
-  )
+  app.get('/v1/users/me/notification-preferences', { preHandler: [requireAuth('consumer')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.getPreferences(auth.userId)
+  })
 
   // PATCH /v1/users/me/notification-preferences
   app.patch(
     '/v1/users/me/notification-preferences',
     {
-      preHandler: [
-        requireAuth('consumer'),
-        validate({ body: notificationPrefsSchema }),
-      ],
+      preHandler: [requireAuth('consumer'), validate({ body: notificationPrefsSchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -58,10 +43,7 @@ export async function notificationRoutes(app: FastifyInstance) {
   app.get(
     '/v1/users/me/notifications',
     {
-      preHandler: [
-        requireAuth('consumer'),
-        validate({ query: notificationHistoryQuerySchema }),
-      ],
+      preHandler: [requireAuth('consumer'), validate({ query: notificationHistoryQuerySchema })],
     },
     async (request) => {
       const auth = getAuth(request)
@@ -74,13 +56,9 @@ export async function notificationRoutes(app: FastifyInstance) {
   )
 
   // POST /v1/users/me/notifications/mark-read — mark all visible notifications as read
-  app.post(
-    '/v1/users/me/notifications/mark-read',
-    { preHandler: [requireAuth('consumer')] },
-    async (request) => {
-      const auth = getAuth(request)
-      const result = await service.markAllNotificationsAsRead(auth.userId)
-      return { success: true, updatedCount: result.updatedCount }
-    },
-  )
+  app.post('/v1/users/me/notifications/mark-read', { preHandler: [requireAuth('consumer')] }, async (request) => {
+    const auth = getAuth(request)
+    const result = await service.markAllNotificationsAsRead(auth.userId)
+    return { success: true, updatedCount: result.updatedCount }
+  })
 }

@@ -25,6 +25,19 @@ import {
 } from './types.js'
 
 export async function authRoutes(app: FastifyInstance) {
+  // Phone-OTP signup/login is permanently disabled in prod (per ops decision —
+  // SMS delivery to SA carriers proved unreliable in pilot). The routes still
+  // exist so dev tests can exercise the Cognito CUSTOM_AUTH path, but they
+  // return 410 Gone in any AREA_CODE_ENV other than 'dev'.
+  const PHONE_OTP_DISABLED = process.env['AREA_CODE_ENV'] !== 'dev'
+
+  function rejectIfPhoneOtpDisabled(reply: { status: (code: number) => { send: (b: unknown) => unknown } }) {
+    return reply.status(410).send({
+      code: 'phone_otp_disabled',
+      message: 'Phone-based authentication is no longer available. Please sign in or sign up with email or Google.',
+    })
+  }
+
   // ─── Consumer Auth ──────────────────────────────────────────────────────
 
   // POST /v1/auth/consumer/signup
@@ -53,6 +66,7 @@ export async function authRoutes(app: FastifyInstance) {
       ],
     },
     async (request, reply) => {
+      if (PHONE_OTP_DISABLED) return rejectIfPhoneOtpDisabled(reply)
       const body = request.body as z.infer<typeof consumerSignupBodySchema>
       const result = await service.consumerSignup(body)
       return reply.status(201).send(result)
@@ -83,7 +97,8 @@ export async function authRoutes(app: FastifyInstance) {
         validate({ body: loginBodySchema }),
       ],
     },
-    async (request) => {
+    async (request, reply) => {
+      if (PHONE_OTP_DISABLED) return rejectIfPhoneOtpDisabled(reply)
       const body = request.body as z.infer<typeof loginBodySchema>
       await service.consumerLogin(body.phone)
       return { success: true, message: 'OTP sent' }
@@ -99,7 +114,8 @@ export async function authRoutes(app: FastifyInstance) {
         validate({ body: verifyOtpBodySchema }),
       ],
     },
-    async (request) => {
+    async (request, reply) => {
+      if (PHONE_OTP_DISABLED) return rejectIfPhoneOtpDisabled(reply)
       const body = request.body as z.infer<typeof verifyOtpBodySchema>
       const userAgent = request.headers['user-agent'] ?? ''
       return service.consumerVerifyOtp(body.phone, body.code, userAgent)
@@ -160,6 +176,7 @@ export async function authRoutes(app: FastifyInstance) {
       ],
     },
     async (request, reply) => {
+      if (PHONE_OTP_DISABLED) return rejectIfPhoneOtpDisabled(reply)
       const body = request.body as z.infer<typeof businessSignupBodySchema>
       const result = await service.businessSignup(body)
       return reply.status(201).send(result)
@@ -190,7 +207,8 @@ export async function authRoutes(app: FastifyInstance) {
         validate({ body: loginBodySchema }),
       ],
     },
-    async (request) => {
+    async (request, reply) => {
+      if (PHONE_OTP_DISABLED) return rejectIfPhoneOtpDisabled(reply)
       const body = request.body as z.infer<typeof loginBodySchema>
       await service.businessLogin(body.phone)
       return { success: true, message: 'OTP sent' }
@@ -206,7 +224,8 @@ export async function authRoutes(app: FastifyInstance) {
         validate({ body: verifyOtpBodySchema }),
       ],
     },
-    async (request) => {
+    async (request, reply) => {
+      if (PHONE_OTP_DISABLED) return rejectIfPhoneOtpDisabled(reply)
       const body = request.body as z.infer<typeof verifyOtpBodySchema>
       const userAgent = request.headers['user-agent'] ?? ''
       return service.businessVerifyOtp(body.phone, body.code, userAgent)
@@ -285,7 +304,8 @@ export async function authRoutes(app: FastifyInstance) {
         validate({ body: loginBodySchema }),
       ],
     },
-    async (request) => {
+    async (request, reply) => {
+      if (PHONE_OTP_DISABLED) return rejectIfPhoneOtpDisabled(reply)
       const body = request.body as z.infer<typeof loginBodySchema>
       await service.staffLogin(body.phone)
       return { success: true, message: 'OTP sent' }
@@ -301,7 +321,8 @@ export async function authRoutes(app: FastifyInstance) {
         validate({ body: verifyOtpBodySchema }),
       ],
     },
-    async (request) => {
+    async (request, reply) => {
+      if (PHONE_OTP_DISABLED) return rejectIfPhoneOtpDisabled(reply)
       const body = request.body as z.infer<typeof verifyOtpBodySchema>
       const userAgent = request.headers['user-agent'] ?? ''
       return service.staffVerifyOtp(body.phone, body.code, userAgent)
@@ -412,7 +433,13 @@ export async function authRoutes(app: FastifyInstance) {
     {
       preHandler: [
         rateLimitMiddleware({ key: 'reset-password', max: 5, windowSeconds: 300 }),
-        validate({ body: z.object({ email: z.string().email(), code: z.string().length(6), newPassword: z.string().min(8).max(256) }) }),
+        validate({
+          body: z.object({
+            email: z.string().email(),
+            code: z.string().length(6),
+            newPassword: z.string().min(8).max(256),
+          }),
+        }),
       ],
     },
     async (request) => {

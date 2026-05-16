@@ -135,7 +135,9 @@ export function BusinessOAuthCallback() {
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { message?: string } | null
         if (res.status === 409) {
-          setError(t('biz.oauth.accountExists', 'This Google account is already linked to a business. Sign in instead.'))
+          setError(
+            t('biz.oauth.accountExists', 'This Google account is already linked to a business. Sign in instead.'),
+          )
           return
         }
         throw new Error(body?.message ?? `profile_failed_${res.status}`)

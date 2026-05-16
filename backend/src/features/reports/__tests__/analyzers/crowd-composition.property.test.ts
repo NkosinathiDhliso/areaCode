@@ -16,25 +16,25 @@ import type { AnonymizedCheckIn } from '../../types.js'
 
 // ─── Custom Arbitraries ─────────────────────────────────────────────────────
 
-const DAYS_OF_WEEK = [
-  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
-] as const
+const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const
 
 const TIERS = ['local', 'regular', 'fixture', 'institution', 'legend'] as const
 
 /** Generate a 64-char hex string (SHA-256 hash format) */
-const hexTokenArb = fc.uint8Array({ minLength: 32, maxLength: 32 }).map(
-  (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(''),
-)
+const hexTokenArb = fc
+  .uint8Array({ minLength: 32, maxLength: 32 })
+  .map((bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(''))
 
 const anonymizedCheckInArb: fc.Arbitrary<AnonymizedCheckIn> = fc.record({
   visitorToken: hexTokenArb,
   nodeId: fc.uuid(),
   tier: fc.constantFrom(...TIERS),
-  checkedInAt: fc.integer({
-    min: new Date('2024-01-01').getTime(),
-    max: new Date('2026-12-31').getTime(),
-  }).map((ts) => new Date(ts).toISOString()),
+  checkedInAt: fc
+    .integer({
+      min: new Date('2024-01-01').getTime(),
+      max: new Date('2026-12-31').getTime(),
+    })
+    .map((ts) => new Date(ts).toISOString()),
   hourOfDay: fc.integer({ min: 0, max: 23 }),
   dayOfWeek: fc.constantFrom(...DAYS_OF_WEEK),
 })

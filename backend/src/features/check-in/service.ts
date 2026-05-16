@@ -129,6 +129,16 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
   const newTier = incrementResult.tier
   await repo.updateStreak(userId)
 
+  // 4b. Advance threshold-lock progress on every active reward at this venue
+  // (Churn-defences spec, Requirement 1). Failures here are logged but not
+  // fatal — the check-in is the source of truth, locks self-heal on next visit.
+  try {
+    const { processCheckInRewardLocks } = await import('../rewards/threshold-lock.js')
+    await processCheckInRewardLocks(userId, input.nodeId)
+  } catch (err) {
+    console.warn(`[check-in] threshold-lock advance failed: ${String(err)}`)
+  }
+
   // Detect tier change and notify
   if (oldTier !== newTier) {
     const TIER_BENEFITS: Record<string, string[]> = {

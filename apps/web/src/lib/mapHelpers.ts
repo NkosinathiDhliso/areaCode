@@ -46,11 +46,7 @@ export function getCategoryColour(category: NodeCategory | string): string {
   return CATEGORY_HEX[category] ?? '#778CA9'
 }
 
-export function applyMarkerStyle(
-  el: HTMLElement,
-  size: number,
-  colour: string,
-): void {
+export function applyMarkerStyle(el: HTMLElement, size: number, colour: string): void {
   el.style.width = `${size}px`
   el.style.height = `${size}px`
   el.style.borderRadius = '50%'

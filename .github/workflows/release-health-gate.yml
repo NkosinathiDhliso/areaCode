@@ -1,0 +1,177 @@
+name: Release Health Gate
+
+# Auto-rollback gate. Triggered by deploy-lambda.yml after a prod deploy.
+# Sleeps 30 minutes, queries Sentry release-health, rolls back if the new
+# version's crash-free user rate degraded.
+#
+# See .kiro/specs/churn-defences/ Requirement 5 for the full rationale.
+# The corresponding incident pattern: §1.5 of docs/CHURN_DEFENSES.md
+# (Starbucks app outages and crashes).
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Commit SHA of the release to monitor'
+        required: true
+        type: string
+      dryRun:
+        description: 'Run the decision logic without rolling back'
+        required: false
+        default: false
+        type: boolean
+      waitMinutes:
+        description: 'Minutes to wait before evaluating health (default 30)'
+        required: false
+        default: '30'
+        type: string
+      minSessions:
+        description: 'Minimum new-version sessions before evaluating (default 30). Prevents low-traffic false positives.'
+        required: false
+        default: '30'
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Wait for traffic to accumulate
+        run: |
+          MINUTES=${{ inputs.waitMinutes }}
+          echo "Waiting $MINUTES minutes for release health to stabilise..."
+          sleep $((MINUTES * 60))
+
+      - name: Query Sentry release health
+        id: health
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          RELEASE_SHA: ${{ inputs.sha }}
+          MIN_SESSIONS: ${{ inputs.minSessions }}
+        run: |
+          set -e
+          # Crash-free user rate for the new release (last 30m)
+          NEW=$(curl -sS \
+            -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+            "https://sentry.io/api/0/organizations/$SENTRY_ORG/sessions/?project=$SENTRY_PROJECT&field=crash_free_rate(user)&field=sum(session)&statsPeriod=30m&query=release:$RELEASE_SHA")
+          NEW_RATE=$(echo "$NEW" | jq -r '.groups[0].totals["crash_free_rate(user)"] // 1.0')
+          NEW_SESSIONS=$(echo "$NEW" | jq -r '.groups[0].totals["sum(session)"] // 0')
+
+          # 7-day baseline excluding the current release
+          PREV=$(curl -sS \
+            -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+            "https://sentry.io/api/0/organizations/$SENTRY_ORG/sessions/?project=$SENTRY_PROJECT&field=crash_free_rate(user)&statsPeriod=7d&query=!release:$RELEASE_SHA")
+          PREV_RATE=$(echo "$PREV" | jq -r '.groups[0].totals["crash_free_rate(user)"] // 1.0')
+
+          # Error count (last 30m vs 7d baseline)
+          NEW_ERRORS=$(curl -sS \
+            -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+            "https://sentry.io/api/0/organizations/$SENTRY_ORG/events-stats/?project=$SENTRY_PROJECT&statsPeriod=30m&query=release:$RELEASE_SHA" \
+            | jq -r '[.data[][1][0].count // 0] | add // 0')
+          PREV_ERRORS=$(curl -sS \
+            -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+            "https://sentry.io/api/0/organizations/$SENTRY_ORG/events-stats/?project=$SENTRY_PROJECT&statsPeriod=7d&query=!release:$RELEASE_SHA" \
+            | jq -r '[.data[][1][0].count // 0] | add // 0')
+
+          # Avg error rate per 30m over the 7-day window
+          PREV_30M_AVG=$(awk "BEGIN { printf \"%.4f\", $PREV_ERRORS / (7 * 24 * 2) }")
+
+          DELTA=$(awk "BEGIN { printf \"%.4f\", $NEW_RATE - $PREV_RATE }")
+
+          echo "new_rate=$NEW_RATE" | tee -a "$GITHUB_OUTPUT"
+          echo "new_sessions=$NEW_SESSIONS" | tee -a "$GITHUB_OUTPUT"
+          echo "prev_rate=$PREV_RATE" | tee -a "$GITHUB_OUTPUT"
+          echo "delta=$DELTA" | tee -a "$GITHUB_OUTPUT"
+          echo "new_errors=$NEW_ERRORS" | tee -a "$GITHUB_OUTPUT"
+          echo "prev_30m_avg=$PREV_30M_AVG" | tee -a "$GITHUB_OUTPUT"
+
+          # Minimum-sessions gate: if the new version has too few sessions to
+          # draw a meaningful conclusion, skip the rollback. Reports that we
+          # had insufficient signal so ops can manually re-evaluate.
+          if awk "BEGIN { exit !($NEW_SESSIONS < $MIN_SESSIONS) }"; then
+            echo "rollback=false" | tee -a "$GITHUB_OUTPUT"
+            echo "insufficient_signal=true" | tee -a "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "insufficient_signal=false" | tee -a "$GITHUB_OUTPUT"
+
+          # Rollback decision
+          ROLLBACK=false
+          # Rule 1: crash-free user rate dropped > 1 percentage point
+          if awk "BEGIN { exit !($DELTA < -0.01) }"; then ROLLBACK=true; fi
+          # Rule 2: error count > 5x the 7-day average per 30m
+          if awk "BEGIN { exit !($NEW_ERRORS > 5 * $PREV_30M_AVG && $PREV_30M_AVG > 0) }"; then
+            ROLLBACK=true
+          fi
+          echo "rollback=$ROLLBACK" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Auto-rollback (alias swap)
+        id: rollback
+        if: ${{ steps.health.outputs.rollback == 'true' && inputs.dryRun != 'true' }}
+        run: |
+          set -e
+          FN="area-code-prod-api"
+          PREV_VERSION=$(aws lambda get-alias --function-name "$FN" --name live-prev --query FunctionVersion --output text 2>/dev/null || echo "")
+          if [ -z "$PREV_VERSION" ] || [ "$PREV_VERSION" = "None" ]; then
+            echo "::error::No live-prev alias found — cannot auto-rollback. Manual intervention required."
+            exit 1
+          fi
+          aws lambda update-alias --function-name "$FN" --name live --function-version "$PREV_VERSION"
+          echo "rolled_back_to=$PREV_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Slack alert
+        if: ${{ steps.health.outputs.rollback == 'true' && env.SLACK_OPS_WEBHOOK != '' }}
+        env:
+          SLACK_OPS_WEBHOOK: ${{ secrets.SLACK_OPS_WEBHOOK }}
+        run: |
+          PAYLOAD=$(jq -n \
+            --arg sha "${{ inputs.sha }}" \
+            --arg new_rate "${{ steps.health.outputs.new_rate }}" \
+            --arg prev_rate "${{ steps.health.outputs.prev_rate }}" \
+            --arg new_errors "${{ steps.health.outputs.new_errors }}" \
+            --arg dryRun "${{ inputs.dryRun }}" \
+            --arg version "${{ steps.rollback.outputs.rolled_back_to }}" \
+            '{text: ("Release health gate fired for " + $sha + ". crash-free new=" + $new_rate + " prev=" + $prev_rate + " errors=" + $new_errors + " dryRun=" + $dryRun + " rolled-back-to=" + $version)}')
+          curl -sS -X POST -H 'Content-Type: application/json' --data "$PAYLOAD" "$SLACK_OPS_WEBHOOK"
+
+      - name: Tag rolled-back commit
+        if: ${{ steps.health.outputs.rollback == 'true' && inputs.dryRun != 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TS=$(date +%Y%m%d%H%M)
+          git config user.name "release-health-gate"
+          git config user.email "ops@areacode.co.za"
+          git tag -a "rollback-$TS" "${{ inputs.sha }}" -m "Auto-rollback by release-health-gate"
+          git push origin "rollback-$TS"
+
+      - name: Summary
+        run: |
+          echo "## Release Health Gate" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Metric | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| SHA | \`${{ inputs.sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Sessions (new) | ${{ steps.health.outputs.new_sessions }} (min ${{ inputs.minSessions }}) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Insufficient signal | ${{ steps.health.outputs.insufficient_signal }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Crash-free (new) | ${{ steps.health.outputs.new_rate }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Crash-free (7d baseline) | ${{ steps.health.outputs.prev_rate }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Delta | ${{ steps.health.outputs.delta }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Errors (last 30m) | ${{ steps.health.outputs.new_errors }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Errors (7d avg per 30m) | ${{ steps.health.outputs.prev_30m_avg }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Rollback decision | ${{ steps.health.outputs.rollback }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Dry run | ${{ inputs.dryRun }} |" >> "$GITHUB_STEP_SUMMARY"

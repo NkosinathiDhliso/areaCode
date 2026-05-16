@@ -12,3 +12,4 @@ export type AppRoute =
   | 'signup'
   | 'forgot-password'
   | 'landing'
+  | 'first-get-prompt'

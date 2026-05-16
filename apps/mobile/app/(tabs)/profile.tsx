@@ -73,11 +73,7 @@ export default function ProfileScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <AvatarCircle
-          url={displayUser?.avatarUrl ?? null}
-          displayName={displayUser?.displayName ?? ''}
-          size={56}
-        />
+        <AvatarCircle url={displayUser?.avatarUrl ?? null} displayName={displayUser?.displayName ?? ''} size={56} />
         <View style={{ flex: 1 }}>
           <Text style={styles.displayName}>{displayUser?.displayName}</Text>
           <Text style={styles.username}>@{displayUser?.username}</Text>
@@ -95,9 +91,7 @@ export default function ProfileScreen() {
         <View style={styles.tierProgressContainer}>
           <View style={styles.tierProgressHeader}>
             <Text style={styles.tierProgressLabel}>{tierProgress.currentTier}</Text>
-            {tierProgress.nextTier && (
-              <Text style={styles.tierProgressNext}>→ {tierProgress.nextTier}</Text>
-            )}
+            {tierProgress.nextTier && <Text style={styles.tierProgressNext}>→ {tierProgress.nextTier}</Text>}
           </View>
           <View style={styles.tierProgressTrack}>
             <View
@@ -107,7 +101,8 @@ export default function ProfileScreen() {
                   width: tierProgress.nextTierThreshold
                     ? `${Math.min(100, ((tierProgress.currentCheckIns - (TIER_LEVELS.find((l: TierLevel) => l.tier === tierProgress.currentTier)?.minCheckIns ?? 0)) / (tierProgress.nextTierThreshold - (TIER_LEVELS.find((l: TierLevel) => l.tier === tierProgress.currentTier)?.minCheckIns ?? 0))) * 100)}%`
                     : '100%',
-                  backgroundColor: TIER_LEVELS.find((l: TierLevel) => l.tier === tierProgress.currentTier)?.colour ?? colors.accent,
+                  backgroundColor:
+                    TIER_LEVELS.find((l: TierLevel) => l.tier === tierProgress.currentTier)?.colour ?? colors.accent,
                 },
               ]}
             />
@@ -163,7 +158,6 @@ function StatCard({ value, label }: { value: string; label: string }) {
     </View>
   )
 }
-
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bgBase },

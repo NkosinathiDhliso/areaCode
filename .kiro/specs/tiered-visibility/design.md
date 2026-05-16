@@ -66,10 +66,7 @@ The core new utility. Lives in `backend/src/features/social/repository.ts`.
  *   WHERE uf1.follower_id = $viewerId
  *     AND uf1.following_id IN ($candidateIds)
  */
-async function getMutualFollowIds(
-  viewerId: string,
-  candidateIds: string[]
-): Promise<Set<string>>
+async function getMutualFollowIds(viewerId: string, candidateIds: string[]): Promise<Set<string>>
 ```
 
 Returns a `Set<string>` of user IDs that are mutual follows of the viewer. O(1) query regardless of candidate list size (up to reasonable limits — leaderboard is capped at 50, feed at 20).
@@ -89,11 +86,12 @@ interface IdentityFields {
 function applyFriendVisibility<T extends IdentityFields>(
   entries: T[],
   friendIds: Set<string>,
-  viewerId: string
+  viewerId: string,
 ): Array<T & { isFriend: boolean }>
 ```
 
 Rules:
+
 - If `entry.userId === viewerId` → always show identity, `isFriend: true`
 - If `friendIds.has(entry.userId)` → show identity, `isFriend: true`
 - Otherwise → null out `displayName`, `username`, `avatarUrl`, set `isFriend: false`
@@ -157,10 +155,11 @@ This function is idempotent: applying it twice produces the same result.
 `GET /v1/nodes/:id/who-is-here`
 
 Response shape:
+
 ```typescript
 interface WhoIsHereResponse {
   totalCount: number
-  tierDistribution: Record<Tier, number>  // e.g. { fixture: 3, local: 7 }
+  tierDistribution: Record<Tier, number> // e.g. { fixture: 3, local: 7 }
   friends: Array<{
     userId: string
     displayName: string
@@ -187,7 +186,7 @@ function emitFriendToast(
     message: string
     nodeId?: string
     avatarUrl?: string
-  }
+  },
 ): void
 ```
 
@@ -209,6 +208,7 @@ Emits to `userRoom(userId)` only. Never touches the city room.
 ### 10. UI Changes
 
 **ProfileScreen** — Remove the privacy toggle checkbox. Replace with static text:
+
 ```
 "Your name is only visible to people you both follow. Everyone else sees the vibe, not who."
 ```
@@ -219,7 +219,6 @@ Emits to `userRoom(userId)` only. Never touches the city room.
 
 **FeedScreen** — No structural change needed since the API now only returns mutual-follow entries. All entries show full identity.
 
-
 ## Data Models
 
 ### Modified Types
@@ -229,13 +228,13 @@ Emits to `userRoom(userId)` only. Never touches the city room.
 ```typescript
 export interface LeaderboardEntry {
   userId: string
-  username: string | null      // null for non-friends
-  displayName: string | null   // null for non-friends
-  avatarUrl: string | null     // null for non-friends
-  tier: Tier                   // always visible
-  rank: number                 // always visible
-  checkInCount: number         // always visible
-  isFriend: boolean            // NEW — drives frontend rendering
+  username: string | null // null for non-friends
+  displayName: string | null // null for non-friends
+  avatarUrl: string | null // null for non-friends
+  tier: Tier // always visible
+  rank: number // always visible
+  checkInCount: number // always visible
+  isFriend: boolean // NEW — drives frontend rendering
 }
 ```
 
@@ -259,6 +258,7 @@ No structural change. The `avatarUrl` field on the `toast:new` event type remain
 #### New: `FriendToast` event
 
 Add to `ServerToClientEvents`:
+
 ```typescript
 'toast:friend_checkin': (payload: {
   type: 'checkin'
@@ -283,6 +283,7 @@ export const consentBodySchema = z.object({
 No schema migration required. The `broadcast_location` column in `consent_records` remains but is no longer written to or read from. New consent records will have it set to its default value (`true`). A future cleanup migration can drop the column.
 
 The `user_follows` table already has the indexes needed for the mutual-follow batch query:
+
 - `@@index([followerId])`
 - `@@index([followingId])`
 - `@@unique([followerId, followingId])`
@@ -295,76 +296,79 @@ The `user_follows` table already has the indexes needed for the mutual-follow ba
 ### Mock Data Updates
 
 #### `packages/shared/mocks/data/consent.ts`
+
 - Remove `broadcastLocation` field from all `MOCK_CONSENT` entries.
 
 #### `packages/shared/mocks/data/leaderboard.ts`
+
 - Add `isFriend: boolean` to each entry. Mark some as `true`, others as `false`.
 - For `isFriend: false` entries, set `displayName: null`, `username: null`, `avatarUrl: null`.
 
 #### `packages/shared/mocks/data/feed.ts`
+
 - Add `isFriend: true` to all entries (feed is friends-only by definition).
 
 #### Dev mode fallbacks
+
 - Update `getCityLeaderboard` DEV_MODE block to include `isFriend` field.
 - Update `getActivityFeed` DEV_MODE block — no identity stripping needed since all entries are friends.
 - Update `shouldBroadcast` → delete entirely.
 
-
 ## Correctness Properties
 
-*A property is a characteristic or behavior that should hold true across all valid executions of a system — essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
+_A property is a characteristic or behavior that should hold true across all valid executions of a system — essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees._
 
 ### Property 1: Check-in always contributes
 
-*For any* check-in by any user at any node, the pulse score must be recalculated, the `checkin:today:{nodeId}` counter must increment, the user must be added to `node:unique_users:{nodeId}`, and the `node:pulse_update` socket event must be emitted to the city room. No user relationship, consent value, or setting can suppress any of these updates.
+_For any_ check-in by any user at any node, the pulse score must be recalculated, the `checkin:today:{nodeId}` counter must increment, the user must be added to `node:unique_users:{nodeId}`, and the `node:pulse_update` socket event must be emitted to the city room. No user relationship, consent value, or setting can suppress any of these updates.
 
 **Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5, 9.1**
 
 ### Property 2: City toast never contains identity
 
-*For any* toast payload emitted to a city room (`toast:new` event), the payload must not contain a `displayName`, `username`, or non-null `avatarUrl` field. The message string must not contain any user's displayName or username.
+_For any_ toast payload emitted to a city room (`toast:new` event), the payload must not contain a `displayName`, `username`, or non-null `avatarUrl` field. The message string must not contain any user's displayName or username.
 
 **Validates: Requirements 1.8, 4.1, 4.2, 9.4, 9.6**
 
 ### Property 3: Identity filter — friends see names, non-friends don't
 
-*For any* list of user entries and any viewer, applying `applyFriendVisibility` must produce entries where: (a) if the entry's userId is a mutual follow of the viewer OR is the viewer themselves, then `displayName`, `username`, and `avatarUrl` are preserved and `isFriend` is `true`; (b) if the entry's userId is NOT a mutual follow and is not the viewer, then `displayName` is `null`, `username` is `null`, `avatarUrl` is `null`, and `isFriend` is `false`. The function must not consult any `broadcastLocation` value.
+_For any_ list of user entries and any viewer, applying `applyFriendVisibility` must produce entries where: (a) if the entry's userId is a mutual follow of the viewer OR is the viewer themselves, then `displayName`, `username`, and `avatarUrl` are preserved and `isFriend` is `true`; (b) if the entry's userId is NOT a mutual follow and is not the viewer, then `displayName` is `null`, `username` is `null`, `avatarUrl` is `null`, and `isFriend` is `false`. The function must not consult any `broadcastLocation` value.
 
 **Validates: Requirements 2.1, 2.2, 2.5, 2.6, 7.1, 9.2, 9.3**
 
 ### Property 4: Feed only contains mutual follows
 
-*For any* activity feed response for a viewer, every entry's user must be a mutual follow of the viewer. There must be no entry where only a one-way follow exists.
+_For any_ activity feed response for a viewer, every entry's user must be a mutual follow of the viewer. There must be no entry where only a one-way follow exists.
 
 **Validates: Requirements 2.3, 2.4**
 
 ### Property 5: Crowd metadata always present
 
-*For any* who-is-here API response, regardless of whether the viewer is authenticated, a friend, or anonymous, the response must contain `totalCount` (a non-negative integer) and `tierDistribution` (a record mapping tier names to counts). These fields must never be omitted or filtered based on viewer identity.
+_For any_ who-is-here API response, regardless of whether the viewer is authenticated, a friend, or anonymous, the response must contain `totalCount` (a non-negative integer) and `tierDistribution` (a record mapping tier names to counts). These fields must never be omitted or filtered based on viewer identity.
 
 **Validates: Requirements 3.1, 3.2, 3.3, 3.5**
 
 ### Property 6: Friend toasts route to user rooms only
 
-*For any* personalised friend check-in toast, the toast must be emitted to the friend's user room (`user:{friendId}`) and must never be emitted to any city room. The friend toast payload must contain the checking-in user's displayName.
+_For any_ personalised friend check-in toast, the toast must be emitted to the friend's user room (`user:{friendId}`) and must never be emitted to any city room. The friend toast payload must contain the checking-in user's displayName.
 
 **Validates: Requirements 4.3, 4.4**
 
 ### Property 7: Mutual follow is bidirectional
 
-*For any* two users A and B, `getMutualFollowIds(A, [B])` returns B in the result set if and only if both a row `(follower_id=A, following_id=B)` and a row `(follower_id=B, following_id=A)` exist in `user_follows`. If only one direction exists, B must not be in the result.
+_For any_ two users A and B, `getMutualFollowIds(A, [B])` returns B in the result set if and only if both a row `(follower_id=A, following_id=B)` and a row `(follower_id=B, following_id=A)` exist in `user_follows`. If only one direction exists, B must not be in the result.
 
 **Validates: Requirements 5.1**
 
 ### Property 8: Consent schema rejects broadcastLocation
 
-*For any* consent update payload that includes a `broadcastLocation` field, the `consentBodySchema` validation must reject it (Zod `.strict()` or explicit rejection). Only `consentVersion` and `analyticsOptIn` are accepted.
+_For any_ consent update payload that includes a `broadcastLocation` field, the `consentBodySchema` validation must reject it (Zod `.strict()` or explicit rejection). Only `consentVersion` and `analyticsOptIn` are accepted.
 
 **Validates: Requirements 7.4, 8.2**
 
 ### Property 9: Identity filter is idempotent
 
-*For any* list of user entries, any viewer, and any set of friend IDs, applying `applyFriendVisibility` twice with the same parameters must produce the same result as applying it once. Formally: `applyFriendVisibility(applyFriendVisibility(entries, friends, viewer), friends, viewer)` equals `applyFriendVisibility(entries, friends, viewer)`.
+_For any_ list of user entries, any viewer, and any set of friend IDs, applying `applyFriendVisibility` twice with the same parameters must produce the same result as applying it once. Formally: `applyFriendVisibility(applyFriendVisibility(entries, friends, viewer), friends, viewer)` equals `applyFriendVisibility(entries, friends, viewer)`.
 
 **Validates: Requirements 9.5**
 
@@ -373,6 +377,7 @@ The `user_follows` table already has the indexes needed for the mutual-follow ba
 ### Mutual Follow Resolution Failure
 
 If the `getMutualFollowIds` query fails (database timeout, connection error), the system falls back to treating all users as non-friends. This means:
+
 - Leaderboard entries are all anonymised (safe default).
 - Who-is-here returns only `totalCount` and `tierDistribution` with an empty `friends` array.
 - Activity feed returns an empty list (since the mutual-follow join would fail).
@@ -397,11 +402,13 @@ The `consentBodySchema` uses Zod's `.strict()` mode to reject unknown fields. If
 Use `fast-check` as the property-based testing library (already available in the Node.js ecosystem, works with Vitest).
 
 Each property test must:
+
 - Run a minimum of 100 iterations.
 - Be tagged with a comment referencing the design property.
 - Generate random inputs using `fast-check` arbitraries.
 
 Key generators needed:
+
 - `arbUserId`: Random UUID strings.
 - `arbUserEntry`: Random `{ userId, displayName, username, avatarUrl, tier }` objects.
 - `arbFollowPairs`: Random sets of `(followerId, followingId)` tuples to simulate the `user_follows` table.

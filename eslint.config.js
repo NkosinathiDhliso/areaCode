@@ -87,6 +87,18 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'off',
     },
   },
+  // Playwright e2e suite: fixture signatures collide with React-hook lint rules
+  // (the `use` callback is a Playwright API, not a React hook), and empty
+  // destructure patterns `({}, use) => {}` are required by Playwright's typing.
+  {
+    files: ['tests/e2e/**/*.ts'],
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
+      'no-empty-pattern': 'off',
+      'import/no-default-export': 'off',
+      'import/order': 'warn',
+    },
+  },
   {
     ignores: [
       '**/node_modules/**',

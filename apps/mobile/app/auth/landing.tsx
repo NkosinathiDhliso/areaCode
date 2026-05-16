@@ -13,16 +13,15 @@ export default function AuthLanding() {
       <Text style={styles.subtitle}>{t('auth.landing.subtitle')}</Text>
 
       <View style={styles.buttons}>
-        <TouchableOpacity
-          style={styles.primaryButton}
-          onPress={() => router.push('/auth/signup')}
-        >
+        <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/auth/signup')}>
           <Text style={styles.primaryButtonText}>{t('auth.landing.customer')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.secondaryButton}
-          onPress={() => {/* Business login, handled by business app */}}
+          onPress={() => {
+            /* Business login, handled by business app */
+          }}
         >
           <Text style={styles.secondaryButtonText}>{t('auth.landing.business')}</Text>
         </TouchableOpacity>
