@@ -114,9 +114,37 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
           </button>
         </div>
 
+        {/*
+          About section.
+
+          Required by Google's OAuth brand-verification policy
+          (https://support.google.com/cloud/answer/13464321):
+            - "The homepage must accurately represent and identify your app or brand"
+            - "The homepage must describe your app's functionality to its users.
+               Your homepage can not be only a login page"
+
+          Without this block, the page reads as a sign-in/sign-up surface and
+          the brand-verification reviewer rejects with "home page does not
+          explain the purpose of your app" and "home page is behind a login page".
+          Do not remove unless replacing with equivalent prose.
+        */}
+        <section className="mt-8 rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+          <h2 className="font-[Syne] text-base font-bold mb-2">About Area Code</h2>
+          <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+            Area Code is a real-time venue discovery and rewards app for South Africa. It shows a live map of cafes,
+            restaurants, bars, and nightlife in Johannesburg, Cape Town, and Durban, with each venue&apos;s status
+            (quiet, active, buzzing, or popping) updated as customers check in.
+          </p>
+          <p className="text-sm text-[var(--text-secondary)] leading-relaxed mt-2">
+            Customers check in when they arrive at a venue to earn rewards from that venue, climb local leaderboards,
+            and discover places that match their taste. Sign in with Google or with email and password — no phone number
+            required.
+          </p>
+        </section>
+
         {/* Trending now */}
         {trending.length > 0 && (
-          <div className="mt-8 rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+          <div className="mt-6 rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] p-4">
             <div className="flex items-center justify-between mb-3">
               <span className="text-[11px] font-medium tracking-widest text-[var(--text-muted)] uppercase">
                 {t('landing.trendingNow', 'Trending Now')}
@@ -172,35 +200,38 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
             {t('landing.hasAccount', 'Already have an account? Sign in')}
           </button>
           <p className="text-[11px] text-[var(--text-muted)]">Cape Town · Johannesburg · Durban</p>
-          {/* Legal footer — required for Google OAuth verification.
-              Renders a discoverable privacy policy link on the public home page. */}
+          {/*
+            Legal footer.
+            Required by the OAuth brand-verification policy: "You must add the
+            link of your privacy policy to your homepage and this link should
+            match the link you added on your OAuth consent screen configuration".
+            The Privacy Policy URL configured in Google Cloud → Branding is
+            https://areacode.co.za/legal/privacy. Keep these in sync.
+          */}
           <nav aria-label="Legal" className="mt-3 flex items-center gap-3 text-[11px] text-[var(--text-muted)]">
             <a
-              href="/legal/privacy"
+              href="https://areacode.co.za/legal/privacy"
               onClick={(e) => {
                 e.preventDefault()
                 go('legal-privacy', '/legal/privacy')
               }}
-              className="hover:text-[var(--accent)] underline-offset-2 hover:underline"
+              className="hover:text-[var(--accent)] underline underline-offset-2"
             >
               Privacy Policy
             </a>
             <span aria-hidden="true">·</span>
             <a
-              href="/legal/terms"
+              href="https://areacode.co.za/legal/terms"
               onClick={(e) => {
                 e.preventDefault()
                 go('legal-terms', '/legal/terms')
               }}
-              className="hover:text-[var(--accent)] underline-offset-2 hover:underline"
+              className="hover:text-[var(--accent)] underline underline-offset-2"
             >
               Terms
             </a>
             <span aria-hidden="true">·</span>
-            <a
-              href="mailto:support@areacode.co.za"
-              className="hover:text-[var(--accent)] underline-offset-2 hover:underline"
-            >
+            <a href="mailto:support@areacode.co.za" className="hover:text-[var(--accent)] underline underline-offset-2">
               Contact
             </a>
           </nav>
