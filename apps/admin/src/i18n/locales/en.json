@@ -39,6 +39,8 @@
   "admin.consent.export": "Export Re-consent List",
   "admin.consent.erasureQueue": "Erasure Queue",
   "admin.nav.archetypes": "Archetypes",
+  "admin.nav.boostFloors": "Boost Floors",
+  "admin.nav.boostPurchases": "Boost Report",
   "admin.nav.genreWeights": "Music Weights",
   "admin.iam.title": "Admin Team",
   "admin.archetypes.title": "Archetype Management",

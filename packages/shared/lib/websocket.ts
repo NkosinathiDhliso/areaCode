@@ -2,6 +2,7 @@
 // Replaces Socket.io with native WebSocket for serverless
 
 import type { ClientToServerEvents, ServerToClientEvents } from '../types'
+import { onTokenRefresh } from './api'
 
 type EventCallback = (payload: any) => void
 
@@ -11,16 +12,40 @@ type AnyEventKey = keyof ServerToClientEvents | LifecycleEvent
 
 class WebSocketManager {
   private ws: WebSocket | null = null
-  readonly url: string
+  private _url: string
   private reconnectAttempts = 0
   private maxReconnectAttempts = 5
   private reconnectDelay = 1000
   private listeners: Map<AnyEventKey, Set<EventCallback>> = new Map()
   private isConnecting = false
   private pendingQueue: Array<{ action: string; payload: unknown }> = []
+  private unsubTokenRefresh: (() => void) | null = null
 
   constructor(url: string) {
-    this.url = url
+    this._url = url
+  }
+
+  get url(): string {
+    return this._url
+  }
+
+  /**
+   * Update the connection URL (e.g. after a token refresh) and reconnect.
+   * Resets reconnect attempts so the fresh-token connection isn't throttled.
+   */
+  reconnectWithUrl(newUrl: string): void {
+    if (this._url === newUrl) return
+    this._url = newUrl
+    this.reconnectAttempts = 0
+    // Close existing connection — onclose will NOT auto-reconnect because
+    // we call connect() explicitly below.
+    if (this.ws) {
+      this.ws.onclose = null // prevent double-reconnect
+      this.ws.close()
+      this.ws = null
+    }
+    this.isConnecting = false
+    this.connect()
   }
 
   connect(): void {
@@ -29,14 +54,14 @@ class WebSocketManager {
     }
 
     // Don't attempt connection to placeholder/disabled URLs
-    if (this.url === 'ws://disabled' || !this.url) {
+    if (this._url === 'ws://disabled' || !this._url) {
       return
     }
 
     this.isConnecting = true
 
     try {
-      this.ws = new WebSocket(this.url)
+      this.ws = new WebSocket(this._url)
 
       this.ws.onopen = () => {
         console.log('WebSocket connected')
@@ -90,6 +115,16 @@ class WebSocketManager {
     setTimeout(() => {
       this.connect()
     }, delay)
+  }
+
+  /** Subscribe to token refresh events so the socket reconnects with the new token. */
+  subscribeToTokenRefresh(buildUrl: (newToken: string) => string): void {
+    // Unsubscribe any previous listener
+    this.unsubTokenRefresh?.()
+    this.unsubTokenRefresh = onTokenRefresh((newToken) => {
+      const newUrl = buildUrl(newToken)
+      this.reconnectWithUrl(newUrl)
+    })
   }
 
   private emitLifecycle(event: LifecycleEvent, payload?: any): void {
@@ -154,7 +189,10 @@ class WebSocketManager {
   }
 
   disconnect(): void {
+    this.unsubTokenRefresh?.()
+    this.unsubTokenRefresh = null
     if (this.ws) {
+      this.ws.onclose = null // prevent auto-reconnect on intentional close
       this.ws.close()
       this.ws = null
     }
@@ -257,13 +295,25 @@ export function getWebSocket(
           a.origin + a.pathname === b.origin + b.pathname && a.searchParams.get('token') === b.searchParams.get('token')
         )
       } catch {
-        return wsManager.url === url
+        return wsManager!.url === url
       }
     })()
 
   if (!isSameConnection) {
     if (wsManager) wsManager.disconnect()
     wsManager = new WebSocketManager(url)
+
+    // Subscribe to token refreshes so the socket reconnects with the new token
+    // automatically — no more disconnect/reconnect loops after a 401 refresh.
+    const stableOpts = opts
+    wsManager.subscribeToTokenRefresh((newToken: string) => {
+      const freshParams = new URLSearchParams()
+      freshParams.set('token', newToken)
+      if (stableOpts?.userId) freshParams.set('userId', stableOpts.userId)
+      if (stableOpts?.citySlug) freshParams.set('citySlug', stableOpts.citySlug)
+      if (stableOpts?.businessId) freshParams.set('businessId', stableOpts.businessId)
+      return `${WEBSOCKET_URL}?${freshParams.toString()}`
+    })
   }
   wsManager!.connect()
 

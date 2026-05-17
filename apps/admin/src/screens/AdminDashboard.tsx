@@ -13,6 +13,8 @@ import { AbuseFlagDashboard } from './AbuseFlagDashboard'
 import { AuditTrailViewer } from './AuditTrailViewer'
 import { ArchetypeManagement } from '../components/ArchetypeManagement'
 import { GenreWeightEditor } from '../components/GenreWeightEditor'
+import { BoostFloorEditor } from './BoostFloorEditor'
+import { BoostPurchaseReport } from './BoostPurchaseReport'
 import { AdminIAM } from './AdminIAM'
 
 type Tab =
@@ -26,6 +28,8 @@ type Tab =
   | 'audit-trail'
   | 'consent'
   | 'archetypes'
+  | 'boost-floors'
+  | 'boost-purchases'
   | 'genre-weights'
   | 'iam'
 
@@ -40,6 +44,8 @@ const TAB_LABELS: Record<Tab, string> = {
   'audit-trail': 'admin.nav.auditTrail',
   consent: 'admin.nav.consent',
   archetypes: 'admin.nav.archetypes',
+  'boost-floors': 'admin.nav.boostFloors',
+  'boost-purchases': 'admin.nav.boostPurchases',
   'genre-weights': 'admin.nav.genreWeights',
   iam: 'admin.nav.iam',
 }
@@ -58,11 +64,13 @@ function getVisibleTabs(role: string | null): Tab[] {
         'audit-trail',
         'consent',
         'archetypes',
+        'boost-floors',
+        'boost-purchases',
         'genre-weights',
         'iam',
       ]
     case 'support_agent':
-      return ['consumers', 'businesses']
+      return ['consumers', 'businesses', 'boost-purchases']
     case 'content_moderator':
       return ['reports', 'abuse-flags']
     default:
@@ -115,6 +123,8 @@ export function AdminDashboard() {
         {activeTab === 'audit-trail' && <AuditTrailViewer />}
         {activeTab === 'consent' && <ConsentAudit />}
         {activeTab === 'archetypes' && <ArchetypeManagement />}
+        {activeTab === 'boost-floors' && <BoostFloorEditor />}
+        {activeTab === 'boost-purchases' && <BoostPurchaseReport />}
         {activeTab === 'genre-weights' && <GenreWeightEditor />}
         {activeTab === 'iam' && <AdminIAM />}
       </main>

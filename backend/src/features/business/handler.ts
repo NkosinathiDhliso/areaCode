@@ -3,7 +3,9 @@ import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { requireBusinessPermission } from '../../shared/middleware/business-role.js'
 import { validate } from '../../shared/middleware/validation.js'
 import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
+import { AppError } from '../../shared/errors/AppError.js'
 import * as service from './service.js'
+import { MalformedCursorError } from './repository.js'
 import {
   checkoutBodySchema,
   trialStartBodySchema,
@@ -13,12 +15,48 @@ import {
 } from './types.js'
 import { z } from 'zod'
 import { getRedemptionsByStaffId } from '../rewards/repository.js'
+import { getVerifiedEmailBySub } from '../../shared/cognito/client.js'
 
 const nodeIdParamsSchema = z.object({ nodeId: z.string().uuid() })
 const staffRedemptionParamsSchema = z.object({ staffId: z.string().uuid() })
 const checkInQuerySchema = z.object({
   date: z.string().optional(),
   cursor: z.string().optional(),
+})
+
+// R6.1–R6.6: operator boost-purchases panel. Path-level `businessId` is
+// matched against the JWT's businessId claim (auth.userId for the business
+// role) to enforce R6.3. Cursor is optional and validated as an opaque
+// string; the repo's MalformedCursorError is caught below and mapped to
+// 400 INVALID_CURSOR (R6.4). Limit defaults to 25 and is capped at 100.
+const businessIdParamsSchema = z.object({ businessId: z.string().min(1).max(64) })
+const boostPurchasesQuerySchema = z.object({
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce.number().int().positive().max(100).optional(),
+})
+
+// R4.6: the admin floor routes accept `:duration` strictly in {2hr,6hr,24hr};
+// any other value is rejected with 400 by the validate middleware before
+// reaching the service layer. Mirrors the enum on `BoostDuration` in
+// types.ts so a typo here would surface at compile time too.
+const boostFloorDurationParamsSchema = z.object({
+  duration: z.enum(['2hr', '6hr', '24hr']),
+})
+
+// R4.3: floor-update body. `floorCents` must be a positive integer in
+// [1, 1_000_000] (0.01–10 000.00 ZAR); `changeReason` is an optional free-text
+// field bounded at 280 chars. Anything outside these ranges yields 400 from
+// the validate middleware and never touches DynamoDB.
+const boostFloorUpdateBodySchema = z.object({
+  floorCents: z.number().int().min(1).max(1_000_000),
+  changeReason: z.string().min(1).max(280).optional(),
+})
+
+// R5.5 / R4.7: the audit-history endpoint paginates with an opaque cursor;
+// 25 rows per page is implicit (the service-layer default). We validate only
+// that the cursor, when supplied, is a non-empty string.
+const boostFloorAuditQuerySchema = z.object({
+  cursor: z.string().min(1).optional(),
 })
 
 export async function businessRoutes(app: FastifyInstance) {
@@ -156,6 +194,51 @@ export async function businessRoutes(app: FastifyInstance) {
       const auth = getAuth(request)
       const body = request.body as z.infer<typeof boostBodySchema>
       return service.purchaseBoost(auth.userId, body.nodeId, body.duration)
+    },
+  )
+
+  // GET /v1/business/:businessId/boost-purchases
+  // Operator-facing recent BoosterPurchase rows for one business, newest-first
+  // with cursor pagination (R6.1, R6.2, R6.4). The JWT's businessId claim
+  // (resolved by requireAuth into auth.userId) MUST equal the path-level
+  // businessId or we return 403 (R6.3). Rows are projected to the operator-
+  // safe view in the service layer so tierSnapshot, neighbourhoodIdSnapshot,
+  // and floorAtPurchaseCents are not leaked (R6.6).
+  app.get(
+    '/v1/business/:businessId/boost-purchases',
+    {
+      preHandler: [
+        requireAuth('business', 'staff'),
+        validate({ params: businessIdParamsSchema, query: boostPurchasesQuerySchema }),
+      ],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      const params = request.params as z.infer<typeof businessIdParamsSchema>
+      const query = request.query as z.infer<typeof boostPurchasesQuerySchema>
+
+      // R6.3: the JWT's businessId claim (auth.userId for business/staff
+      // sessions, resolved by requireAuth from custom:businessId or the
+      // staff record) must match the path. Mismatches are 403, never a
+      // silent empty list, so cross-business probing is impossible.
+      if (auth.userId !== params.businessId) {
+        throw AppError.forbidden('Access denied')
+      }
+
+      const cursor = query.cursor ?? null
+      const limit = query.limit ?? 25
+
+      try {
+        return await service.listBoosterPurchasesForBusiness(params.businessId, cursor, limit)
+      } catch (err) {
+        // R6.4: a malformed cursor surfaces from the repo as
+        // MalformedCursorError; map to a typed 400 so the operator panel
+        // can render an inline error instead of a generic 500.
+        if (err instanceof MalformedCursorError) {
+          throw new AppError(400, 'INVALID_CURSOR', 'Invalid pagination cursor')
+        }
+        throw err
+      }
     },
   )
 
@@ -320,6 +403,213 @@ export async function businessRoutes(app: FastifyInstance) {
     async (request) => {
       const auth = getAuth(request)
       return service.downgradeToFree(auth.userId)
+    },
+  )
+
+  // ─── Admin Boost Floor routes (R4, R5) ──────────────────────────────────
+  //
+  // Per the booster-pricing-floor-and-audit spec (Task 7.2), the admin
+  // floor-editor lives in the existing business-handler Lambda alongside the
+  // operator boost-purchases route. All three routes below require an admin
+  // JWT via `requireAuth('admin')`; non-admin tokens are rejected with 401
+  // by the middleware itself (the requested role doesn't match), satisfying
+  // R4.5 in practice — for explicit coverage, see the role check used by
+  // analogous admin endpoints in features/admin/handler.ts. Audit-write
+  // failures inside `service.updateBoostFloor` propagate to the global
+  // error handler in app.ts which maps non-AppError throws to 500 (R5.3).
+
+  // GET /v1/admin/boost-floors — return the three BoostFloorView entries
+  // (one per duration) including default-fallback rows for un-edited
+  // durations (R4.2, R4.8).
+  app.get('/v1/admin/boost-floors', { preHandler: [requireAuth('admin')] }, async () => {
+    const items = await service.getBoostFloors()
+    return { items }
+  })
+
+  // PUT /v1/admin/boost-floors/:duration — admin updates one floor. The
+  // validate middleware enforces R4.6 (duration enum) and R4.3 (floorCents
+  // integer in [1, 1_000_000], changeReason optional 1..280 chars) and
+  // returns 400 on parse failure. The service writes the audit row before
+  // the floor row; if the audit write fails the thrown error reaches the
+  // global error handler as a 500 (R5.3).
+  app.put(
+    '/v1/admin/boost-floors/:duration',
+    {
+      preHandler: [
+        requireAuth('admin'),
+        validate({
+          params: boostFloorDurationParamsSchema,
+          body: boostFloorUpdateBodySchema,
+        }),
+      ],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      const params = request.params as z.infer<typeof boostFloorDurationParamsSchema>
+      const body = request.body as z.infer<typeof boostFloorUpdateBodySchema>
+
+      // R5.1: the audit row records `changedBy` (Cognito sub) and
+      // `changedByEmail`. The access token usually carries `email` for
+      // federated/native admin sessions; if it doesn't, fall back to
+      // reading the verified attribute from the admin Cognito pool. As a
+      // last resort use a non-routable placeholder so the audit row still
+      // satisfies the 3..254-char schema constraint and the change is not
+      // silently dropped. The Cognito sub in `changedBy` remains the
+      // authoritative identifier.
+      let email = auth.email
+      if (!email) {
+        email = await getVerifiedEmailBySub('admin', auth.cognitoSub)
+      }
+      if (!email) {
+        email = '<admin-no-email>@areacode.co.za'
+      }
+
+      return service.updateBoostFloor(
+        params.duration,
+        body.floorCents,
+        body.changeReason ?? null,
+        { sub: auth.cognitoSub, email },
+      )
+    },
+  )
+
+  // GET /v1/admin/boost-floors/:duration/audit — paginated, newest-first
+  // history of floor changes for one duration (R4.7, R5.5). The service
+  // layer defaults `limit` to 25, which is the page size required by R5.5.
+  app.get(
+    '/v1/admin/boost-floors/:duration/audit',
+    {
+      preHandler: [
+        requireAuth('admin'),
+        validate({
+          params: boostFloorDurationParamsSchema,
+          query: boostFloorAuditQuerySchema,
+        }),
+      ],
+    },
+    async (request) => {
+      const params = request.params as z.infer<typeof boostFloorDurationParamsSchema>
+      const query = request.query as z.infer<typeof boostFloorAuditQuerySchema>
+      const cursor = query.cursor ?? null
+
+      try {
+        return await service.listFloorChangeAudit(params.duration, cursor)
+      } catch (err) {
+        // A malformed cursor is the only client-facing failure mode beyond
+        // those caught by validate(); map it to 400 with the same code the
+        // operator panel uses so admins see a consistent error shape.
+        if (err instanceof MalformedCursorError) {
+          throw new AppError(400, 'INVALID_CURSOR', 'Invalid pagination cursor')
+        }
+        throw err
+      }
+    },
+  )
+
+  // ─── Admin Boost Purchase Report (R7) ──────────────────────────────────
+  //
+  // GET /v1/admin/boost-purchases — cross-business booster purchase report
+  // for ops, refund, and dispute support (Task 7.3). Two mutually-exclusive
+  // query modes:
+  //
+  //   - Date-range mode (R7.2): when both `from` and `to` are present, query
+  //     GSI1 for rows whose `paidAt` falls in the inclusive ISO range. The
+  //     service layer validates the range BEFORE any DynamoDB call and
+  //     throws `AppError(400, 'INVALID_DATE_RANGE')` if `from > to` or the
+  //     span exceeds `ADMIN_BOOST_REPORT_MAX_RANGE_DAYS` (367 days, R7.5).
+  //
+  //   - Single-payment mode (R7.2): when neither `from` nor `to` is present
+  //     but `yocoCheckoutId` is, look up the Idempotency_Marker and follow
+  //     it to the BoosterPurchase row. Returns at most one row, or an empty
+  //     result if no marker exists, in the same `{ items, nextCursor }`
+  //     shape as date-range mode for response-shape parity.
+  //
+  // R7.4 dispatch rules:
+  //   - Both `from` and `to` present  → date-range mode wins; ignore
+  //     `yocoCheckoutId`. A malformed range surfaces as 400 from the
+  //     service layer without any fallback to single-payment mode, so a
+  //     bad query never silently masquerades as a single-payment lookup.
+  //   - Only one of `from`/`to` present → 400 INVALID_QUERY (the operator
+  //     intended date-range mode but supplied an incomplete range).
+  //   - Neither `from`/`to` and `yocoCheckoutId` present → single-payment.
+  //   - Neither `from`/`to` nor `yocoCheckoutId` → 400 INVALID_QUERY.
+  //
+  // Auth: `requireAuth('admin')` — non-admin tokens are rejected by the
+  // middleware before the handler runs (R7.3), matching the floor routes
+  // above.
+  const boostPurchasesAdminQuerySchema = z.object({
+    from: z.string().optional(),
+    to: z.string().optional(),
+    yocoCheckoutId: z.string().min(1).max(128).optional(),
+    cursor: z.string().min(1).optional(),
+  })
+
+  app.get(
+    '/v1/admin/boost-purchases',
+    {
+      preHandler: [
+        requireAuth('admin'),
+        validate({ query: boostPurchasesAdminQuerySchema }),
+      ],
+    },
+    async (request) => {
+      const query = request.query as z.infer<typeof boostPurchasesAdminQuerySchema>
+      const { from, to, yocoCheckoutId, cursor } = query
+
+      const hasFrom = typeof from === 'string' && from.length > 0
+      const hasTo = typeof to === 'string' && to.length > 0
+
+      try {
+        if (hasFrom && hasTo) {
+          // R7.4: when both from/to AND yocoCheckoutId are supplied, the
+          // date-range path wins and yocoCheckoutId is intentionally
+          // ignored. The service layer enforces R7.5 before any DynamoDB
+          // call, so a malformed range surfaces as 400 INVALID_DATE_RANGE
+          // and never falls back to single-payment mode.
+          return await service.listBoosterPurchasesByDateRange(
+            from,
+            to,
+            cursor ?? null,
+            25,
+          )
+        }
+
+        if (hasFrom || hasTo) {
+          // Asymmetric range — the operator intended date-range mode but
+          // supplied only one bound. Reject explicitly rather than silently
+          // falling through to single-payment, which would surprise the
+          // caller.
+          throw new AppError(
+            400,
+            'INVALID_QUERY',
+            'Both from and to required for date-range mode',
+          )
+        }
+
+        if (yocoCheckoutId !== undefined) {
+          // Single-payment mode. Returns at most one row; an empty array
+          // when no Idempotency_Marker exists for the supplied id. The
+          // response shape mirrors date-range mode (`items`/`nextCursor`)
+          // so the admin frontend can render either with one path.
+          const row = await service.getBoosterPurchaseByYocoCheckoutId(yocoCheckoutId)
+          return { items: row ? [row] : [], nextCursor: null as string | null }
+        }
+
+        throw new AppError(
+          400,
+          'INVALID_QUERY',
+          'Either from+to or yocoCheckoutId is required',
+        )
+      } catch (err) {
+        // Parity with the other admin/operator boost routes: a malformed
+        // pagination cursor surfaces from the repo as MalformedCursorError;
+        // map it to 400 INVALID_CURSOR. This only fires on the date-range
+        // path (single-payment mode is cursor-less).
+        if (err instanceof MalformedCursorError) {
+          throw new AppError(400, 'INVALID_CURSOR', 'Invalid pagination cursor')
+        }
+        throw err
+      }
     },
   )
 }

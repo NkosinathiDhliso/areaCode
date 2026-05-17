@@ -43,18 +43,40 @@ function AppContent() {
   const businessId = useBusinessAuthStore((s) => s.businessId)
   const setRole = useBusinessAuthStore((s) => s.setRole)
   const [screen, setScreen] = useState<'login' | 'signup'>('login')
+  // Gate initial render until the token is confirmed valid (avoids 401 noise)
+  const [tokenReady, setTokenReady] = useState(false)
   useTheme()
 
-  // Initialize socket with businessId for room authorization
+  // On mount (or when auth state changes), ensure the token is valid before
+  // firing any API requests or connecting the WebSocket.
   useEffect(() => {
-    if (accessToken && businessId) {
+    if (!isAuthenticated) {
+      setTokenReady(false)
+      return
+    }
+    let cancelled = false
+    api.ensureValidToken().then((validToken) => {
+      if (cancelled) return
+      if (!validToken) {
+        // Token refresh failed — session is dead, store will have logged out
+        setTokenReady(false)
+        return
+      }
+      setTokenReady(true)
+    })
+    return () => { cancelled = true }
+  }, [isAuthenticated])
+
+  // Initialize socket with businessId for room authorization — only after token is valid
+  useEffect(() => {
+    if (accessToken && businessId && tokenReady) {
       getSocket(accessToken, { businessId })
     }
-  }, [accessToken, businessId])
+  }, [accessToken, businessId, tokenReady])
 
-  // Fetch role and permissions on auth
+  // Fetch role and permissions on auth — only after token is valid
   useEffect(() => {
-    if (!isAuthenticated) return
+    if (!isAuthenticated || !tokenReady) return
     api
       .get<{ role: 'owner' | 'manager' | 'staff'; permissions: string[] }>('/v1/business/me/role')
       .then((res) => {
@@ -68,9 +90,9 @@ function AppContent() {
         // Fallback: assume owner if role endpoint fails (backward compat)
         setRole('owner', [])
       })
-  }, [isAuthenticated, setRole])
+  }, [isAuthenticated, tokenReady, setRole])
 
-  if (isAuthenticated) return <BusinessDashboard />
+  if (isAuthenticated && tokenReady) return <BusinessDashboard />
 
   if (window.location.pathname.startsWith('/auth/callback')) {
     return <BusinessOAuthCallback />

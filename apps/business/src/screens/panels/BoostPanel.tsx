@@ -5,6 +5,8 @@ import { api } from '@area-code/shared/lib/api'
 import { formatZAR } from '@area-code/shared/lib/formatters'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 
+import { BoostPurchasesPanel } from '../../components/BoostPurchasesPanel'
+
 interface BoostPricing {
   '2hr': number
   '6hr': number
@@ -73,6 +75,9 @@ export function BoostPanel() {
         </div>
       )}
       {error && <p className="text-[var(--danger)] text-xs mt-2">{error}</p>}
+
+      {/* R6.1 — Recent purchases section beneath the existing buy-a-boost form. */}
+      <BoostPurchasesPanel />
     </div>
   )
 }

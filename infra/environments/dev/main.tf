@@ -357,6 +357,42 @@ resource "aws_dynamodb_table" "app_data" {
   tags = { Environment = local.env }
 }
 
+# Booster pricing floor seed (booster-pricing-floor-and-audit R3.5, R9.4)
+#   PK = BOOST_FLOOR
+#   SK = <duration>  (one of 2hr | 6hr | 24hr)
+# Seeded equal to the BOOST_PRICING const so the rejection branch never fires
+# on day one. Admins update these rows via PUT /v1/admin/boost-floors/:duration;
+# `lifecycle.ignore_changes = [item]` prevents Terraform from overwriting their
+# changes on subsequent applies. PAY_PER_REQUEST table — no extra cost.
+locals {
+  boost_floor_seed_cents = {
+    "2hr"  = 2500
+    "6hr"  = 5000
+    "24hr" = 15000
+  }
+}
+
+resource "aws_dynamodb_table_item" "boost_floor_seed" {
+  for_each   = local.boost_floor_seed_cents
+  table_name = aws_dynamodb_table.app_data.name
+  hash_key   = aws_dynamodb_table.app_data.hash_key
+  range_key  = aws_dynamodb_table.app_data.range_key
+
+  item = jsonencode({
+    pk         = { S = "BOOST_FLOOR" }
+    sk         = { S = each.key }
+    duration   = { S = each.key }
+    floorCents = { N = tostring(each.value) }
+    currency   = { S = "ZAR" }
+    updatedAt  = { S = timestamp() }
+    updatedBy  = { S = "system:terraform-seed" }
+  })
+
+  lifecycle {
+    ignore_changes = [item]
+  }
+}
+
 # Live_Vibe_on_Map: per-business Music_Schedule rows.
 #   PK = BUSINESS#<businessId>
 #   SK = SCHEDULE#<scheduleId>
@@ -595,12 +631,12 @@ module "lambda_schedule_transition_tick" {
   vpc_subnet_ids         = module.vpc.private_subnet_ids
   vpc_security_group_ids = module.vpc.lambda_security_group_ids
   environment_variables = {
-    AREA_CODE_ENV          = local.env
-    MUSIC_SCHEDULES_TABLE  = aws_dynamodb_table.music_schedules.name
-    NODES_TABLE            = aws_dynamodb_table.nodes.name
-    CHECKINS_TABLE         = aws_dynamodb_table.checkins.name
-    APP_DATA_TABLE         = aws_dynamodb_table.app_data.name
-    LIVE_VIBE_ON_MAP_FLAG  = "false"
+    AREA_CODE_ENV         = local.env
+    MUSIC_SCHEDULES_TABLE = aws_dynamodb_table.music_schedules.name
+    NODES_TABLE           = aws_dynamodb_table.nodes.name
+    CHECKINS_TABLE        = aws_dynamodb_table.checkins.name
+    APP_DATA_TABLE        = aws_dynamodb_table.app_data.name
+    LIVE_VIBE_ON_MAP_FLAG = "false"
   }
 }
 

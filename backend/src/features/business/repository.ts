@@ -1,5 +1,13 @@
 // DynamoDB-backed Business Repository (replaces Prisma)
-import { GetCommand, PutCommand, QueryCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+import {
+  BatchGetCommand,
+  DeleteCommand,
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+  ScanCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
 import { randomBytes } from 'node:crypto'
@@ -10,6 +18,19 @@ import {
   getStaffByBusinessId,
 } from '../auth/dynamodb-repository.js'
 import { getCheckInsByNode } from '../check-in/dynamodb-repository.js'
+import {
+  boostFloorRowSchema,
+  boosterCheckoutMarkerRowSchema,
+  boosterPurchaseRowSchema,
+  floorChangeAuditRowSchema,
+  type BoostDuration,
+  type BoostFloorRow,
+  type BoosterCheckoutMarkerRow,
+  type BoosterPurchaseRow,
+  type FloorChangeAuditRow,
+} from './types.js'
+
+const BOOST_DURATIONS: readonly BoostDuration[] = ['2hr', '6hr', '24hr'] as const
 
 export async function findBusinessById(id: string) {
   return getBusinessDynamo(id)
@@ -380,4 +401,408 @@ export async function getRewardsForBusiness(businessId: string) {
     allRewards.push(...(result.Items || []).map((r) => ({ ...r, id: r['rewardId'] ?? r['id'] })))
   }
   return allRewards
+}
+
+// ─── Booster Purchase audit & idempotency marker ────────────────────────────
+//
+// See `.kiro/specs/booster-pricing-floor-and-audit/design.md` Flow 2.
+//
+// Two-step idempotency choreography for `payment.succeeded` webhooks with
+// `metadata.type === 'boost'`:
+//
+//   1. PutItem the `BOOST_CHECKOUT#<yocoCheckoutId>` marker row with
+//      `attribute_not_exists(pk)` so a second delivery for the same Yoco
+//      checkout id (even with a fresh Yoco `eventId`) is detected as a
+//      duplicate (R2.3, R2.6).
+//   2. PutItem the `BOOST#<businessId>` audit row with
+//      `attribute_not_exists(pk)` so an extremely rare collision on
+//      (paidAt-millisecond, yocoCheckoutId) for two different events still
+//      can't silently overwrite an existing row (R1.4).
+//
+// On any non-conditional failure of step 2 (R1.5), best-effort `DeleteItem`
+// the marker so a Yoco retry can re-attempt cleanly (R2.4). If the
+// compensating delete itself fails, we log and re-throw the *original*
+// error anyway — the next Yoco retry will land on the existing marker and
+// be treated as a duplicate.
+
+function isConditionalCheckFailedError(err: unknown): boolean {
+  return (err as { name?: string } | null)?.name === 'ConditionalCheckFailedException'
+}
+
+export async function putBoosterPurchaseWithMarker(args: {
+  purchase: BoosterPurchaseRow
+  marker: BoosterCheckoutMarkerRow
+}): Promise<{ result: 'written' | 'duplicate' }> {
+  const { purchase, marker } = args
+
+  // Step 1: write the idempotency marker first. R2.2 / R2.3.
+  try {
+    await documentClient.send(
+      new PutCommand({
+        TableName: TableNames.appData,
+        Item: marker,
+        ConditionExpression: 'attribute_not_exists(pk)',
+      }),
+    )
+  } catch (err) {
+    if (isConditionalCheckFailedError(err)) {
+      // Marker already exists → same yocoCheckoutId already persisted. R2.3 / R2.6.
+      return { result: 'duplicate' }
+    }
+    throw err
+  }
+
+  // Step 2: write the BoosterPurchase audit row. R1.4.
+  try {
+    await documentClient.send(
+      new PutCommand({
+        TableName: TableNames.appData,
+        Item: purchase,
+        ConditionExpression: 'attribute_not_exists(pk)',
+      }),
+    )
+    return { result: 'written' }
+  } catch (err) {
+    if (isConditionalCheckFailedError(err)) {
+      // (pk, sk) collision — but the marker we just wrote is now the source
+      // of truth for this yocoCheckoutId. Treat as duplicate. R1.6.
+      return { result: 'duplicate' }
+    }
+
+    // Non-conditional failure of the purchase write. Best-effort compensating
+    // delete of the marker so a Yoco retry can re-attempt cleanly. R1.5 / R2.4.
+    try {
+      await documentClient.send(
+        new DeleteCommand({
+          TableName: TableNames.appData,
+          Key: { pk: marker.pk, sk: marker.sk },
+        }),
+      )
+    } catch (deleteErr) {
+      // Compensating delete failed — log and re-throw the *original* error
+      // anyway. The next Yoco retry will see the orphaned marker and treat
+      // the event as a duplicate, which is safe because no purchase row was
+      // ever written.
+      console.warn(
+        `[business] putBoosterPurchaseWithMarker: compensating marker delete failed for marker.pk=${marker.pk}: ${String(deleteErr)}`,
+      )
+    }
+    throw err
+  }
+}
+
+// ─── BoostFloor reads ───────────────────────────────────────────────────────
+//
+// See `.kiro/specs/booster-pricing-floor-and-audit/design.md` Data Models.
+//
+// `BoostFloor_Row` lives at `pk='BOOST_FLOOR'`, `sk=<duration>` (one of
+// `'2hr' | '6hr' | '24hr'`). Reads are point-lookups (R3.1) or a small
+// `BatchGetItem` for the editor surface (R4.2) — never a Scan or Query.
+//
+// We Zod-parse every read result so a malformed row in DynamoDB does not
+// crash callers. A parse failure is logged via `console.warn` and treated
+// as missing (`null` for `getBoostFloor`, omitted for `listBoostFloors`)
+// so the service-layer `BOOST_FLOOR_DEFAULTS` fallback path takes over.
+
+export async function getBoostFloor(duration: BoostDuration): Promise<BoostFloorRow | null> {
+  const result = await documentClient.send(
+    new GetCommand({
+      TableName: TableNames.appData,
+      Key: { pk: 'BOOST_FLOOR', sk: duration },
+    }),
+  )
+  if (!result.Item) return null
+
+  const parsed = boostFloorRowSchema.safeParse(result.Item)
+  if (!parsed.success) {
+    console.warn(
+      `[business] getBoostFloor: malformed BoostFloor_Row for duration=${duration}: ${parsed.error.message}`,
+    )
+    return null
+  }
+  return parsed.data
+}
+
+export async function listBoostFloors(): Promise<BoostFloorRow[]> {
+  const result = await documentClient.send(
+    new BatchGetCommand({
+      RequestItems: {
+        [TableNames.appData]: {
+          Keys: BOOST_DURATIONS.map((duration) => ({ pk: 'BOOST_FLOOR', sk: duration })),
+        },
+      },
+    }),
+  )
+
+  const items = result.Responses?.[TableNames.appData] ?? []
+  const rows: BoostFloorRow[] = []
+  for (const item of items) {
+    const parsed = boostFloorRowSchema.safeParse(item)
+    if (!parsed.success) {
+      console.warn(
+        `[business] listBoostFloors: skipping malformed BoostFloor_Row sk=${String(item['sk'])}: ${parsed.error.message}`,
+      )
+      continue
+    }
+    rows.push(parsed.data)
+  }
+  return rows
+}
+
+// ─── Cursor parsing ─────────────────────────────────────────────────────────
+//
+// Shared sentinel for paginated repository functions. The handler layer
+// (task 7.x) `instanceof`-checks this to map the failure to a 400 response.
+// Reused by `queryFloorChangeAudit` and the upcoming booster-purchase
+// query helpers.
+
+export class MalformedCursorError extends Error {
+  override readonly name = 'MalformedCursorError'
+  constructor(message = 'Malformed pagination cursor') {
+    super(message)
+  }
+}
+
+function decodeCursor(cursor: string): Record<string, unknown> {
+  try {
+    const decoded = Buffer.from(cursor, 'base64url').toString()
+    const parsed = JSON.parse(decoded)
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new MalformedCursorError()
+    }
+    return parsed as Record<string, unknown>
+  } catch (err) {
+    if (err instanceof MalformedCursorError) throw err
+    throw new MalformedCursorError()
+  }
+}
+
+function encodeCursor(key: Record<string, unknown> | undefined): string | null {
+  if (!key) return null
+  return Buffer.from(JSON.stringify(key)).toString('base64url')
+}
+
+// ─── Floor audit write & query ──────────────────────────────────────────────
+//
+// See `.kiro/specs/booster-pricing-floor-and-audit/design.md` Flow 3.
+//
+// Audit-first ordering for floor updates (R5.2): the
+// `Floor_Change_Audit_Row` is written *before* the `BoostFloor_Row` is
+// updated so no reader can observe a new floor before its audit row is
+// durable. If the audit write fails, the floor row is left untouched
+// (R5.3) and the error propagates so the handler returns 500.
+//
+// `BoostFloor_Row` `PutItem` is unconditional — overwrite is the intended
+// semantic for an admin update; `updatedAt` / `updatedBy` are already on
+// the `next` row passed in by the caller.
+//
+// `Floor_Change_Audit_Row` `PutItem` is also unconditional: the unique
+// `sk` includes a UUID v4 `changeId` so collisions are vanishingly
+// unlikely, and a duplicate audit row is preferable to a missing one.
+
+export async function writeFloorAuditThenUpdateFloor(args: {
+  audit: FloorChangeAuditRow
+  next: BoostFloorRow
+}): Promise<void> {
+  const { audit, next } = args
+
+  // Step 1: write the audit row first. If this fails, propagate without
+  // touching the floor row so the BoostFloor_Row stays unchanged (R5.3).
+  await documentClient.send(
+    new PutCommand({
+      TableName: TableNames.appData,
+      Item: audit,
+    }),
+  )
+
+  // Step 2: only on audit-write success do we update the floor row.
+  // Overwrite semantics — this is an admin-driven update path.
+  await documentClient.send(
+    new PutCommand({
+      TableName: TableNames.appData,
+      Item: next,
+    }),
+  )
+}
+
+export async function queryFloorChangeAudit(
+  duration: BoostDuration,
+  cursor: string | null,
+  limit: number,
+): Promise<{ items: FloorChangeAuditRow[]; nextCursor: string | null }> {
+  const params: Record<string, unknown> = {
+    TableName: TableNames.appData,
+    KeyConditionExpression: 'pk = :pk',
+    ExpressionAttributeValues: { ':pk': `BOOST_FLOOR_AUDIT#${duration}` },
+    ScanIndexForward: false, // newest-first (R5.5)
+    Limit: limit,
+  }
+  if (cursor) {
+    ;(params as { ExclusiveStartKey?: Record<string, unknown> }).ExclusiveStartKey = decodeCursor(cursor)
+  }
+
+  const result = await documentClient.send(new QueryCommand(params as any))
+  const items: FloorChangeAuditRow[] = []
+  for (const item of result.Items ?? []) {
+    const parsed = floorChangeAuditRowSchema.safeParse(item)
+    if (!parsed.success) {
+      console.warn(
+        `[business] queryFloorChangeAudit: skipping malformed Floor_Change_Audit_Row sk=${String(item['sk'])}: ${parsed.error.message}`,
+      )
+      continue
+    }
+    items.push(parsed.data)
+  }
+
+  return {
+    items,
+    nextCursor: encodeCursor(result.LastEvaluatedKey as Record<string, unknown> | undefined),
+  }
+}
+
+// ─── BoosterPurchase reads ──────────────────────────────────────────────────
+//
+// See `.kiro/specs/booster-pricing-floor-and-audit/design.md` access-pattern
+// table:
+//
+// - Operator view of own purchases (R6.2): `Query` `pk='BOOST#<businessId>'`
+//   with `ScanIndexForward=false` so the natural sort-order (by `paidAt`
+//   embedded in `sk`) yields newest-first.
+// - Admin date-range across all businesses (R7.2): `Query` GSI1 with
+//   `gsi1pk='BOOST_BY_TIME'` and `gsi1sk BETWEEN :from AND :to`. Newest-first
+//   to match operator pagination semantics so the admin UI can stream the
+//   most-recent matches without waiting for the full page.
+// - Admin single-payment lookup (R7.2): the `BOOST_CHECKOUT#<yocoCheckoutId>`
+//   marker is a direct point read; the caller follows up with a `GetItem`
+//   for the BoosterPurchase row using the marker's stored `boostPk` /
+//   `boostSk`. `getBoosterPurchaseByKey` is exported below for that follow-up
+//   so the service layer does not need to import `documentClient` directly.
+//
+// All reads Zod-parse with `safeParse`; on parse failure we log and skip the
+// offending row so a single malformed row in DynamoDB cannot bring down a
+// whole page, consistent with `queryFloorChangeAudit` (task 2.3).
+
+export async function queryBoosterPurchasesForBusiness(
+  businessId: string,
+  cursor: string | null,
+  limit: number,
+): Promise<{ items: BoosterPurchaseRow[]; nextCursor: string | null }> {
+  const params: Record<string, unknown> = {
+    TableName: TableNames.appData,
+    KeyConditionExpression: 'pk = :pk',
+    ExpressionAttributeValues: { ':pk': `BOOST#${businessId}` },
+    ScanIndexForward: false, // newest-first (R6.2)
+    Limit: limit,
+  }
+  if (cursor) {
+    ;(params as { ExclusiveStartKey?: Record<string, unknown> }).ExclusiveStartKey = decodeCursor(cursor)
+  }
+
+  const result = await documentClient.send(new QueryCommand(params as any))
+  const items: BoosterPurchaseRow[] = []
+  for (const item of result.Items ?? []) {
+    const parsed = boosterPurchaseRowSchema.safeParse(item)
+    if (!parsed.success) {
+      console.warn(
+        `[business] queryBoosterPurchasesForBusiness: skipping malformed BoosterPurchase row sk=${String(item['sk'])}: ${parsed.error.message}`,
+      )
+      continue
+    }
+    items.push(parsed.data)
+  }
+
+  return {
+    items,
+    nextCursor: encodeCursor(result.LastEvaluatedKey as Record<string, unknown> | undefined),
+  }
+}
+
+export async function queryBoosterPurchasesByTimeRange(
+  fromIso: string,
+  toIso: string,
+  cursor: string | null,
+  limit: number,
+): Promise<{ items: BoosterPurchaseRow[]; nextCursor: string | null }> {
+  const params: Record<string, unknown> = {
+    TableName: TableNames.appData,
+    IndexName: 'GSI1',
+    KeyConditionExpression: 'gsi1pk = :pk AND gsi1sk BETWEEN :from AND :to',
+    ExpressionAttributeValues: {
+      ':pk': 'BOOST_BY_TIME',
+      ':from': fromIso,
+      ':to': toIso,
+    },
+    ScanIndexForward: false, // newest-first to match operator pagination semantics (R7.2)
+    Limit: limit,
+  }
+  if (cursor) {
+    ;(params as { ExclusiveStartKey?: Record<string, unknown> }).ExclusiveStartKey = decodeCursor(cursor)
+  }
+
+  const result = await documentClient.send(new QueryCommand(params as any))
+  const items: BoosterPurchaseRow[] = []
+  for (const item of result.Items ?? []) {
+    const parsed = boosterPurchaseRowSchema.safeParse(item)
+    if (!parsed.success) {
+      console.warn(
+        `[business] queryBoosterPurchasesByTimeRange: skipping malformed BoosterPurchase row sk=${String(item['sk'])}: ${parsed.error.message}`,
+      )
+      continue
+    }
+    items.push(parsed.data)
+  }
+
+  return {
+    items,
+    nextCursor: encodeCursor(result.LastEvaluatedKey as Record<string, unknown> | undefined),
+  }
+}
+
+export async function getBoosterCheckoutMarker(
+  yocoCheckoutId: string,
+): Promise<BoosterCheckoutMarkerRow | null> {
+  const key = `BOOST_CHECKOUT#${yocoCheckoutId}`
+  const result = await documentClient.send(
+    new GetCommand({
+      TableName: TableNames.appData,
+      Key: { pk: key, sk: key },
+    }),
+  )
+  if (!result.Item) return null
+
+  const parsed = boosterCheckoutMarkerRowSchema.safeParse(result.Item)
+  if (!parsed.success) {
+    console.warn(
+      `[business] getBoosterCheckoutMarker: malformed Idempotency_Marker for yocoCheckoutId=${yocoCheckoutId}: ${parsed.error.message}`,
+    )
+    return null
+  }
+  return parsed.data
+}
+
+// Follow-up `GetItem` companion for `getBoosterCheckoutMarker`. The service
+// layer's `getBoosterPurchaseByYocoCheckoutId` (task 6.2) reads the marker,
+// then uses its stored `boostPk` / `boostSk` to retrieve the audit row.
+// Exposed here so the service layer does not need to import `documentClient`
+// directly.
+export async function getBoosterPurchaseByKey(
+  boostPk: string,
+  boostSk: string,
+): Promise<BoosterPurchaseRow | null> {
+  const result = await documentClient.send(
+    new GetCommand({
+      TableName: TableNames.appData,
+      Key: { pk: boostPk, sk: boostSk },
+    }),
+  )
+  if (!result.Item) return null
+
+  const parsed = boosterPurchaseRowSchema.safeParse(result.Item)
+  if (!parsed.success) {
+    console.warn(
+      `[business] getBoosterPurchaseByKey: malformed BoosterPurchase row pk=${boostPk} sk=${boostSk}: ${parsed.error.message}`,
+    )
+    return null
+  }
+  return parsed.data
 }
