@@ -2,6 +2,113 @@ import type { BusinessTier, Tier } from '../types'
 
 const TIER_ORDER: Tier[] = ['local', 'regular', 'fixture', 'institution', 'legend']
 
+// ─── Feature flags ──────────────────────────────────────────────────────────
+//
+// Boolean feature flags read from a backend-served config (R12.1) with a
+// safe fallback to the registered default whenever the flag store is
+// unreachable (R12.3). Defaults to `false` in every environment (R12.2)
+// unless explicitly overridden at runtime or via env var.
+//
+// Reads are safe on web, business, and backend. Every read is wrapped in a
+// try/catch so a malformed override or missing env subsystem can never
+// crash callers — the default value wins.
+
+export type FeatureFlagName = 'live_vibe_on_map'
+
+const FEATURE_FLAG_DEFAULTS: Readonly<Record<FeatureFlagName, boolean>> = Object.freeze({
+  live_vibe_on_map: false,
+})
+
+const featureFlagOverrides = new Map<FeatureFlagName, boolean>()
+
+/**
+ * Set or clear a runtime override for a feature flag. Used by tests and by
+ * the future backend-served config push path. Pass `undefined` to clear.
+ */
+export function setFeatureFlagOverride(name: FeatureFlagName, value: boolean | undefined): void {
+  if (value === undefined) {
+    featureFlagOverrides.delete(name)
+    return
+  }
+  featureFlagOverrides.set(name, value)
+}
+
+/** Clear every override. Test-only helper. */
+export function clearFeatureFlagOverrides(): void {
+  featureFlagOverrides.clear()
+}
+
+function flagEnvKey(name: FeatureFlagName): string {
+  return `AREA_CODE_FLAG_${name.toUpperCase()}`
+}
+
+function flagViteEnvKey(name: FeatureFlagName): string {
+  return `VITE_FLAG_${name.toUpperCase()}`
+}
+
+function readFromEnv(name: FeatureFlagName): boolean | undefined {
+  // Backend / Node: process.env (Lambda runtime, vitest). Reach for
+  // `process` via `globalThis` so this module can compile under the web
+  // tsconfig, which doesn't include `@types/node` and would otherwise
+  // raise TS2591 on a bare `process` reference. The web bundle never
+  // takes this branch at runtime because `process` is undefined there.
+  try {
+    const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    if (proc?.env) {
+      const raw = proc.env[flagEnvKey(name)]
+      if (raw === 'true') return true
+      if (raw === 'false') return false
+    }
+  } catch {
+    // process is not available in this runtime — ignore.
+  }
+
+  // Web / business: import.meta.env (Vite). Read defensively so this module
+  // can also be imported from non-Vite contexts (Node tests, SSR shims)
+  // without throwing on `import.meta`.
+  try {
+    const meta = (import.meta as unknown as { env?: Record<string, string | undefined> })?.env
+    if (meta) {
+      const raw = meta[flagViteEnvKey(name)]
+      if (raw === 'true') return true
+      if (raw === 'false') return false
+    }
+  } catch {
+    // import.meta unavailable — ignore.
+  }
+
+  return undefined
+}
+
+/**
+ * Read a feature flag's current value. Returns the registered default on any
+ * read failure, mirroring R12.3's unreachable-store fallback semantics.
+ */
+export function getFeatureFlag(name: FeatureFlagName): boolean {
+  try {
+    const override = featureFlagOverrides.get(name)
+    if (typeof override === 'boolean') return override
+
+    const fromEnv = readFromEnv(name)
+    if (typeof fromEnv === 'boolean') return fromEnv
+  } catch {
+    // Any unexpected throw → fall through to the default.
+  }
+  return FEATURE_FLAG_DEFAULTS[name]
+}
+
+/**
+ * Typed helper for the `live_vibe_on_map` flag (Requirement 12).
+ *
+ * Returns `false` by default and whenever the flag store is unreachable.
+ * Safe to call from web, business, and backend contexts. Despite the `use*`
+ * naming convention, this is a plain function — it does not subscribe to
+ * React state and may be called outside a component.
+ */
+export function useLiveVibeOnMap(): boolean {
+  return getFeatureFlag('live_vibe_on_map')
+}
+
 function tierAtLeast(tier: Tier | null, minTier: Tier): boolean {
   if (!tier) return false
   return TIER_ORDER.indexOf(tier) >= TIER_ORDER.indexOf(minTier)

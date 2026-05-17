@@ -4,3 +4,10 @@ export { REWARD_TYPES } from './reward-types'
 export { TIER_LEVELS, getTier, type TierLevel } from './tier-levels'
 export { GENRE_WEIGHT_MATRIX, MUSIC_GENRES, PERSONALITY_DIMENSIONS } from './genre-weights'
 export { ARCHETYPE_CATALOG } from './archetype-catalog'
+export {
+  ARCHETYPE_NAMES,
+  getArchetypeDisplayName,
+  getArchetypeEtymology,
+  type ArchetypeNameEntry,
+} from './archetype-names'
+export { ARCHETYPE_GLYPHS, getArchetypeGlyph, dynamicContrastForCategory } from './archetype-glyphs'

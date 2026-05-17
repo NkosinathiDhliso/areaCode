@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@area-code/shared/lib/api'
 import type { PersonalityArchetype, PersonalityDimension } from '@area-code/shared/types'
 import { PERSONALITY_DIMENSIONS } from '@area-code/shared/constants/genre-weights'
+import { getArchetypeDisplayName } from '@area-code/shared/constants/archetype-names'
 import { ArchetypeTestTool } from './ArchetypeTestTool'
 
 const EMPTY_FORM = {
@@ -128,7 +129,21 @@ export function ArchetypeManagement() {
           >
             <span className="text-[var(--text-muted)] text-sm w-8">{a.priority}</span>
             <span className="text-[var(--text-muted)] text-xs">{a.iconId}</span>
-            <span className="text-[var(--text-primary)] text-sm font-medium flex-1">{a.name}</span>
+            {/*
+             * R9.7: render the catalog `id` and the short Archetype_Display_Name
+             * together so admins can match against the legacy database keys
+             * and see the consumer-facing label at the same time. The catalog
+             * `name` (long-form) is retained per R9.2/R9.3 and shown after
+             * the display name. Consumer surfaces render the display name
+             * via `getArchetypeDisplayName`; admins see the full triplet.
+             */}
+            <div className="flex-1 min-w-0 flex flex-col">
+              <div className="flex flex-row items-baseline gap-2">
+                <span className="text-[var(--text-primary)] text-sm font-medium">{getArchetypeDisplayName(a.id)}</span>
+                <span className="text-[var(--text-muted)] text-xs font-mono truncate">{a.id}</span>
+              </div>
+              <span className="text-[var(--text-secondary)] text-xs truncate">{a.name}</span>
+            </div>
             <button
               onClick={() => void toggleActive(a)}
               className={`text-xs px-2 py-1 rounded-lg ${a.isActive ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}

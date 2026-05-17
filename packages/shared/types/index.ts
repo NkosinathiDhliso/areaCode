@@ -20,7 +20,7 @@ export type CheckInType = 'reward' | 'presence'
 export type RewardType = 'nth_checkin' | 'daily_first' | 'streak' | 'milestone'
 
 // Toast types with priority
-export type ToastType = 'surge' | 'reward_pressure' | 'checkin' | 'reward_new' | 'streak' | 'leaderboard'
+export type ToastType = 'surge' | 'city_pulse' | 'reward_pressure' | 'checkin' | 'reward_new' | 'streak' | 'leaderboard'
 
 // Claim statuses
 export type ClaimStatus = 'unclaimed' | 'pending' | 'claimed'
@@ -72,6 +72,58 @@ export interface GenreWeightEntry {
   genre: MusicGenre
   weights: DimensionScoreVector
 }
+
+// Music schedule day-of-week , two-letter ISO-style code (3-letter uppercase per design)
+export type ScheduleDayOfWeek = 'MON' | 'TUE' | 'WED' | 'THU' | 'FRI' | 'SAT' | 'SUN'
+
+// Schedule slot mode , blanket = single genre set; lineup = ordered DJ entries
+export type ScheduleSlotMode = 'blanket' | 'lineup'
+
+// Lineup entry , one DJ slot inside a lineup-mode Schedule_Slot.
+// `startTime` must equal the parent slot's `startTime` for index 0 (R3.7).
+export interface LineupEntry {
+  startTime: string // HH:mm
+  startTimeMin: number // 0..1439, derived from startTime
+  djName?: string
+  genres: MusicGenre[]
+}
+
+// Schedule slot , one contiguous, half-open `[startTime, endTime)` segment
+// of a venue's weekly Music_Schedule. The `startTimeMin` / `endTimeMin`
+// fields are stored alongside `HH:mm` so ordering is cheap and cannot drift
+// from the human-readable form (design Data Models).
+export interface ScheduleSlot {
+  slotId: string
+  dayOfWeek: ScheduleDayOfWeek
+  startTime: string // HH:mm
+  endTime: string // HH:mm
+  startTimeMin: number // 0..1439
+  endTimeMin: number // 0..1439
+  mode: ScheduleSlotMode
+  genres?: MusicGenre[] // present iff mode === 'blanket'
+  lineup?: LineupEntry[] // present iff mode === 'lineup'
+}
+
+// Music schedule , a venue's weekly programming, denormalised into slots.
+// `timezone` is an IANA tz database id (e.g. "Africa/Johannesburg").
+export interface MusicSchedule {
+  businessId: string
+  scheduleId: string
+  timezone: string // IANA timezone id
+  slots: ScheduleSlot[]
+  updatedAt: string // ISO-8601 ms
+  schemaVersion: 1
+}
+
+// Live_Archetype resolver branch , surfaced for observability and emitted
+// on `node:archetype_change` so consumers can debug without a backend
+// round-trip (design Components and Interfaces, R7.11).
+export type LiveArchetypeBranch =
+  | 'schedule_lineup'
+  | 'schedule_blanket'
+  | 'checkin_mode'
+  | 'default'
+  | 'eclectic_fallback'
 
 // Personality archetype , stored in DB, managed by admins
 export interface PersonalityArchetype {
@@ -132,6 +184,32 @@ export interface Node {
   headerImageKey?: string | null
   instagramHandle?: string | null
   createdAt: string
+  /**
+   * Optional fallback Archetype id used by the Live_Archetype resolver
+   * (R7.7) when no Active_Slot exists and the 90-min check-in window
+   * carries no catalog archetypeId. Stored as `defaultArchetypeId` on
+   * the Node row (design Data Models, "Existing tables touched"). Absent
+   * or unknown ids fall through to `archetype-eclectic` per R7.8.
+   */
+  defaultArchetypeId?: string | null
+  /**
+   * Cache of the previously emitted Live_Archetype id, written by the
+   * `live-archetype-evaluator` Lambda so subsequent Evaluation_Ticks
+   * can dedupe `node:archetype_change` events (design § R11). Not used
+   * by the pure resolver — kept here so the Node row is the single
+   * source of truth for the cache.
+   */
+  lastArchetypeId?: string | null
+  /**
+   * Current Live_Archetype id carried on the live nodes payload (R11.1).
+   * Populated by the backend on the read path (initial REST fetch and
+   * post-reconnect replays) so the consumer client can prime
+   * `useMapStore.archetypeIds` without waiting for a `node:archetype_change`
+   * event. Stub field — the backend wire surface that fills it ships in a
+   * later task; the consumer hook (`useNodeArchetype`) tolerates it being
+   * absent.
+   */
+  liveArchetypeId?: string | null
 }
 
 export interface PulseScore {
@@ -356,6 +434,7 @@ export interface ServerToClientEvents {
   'business:checkin': (payload: BusinessCheckinPayload) => void
   'business:reward_claimed': (payload: BusinessRewardClaimedPayload) => void
   'toast:friend_checkin': (payload: { type: 'checkin'; message: string; nodeId?: string; avatarUrl?: string }) => void
+  'node:archetype_change': (payload: { nodeId: string; liveArchetypeId: string; branch: LiveArchetypeBranch }) => void
 }
 
 export interface ClientToServerEvents {

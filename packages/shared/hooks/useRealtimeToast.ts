@@ -9,13 +9,16 @@ import type { Toast, ToastType } from '../types'
 const TOAST_DISPLAY_MS = 4000
 const MAX_DISTANCE_KM = 2
 
+// Mirror of TOAST_PRIORITY in stores/toastStore.ts — kept in sync because
+// the priority value is stamped onto the Toast at enqueue time.
 const PRIORITY_MAP: Record<ToastType, number> = {
   surge: 1,
-  reward_pressure: 2,
-  checkin: 3,
-  reward_new: 3,
-  streak: 4,
-  leaderboard: 4,
+  city_pulse: 2,
+  reward_pressure: 3,
+  checkin: 4,
+  reward_new: 4,
+  streak: 5,
+  leaderboard: 5,
 }
 
 export function useRealtimeToast(token?: string, userId?: string) {

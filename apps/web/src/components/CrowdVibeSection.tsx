@@ -4,6 +4,8 @@ import { api } from '@area-code/shared/lib/api'
 import type { CrowdVibeSnapshot, MusicGenre } from '@area-code/shared/types'
 import { ARCHETYPE_CATALOG } from '@area-code/shared/constants/archetype-catalog'
 
+import { resolveArchetypeDisplayName } from '../lib/archetypeDisplay'
+
 interface CrowdVibeSectionProps {
   nodeId: string
 }
@@ -63,7 +65,15 @@ export function CrowdVibeSection({ nodeId }: CrowdVibeSectionProps) {
       {archetypeEntries.length > 0 && (
         <div className="flex flex-row flex-wrap gap-2 mb-3">
           {archetypeEntries.map(([name, pct]) => {
+            // The crowd-vibe API keys the percentages by the legacy long-form
+            // archetype name (e.g. "The Festival Spirit"), which is preserved
+            // on the catalog for admin tools (R9.7) and is no longer rendered
+            // on consumer surfaces. Map the legacy name back to the catalog
+            // id, then resolve through `resolveArchetypeDisplayName` so the
+            // surface renders the short display name (R9.6) and emits a
+            // non-blocking warning if the id is unknown (R9.10).
             const arch = ARCHETYPE_CATALOG.find((a) => a.name === name)
+            const displayName = arch ? resolveArchetypeDisplayName(arch.id) : name
             return (
               <div
                 key={name}
@@ -71,7 +81,7 @@ export function CrowdVibeSection({ nodeId }: CrowdVibeSectionProps) {
               >
                 <span className="text-[var(--text-muted)] text-xs">{arch?.iconId ?? '?'}</span>
                 <span className="text-[var(--text-primary)] text-sm font-medium">{pct}%</span>
-                <span className="text-[var(--text-secondary)] text-xs">{name}</span>
+                <span className="text-[var(--text-secondary)] text-xs">{displayName}</span>
               </div>
             )
           })}

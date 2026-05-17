@@ -15,3 +15,26 @@ export { haversineDistance, isWithinRadius } from './geoUtils'
 export { formatZAR, formatRelativeTime, formatLocalTime, formatLocalDate, formatCountdown, toE164 } from './formatters'
 export * from './featureGating'
 export { computeDimensionScores, resolveArchetype, matchesArchetype } from './archetypeResolver'
+export {
+  LineupEntrySchema,
+  ScheduleSlotSchema,
+  MusicScheduleSchema,
+  ScheduleValidationError,
+  validateMusicSchedule,
+  type ScheduleValidationCode,
+  type ValidationResult,
+} from './schedule-validator'
+export {
+  genresToArchetype,
+  GenreToArchetypeValidationError,
+  type GenresToArchetypeResult,
+  type GenresToArchetypeWarning,
+} from './genreToArchetype'
+export { resolveActiveSlot, ScheduleResolverInternalError, type ResolvedSlot } from './scheduleResolver'
+export {
+  resolveLiveArchetype,
+  LiveArchetypeInternalError,
+  type LiveArchetypeInputs,
+  type LiveArchetypeResult,
+  type LiveArchetypeCheckIn,
+} from './liveArchetype'

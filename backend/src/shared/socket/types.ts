@@ -4,7 +4,20 @@
  */
 
 export type NodeState = 'dormant' | 'quiet' | 'active' | 'buzzing' | 'popping'
-export type ToastType = 'surge' | 'reward_pressure' | 'checkin' | 'reward_new' | 'streak' | 'leaderboard'
+export type ToastType = 'surge' | 'city_pulse' | 'reward_pressure' | 'checkin' | 'reward_new' | 'streak' | 'leaderboard'
+
+/**
+ * Branch tag returned alongside `node:archetype_change`. Mirrors
+ * `LiveArchetypeBranch` in `packages/shared/types/index.ts` (kept in
+ * sync per R7.11) so the consumer client can debug which Live_Archetype
+ * branch fired without a backend round-trip.
+ */
+export type LiveArchetypeBranch =
+  | 'schedule_lineup'
+  | 'schedule_blanket'
+  | 'checkin_mode'
+  | 'default'
+  | 'eclectic_fallback'
 
 export interface BusinessCheckinPayload {
   nodeId: string
@@ -50,6 +63,7 @@ export interface ServerToClientEvents {
   'node:pulse_update': (payload: { nodeId: string; pulseScore: number; checkInCount: number; state: NodeState }) => void
   'node:state_surge': (payload: { nodeId: string; fromState: NodeState; toState: NodeState }) => void
   'node:state_change': (payload: { nodeId: string; state: NodeState }) => void
+  'node:archetype_change': (payload: { nodeId: string; liveArchetypeId: string; branch: LiveArchetypeBranch }) => void
   'node:created': (payload: {
     id: string
     name: string

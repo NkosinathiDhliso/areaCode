@@ -6,7 +6,11 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { resolveArchetypeDisplayName } from '../lib/archetypeDisplay'
+import { ArchetypeReveal } from './ArchetypeReveal'
 import { ManualGenreSelector } from './ManualGenreSelector'
+
+const UNCHARTED_ARCHETYPE_ID = 'archetype-uncharted'
 
 const GENRE_LABELS: Record<MusicGenre, string> = {
   amapiano: 'Amapiano',
@@ -42,9 +46,13 @@ export function StreamingSection() {
   const [syncingSpotify, setSyncingSpotify] = useState(false)
 
   const connected = user?.streamingProvider ?? null
-  const archetype = user?.archetypeId
-    ? ARCHETYPE_CATALOG.find((a) => a.id === user.archetypeId)
-    : ARCHETYPE_CATALOG.find((a) => a.name === 'The Uncharted')
+  // Look up the catalog entry by id so the rename module (R9.6) is the only
+  // source of consumer-facing display names. The legacy `archetype.name`
+  // field is preserved on the catalog for admin tools (R9.7) and is no
+  // longer rendered on consumer surfaces.
+  const archetypeId = user?.archetypeId ?? UNCHARTED_ARCHETYPE_ID
+  const archetype = ARCHETYPE_CATALOG.find((a) => a.id === archetypeId)
+  const archetypeDisplayName = resolveArchetypeDisplayName(archetypeId)
   const genres = user?.musicGenres ?? []
 
   // Handle Spotify OAuth callback, read query params after redirect back.
@@ -179,19 +187,16 @@ export function StreamingSection() {
         </div>
       )}
 
-      {archetype && (
-        <div className="flex flex-row items-center gap-3 mb-3">
-          <span className="text-[var(--text-muted)] text-lg">{archetype.iconId}</span>
-          <div className="flex-1">
-            <p className="text-[var(--text-primary)] text-sm font-medium">{archetype.name}</p>
-            <p className="text-[var(--text-secondary)] text-xs">{archetype.description}</p>
-          </div>
-        </div>
-      )}
-
-      {archetype?.name === 'The Uncharted' && (
-        <p className="text-[var(--text-muted)] text-xs mb-3">{t('profile.archetype.uncharted')}</p>
-      )}
+      {/*
+        Archetype reveal card. Renders the rename-module display name,
+        the catalog description, and (for non-English names like Kasi)
+        an italicised etymology line beneath the display name. The same
+        component is also the "re-read" surface reachable from the
+        consumer profile screen per R9.11. For `archetype-uncharted` it
+        also surfaces the helper copy from `profile.archetype.uncharted`
+        as a call to action (R9.8).
+      */}
+      <ArchetypeReveal archetypeId={archetypeId} />
 
       {genres.length > 0 && (
         <div className="flex flex-row flex-wrap gap-2 mb-3">
@@ -224,7 +229,7 @@ export function StreamingSection() {
               </div>
               <p className="text-[var(--text-muted)] text-xs mt-1">
                 {genres.length > 0
-                  ? `${genres.length} genres synced${archetype ? `, ${archetype.name}` : ''}`
+                  ? `${genres.length} genres synced${archetype ? `, ${archetypeDisplayName}` : ''}`
                   : 'Connected. Add listening history or pick genres manually to shape your archetype.'}
               </p>
             </div>

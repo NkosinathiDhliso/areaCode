@@ -21,6 +21,7 @@ export const TableNames = {
   rewards: process.env['REWARDS_TABLE'] || 'area-code-dev-rewards',
   businesses: process.env['BUSINESSES_TABLE'] || 'area-code-dev-businesses',
   appData: process.env['APP_DATA_TABLE'] || 'area-code-dev-app-data',
+  musicSchedules: process.env['MUSIC_SCHEDULES_TABLE'] || 'area-code-dev-music-schedules',
 } as const
 
 export { client }

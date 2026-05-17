@@ -3,15 +3,24 @@ import * as fc from 'fast-check'
 import { useToastStore } from '../toastStore'
 import type { Toast, ToastType } from '../../types'
 
-const TOAST_TYPES: ToastType[] = ['surge', 'reward_pressure', 'checkin', 'reward_new', 'streak', 'leaderboard']
+const TOAST_TYPES: ToastType[] = [
+  'surge',
+  'city_pulse',
+  'reward_pressure',
+  'checkin',
+  'reward_new',
+  'streak',
+  'leaderboard',
+]
 
 const PRIORITY_MAP: Record<ToastType, number> = {
   surge: 1,
-  reward_pressure: 2,
-  checkin: 3,
-  reward_new: 3,
-  streak: 4,
-  leaderboard: 4,
+  city_pulse: 2,
+  reward_pressure: 3,
+  checkin: 4,
+  reward_new: 4,
+  streak: 5,
+  leaderboard: 5,
 }
 
 function makeToast(type: ToastType, id: string): Toast {

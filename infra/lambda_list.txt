@@ -8,3 +8,4 @@ partition-manager
 cleanup
 run-migration
 yoco-webhook
+schedule-transition-tick

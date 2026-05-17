@@ -1,8 +1,22 @@
-import { useEffect, useRef } from 'react'
+import { createElement, useEffect, useRef } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import mapboxgl from 'mapbox-gl'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
+import { useLiveVibeOnMap } from '@area-code/shared/lib/featureGating'
 import type { Node, NodeCategory, NodeState } from '@area-code/shared/types'
 import { getNodeState, getCategoryColour } from '../lib/mapHelpers'
+import { ArchetypeGlyph } from '../components/ArchetypeGlyph'
+
+/**
+ * Default Live_Archetype id used while no live value has arrived for a
+ * node and the node has no `defaultArchetypeId`. Mirrors R7.8's
+ * eclectic-fallback rule on the rendering side, so the glyph is never
+ * blank while the flag is on.
+ */
+const DEFAULT_ARCHETYPE_ID = 'archetype-eclectic'
+
+/** Marker sub-element marked as the React glyph mount host. */
+const GLYPH_HOST_LAYER = 'glyph-host'
 
 const STATE_CONFIG: Record<NodeState, { animation: string; speed: string; haloOpacity: number; ringOpacity: number }> =
   {
@@ -143,6 +157,23 @@ function buildMarkerElement(
     e.stopPropagation()
     onTap()
   })
+
+  // ── Layer 3a: Archetype glyph mount host ──
+  // Mounted inside the core so the breathe/pulse animation on the core
+  // drives the glyph's scale curve in lockstep (R8.5). The host is the
+  // full size of the core; ArchetypeGlyph sizes itself relative to
+  // that with its own min-floor (R8.9).
+  const glyphHost = document.createElement('div')
+  Object.assign(glyphHost.style, {
+    position: 'absolute',
+    inset: '0',
+    width: '100%',
+    height: '100%',
+    pointerEvents: 'none',
+  })
+  glyphHost.dataset.layer = GLYPH_HOST_LAYER
+  core.appendChild(glyphHost)
+
   container.appendChild(core)
 
   // ── Layer 4: Live count badge ──
@@ -253,7 +284,14 @@ export function useMapMarkers(
 ) {
   const nodes = useMapStore((s) => s.nodes)
   const pulseScores = useMapStore((s) => s.pulseScores)
+  const archetypeIds = useMapStore((s) => s.archetypeIds)
+  const liveVibeOnMap = useLiveVibeOnMap()
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map())
+  // Per-marker React roots used to render <ArchetypeGlyph> inside the
+  // marker's core layer. Tracked in parallel with `markersRef` so we can
+  // unmount the root when the marker is removed (avoids leaking React
+  // commit work for nodes that have left the viewport / filter).
+  const glyphRootsRef = useRef<Map<string, Root>>(new Map())
   // Keep a stable ref to the latest onNodeTap so marker click handlers are never stale
   const onNodeTapRef = useRef(onNodeTap)
   onNodeTapRef.current = onNodeTap
@@ -279,6 +317,17 @@ export function useMapMarkers(
         if (!filteredIds.has(id)) {
           marker.remove()
           markersRef.current.delete(id)
+          // Unmount the React glyph root for this marker so React stops
+          // tracking its element. Without this we'd keep committing to
+          // an unmounted DOM node.
+          const root = glyphRootsRef.current.get(id)
+          if (root) {
+            // Defer unmount one microtask to avoid React 18's "synchronous
+            // unmount during render" warning when this runs from inside a
+            // useEffect commit phase.
+            queueMicrotask(() => root.unmount())
+            glyphRootsRef.current.delete(id)
+          }
         }
       }
 
@@ -288,10 +337,25 @@ export function useMapMarkers(
         const coreSize = getCoreSize(state, score)
         const colour = getCategoryColour(node.category)
         const existing = markersRef.current.get(node.id)
+        // R7.8 / R8 fallback ladder: live archetype id from the store
+        // (populated by `node:archetype_change`), then the node's
+        // configured default, then the eclectic fallback.
+        const archetypeId = archetypeIds[node.id] ?? node.defaultArchetypeId ?? DEFAULT_ARCHETYPE_ID
 
         if (existing) {
           existing.setLngLat([node.lng, node.lat])
           updateMarkerElement(existing.getElement(), coreSize, colour, state, score)
+          // Re-render the glyph so opacity (R8.3/R8.4) and crossfade
+          // (R8.6) reflect the latest pulse state and archetype id.
+          renderGlyph(
+            glyphRootsRef.current,
+            existing.getElement(),
+            node.id,
+            archetypeId,
+            state,
+            node.category,
+            liveVibeOnMap,
+          )
           continue
         }
 
@@ -302,6 +366,7 @@ export function useMapMarkers(
         const marker = new mapboxgl.Marker({ element: el, anchor: 'center' }).setLngLat([node.lng, node.lat]).addTo(map)
 
         markersRef.current.set(node.id, marker)
+        renderGlyph(glyphRootsRef.current, el, node.id, archetypeId, state, node.category, liveVibeOnMap)
       }
     }
 
@@ -315,5 +380,58 @@ export function useMapMarkers(
       cancelled = true
       map.off('load', addMarkers)
     }
-  }, [nodes, pulseScores, categoryFilter, mapRef, mapReady])
+  }, [nodes, pulseScores, archetypeIds, categoryFilter, mapRef, mapReady, liveVibeOnMap])
+
+  // Tear down every glyph root on unmount so a remount of the map screen
+  // doesn't leak React commits to dead DOM.
+  useEffect(() => {
+    const roots = glyphRootsRef.current
+    return () => {
+      for (const [, root] of roots) {
+        queueMicrotask(() => root.unmount())
+      }
+      roots.clear()
+    }
+  }, [])
+}
+
+/**
+ * Mount or update the ArchetypeGlyph React subtree for a marker's
+ * glyph host. While the `live_vibe_on_map` flag is `false` (R12.4) we
+ * unmount any previously-rendered root and render nothing — the legacy
+ * marker shape stays untouched.
+ */
+function renderGlyph(
+  roots: Map<string, Root>,
+  markerEl: HTMLElement,
+  nodeId: string,
+  archetypeId: string,
+  state: NodeState,
+  category: NodeCategory,
+  enabled: boolean,
+): void {
+  const host = markerEl.querySelector(`[data-layer="${GLYPH_HOST_LAYER}"]`) as HTMLElement | null
+  if (!host) return
+
+  if (!enabled) {
+    const existing = roots.get(nodeId)
+    if (existing) {
+      queueMicrotask(() => existing.unmount())
+      roots.delete(nodeId)
+    }
+    return
+  }
+
+  let root = roots.get(nodeId)
+  if (!root) {
+    root = createRoot(host)
+    roots.set(nodeId, root)
+  }
+  root.render(
+    createElement(ArchetypeGlyph, {
+      archetypeId,
+      pulseState: state,
+      category,
+    }),
+  )
 }

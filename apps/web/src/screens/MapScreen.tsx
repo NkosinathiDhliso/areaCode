@@ -5,7 +5,8 @@ import { MapPinOff } from 'lucide-react'
 
 import { api } from '@area-code/shared/lib/api'
 import { useMapStore, useConsumerAuthStore, useLocationStore, useUserStore } from '@area-code/shared/stores'
-import { useGeolocation, useCheckIn } from '@area-code/shared/hooks'
+import { useGeolocation, useCheckIn, useNodeArchetype, useCityPulseToast } from '@area-code/shared/hooks'
+import { useLiveVibeOnMap } from '@area-code/shared/lib/featureGating'
 import { Spinner } from '@area-code/shared/components/Spinner'
 import type { Node, NodeCategory, Reward } from '@area-code/shared/types'
 
@@ -29,12 +30,50 @@ interface MapScreenProps {
 
 const DEFAULT_ZOOM = 13
 
+/**
+ * Flag-gated subscriber for live archetype deltas (R11.1, R12.4, R12.6).
+ *
+ * Mounted only when `live_vibe_on_map` is true; unmounting it tears down the
+ * `node:archetype_change` listener and the per-node retention timers, so the
+ * subscription is a true no-op while the flag is `false`. Keeps the hook
+ * call itself unconditional inside this component to honour React's rules
+ * of hooks.
+ */
+function LiveArchetypeSubscriber({ token, citySlug }: { token: string | undefined; citySlug: string }) {
+  useNodeArchetype(token, { citySlug })
+  return null
+}
+
+/**
+ * Flag-gated mount for the once-per-session City_Pulse toast (R2, R10.3).
+ *
+ * Mounted only when `live_vibe_on_map` is true so that while the flag is
+ * `false` the legacy permanent glass card in `MapControls` keeps rendering
+ * and no toast slot is ever consumed. Unmounting tears down the grace and
+ * auto-dismiss timers via `useCityPulseToast`'s cleanup effect.
+ */
+function CityPulseToastMount({ mapReady }: { mapReady: boolean }) {
+  useCityPulseToast({ mapReady })
+  return null
+}
+
 export function MapScreen({ onNavigate }: MapScreenProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
-  const { containerRef, mapRef, mapReady, mapError, retryMap, is3D, setPitch3D, bearing, resetNorth, recenterUser } =
-    useMapInit()
+  const {
+    containerRef,
+    mapRef,
+    mapReady,
+    mapError,
+    retryMap,
+    is3D,
+    setPitch3D,
+    bearing,
+    resetNorth,
+    recenterUser,
+    pauseIdleDrift,
+  } = useMapInit()
   const setNodes = useMapStore((s) => s.setNodes)
   const pulseScores = useMapStore((s) => s.pulseScores)
   const nodesById = useMapStore((s) => s.nodes)
@@ -43,6 +82,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const accessToken = useConsumerAuthStore((s) => s.accessToken)
   const permissionState = useLocationStore((s) => s.permissionState)
   const lastKnownPosition = useLocationStore((s) => s.lastKnownPosition)
+  const lastKnownPositionCapturedAt = useLocationStore((s) => s.capturedAt)
   const onboarding = useUserStore((s) => s.onboarding)
   const markHintSeen = useUserStore((s) => s.markHintSeen)
   const { requestLocation, geoStatus } = useGeolocation()
@@ -67,6 +107,13 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   // Socket subscriptions, citySlug passed for anonymous room join
   const userId = useConsumerAuthStore((s) => s.userId)
   useMapSockets(citySlug, accessToken ?? undefined, userId)
+
+  // Live archetype delivery is gated by the `live_vibe_on_map` flag (R12.4,
+  // R12.6). When the flag is `false` the subscriber is unmounted and the
+  // `node:archetype_change` listener is never attached, so the subscription
+  // is a true no-op. The flag is read at the top level here so the
+  // mount/unmount transition does not violate React's rules of hooks.
+  const liveVibeOnMap = useLiveVibeOnMap()
 
   // Fetch nodes for city
   const { data: nodeList } = useQuery({
@@ -230,7 +277,8 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
           onToggle3D={() => setPitch3D(!is3D)}
           onResetNorth={resetNorth}
           onRecenter={recenterUser}
-          hasUserLocation={!!lastKnownPosition}
+          lastKnownPositionFreshAt={lastKnownPositionCapturedAt}
+          pauseIdleDrift={pauseIdleDrift}
         />
       )}
 
@@ -295,6 +343,9 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
       <ToastOverlay />
       <ProximityNudgeBanner onNavigate={onNavigate} />
+
+      {liveVibeOnMap && <LiveArchetypeSubscriber token={accessToken ?? undefined} citySlug={citySlug} />}
+      {liveVibeOnMap && <CityPulseToastMount mapReady={mapReady} />}
 
       <NodeDetailSheet
         node={selectedNode}

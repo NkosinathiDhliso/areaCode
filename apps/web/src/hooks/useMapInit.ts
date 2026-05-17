@@ -271,6 +271,30 @@ export function useMapInit() {
   const [is3D, setIs3D] = useState(true)
   const [bearing, setBearing] = useState(BEARING_3D)
   const driftRafRef = useRef<number | null>(null)
+  /**
+   * Timestamp (Date.now()) until which the idle bearing-drift should remain
+   * paused. The drift `tick` reads this on every frame, and `pauseIdleDrift`
+   * (plus the existing mousedown/touchstart/wheel handlers) extends it.
+   *
+   * R1.5 requires at least 4000ms of pause after a Compass/Recenter tap, so
+   * callers pass `pauseIdleDrift(4000)`.
+   */
+  const driftPausedUntilRef = useRef<number>(0)
+
+  /**
+   * Pause idle bearing-drift for at least `ms` milliseconds.
+   *
+   * Used by Map_Sidebar (R1.5) so that a compass or recenter tap doesn't
+   * have the city slowly counter-rotating against the user's intent for the
+   * next animation frame. Idempotent and monotonic: calling it with a
+   * smaller `ms` while a longer pause is already pending is a no-op.
+   */
+  const pauseIdleDrift = useCallback((ms: number) => {
+    const until = Date.now() + Math.max(0, ms)
+    if (until > driftPausedUntilRef.current) {
+      driftPausedUntilRef.current = until
+    }
+  }, [])
 
   const setPitch3D = useCallback((on: boolean) => {
     setIs3D(on)
@@ -287,21 +311,65 @@ export function useMapInit() {
     }
   }, [])
 
+  /**
+   * Snap the bearing back to north when the user taps Compass_Button.
+   *
+   * Reads through `mapRef.current` (not the module-level `singletonMap`) so a
+   * teardown-recreate cycle via `retryMap` wires the latest map instance
+   * (Live Vibe on Map R1.1, design "Frontend: R1 sidebar correctness").
+   *
+   * Early-out branches:
+   *   - Map ref absent or not yet `loaded()`: silent debug log, no throw (R1.6).
+   *   - Bearing already within ±1° of north: no-op, no animation, no error (R1.2).
+   */
   const resetNorth = useCallback(() => {
-    const map = singletonMap
-    if (!map) return
+    const map = mapRef.current
+    if (!map || !map.loaded()) {
+      if (import.meta.env?.DEV) {
+        console.debug('[useMapInit] resetNorth ignored: map not loaded')
+      }
+      return
+    }
     try {
+      const current = map.getBearing()
+      // R1.2: within ±1° of north (0°) is a successful no-op. Compute the
+      // shortest signed angular distance from `current` to 0, robust to any
+      // bearing magnitude mapbox-gl might return.
+      const delta = Math.abs(((((current + 180) % 360) + 360) % 360) - 180)
+      if (delta <= 1) {
+        return
+      }
       map.easeTo({ bearing: 0, duration: 600 })
     } catch {
       /* ignore */
     }
   }, [])
 
+  /**
+   * Fly the map to the consumer's Last_Known_Position when the user taps
+   * Recenter_Button.
+   *
+   * Reads through `mapRef.current` (R1.1) and gates on the position's
+   * freshness via `Date.now() - capturedAt <= 60000` (R1.3) so a stale fix
+   * does not pull the map to where the user no longer is.
+   *
+   * Early-out branches:
+   *   - Map ref absent or not yet `loaded()`: silent debug log, no throw (R1.6).
+   *   - No `lastKnownPosition` or `capturedAt`: silent no-op.
+   *   - Position older than 60s: silent no-op (the button itself renders
+   *     disabled in this state per R1.4, but the callback also enforces).
+   */
   const recenterUser = useCallback(() => {
-    const map = singletonMap
-    if (!map) return
-    const pos = useLocationStore.getState().lastKnownPosition
-    if (!pos) return
+    const map = mapRef.current
+    if (!map || !map.loaded()) {
+      if (import.meta.env?.DEV) {
+        console.debug('[useMapInit] recenterUser ignored: map not loaded')
+      }
+      return
+    }
+    const { lastKnownPosition: pos, capturedAt } = useLocationStore.getState()
+    if (!pos || !capturedAt) return
+    if (Date.now() - capturedAt > 60_000) return
     try {
       map.flyTo({ center: [pos.lng, pos.lat], zoom: DEFAULT_ZOOM, duration: 1000 })
     } catch {
@@ -487,23 +555,27 @@ export function useMapInit() {
   // A near-imperceptible rotation (≈ 0.3°/sec) while the user is idle.
   // Mission-aligned: the city is alive, even when the user is still.
   // Pauses on user interaction and respects prefers-reduced-motion.
+  //
+  // The pause is shared with `pauseIdleDrift(ms)` (R1.5) via
+  // `driftPausedUntilRef`, so a Compass/Recenter tap can extend the pause
+  // independently of the mousedown/touchstart/wheel handlers below.
   useEffect(() => {
     if (!singletonLoaded || !is3D) return
     if (prefersReducedMotion()) return
 
     let lastTime = performance.now()
-    let interacting = false
     let interactionTimer: ReturnType<typeof setTimeout> | null = null
 
     const map = singletonMap
     if (!map) return
 
     const markInteraction = () => {
-      interacting = true
+      // Resume drift 4s after the last interaction.
+      driftPausedUntilRef.current = Date.now() + 4000
       if (interactionTimer) clearTimeout(interactionTimer)
-      // Resume drift 4s after the last interaction
       interactionTimer = setTimeout(() => {
-        interacting = false
+        // No-op timer: kept so we still clear it on cleanup. The drift loop
+        // checks `driftPausedUntilRef` directly each frame.
       }, 4000)
     }
 
@@ -515,7 +587,8 @@ export function useMapInit() {
       const delta = now - lastTime
       lastTime = now
 
-      if (!interacting && singletonMap === map) {
+      const paused = Date.now() < driftPausedUntilRef.current
+      if (!paused && singletonMap === map) {
         try {
           const current = map.getBearing()
           // 0.3 degrees per second, wraps cleanly through 360
@@ -558,5 +631,6 @@ export function useMapInit() {
     bearing,
     resetNorth,
     recenterUser,
+    pauseIdleDrift,
   }
 }

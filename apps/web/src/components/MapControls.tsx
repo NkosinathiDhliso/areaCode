@@ -1,9 +1,29 @@
+import { useLiveVibeOnMap } from '@area-code/shared/lib/featureGating'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import { Box, Square, Compass, Crosshair, Activity } from 'lucide-react'
-import { useMemo } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { getNodeState } from '../lib/mapHelpers'
+
+/**
+ * R1 debounce window shared by Compass_Button and Recenter_Button. A
+ * double-tap inside this window collapses to a single intent so the map
+ * does not whiplash between a bearing reset and a fly-to.
+ */
+const SIDEBAR_TAP_DEBOUNCE_MS = 250
+
+/**
+ * R1.3 / R1.4 freshness window. Anything older than 60s is treated as a
+ * stale fix and Recenter_Button renders in its disabled affordance.
+ */
+const LAST_KNOWN_POSITION_FRESHNESS_MS = 60_000
+
+/**
+ * R1.5 — minimum idle-drift pause after a sidebar tap so the city does not
+ * counter-rotate against the user's intent.
+ */
+const SIDEBAR_DRIFT_PAUSE_MS = 4000
 
 interface MapControlsProps {
   is3D: boolean
@@ -11,7 +31,17 @@ interface MapControlsProps {
   onToggle3D: () => void
   onResetNorth: () => void
   onRecenter: () => void
-  hasUserLocation: boolean
+  /**
+   * Timestamp (Date.now() ms) of the most recent Last_Known_Position, or
+   * `null` if the consumer has not yet granted permission / acquired a fix.
+   * Used by Recenter_Button to derive freshness per R1.3 / R1.4.
+   */
+  lastKnownPositionFreshAt: number | null
+  /**
+   * Pause the idle bearing-drift loop for at least `ms` milliseconds (R1.5).
+   * Wired through from `useMapInit`.
+   */
+  pauseIdleDrift?: (ms: number) => void
 }
 
 /**
@@ -30,11 +60,39 @@ export function MapControls({
   onToggle3D,
   onResetNorth,
   onRecenter,
-  hasUserLocation,
+  lastKnownPositionFreshAt,
+  pauseIdleDrift,
 }: MapControlsProps) {
   const { t } = useTranslation()
   const pulseScores = useMapStore((s) => s.pulseScores)
   const nodes = useMapStore((s) => s.nodes)
+  const liveVibeOnMap = useLiveVibeOnMap()
+
+  // Shared debounce timestamp across Compass_Button and Recenter_Button so a
+  // double-tap within 250ms is collapsed to a single intent (R1.7).
+  const lastTapAtRef = useRef<number>(0)
+
+  // R1.3 — freshness is derived at render time from the captured timestamp
+  // so the affordance flips back to disabled the moment the fix ages out,
+  // without requiring an extra timer to re-render the button.
+  const hasFreshUserLocation =
+    lastKnownPositionFreshAt !== null && Date.now() - lastKnownPositionFreshAt <= LAST_KNOWN_POSITION_FRESHNESS_MS
+
+  const handleResetNorth = useCallback(() => {
+    const now = Date.now()
+    if (now - lastTapAtRef.current < SIDEBAR_TAP_DEBOUNCE_MS) return
+    lastTapAtRef.current = now
+    pauseIdleDrift?.(SIDEBAR_DRIFT_PAUSE_MS)
+    onResetNorth()
+  }, [onResetNorth, pauseIdleDrift])
+
+  const handleRecenter = useCallback(() => {
+    const now = Date.now()
+    if (now - lastTapAtRef.current < SIDEBAR_TAP_DEBOUNCE_MS) return
+    lastTapAtRef.current = now
+    pauseIdleDrift?.(SIDEBAR_DRIFT_PAUSE_MS)
+    onRecenter()
+  }, [onRecenter, pauseIdleDrift])
 
   const { totalPulse, hottestState } = useMemo(() => {
     let total = 0
@@ -58,30 +116,37 @@ export function MapControls({
 
   return (
     <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex flex-col items-end gap-2 pointer-events-none">
-      {/* City Pulse readout */}
-      <div
-        className="glass-raised rounded-2xl px-3 py-2 flex items-center gap-2 pointer-events-auto"
-        style={{ minWidth: '88px' }}
-        aria-label={t('map.controls.cityPulse')}
-        title={t('map.controls.cityPulseHint')}
-      >
-        <span
-          className="relative inline-flex h-2 w-2 rounded-full"
-          style={{
-            background: pulseTone,
-            boxShadow: `0 0 8px ${pulseTone}, 0 0 16px ${pulseTone}`,
-            animation: 'breathe 2s ease-in-out infinite',
-          }}
-        />
-        <div className="flex flex-col leading-tight">
-          <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">
-            {t('map.controls.cityPulse')}
-          </span>
-          <span className="text-[var(--text-primary)] text-sm font-bold tabular-nums">
-            {totalPulse > 999 ? '999+' : totalPulse}
-          </span>
+      {/*
+        Legacy permanent City_Pulse glass card. Live Vibe on Map R2 replaces
+        this with a once-per-session toast surfaced via `useCityPulseToast`,
+        so behind the `live_vibe_on_map` flag we unmount the card entirely.
+        While the flag is `false` the card renders exactly as it does today.
+      */}
+      {!liveVibeOnMap && (
+        <div
+          className="glass-raised rounded-2xl px-3 py-2 flex items-center gap-2 pointer-events-auto"
+          style={{ minWidth: '88px' }}
+          aria-label={t('map.controls.cityPulse')}
+          title={t('map.controls.cityPulseHint')}
+        >
+          <span
+            className="relative inline-flex h-2 w-2 rounded-full"
+            style={{
+              background: pulseTone,
+              boxShadow: `0 0 8px ${pulseTone}, 0 0 16px ${pulseTone}`,
+              animation: 'breathe 2s ease-in-out infinite',
+            }}
+          />
+          <div className="flex flex-col leading-tight">
+            <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">
+              {t('map.controls.cityPulse')}
+            </span>
+            <span className="text-[var(--text-primary)] text-sm font-bold tabular-nums">
+              {totalPulse > 999 ? '999+' : totalPulse}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Control stack */}
       <div className="glass-raised rounded-2xl p-1 flex flex-col gap-1 pointer-events-auto">
@@ -109,7 +174,7 @@ export function MapControls({
           <span className="text-[9px] font-bold tracking-wider leading-none">{is3D ? '3D' : '2D'}</span>
         </button>
 
-        <ControlButton onClick={onResetNorth} label={t('map.controls.north')}>
+        <ControlButton onClick={handleResetNorth} label={t('map.controls.north')} testId="map-sidebar-compass">
           <span
             className="inline-flex"
             style={{
@@ -121,7 +186,12 @@ export function MapControls({
           </span>
         </ControlButton>
 
-        <ControlButton onClick={onRecenter} disabled={!hasUserLocation} label={t('map.controls.recenter')}>
+        <ControlButton
+          onClick={handleRecenter}
+          disabled={!hasFreshUserLocation}
+          label={t('map.controls.recenter')}
+          testId="map-sidebar-recenter"
+        >
           <Crosshair size={18} strokeWidth={1.75} />
         </ControlButton>
       </div>
@@ -148,15 +218,18 @@ interface ControlButtonProps {
   label: string
   active?: boolean
   disabled?: boolean
+  testId?: string
 }
 
-function ControlButton({ onClick, children, label, active, disabled }: ControlButtonProps) {
+function ControlButton({ onClick, children, label, active, disabled, testId }: ControlButtonProps) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
+      aria-disabled={disabled ? true : undefined}
       title={label}
+      data-testid={testId}
       className={`
         w-10 h-10 rounded-xl flex items-center justify-center transition-all
         ${

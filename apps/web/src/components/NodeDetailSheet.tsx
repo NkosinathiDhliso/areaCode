@@ -7,10 +7,21 @@ import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore
 import { useErrorStore } from '@area-code/shared/stores/errorStore'
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import type { GeoStatus } from '@area-code/shared/stores/locationStore'
+import { useMapStore } from '@area-code/shared/stores/mapStore'
 import { CrowdVibeSection } from './CrowdVibeSection'
+import { ArchetypeGlyph } from './ArchetypeGlyph'
 import { DirectionsSheet } from './DirectionsSheet'
 import { QrScannerSheet } from './QrScannerSheet'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
+import { resolveArchetypeDisplayName } from '../lib/archetypeDisplay'
+
+/**
+ * Live_Archetype id used when no live value has arrived for the node and
+ * the node has no `defaultArchetypeId`. Mirrors R7.8's eclectic-fallback
+ * rule on the rendering side so the detail sheet glyph + display name
+ * are never blank (R8.10 / R9.6).
+ */
+const DEFAULT_ARCHETYPE_ID = 'archetype-eclectic'
 
 // ─── Directions ────────────────────────────────────────────────────────────
 //
@@ -55,6 +66,14 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
   const isBusinessAuthenticated = useBusinessAuthStore((s) => s.isAuthenticated)
   const geoStatus = useLocationStore((s) => s.geoStatus)
+  // Live_Archetype id for this node — same resolution order as the map
+  // marker (`useMapMarkers.ts`): cached live id from the
+  // `node:archetype_change` stream, then the node's configured default,
+  // then the eclectic fallback per R7.8. Drives the R8.10 / R9.6 glyph
+  // and display name in the detail sheet.
+  const archetypeId = useMapStore(
+    (s) => (node ? s.archetypeIds[node.id] : undefined) ?? node?.defaultArchetypeId ?? DEFAULT_ARCHETYPE_ID,
+  )
   const [menuOpen, setMenuOpen] = useState(false)
   const [claimModalOpen, setClaimModalOpen] = useState(false)
   const [registrationNumber, setRegistrationNumber] = useState('')
@@ -330,6 +349,20 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
               </div>
             </div>
           )}
+
+          {/* Live archetype glyph + display name (R8.10, R9.6).
+              `ArchetypeGlyph` positions itself absolutely against its
+              parent, so we wrap it in a relative-sized box. The display
+              name resolves through `resolveArchetypeDisplayName` which
+              emits a non-blocking warning for unknown ids per R9.10. */}
+          <div className="flex flex-row items-center gap-2 mb-3">
+            <div className="relative w-6 h-6 shrink-0">
+              <ArchetypeGlyph archetypeId={archetypeId} pulseState={state} category={node.category} size={24} />
+            </div>
+            <span className="text-[var(--text-primary)] text-sm font-medium">
+              {resolveArchetypeDisplayName(archetypeId)}
+            </span>
+          </div>
 
           {/* Crowd Vibe section */}
           <CrowdVibeSection nodeId={node.id} />

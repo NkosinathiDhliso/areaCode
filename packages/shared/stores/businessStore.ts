@@ -15,6 +15,7 @@ type DashboardPanel =
   | 'staff-redemptions'
   | 'staff-leaderboard'
   | 'reports'
+  | 'music-schedule'
 
 interface BusinessState {
   business: BusinessAccount | null

@@ -357,6 +357,46 @@ resource "aws_dynamodb_table" "app_data" {
   tags = { Environment = local.env }
 }
 
+# Live_Vibe_on_Map: per-business Music_Schedule rows.
+#   PK = BUSINESS#<businessId>
+#   SK = SCHEDULE#<scheduleId>
+# GSI ByNextTransition is sparse — only schedules with at least one slot
+# carry `gsi1pk` / `nextTransitionAt`, so the schedule-transition-tick
+# Lambda can BETWEEN-query upcoming boundaries without scanning empty rows.
+resource "aws_dynamodb_table" "music_schedules" {
+  name         = "area-code-${local.env}-music-schedules"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+  range_key    = "sk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+  attribute {
+    name = "gsi1pk"
+    type = "S"
+  }
+  attribute {
+    name = "nextTransitionAt"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "ByNextTransition"
+    hash_key        = "gsi1pk"
+    range_key       = "nextTransitionAt"
+    projection_type = "ALL"
+  }
+
+  point_in_time_recovery { enabled = true }
+  tags = { Environment = local.env }
+}
+
 # =============================================================================
 # Lambda functions
 # =============================================================================
@@ -533,6 +573,91 @@ module "lambda_report_generator" {
     AREA_CODE_SQS_PUSH_QUEUE_URL = module.sqs_push_sender.queue_url
     AREA_CODE_ANONYMIZATION_SALT = "report-anonymization-salt-dev"
   }
+}
+
+# Live_Vibe_on_Map: schedule-transition-tick worker.
+#
+# Invoked every minute by EventBridge. Queries the `MusicSchedules`
+# `ByNextTransition` GSI for schedules whose `nextTransitionAt` is inside
+# the next 60s window and fans out one Evaluation_Tick to the in-process
+# `evaluateLiveArchetype` orchestrator (see backend/src/workers/
+# schedule-transition-tick.ts). The evaluator is short-circuited to a no-op
+# while `LIVE_VIBE_ON_MAP_FLAG` is "false" (R12.5) so this can ship before
+# the canary flip without consuming DynamoDB budget.
+module "lambda_schedule_transition_tick" {
+  source                 = "../../modules/lambda"
+  env                    = local.env
+  function_name          = "schedule-transition-tick"
+  handler                = "index.handler"
+  timeout                = 60
+  memory_size            = 256
+  lambda_in_vpc          = true
+  vpc_subnet_ids         = module.vpc.private_subnet_ids
+  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  environment_variables = {
+    AREA_CODE_ENV          = local.env
+    MUSIC_SCHEDULES_TABLE  = aws_dynamodb_table.music_schedules.name
+    NODES_TABLE            = aws_dynamodb_table.nodes.name
+    CHECKINS_TABLE         = aws_dynamodb_table.checkins.name
+    APP_DATA_TABLE         = aws_dynamodb_table.app_data.name
+    LIVE_VIBE_ON_MAP_FLAG  = "false"
+  }
+}
+
+# Lambda IAM: schedule-transition-tick reads MusicSchedules (GSI + base),
+# Nodes (BusinessIndex), CheckIns (per-venue GSI), and appData (city row);
+# updates Nodes for the `lastArchetypeId` cache; publishes archetype-change
+# deltas via the WebSocket API management plane. Least-privilege per R11.5.
+resource "aws_iam_role_policy" "schedule_transition_tick_dynamodb" {
+  name = "dynamodb-access"
+  role = module.lambda_schedule_transition_tick.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:Query"
+      ]
+      Resource = [
+        aws_dynamodb_table.music_schedules.arn,
+        "${aws_dynamodb_table.music_schedules.arn}/index/*",
+        aws_dynamodb_table.nodes.arn,
+        "${aws_dynamodb_table.nodes.arn}/index/*",
+        aws_dynamodb_table.checkins.arn,
+        "${aws_dynamodb_table.checkins.arn}/index/*",
+        aws_dynamodb_table.app_data.arn,
+        "${aws_dynamodb_table.app_data.arn}/index/*"
+      ]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "schedule_transition_tick_websocket" {
+  name = "websocket-manage"
+  role = module.lambda_schedule_transition_tick.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["execute-api:ManageConnections", "execute-api:Invoke"]
+        Resource = "arn:aws:execute-api:us-east-1:*:${module.websocket.websocket_api_id}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = ["dynamodb:GetItem", "dynamodb:Query"]
+        Resource = [
+          module.websocket.connections_table_arn,
+          "${module.websocket.connections_table_arn}/index/*"
+        ]
+      }
+    ]
+  })
 }
 
 # WebSocket Lambda
@@ -884,6 +1009,14 @@ module "eventbridge_schedules" {
       lambda_arn           = module.lambda_report_dispatcher.function_arn
       lambda_function_name = module.lambda_report_dispatcher.function_name
     }
+    schedule-transition-tick = {
+      # Live_Vibe_on_Map evaluation tick (R11.5). EventBridge's minimum
+      # cadence is `rate(1 minute)`, matching the design's 60s window.
+      description          = "Live Vibe on Map schedule transition tick (every minute)"
+      schedule_expression  = "rate(1 minute)"
+      lambda_arn           = module.lambda_schedule_transition_tick.function_arn
+      lambda_function_name = module.lambda_schedule_transition_tick.function_name
+    }
   }
 }
 
@@ -902,6 +1035,13 @@ module "api_gateway" {
     "https://master.d1ay6jict0ql9w.amplifyapp.com",
   ]
 
+  # The `$default` catch-all routes every HTTP path (including all
+  # `/v1/business/{businessId}/music-schedule[/...]` schedule-CRUD routes
+  # added in the live-vibe-on-map spec, task 7.3) into the Fastify
+  # monolith. New backend routes that live inside `lambda_api` therefore
+  # do NOT require additional IaC entries here — they are picked up by
+  # Fastify's router at runtime. The only per-route override below is
+  # the Yoco webhook, which targets a different Lambda.
   lambda_integrations = {
     api_catchall = {
       invoke_arn = module.lambda_api.invoke_arn
