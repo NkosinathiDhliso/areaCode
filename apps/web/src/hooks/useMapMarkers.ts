@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import mapboxgl from 'mapbox-gl'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import type { Node, NodeCategory, NodeState } from '@area-code/shared/types'
+import { TIER_SIZE_MULTIPLIER } from '@area-code/shared/constants'
 import { getNodeState, getCategoryColour } from '../lib/mapHelpers'
 import { ArchetypeGlyph } from '../components/ArchetypeGlyph'
 
@@ -133,6 +134,10 @@ function buildMarkerElement(
     // Soft drop-shadow so the silhouette reads on light tiles. Not a
     // glow per se — the halo handles glow. This is just edge separation.
     filter: state === 'dormant' ? 'none' : `drop-shadow(0 0 ${glyphSize * 0.25}px ${colour}66)`,
+    // Smooth size transition so a mid-session tier upgrade (e.g.
+    // starter → growth) rescales the glyph over 400ms rather than
+    // snapping instantly (R8.6 crossfade / smooth transitions).
+    transition: 'width 400ms ease, height 400ms ease',
   })
   glyphWrapper.dataset.layer = 'glyph-wrapper'
   glyphWrapper.addEventListener('mousedown', (e) => e.stopPropagation())
@@ -339,7 +344,8 @@ export function useMapMarkers(
       for (const node of filtered) {
         const score = pulseScores[node.id] ?? 0
         const state = getNodeState(score)
-        const glyphSize = getGlyphSize(state, score)
+        const tierMultiplier = TIER_SIZE_MULTIPLIER[node.businessTier ?? 'starter']
+        const glyphSize = getGlyphSize(state, score) * tierMultiplier
         const colour = getCategoryColour(node.category)
         const existing = markersRef.current.get(node.id)
         // R7.8 / R8 fallback ladder: live archetype id from the store

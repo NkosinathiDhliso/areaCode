@@ -11,3 +11,4 @@ export {
   type ArchetypeNameEntry,
 } from './archetype-names'
 export { ARCHETYPE_GLYPHS, getArchetypeGlyph, dynamicContrastForCategory } from './archetype-glyphs'
+export { TIER_SIZE_MULTIPLIER } from './tier-size'

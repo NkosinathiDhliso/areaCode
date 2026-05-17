@@ -185,6 +185,13 @@ export interface Node {
   instagramHandle?: string | null
   createdAt: string
   /**
+   * The owning business's subscription tier, passed through from the
+   * paid-tier filter in `getNodesByCitySlug`. Drives the tier-based
+   * glyph size multiplier on the map (R8.1). Defaults to `'starter'`
+   * when absent on the client.
+   */
+  businessTier?: BusinessTier
+  /**
    * Optional fallback Archetype id used by the Live_Archetype resolver
    * (R7.7) when no Active_Slot exists and the 90-min check-in window
    * carries no catalog archetypeId. Stored as `defaultArchetypeId` on

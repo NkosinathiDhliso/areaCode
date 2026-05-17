@@ -23,18 +23,19 @@ export async function getNodesByCitySlug(citySlug: string) {
   )
   const items = result.Items || []
 
-  // Build a set of business-owned nodes whose business is on a paid tier.
+  // Build a map of business-owned nodes whose business is on a paid tier.
   // Nodes without a businessId (legacy/unclaimed) are always visible.
   const businessIds = Array.from(
     new Set(items.map((n) => n['businessId']).filter((b): b is string => typeof b === 'string' && b.length > 0)),
   )
-  const paidBusinessIds = new Set<string>()
+  const paidBusinessTiers = new Map<string, string>()
   if (businessIds.length > 0) {
     const { findBusinessById } = await import('../business/repository.js')
     const businesses = await Promise.all(businessIds.map((id) => findBusinessById(id).catch(() => null)))
     businesses.forEach((b, i) => {
-      if (b && PAID_TIERS_SET.has(b.tier ?? 'free')) {
-        paidBusinessIds.add(businessIds[i]!)
+      const tier = b?.tier ?? 'free'
+      if (b && PAID_TIERS_SET.has(tier)) {
+        paidBusinessTiers.set(businessIds[i]!, tier)
       }
     })
   }
@@ -44,7 +45,7 @@ export async function getNodesByCitySlug(citySlug: string) {
       const bid = n['businessId']
       // Require an owning business on a paid tier. Orphan/legacy nodes are hidden.
       if (!bid || typeof bid !== 'string') return false
-      return paidBusinessIds.has(bid)
+      return paidBusinessTiers.has(bid)
     })
     .map((n) => ({
       id: n['nodeId'] ?? n['id'],
@@ -57,6 +58,7 @@ export async function getNodesByCitySlug(citySlug: string) {
       nodeColour: n['nodeColour'],
       nodeIcon: n['nodeIcon'],
       isVerified: n['isVerified'],
+      businessTier: paidBusinessTiers.get(n['businessId'] as string) ?? 'starter',
     }))
 }
 

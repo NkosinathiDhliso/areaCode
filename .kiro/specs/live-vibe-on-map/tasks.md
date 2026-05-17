@@ -296,34 +296,34 @@ This plan implements the five Live Vibe on Map deliverables bottom-up: shared ty
 - [x] 15. Final checkpoint — full feature green behind the flag
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 16. Tier-driven glyph size multiplier (boost = paid lever, halo = honest lever)
-  - [ ] 16.1 Expose `businessTier` on the nodes-for-city REST payload
+- [x] 16. Tier-driven glyph size multiplier (boost = paid lever, halo = honest lever)
+  - [x] 16.1 Expose `businessTier` on the nodes-for-city REST payload
     - Edit `backend/src/features/nodes/repository.ts` `getNodesByCitySlug` to include the owning business's `tier` field in the returned node objects (already fetched during the paid-tier filter pass — just pass it through)
     - Add `businessTier?: BusinessTier` to the shared `Node` interface in `packages/shared/types/index.ts`; default to `'starter'` when absent on the client
     - _Requirements: 8.1 (size driven by tier), 12.4 (data plumbing)_
 
-  - [ ] 16.2 Add `TIER_SIZE_MULTIPLIER` constant and apply in `useMapMarkers.ts`
+  - [x] 16.2 Add `TIER_SIZE_MULTIPLIER` constant and apply in `useMapMarkers.ts`
     - Create `packages/shared/constants/tier-size.ts` exporting `TIER_SIZE_MULTIPLIER: Record<BusinessTier, number>` with values `{ free: 1.0, starter: 1.0, payg: 1.0, growth: 1.3, pro: 1.6 }`
     - In `useMapMarkers.ts`, multiply the base glyph size (`getGlyphSize(state, score)`) by `TIER_SIZE_MULTIPLIER[node.businessTier ?? 'starter']` so tier drives size independently of pulse score
     - Halo radius stays proportional to the multiplied glyph size (bigger venue = bigger halo radius) but halo brightness/speed stays locked to pulse score only — no tier influence on animation
     - _Requirements: 8.1 (size = paid lever), 8.5 (halo = honest lever)_
 
-  - [ ] 16.3 Smooth size transition on tier change
+  - [x] 16.3 Smooth size transition on tier change
     - Add a CSS `transition: width 400ms ease, height 400ms ease` on the `glyph-wrapper` element in `buildMarkerElement` so a mid-session tier upgrade rescales smoothly rather than snapping
     - _Requirements: 8.6 (crossfade / smooth transitions)_
 
-  - [ ] 16.4 Write property test: glyph size is non-decreasing with tier rank
+  - [x] 16.4 Write property test: glyph size is non-decreasing with tier rank
     - Create `apps/web/src/hooks/__tests__/useMapMarkers.tier-size.test.ts`
     - For every (Pulse_State × score × tier) triple, assert `glyphSize(state, score, tierA) <= glyphSize(state, score, tierB)` whenever `tierRank(tierA) <= tierRank(tierB)`
     - Assert that halo animation speed is identical across tiers for the same Pulse_State (tier does not buy brightness)
     - **Validates: size = paid lever, halo = honest lever invariant**
 
-  - [ ] 16.5 Confirm free-tier exclusion from the map (existing behaviour)
+  - [x] 16.5 Confirm free-tier exclusion from the map (existing behaviour)
     - Write a focused integration test in `backend/src/features/nodes/__tests__/repository.test.ts` asserting that `getNodesByCitySlug` returns zero nodes for businesses with `tier = 'free'`
     - This is existing behaviour (the `PAID_TIERS_SET` filter) but not currently tested — pin it so a future refactor can't accidentally expose free-tier venues
     - _Requirements: map visibility = paid subscription only_
 
-- [ ] 17. Checkpoint — tier-driven size green
+- [x] 17. Checkpoint — tier-driven size green
   - Run all new tests from 16.x plus the existing contrast test (which should still pass since tier doesn't affect the silhouette/outline colour pairing)
   - Ensure no regressions in the full task 15 surface
 
