@@ -31,8 +31,8 @@ export function TermsScreen({ onNavigate }: TermsScreenProps) {
         <section className="space-y-6 text-sm leading-relaxed text-[var(--text-secondary)]">
           <p>
             These terms govern your use of the Area Code consumer app at{' '}
-            <a href="https://areacode.co.za" className="text-[var(--accent)] underline">
-              areacode.co.za
+            <a href="https://www.areacode.co.za" className="text-[var(--accent)] underline">
+              www.areacode.co.za
             </a>
             . By creating an account or signing in, you agree to them.
           </p>

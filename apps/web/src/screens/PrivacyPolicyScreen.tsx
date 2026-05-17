@@ -38,8 +38,8 @@ export function PrivacyPolicyScreen({ onNavigate }: PrivacyPolicyScreenProps) {
             Area Code (&quot;we&quot;, &quot;us&quot;, &quot;our&quot;) is a venue-discovery platform operated from
             South Africa. This policy explains what personal information we collect from you when you use the Area Code
             consumer app at{' '}
-            <a href="https://areacode.co.za" className="text-[var(--accent)] underline">
-              areacode.co.za
+            <a href="https://www.areacode.co.za" className="text-[var(--accent)] underline">
+              www.areacode.co.za
             </a>
             , why we collect it, how we use it, and the rights you have over it.
           </p>
@@ -211,7 +211,8 @@ export function PrivacyPolicyScreen({ onNavigate }: PrivacyPolicyScreenProps) {
           <h2 className="font-[Syne] text-xl font-bold text-[var(--text-primary)] pt-4">9. Cookies and storage</h2>
           <p>
             We use browser local storage to keep you signed in and to remember your settings. We do not use third-party
-            advertising cookies. We use a single first-party error-monitoring cookie set by Sentry for crash reporting.
+            advertising cookies or analytics cookies. For crash and performance monitoring we use Amazon CloudWatch RUM,
+            configured to operate without cookies.
           </p>
 
           <h2 className="font-[Syne] text-xl font-bold text-[var(--text-primary)] pt-4">10. Changes</h2>

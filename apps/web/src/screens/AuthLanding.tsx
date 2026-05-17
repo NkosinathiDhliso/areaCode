@@ -206,11 +206,11 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
             link of your privacy policy to your homepage and this link should
             match the link you added on your OAuth consent screen configuration".
             The Privacy Policy URL configured in Google Cloud → Branding is
-            https://areacode.co.za/legal/privacy. Keep these in sync.
+            https://www.areacode.co.za/legal/privacy. Keep these in sync.
           */}
           <nav aria-label="Legal" className="mt-3 flex items-center gap-3 text-[11px] text-[var(--text-muted)]">
             <a
-              href="https://areacode.co.za/legal/privacy"
+              href="https://www.areacode.co.za/legal/privacy"
               onClick={(e) => {
                 e.preventDefault()
                 go('legal-privacy', '/legal/privacy')
@@ -221,7 +221,7 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
             </a>
             <span aria-hidden="true">·</span>
             <a
-              href="https://areacode.co.za/legal/terms"
+              href="https://www.areacode.co.za/legal/terms"
               onClick={(e) => {
                 e.preventDefault()
                 go('legal-terms', '/legal/terms')
