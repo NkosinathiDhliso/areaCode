@@ -45,36 +45,21 @@ import { BoostPurchaseReport } from '../screens/BoostPurchaseReport'
 // (`biz_…`, `ch_…`, `nbr_…`) keep generated values from accidentally
 // colliding with table header text such as "businessId".
 
-const alphanumChar = fc.constantFrom(
-  ...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'.split(''),
-)
+const alphanumChar = fc.constantFrom(...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'.split(''))
 
-const businessIdArb = fc
-  .string({ minLength: 4, maxLength: 16, unit: alphanumChar })
-  .map((s) => `biz_${s}`)
+const businessIdArb = fc.string({ minLength: 4, maxLength: 16, unit: alphanumChar }).map((s) => `biz_${s}`)
 
-const nodeIdArb = fc
-  .string({ minLength: 4, maxLength: 16, unit: alphanumChar })
-  .map((s) => `node_${s}`)
+const nodeIdArb = fc.string({ minLength: 4, maxLength: 16, unit: alphanumChar }).map((s) => `node_${s}`)
 
-const yocoCheckoutIdArb = fc
-  .string({ minLength: 6, maxLength: 24, unit: alphanumChar })
-  .map((s) => `ch_${s}`)
+const yocoCheckoutIdArb = fc.string({ minLength: 6, maxLength: 24, unit: alphanumChar }).map((s) => `ch_${s}`)
 
 const neighbourhoodIdArb = fc.option(
-  fc
-    .string({ minLength: 4, maxLength: 16, unit: alphanumChar })
-    .map((s) => `nbr_${s}`),
+  fc.string({ minLength: 4, maxLength: 16, unit: alphanumChar }).map((s) => `nbr_${s}`),
   { nil: null, freq: 4 },
 )
 
 const durationArb = fc.constantFrom('2hr' as const, '6hr' as const, '24hr' as const)
-const tierArb = fc.constantFrom(
-  'starter' as const,
-  'growth' as const,
-  'pro' as const,
-  'payg' as const,
-)
+const tierArb = fc.constantFrom('starter' as const, 'growth' as const, 'pro' as const, 'payg' as const)
 
 // Use a finite ISO range so `Intl.DateTimeFormat` can format reliably
 // across all platforms. 2024-01-01 → 2030-12-31.

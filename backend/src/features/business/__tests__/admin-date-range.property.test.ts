@@ -75,9 +75,7 @@ const mocks = vi.hoisted(() => {
 
       let startIndex = 0
       if (startKey) {
-        const idx = matching.findIndex(
-          (r) => r['pk'] === startKey.pk && r['sk'] === startKey.sk,
-        )
+        const idx = matching.findIndex((r) => r['pk'] === startKey.pk && r['sk'] === startKey.sk)
         startIndex = idx >= 0 ? idx + 1 : matching.length
       }
 
@@ -134,9 +132,7 @@ const wordDashStringArb = (min: number, max: number) =>
   fc.string({
     minLength: min,
     maxLength: max,
-    unit: fc.constantFrom(
-      ...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-'.split(''),
-    ),
+    unit: fc.constantFrom(...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-'.split('')),
   })
 
 const businessIdArb = wordDashStringArb(1, 64)
@@ -147,9 +143,7 @@ const durationArb: fc.Arbitrary<BoostDuration> = fc.constantFrom('2hr', '6hr', '
 const tierArb = fc.constantFrom('starter', 'growth', 'pro', 'payg') as fc.Arbitrary<
   'starter' | 'growth' | 'pro' | 'payg'
 >
-const isoMillisArb = fc
-  .integer({ min: MIN_TIME_MS, max: MAX_TIME_MS })
-  .map((ms) => new Date(ms).toISOString())
+const isoMillisArb = fc.integer({ min: MIN_TIME_MS, max: MAX_TIME_MS }).map((ms) => new Date(ms).toISOString())
 
 const boosterPurchaseRowArb: fc.Arbitrary<BoosterPurchaseRow> = fc
   .record({
@@ -200,9 +194,7 @@ function dedupeByPkSk(rows: BoosterPurchaseRow[]): BoosterPurchaseRow[] {
   return out
 }
 
-const seedSetArb = fc
-  .array(boosterPurchaseRowArb, { minLength: 0, maxLength: 60 })
-  .map(dedupeByPkSk)
+const seedSetArb = fc.array(boosterPurchaseRowArb, { minLength: 0, maxLength: 60 }).map(dedupeByPkSk)
 
 // ─── Range arbitraries: valid, inverted, over-cap ───────────────────────────
 
@@ -211,10 +203,7 @@ type GeneratedRange = { fromIso: string; toIso: string; classification: RangeCla
 
 /** `from <= to` AND `(to - from) <= 367 days` — service accepts. */
 const validRangeArb: fc.Arbitrary<GeneratedRange> = fc
-  .tuple(
-    fc.integer({ min: MIN_TIME_MS, max: MAX_TIME_MS }),
-    fc.integer({ min: 0, max: RANGE_MS }),
-  )
+  .tuple(fc.integer({ min: MIN_TIME_MS, max: MAX_TIME_MS }), fc.integer({ min: 0, max: RANGE_MS }))
   .map(([fromMs, deltaMs]) => ({
     fromIso: new Date(fromMs).toISOString(),
     toIso: new Date(fromMs + deltaMs).toISOString(),
@@ -223,10 +212,7 @@ const validRangeArb: fc.Arbitrary<GeneratedRange> = fc
 
 /** `from > to` — service rejects with 400 before any DynamoDB call. */
 const invertedRangeArb: fc.Arbitrary<GeneratedRange> = fc
-  .tuple(
-    fc.integer({ min: MIN_TIME_MS + 1, max: MAX_TIME_MS }),
-    fc.integer({ min: 1, max: RANGE_MS }),
-  )
+  .tuple(fc.integer({ min: MIN_TIME_MS + 1, max: MAX_TIME_MS }), fc.integer({ min: 1, max: RANGE_MS }))
   .map(([toMs, deltaMs]) => ({
     fromIso: new Date(toMs).toISOString(),
     toIso: new Date(toMs - deltaMs).toISOString(),
@@ -285,9 +271,7 @@ describe('Property 6: admin date-range query result-set with range-validation ga
 
         // (b) Valid range: drive pagination to completion and assert set equality
         // against the boundary-inclusive in-memory filter.
-        const expected = rows.filter(
-          (r) => r.gsi1sk >= range.fromIso && r.gsi1sk <= range.toIso,
-        )
+        const expected = rows.filter((r) => r.gsi1sk >= range.fromIso && r.gsi1sk <= range.toIso)
 
         type CollectedRow = { businessId: string; paidAt: string; yocoCheckoutId: string }
         const collected: CollectedRow[] = []
@@ -296,12 +280,7 @@ describe('Property 6: admin date-range query result-set with range-validation ga
         // Use `limit=5` to force multi-page traversal even with small seeded sets.
         // Hard upper bound on iterations as a safety rail against runaway cursors.
         for (let safety = 0; safety < 200; safety++) {
-          const page = await listBoosterPurchasesByDateRange(
-            range.fromIso,
-            range.toIso,
-            cursor,
-            5,
-          )
+          const page = await listBoosterPurchasesByDateRange(range.fromIso, range.toIso, cursor, 5)
           collected.push(...page.items)
           if (page.nextCursor === null) break
           cursor = page.nextCursor

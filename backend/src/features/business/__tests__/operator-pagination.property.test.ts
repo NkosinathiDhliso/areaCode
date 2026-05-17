@@ -45,16 +45,14 @@ const mocks = vi.hoisted(() => {
     // no other DynamoDB commands on `listBoosterPurchasesForBusiness`'s code
     // path so a default empty response is safe for everything else.
     if ('KeyConditionExpression' in input) {
-      const pk = (input['ExpressionAttributeValues'] as Record<string, unknown> | undefined)?.[
-        ':pk'
-      ] as string | undefined
+      const pk = (input['ExpressionAttributeValues'] as Record<string, unknown> | undefined)?.[':pk'] as
+        | string
+        | undefined
       if (typeof pk !== 'string') return { Items: [] }
 
       const limit = (input['Limit'] as number | undefined) ?? 25
       const scanForward = input['ScanIndexForward'] !== false
-      const exclusiveStartKey = input['ExclusiveStartKey'] as
-        | { pk: string; sk: string }
-        | undefined
+      const exclusiveStartKey = input['ExclusiveStartKey'] as { pk: string; sk: string } | undefined
 
       const partition = (store.get(pk) ?? []).slice() as Array<{ pk: string; sk: string }>
       partition.sort((a, b) => {
@@ -65,9 +63,7 @@ const mocks = vi.hoisted(() => {
 
       let startIdx = 0
       if (exclusiveStartKey) {
-        const idx = partition.findIndex(
-          (r) => r.pk === exclusiveStartKey.pk && r.sk === exclusiveStartKey.sk,
-        )
+        const idx = partition.findIndex((r) => r.pk === exclusiveStartKey.pk && r.sk === exclusiveStartKey.sk)
         startIdx = idx >= 0 ? idx + 1 : 0
       }
 
@@ -125,9 +121,7 @@ const wordDashStringArb = (minLength: number, maxLength: number) =>
   fc.string({
     minLength,
     maxLength,
-    unit: fc.constantFrom(
-      ...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-'.split(''),
-    ),
+    unit: fc.constantFrom(...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-'.split('')),
   })
 
 const nodeIdArb = wordDashStringArb(1, 64)
@@ -187,56 +181,50 @@ const seedSetArb = fc.uniqueArray(boosterPurchaseRowArb, {
 // ─── Property 7: pagination round-trip ──────────────────────────────────────
 
 describe('Property 7: operator pagination round-trip preserves order and identity', () => {
-  it(
-    'union of pages contains every seed row exactly once, paidAt-descending',
-    { timeout: 60_000 },
-    async () => {
-      await fc.assert(
-        fc.asyncProperty(seedSetArb, async (rows) => {
-          mocks.seed(rows)
+  it('union of pages contains every seed row exactly once, paidAt-descending', { timeout: 60_000 }, async () => {
+    await fc.assert(
+      fc.asyncProperty(seedSetArb, async (rows) => {
+        mocks.seed(rows)
 
-          const collected: Array<{ yocoCheckoutId: string; paidAt: string }> = []
-          let cursor: string | null = null
-          let pageCount = 0
-          const maxPages = Math.ceil(rows.length / 25) + 2 // safety bound
+        const collected: Array<{ yocoCheckoutId: string; paidAt: string }> = []
+        let cursor: string | null = null
+        let pageCount = 0
+        const maxPages = Math.ceil(rows.length / 25) + 2 // safety bound
 
-          do {
-            const result = await listBoosterPurchasesForBusiness(FIXED_BUSINESS_ID, cursor, 25)
-            for (const item of result.items) {
-              collected.push({ yocoCheckoutId: item.yocoCheckoutId, paidAt: item.paidAt })
-            }
-            cursor = result.nextCursor
-            pageCount++
-            if (pageCount > maxPages) {
-              throw new Error(
-                `Pagination failed to terminate after ${pageCount} pages (rows=${rows.length})`,
-              )
-            }
-          } while (cursor !== null)
-
-          // Total count matches seed count.
-          expect(collected.length).toBe(rows.length)
-
-          // Each row appears exactly once across the union of pages.
-          const collectedIds = new Set(collected.map((r) => r.yocoCheckoutId))
-          expect(collectedIds.size).toBe(collected.length)
-
-          const seedIds = new Set(rows.map((r) => r.yocoCheckoutId))
-          expect(collectedIds).toEqual(seedIds)
-
-          // Union is paidAt-descending (non-strict — ties are allowed when two
-          // rows happen to share the same paidAt timestamp; the secondary sk
-          // ordering on yocoCheckoutId disambiguates the tie deterministically).
-          for (let i = 1; i < collected.length; i++) {
-            const prev = collected[i - 1]!.paidAt
-            const curr = collected[i]!.paidAt
-            expect(curr <= prev).toBe(true)
+        do {
+          const result = await listBoosterPurchasesForBusiness(FIXED_BUSINESS_ID, cursor, 25)
+          for (const item of result.items) {
+            collected.push({ yocoCheckoutId: item.yocoCheckoutId, paidAt: item.paidAt })
           }
-        }),
-        { numRuns: 100 },
-      )
-    },
-  )
+          cursor = result.nextCursor
+          pageCount++
+          if (pageCount > maxPages) {
+            throw new Error(`Pagination failed to terminate after ${pageCount} pages (rows=${rows.length})`)
+          }
+        } while (cursor !== null)
+
+        // Total count matches seed count.
+        expect(collected.length).toBe(rows.length)
+
+        // Each row appears exactly once across the union of pages.
+        const collectedIds = new Set(collected.map((r) => r.yocoCheckoutId))
+        expect(collectedIds.size).toBe(collected.length)
+
+        const seedIds = new Set(rows.map((r) => r.yocoCheckoutId))
+        expect(collectedIds).toEqual(seedIds)
+
+        // Union is paidAt-descending (non-strict — ties are allowed when two
+        // rows happen to share the same paidAt timestamp; the secondary sk
+        // ordering on yocoCheckoutId disambiguates the tie deterministically).
+        for (let i = 1; i < collected.length; i++) {
+          const prev = collected[i - 1]!.paidAt
+          const curr = collected[i]!.paidAt
+          expect(curr <= prev).toBe(true)
+        }
+      }),
+      { numRuns: 100 },
+    )
+  })
 })
 
 // ─── Malformed-cursor rejection ─────────────────────────────────────────────
@@ -253,18 +241,16 @@ const malformedCursorArb = fc.oneof(
   fc.constant(Buffer.from('null').toString('base64url')),
   // Random short strings that are extremely unlikely to round-trip to a
   // non-array object after base64url+JSON.parse.
-  fc
-    .string({ minLength: 1, maxLength: 32 })
-    .filter((s) => {
-      try {
-        const decoded = Buffer.from(s, 'base64url').toString()
-        if (decoded.length === 0) return true
-        const parsed = JSON.parse(decoded)
-        return parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)
-      } catch {
-        return true
-      }
-    }),
+  fc.string({ minLength: 1, maxLength: 32 }).filter((s) => {
+    try {
+      const decoded = Buffer.from(s, 'base64url').toString()
+      if (decoded.length === 0) return true
+      const parsed = JSON.parse(decoded)
+      return parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)
+    } catch {
+      return true
+    }
+  }),
 )
 
 describe('malformed cursor is rejected with MalformedCursorError (R6.4)', () => {
@@ -272,9 +258,9 @@ describe('malformed cursor is rejected with MalformedCursorError (R6.4)', () => 
     await fc.assert(
       fc.asyncProperty(malformedCursorArb, async (garbage) => {
         mocks.seed([])
-        await expect(
-          listBoosterPurchasesForBusiness('any-id', garbage, 25),
-        ).rejects.toBeInstanceOf(MalformedCursorError)
+        await expect(listBoosterPurchasesForBusiness('any-id', garbage, 25)).rejects.toBeInstanceOf(
+          MalformedCursorError,
+        )
       }),
       { numRuns: 100 },
     )
@@ -282,8 +268,8 @@ describe('malformed cursor is rejected with MalformedCursorError (R6.4)', () => 
 
   it('throws MalformedCursorError for the literal example from the task description', async () => {
     mocks.seed([])
-    await expect(
-      listBoosterPurchasesForBusiness('any-id', '###NOT-BASE64###', 25),
-    ).rejects.toBeInstanceOf(MalformedCursorError)
+    await expect(listBoosterPurchasesForBusiness('any-id', '###NOT-BASE64###', 25)).rejects.toBeInstanceOf(
+      MalformedCursorError,
+    )
   })
 })

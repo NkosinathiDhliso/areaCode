@@ -77,9 +77,7 @@ const scoreArb = fc.integer({ min: 0, max: 200 })
 /**
  * Generate a pair of tiers where tierRank(tierA) <= tierRank(tierB).
  */
-const orderedTierPairArb = fc
-  .tuple(tierArb, tierArb)
-  .filter(([a, b]) => TIER_RANK[a] <= TIER_RANK[b])
+const orderedTierPairArb = fc.tuple(tierArb, tierArb).filter(([a, b]) => TIER_RANK[a] <= TIER_RANK[b])
 
 describe('useMapMarkers tier-size property tests', () => {
   /**

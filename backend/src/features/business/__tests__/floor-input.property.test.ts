@@ -147,8 +147,7 @@ const sequenceArb = fc.array(requestArb, { minLength: 1, maxLength: 50 })
 
 function isValidRequest(req: { duration: unknown; floorCents: number }): boolean {
   const validDuration =
-    typeof req.duration === 'string' &&
-    VALID_DURATIONS.includes(req.duration as (typeof VALID_DURATIONS)[number])
+    typeof req.duration === 'string' && VALID_DURATIONS.includes(req.duration as (typeof VALID_DURATIONS)[number])
   const validFloor =
     typeof req.floorCents === 'number' &&
     Number.isInteger(req.floorCents) &&
@@ -218,9 +217,7 @@ describe('Property 5: floor input-validation accept count', () => {
           // Per-request writes captured during this single call.
           const perRequestPuts: CapturedPut[] = []
           for (let i = callsBefore; i < mocks.sendMock.mock.calls.length; i++) {
-            const cmd = mocks.sendMock.mock.calls[i]?.[0] as
-              | { input?: { Item?: Record<string, unknown> } }
-              | undefined
+            const cmd = mocks.sendMock.mock.calls[i]?.[0] as { input?: { Item?: Record<string, unknown> } } | undefined
             const item = cmd?.input?.Item
             if (item && 'pk' in item) {
               perRequestPuts.push({ pk: item['pk'], sk: item['sk'] })

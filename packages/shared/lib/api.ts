@@ -53,7 +53,9 @@ const tokenRefreshListeners: Set<TokenRefreshListener> = new Set()
 /** Subscribe to token refresh events. Returns an unsubscribe function. */
 export function onTokenRefresh(listener: TokenRefreshListener): () => void {
   tokenRefreshListeners.add(listener)
-  return () => { tokenRefreshListeners.delete(listener) }
+  return () => {
+    tokenRefreshListeners.delete(listener)
+  }
 }
 
 class ApiClient {
@@ -107,7 +109,11 @@ class ApiClient {
           this.onTokenRefreshed?.(data.accessToken)
           // Notify external listeners (WebSocket, etc.)
           for (const listener of tokenRefreshListeners) {
-            try { listener(data.accessToken) } catch { /* swallow */ }
+            try {
+              listener(data.accessToken)
+            } catch {
+              /* swallow */
+            }
           }
           return data.accessToken
         }

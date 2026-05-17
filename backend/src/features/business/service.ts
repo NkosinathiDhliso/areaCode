@@ -351,13 +351,7 @@ export async function purchaseBoost(businessId: string, nodeId: string, duration
   // "metric-emission failure must not block rejection" contract from R9.5 —
   // it swallows any throw from `putBoostMetric` and still returns the reject
   // decision. We rely on that here rather than duplicating the try/catch.
-  const decision = await decideBoostFloorWithMetric(
-    amountCents,
-    effectiveFloor,
-    duration,
-    businessId,
-    putBoostMetric,
-  )
+  const decision = await decideBoostFloorWithMetric(amountCents, effectiveFloor, duration, businessId, putBoostMetric)
 
   if (decision.decision === 'reject') {
     logBoostBranch('floor_violation_rejected', {
@@ -366,11 +360,7 @@ export async function purchaseBoost(businessId: string, nodeId: string, duration
       amountCents,
       effectiveFloor,
     })
-    throw new AppError(
-      400,
-      'BOOST_BELOW_FLOOR',
-      'Booster price is below the configured floor for this duration',
-    )
+    throw new AppError(400, 'BOOST_BELOW_FLOOR', 'Booster price is below the configured floor for this duration')
   }
 
   const metadata = { businessId, nodeId, duration, type: 'boost' }
@@ -553,9 +543,7 @@ async function persistBoosterPurchase(payload: Record<string, unknown>): Promise
   const node = await getNodeById(nodeId)
   const nodeRec = node as unknown as Record<string, unknown> | null
   const neighbourhoodIdSnapshot =
-    nodeRec && typeof nodeRec['neighbourhoodId'] === 'string'
-      ? (nodeRec['neighbourhoodId'] as string)
-      : null
+    nodeRec && typeof nodeRec['neighbourhoodId'] === 'string' ? (nodeRec['neighbourhoodId'] as string) : null
 
   // R1.2: snapshot the effective floor at write time using the same fallback
   // semantics as `purchaseBoost` so the value persisted on the row reflects
@@ -567,10 +555,7 @@ async function persistBoosterPurchase(payload: Record<string, unknown>): Promise
   // not, fall back to "now" so the audit row always carries a sortable
   // millisecond-precision UTC timestamp.
   const paidAtRaw = payload['paidAt']
-  const paidAtIso =
-    typeof paidAtRaw === 'string' && paidAtRaw.length > 0
-      ? paidAtRaw
-      : new Date().toISOString()
+  const paidAtIso = typeof paidAtRaw === 'string' && paidAtRaw.length > 0 ? paidAtRaw : new Date().toISOString()
   const createdAtIso = new Date().toISOString()
 
   const purchase: BoosterPurchaseRow = {
@@ -626,10 +611,7 @@ async function persistBoosterPurchase(payload: Record<string, unknown>): Promise
         Dimensions: [{ Name: 'duration', Value: validDuration }],
       })
     } catch (metricErr) {
-      console.warn(
-        '[business] persistBoosterPurchase: BoostPurchaseAuditMissing metric emission failed',
-        metricErr,
-      )
+      console.warn('[business] persistBoosterPurchase: BoostPurchaseAuditMissing metric emission failed', metricErr)
     }
     throw err
   }
@@ -1084,11 +1066,7 @@ export async function updateBoostFloor(
   // R5.1: `changeReason` is `null` or 1-280 chars.
   if (changeReason !== null) {
     if (typeof changeReason !== 'string' || changeReason.length < 1 || changeReason.length > 280) {
-      throw new AppError(
-        400,
-        'INVALID_CHANGE_REASON',
-        'changeReason must be null or a string of 1-280 characters',
-      )
+      throw new AppError(400, 'INVALID_CHANGE_REASON', 'changeReason must be null or a string of 1-280 characters')
     }
   }
 
@@ -1202,11 +1180,7 @@ export async function listBoosterPurchasesForBusiness(
   cursor: string | null,
   limit: number = 25,
 ): Promise<{ items: BoosterPurchaseView[]; nextCursor: string | null }> {
-  const { items, nextCursor } = await repo.queryBoosterPurchasesForBusiness(
-    businessId,
-    cursor,
-    limit,
-  )
+  const { items, nextCursor } = await repo.queryBoosterPurchasesForBusiness(businessId, cursor, limit)
 
   // R6.6: project to the operator-safe view. Drop `tierSnapshot`,
   // `neighbourhoodIdSnapshot`, `floorAtPurchaseCents`, plus the row's
@@ -1241,8 +1215,7 @@ export async function listBoosterPurchasesForBusiness(
 // `businessId`, `tierSnapshot`, `neighbourhoodIdSnapshot`,
 // `floorAtPurchaseCents`, and `yocoCheckoutId` (R7.6).
 
-const ADMIN_BOOST_REPORT_MAX_RANGE_MS =
-  ADMIN_BOOST_REPORT_MAX_RANGE_DAYS * 24 * 60 * 60 * 1000
+const ADMIN_BOOST_REPORT_MAX_RANGE_MS = ADMIN_BOOST_REPORT_MAX_RANGE_DAYS * 24 * 60 * 60 * 1000
 
 function projectAdminBoosterPurchaseView(row: BoosterPurchaseRow): AdminBoosterPurchaseView {
   return {
@@ -1283,39 +1256,22 @@ export async function listBoosterPurchasesByDateRange(
   const fromMs = Date.parse(fromIso)
   const toMs = Date.parse(toIso)
   if (Number.isNaN(fromMs) || Number.isNaN(toMs)) {
-    throw new AppError(
-      400,
-      'INVALID_DATE_RANGE',
-      'from and to must be parseable ISO 8601 timestamps',
-    )
+    throw new AppError(400, 'INVALID_DATE_RANGE', 'from and to must be parseable ISO 8601 timestamps')
   }
 
   // R7.5: `from <= to`. Use `<=` so a same-instant range (matching exactly
   // one row) is allowed.
   if (fromMs > toMs) {
-    throw new AppError(
-      400,
-      'INVALID_DATE_RANGE',
-      'from must be less than or equal to to',
-    )
+    throw new AppError(400, 'INVALID_DATE_RANGE', 'from must be less than or equal to to')
   }
 
   // R7.5: `(to - from) <= ADMIN_BOOST_REPORT_MAX_RANGE_DAYS`. Use `<=` so
   // exactly 367 days is allowed.
   if (toMs - fromMs > ADMIN_BOOST_REPORT_MAX_RANGE_MS) {
-    throw new AppError(
-      400,
-      'INVALID_DATE_RANGE',
-      `Date range cannot exceed ${ADMIN_BOOST_REPORT_MAX_RANGE_DAYS} days`,
-    )
+    throw new AppError(400, 'INVALID_DATE_RANGE', `Date range cannot exceed ${ADMIN_BOOST_REPORT_MAX_RANGE_DAYS} days`)
   }
 
-  const { items, nextCursor } = await repo.queryBoosterPurchasesByTimeRange(
-    fromIso,
-    toIso,
-    cursor,
-    limit,
-  )
+  const { items, nextCursor } = await repo.queryBoosterPurchasesByTimeRange(fromIso, toIso, cursor, limit)
 
   return {
     items: items.map(projectAdminBoosterPurchaseView),

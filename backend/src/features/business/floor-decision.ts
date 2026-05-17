@@ -23,9 +23,7 @@ export type BoostFloorViolationMetricInput = BoostMetricInput
 
 export type PutMetricFn = (input: BoostMetricInput) => Promise<void> | void
 
-export type BoostFloorDecision =
-  | { decision: 'accept' }
-  | { decision: 'reject'; code: 'BOOST_BELOW_FLOOR' }
+export type BoostFloorDecision = { decision: 'accept' } | { decision: 'reject'; code: 'BOOST_BELOW_FLOOR' }
 
 /**
  * Booster floor check + metric-emission contract.

@@ -177,9 +177,7 @@ describe('getNodesByCitySlug — paid-tier filter', () => {
     const nodes = await getNodesByCitySlug(CITY_SLUG)
 
     expect(nodes).toHaveLength(4)
-    expect(nodes.map((n) => n.id).sort()).toEqual(
-      paidTiers.map((t) => `node-${t}`).sort(),
-    )
+    expect(nodes.map((n) => n.id).sort()).toEqual(paidTiers.map((t) => `node-${t}`).sort())
   })
 
   it('excludes free-tier nodes while including paid-tier nodes in the same city', async () => {

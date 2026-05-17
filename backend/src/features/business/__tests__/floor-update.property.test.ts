@@ -61,11 +61,7 @@ const mocks = vi.hoisted(() => {
 
       // Audit-write failure injection: throw a non-conditional error on
       // the next PutCommand whose pk starts with 'BOOST_FLOOR_AUDIT#'.
-      if (
-        state.failNextAuditWrite &&
-        typeof pk === 'string' &&
-        pk.startsWith('BOOST_FLOOR_AUDIT#')
-      ) {
+      if (state.failNextAuditWrite && typeof pk === 'string' && pk.startsWith('BOOST_FLOOR_AUDIT#')) {
         state.failNextAuditWrite = false
         throw makeError('InternalServerError', 'Injected audit-write failure')
       }
@@ -96,10 +92,7 @@ const mocks = vi.hoisted(() => {
 
     // ── BatchGetCommand ─────────────────────────────────────────────────
     if (ctorName === 'BatchGetCommand') {
-      const requestItems = (input['RequestItems'] ?? {}) as Record<
-        string,
-        { Keys: Array<{ pk: string; sk: string }> }
-      >
+      const requestItems = (input['RequestItems'] ?? {}) as Record<string, { Keys: Array<{ pk: string; sk: string }> }>
       const responses: Record<string, Record<string, unknown>[]> = {}
       for (const [tableName, req] of Object.entries(requestItems)) {
         const items: Record<string, unknown>[] = []
@@ -117,7 +110,7 @@ const mocks = vi.hoisted(() => {
     if (ctorName === 'QueryCommand') {
       const vals = (input['ExpressionAttributeValues'] ?? {}) as Record<string, unknown>
       const targetPk = vals[':pk']
-      let items = [...store.values()].filter((it) => it['pk'] === targetPk)
+      const items = [...store.values()].filter((it) => it['pk'] === targetPk)
       items.sort((a, b) => String(a['sk']).localeCompare(String(b['sk'])))
       if (input['ScanIndexForward'] === false) items.reverse()
       const limit = (input['Limit'] as number | undefined) ?? items.length
@@ -171,9 +164,7 @@ const emailArb = fc
   .string({
     minLength: 1,
     maxLength: 16,
-    unit: fc.constantFrom(
-      ...'abcdefghijklmnopqrstuvwxyz0123456789'.split(''),
-    ),
+    unit: fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')),
   })
   .map((local) => `${local || 'a'}@example.com`)
 
@@ -206,82 +197,60 @@ const sequenceArb = fc.array(attemptArb, { minLength: 0, maxLength: 50 })
 describe('Property 4: floor update convergence with audit-first ordering', () => {
   beforeEach(() => mocks.reset())
 
-  it(
-    'final BoostFloor_Row equals the last accepted update; audit count matches accepted count; injected audit-write failures leave the floor row untouched',
-    async () => {
-      await fc.assert(
-        fc.asyncProperty(sequenceArb, async (sequence) => {
-          mocks.reset()
+  it('final BoostFloor_Row equals the last accepted update; audit count matches accepted count; injected audit-write failures leave the floor row untouched', async () => {
+    await fc.assert(
+      fc.asyncProperty(sequenceArb, async (sequence) => {
+        mocks.reset()
 
-          // In-memory model: the source of truth the test double must converge to.
-          const lastAcceptedFloor = new Map<BoostDuration, number>()
-          const acceptedCount = new Map<BoostDuration, number>()
+        // In-memory model: the source of truth the test double must converge to.
+        const lastAcceptedFloor = new Map<BoostDuration, number>()
+        const acceptedCount = new Map<BoostDuration, number>()
 
-          for (const attempt of sequence) {
-            const floorKey = `BOOST_FLOOR#${attempt.duration}`
+        for (const attempt of sequence) {
+          const floorKey = `BOOST_FLOOR#${attempt.duration}`
 
-            if (attempt.injectAuditFailure) {
-              // Snapshot the floor row before the failed attempt. The
-              // post-condition is that this row is identical after the
-              // attempt rejects (R5.2, R5.3).
-              const before = mocks.store.get(floorKey)
-              mocks.state.failNextAuditWrite = true
+          if (attempt.injectAuditFailure) {
+            // Snapshot the floor row before the failed attempt. The
+            // post-condition is that this row is identical after the
+            // attempt rejects (R5.2, R5.3).
+            const before = mocks.store.get(floorKey)
+            mocks.state.failNextAuditWrite = true
 
-              await expect(
-                updateBoostFloor(
-                  attempt.duration,
-                  attempt.floorCents,
-                  null,
-                  attempt.admin,
-                ),
-              ).rejects.toThrow()
+            await expect(updateBoostFloor(attempt.duration, attempt.floorCents, null, attempt.admin)).rejects.toThrow()
 
-              const after = mocks.store.get(floorKey)
-              // Per-attempt invariant: a failed audit write never produces
-              // a BoostFloor_Row update.
-              expect(after).toEqual(before)
-            } else {
-              await updateBoostFloor(
-                attempt.duration,
-                attempt.floorCents,
-                null,
-                attempt.admin,
-              )
-              lastAcceptedFloor.set(attempt.duration, attempt.floorCents)
-              acceptedCount.set(
-                attempt.duration,
-                (acceptedCount.get(attempt.duration) ?? 0) + 1,
-              )
-            }
+            const after = mocks.store.get(floorKey)
+            // Per-attempt invariant: a failed audit write never produces
+            // a BoostFloor_Row update.
+            expect(after).toEqual(before)
+          } else {
+            await updateBoostFloor(attempt.duration, attempt.floorCents, null, attempt.admin)
+            lastAcceptedFloor.set(attempt.duration, attempt.floorCents)
+            acceptedCount.set(attempt.duration, (acceptedCount.get(attempt.duration) ?? 0) + 1)
+          }
+        }
+
+        // ── End-of-sequence assertions ─────────────────────────────────
+
+        for (const duration of DURATIONS) {
+          const expectedFloor = lastAcceptedFloor.get(duration)
+          const row = mocks.store.get(`BOOST_FLOOR#${duration}`) as { floorCents: number; duration: string } | undefined
+
+          if (expectedFloor === undefined) {
+            // No accepted updates touched this duration — no row should
+            // exist (the seed is a separate concern, not exercised here).
+            expect(row).toBeUndefined()
+          } else {
+            expect(row).toBeDefined()
+            expect(row?.floorCents).toBe(expectedFloor)
+            expect(row?.duration).toBe(duration)
           }
 
-          // ── End-of-sequence assertions ─────────────────────────────────
-
-          for (const duration of DURATIONS) {
-            const expectedFloor = lastAcceptedFloor.get(duration)
-            const row = mocks.store.get(`BOOST_FLOOR#${duration}`) as
-              | { floorCents: number; duration: string }
-              | undefined
-
-            if (expectedFloor === undefined) {
-              // No accepted updates touched this duration — no row should
-              // exist (the seed is a separate concern, not exercised here).
-              expect(row).toBeUndefined()
-            } else {
-              expect(row).toBeDefined()
-              expect(row?.floorCents).toBe(expectedFloor)
-              expect(row?.duration).toBe(duration)
-            }
-
-            const expectedAuditCount = acceptedCount.get(duration) ?? 0
-            const auditRows = [...mocks.store.values()].filter(
-              (it) => it['pk'] === `BOOST_FLOOR_AUDIT#${duration}`,
-            )
-            expect(auditRows).toHaveLength(expectedAuditCount)
-          }
-        }),
-        { numRuns: 100 },
-      )
-    },
-  )
+          const expectedAuditCount = acceptedCount.get(duration) ?? 0
+          const auditRows = [...mocks.store.values()].filter((it) => it['pk'] === `BOOST_FLOOR_AUDIT#${duration}`)
+          expect(auditRows).toHaveLength(expectedAuditCount)
+        }
+      }),
+      { numRuns: 100 },
+    )
+  })
 })

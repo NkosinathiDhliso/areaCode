@@ -261,9 +261,7 @@ export async function queryBoosterPurchasesByTimeRange(
   cursor: string | null,
   limit: number,
 ): Promise<{ items: BoosterPurchaseRow[]; nextCursor: string | null }>
-export async function getBoosterCheckoutMarker(
-  yocoCheckoutId: string,
-): Promise<BoosterCheckoutMarkerRow | null>
+export async function getBoosterCheckoutMarker(yocoCheckoutId: string): Promise<BoosterCheckoutMarkerRow | null>
 ```
 
 `putBoosterPurchaseWithMarker` encodes the two-step idempotency choreography from Flow 2:
@@ -277,8 +275,8 @@ export async function getBoosterCheckoutMarker(
 
 ```ts
 export const BOOST_FLOOR_DEFAULTS: Record<BoostDuration, number> = {
-  '2hr': BOOST_PRICING['2hr'],   // 2500
-  '6hr': BOOST_PRICING['6hr'],   // 5000
+  '2hr': BOOST_PRICING['2hr'], // 2500
+  '6hr': BOOST_PRICING['6hr'], // 5000
   '24hr': BOOST_PRICING['24hr'], // 15000
 }
 
@@ -286,23 +284,29 @@ export const BOOST_FLOOR_MIN_CENTS = 1
 export const BOOST_FLOOR_MAX_CENTS = 1_000_000 // 10 000.00 ZAR
 export const ADMIN_BOOST_REPORT_MAX_RANGE_DAYS = 367
 
-export const boosterPurchaseRowSchema = z.object({ /* see Data Models */ })
-export const boostFloorRowSchema = z.object({ /* see Data Models */ })
-export const floorChangeAuditRowSchema = z.object({ /* see Data Models */ })
+export const boosterPurchaseRowSchema = z.object({
+  /* see Data Models */
+})
+export const boostFloorRowSchema = z.object({
+  /* see Data Models */
+})
+export const floorChangeAuditRowSchema = z.object({
+  /* see Data Models */
+})
 ```
 
 #### `handler.ts` (extended)
 
 New routes, all on the existing API Gateway HTTP API and existing business-handler Lambda:
 
-| Method | Path | Auth | Purpose |
-|---|---|---|---|
-| `GET` | `/v1/business/:businessId/boost-purchases?cursor=...` | Business JWT, `businessId` claim must match path | Operator panel (R6) |
-| `GET` | `/v1/admin/boost-floors` | Admin JWT | Floor Editor read (R4.2) |
-| `PUT` | `/v1/admin/boost-floors/:duration` | Admin JWT | Floor update (R4.3–R4.6) |
-| `GET` | `/v1/admin/boost-floors/:duration/audit?cursor=...` | Admin JWT | Floor change history (R5.5, R4.7) |
-| `GET` | `/v1/admin/boost-purchases?from=...&to=...` | Admin JWT | Date-range mode (R7.2) |
-| `GET` | `/v1/admin/boost-purchases?yocoCheckoutId=...` | Admin JWT | Single-payment mode (R7.2) |
+| Method | Path                                                  | Auth                                             | Purpose                           |
+| ------ | ----------------------------------------------------- | ------------------------------------------------ | --------------------------------- |
+| `GET`  | `/v1/business/:businessId/boost-purchases?cursor=...` | Business JWT, `businessId` claim must match path | Operator panel (R6)               |
+| `GET`  | `/v1/admin/boost-floors`                              | Admin JWT                                        | Floor Editor read (R4.2)          |
+| `PUT`  | `/v1/admin/boost-floors/:duration`                    | Admin JWT                                        | Floor update (R4.3–R4.6)          |
+| `GET`  | `/v1/admin/boost-floors/:duration/audit?cursor=...`   | Admin JWT                                        | Floor change history (R5.5, R4.7) |
+| `GET`  | `/v1/admin/boost-purchases?from=...&to=...`           | Admin JWT                                        | Date-range mode (R7.2)            |
+| `GET`  | `/v1/admin/boost-purchases?yocoCheckoutId=...`        | Admin JWT                                        | Single-payment mode (R7.2)        |
 
 Handler responsibilities:
 
@@ -350,23 +354,23 @@ We rely on the table's existing GSI1 (`gsi1pk`/`gsi1sk`). Only `BoosterPurchase`
 
 ### `BoosterPurchase` (audit row, R1.2)
 
-| Attribute | Type | Description |
-|---|---|---|
-| `pk` | string | `BOOST#<businessId>` |
-| `sk` | string | `BOOST#<paidAt_iso>#<yocoCheckoutId>` |
-| `gsi1pk` | string | `BOOST_BY_TIME` (R7.2 date-range query) |
-| `gsi1sk` | string | `paidAt_iso` |
-| `businessId` | string (1–64) | |
-| `nodeId` | string (1–64) | |
-| `duration` | enum | `'2hr' \| '6hr' \| '24hr'` |
-| `amountCents` | int > 0 | |
-| `currency` | string | `'ZAR'` |
-| `yocoCheckoutId` | string (1–128) | |
-| `paidAt` | string | ISO 8601 ms-precision UTC, equal to `gsi1sk` |
-| `tierSnapshot` | enum | `'starter' \| 'growth' \| 'pro' \| 'payg'` (R1.2; snapshot of `getEffectiveTier(biz)` at write time) |
-| `neighbourhoodIdSnapshot` | string (1–64) \| null | from `nodes.neighbourhoodId` at write time |
-| `floorAtPurchaseCents` | int > 0 | snapshot of effective floor at write time (R1.2) |
-| `createdAt` | string | ISO 8601 ms-precision UTC, when the row was written (may differ from `paidAt`) |
+| Attribute                 | Type                  | Description                                                                                          |
+| ------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------- |
+| `pk`                      | string                | `BOOST#<businessId>`                                                                                 |
+| `sk`                      | string                | `BOOST#<paidAt_iso>#<yocoCheckoutId>`                                                                |
+| `gsi1pk`                  | string                | `BOOST_BY_TIME` (R7.2 date-range query)                                                              |
+| `gsi1sk`                  | string                | `paidAt_iso`                                                                                         |
+| `businessId`              | string (1–64)         |                                                                                                      |
+| `nodeId`                  | string (1–64)         |                                                                                                      |
+| `duration`                | enum                  | `'2hr' \| '6hr' \| '24hr'`                                                                           |
+| `amountCents`             | int > 0               |                                                                                                      |
+| `currency`                | string                | `'ZAR'`                                                                                              |
+| `yocoCheckoutId`          | string (1–128)        |                                                                                                      |
+| `paidAt`                  | string                | ISO 8601 ms-precision UTC, equal to `gsi1sk`                                                         |
+| `tierSnapshot`            | enum                  | `'starter' \| 'growth' \| 'pro' \| 'payg'` (R1.2; snapshot of `getEffectiveTier(biz)` at write time) |
+| `neighbourhoodIdSnapshot` | string (1–64) \| null | from `nodes.neighbourhoodId` at write time                                                           |
+| `floorAtPurchaseCents`    | int > 0               | snapshot of effective floor at write time (R1.2)                                                     |
+| `createdAt`               | string                | ISO 8601 ms-precision UTC, when the row was written (may differ from `paidAt`)                       |
 
 Constraints:
 
@@ -377,14 +381,14 @@ Constraints:
 
 ### `Idempotency_Marker` (R2.1)
 
-| Attribute | Type | Description |
-|---|---|---|
-| `pk` | string | `BOOST_CHECKOUT#<yocoCheckoutId>` |
-| `sk` | string | `BOOST_CHECKOUT#<yocoCheckoutId>` (same value, single-row partition) |
-| `businessId` | string | copied from BoosterPurchase |
-| `boostPk` | string | copied from BoosterPurchase `pk` (enables R7.2 single-payment lookup) |
-| `boostSk` | string | copied from BoosterPurchase `sk` |
-| `createdAt` | string | ISO 8601 ms-precision UTC |
+| Attribute    | Type   | Description                                                           |
+| ------------ | ------ | --------------------------------------------------------------------- |
+| `pk`         | string | `BOOST_CHECKOUT#<yocoCheckoutId>`                                     |
+| `sk`         | string | `BOOST_CHECKOUT#<yocoCheckoutId>` (same value, single-row partition)  |
+| `businessId` | string | copied from BoosterPurchase                                           |
+| `boostPk`    | string | copied from BoosterPurchase `pk` (enables R7.2 single-payment lookup) |
+| `boostSk`    | string | copied from BoosterPurchase `sk`                                      |
+| `createdAt`  | string | ISO 8601 ms-precision UTC                                             |
 
 Constraints:
 
@@ -393,45 +397,45 @@ Constraints:
 
 ### `BoostFloor_Row` (R4.1)
 
-| Attribute | Type | Description |
-|---|---|---|
-| `pk` | string | `BOOST_FLOOR` |
-| `sk` | string | `'2hr' \| '6hr' \| '24hr'` |
-| `duration` | string | equal to `sk` |
-| `floorCents` | int > 0, ≤ 1_000_000 | |
-| `currency` | string | `'ZAR'` (R3.6) |
-| `updatedAt` | string | ISO 8601 ms-precision UTC |
-| `updatedBy` | string | admin's Cognito sub |
+| Attribute    | Type                 | Description                |
+| ------------ | -------------------- | -------------------------- |
+| `pk`         | string               | `BOOST_FLOOR`              |
+| `sk`         | string               | `'2hr' \| '6hr' \| '24hr'` |
+| `duration`   | string               | equal to `sk`              |
+| `floorCents` | int > 0, ≤ 1_000_000 |                            |
+| `currency`   | string               | `'ZAR'` (R3.6)             |
+| `updatedAt`  | string               | ISO 8601 ms-precision UTC  |
+| `updatedBy`  | string               | admin's Cognito sub        |
 
 Initial seed (R3.5, R4.8): the rows are seeded equal to the `BOOST_PRICING` const values (`2hr=2500, 6hr=5000, 24hr=15000`) at deploy time via a one-shot Terraform `aws_dynamodb_table_item` resource per duration, or a one-shot Lambda invoked by the deploy. Until seeded, the floor enforcement falls back to the const (R3.2) and the editor labels the row `"default — never edited"` (R4.8). This means the rejection branch never fires on day one (R9.4).
 
 ### `Floor_Change_Audit_Row` (R5.1)
 
-| Attribute | Type | Description |
-|---|---|---|
-| `pk` | string | `BOOST_FLOOR_AUDIT#<duration>` |
-| `sk` | string | `<changedAt_iso>#<changeId>` (sorts newest-last; query Descending for newest-first) |
-| `duration` | enum | `'2hr' \| '6hr' \| '24hr'` |
-| `previousFloorCents` | int \| null | `null` on first set |
-| `newFloorCents` | int > 0 | |
-| `currency` | string | `'ZAR'` |
-| `changedBy` | string | admin's Cognito sub |
-| `changedByEmail` | string (3–254) | admin's email at the time of the change |
-| `changedAt` | string | ISO 8601 ms-precision UTC |
-| `changeReason` | string (1–280) \| null | optional free-text |
+| Attribute            | Type                   | Description                                                                         |
+| -------------------- | ---------------------- | ----------------------------------------------------------------------------------- |
+| `pk`                 | string                 | `BOOST_FLOOR_AUDIT#<duration>`                                                      |
+| `sk`                 | string                 | `<changedAt_iso>#<changeId>` (sorts newest-last; query Descending for newest-first) |
+| `duration`           | enum                   | `'2hr' \| '6hr' \| '24hr'`                                                          |
+| `previousFloorCents` | int \| null            | `null` on first set                                                                 |
+| `newFloorCents`      | int > 0                |                                                                                     |
+| `currency`           | string                 | `'ZAR'`                                                                             |
+| `changedBy`          | string                 | admin's Cognito sub                                                                 |
+| `changedByEmail`     | string (3–254)         | admin's email at the time of the change                                             |
+| `changedAt`          | string                 | ISO 8601 ms-precision UTC                                                           |
+| `changeReason`       | string (1–280) \| null | optional free-text                                                                  |
 
 No `ttl` attribute (R5.4, R8.2).
 
 ### Access patterns and key choices
 
-| Access pattern | Operation | Rationale |
-|---|---|---|
-| Operator views their own purchases (R6.2) | `Query` `pk = BOOST#<businessId>` ScanIndexForward=false, Limit=25 | `sk` includes `paidAt_iso` so reverse scan yields newest-first |
-| Admin date-range across all businesses (R7.2) | `Query` GSI1 `gsi1pk = 'BOOST_BY_TIME'` and `gsi1sk BETWEEN :from AND :to` | Without GSI1 this would require a Scan; GSI1 keeps it O(matches) |
-| Admin single-payment lookup (R7.2) | `GetItem` `pk = BOOST_CHECKOUT#<yocoCheckoutId>` then `GetItem` of stored `boostPk`/`boostSk` | Two consistent `GetItem`s, no Scan; the marker doubles as a lookup index |
-| Read current floor (R3.1) | `GetItem` `pk = BOOST_FLOOR sk = <duration>` | Single point read on the hot path |
-| Read all floors for editor (R4.2) | `BatchGetItem` of three keys | Three `GetItem`s in one call; no Scan |
-| Read floor change history (R4.7, R5.5) | `Query` `pk = BOOST_FLOOR_AUDIT#<duration>` ScanIndexForward=false, Limit=25 | Natural newest-first via reverse scan |
+| Access pattern                                | Operation                                                                                     | Rationale                                                                |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Operator views their own purchases (R6.2)     | `Query` `pk = BOOST#<businessId>` ScanIndexForward=false, Limit=25                            | `sk` includes `paidAt_iso` so reverse scan yields newest-first           |
+| Admin date-range across all businesses (R7.2) | `Query` GSI1 `gsi1pk = 'BOOST_BY_TIME'` and `gsi1sk BETWEEN :from AND :to`                    | Without GSI1 this would require a Scan; GSI1 keeps it O(matches)         |
+| Admin single-payment lookup (R7.2)            | `GetItem` `pk = BOOST_CHECKOUT#<yocoCheckoutId>` then `GetItem` of stored `boostPk`/`boostSk` | Two consistent `GetItem`s, no Scan; the marker doubles as a lookup index |
+| Read current floor (R3.1)                     | `GetItem` `pk = BOOST_FLOOR sk = <duration>`                                                  | Single point read on the hot path                                        |
+| Read all floors for editor (R4.2)             | `BatchGetItem` of three keys                                                                  | Three `GetItem`s in one call; no Scan                                    |
+| Read floor change history (R4.7, R5.5)        | `Query` `pk = BOOST_FLOOR_AUDIT#<duration>` ScanIndexForward=false, Limit=25                  | Natural newest-first via reverse scan                                    |
 
 ### Validation (Zod)
 
@@ -523,8 +527,6 @@ erDiagram
   FloorChangeAudit }o--|| BoostFloor : "duration"
 ```
 
-
-
 ## Correctness Properties
 
 _A property is a characteristic or behavior that should hold true across all valid executions of a system — essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees._
@@ -589,44 +591,44 @@ _For any_ persisted `BoosterPurchase`, `Idempotency_Marker`, or `Floor_Change_Au
 
 ### Booster purchase (floor-check path)
 
-| Condition | HTTP | Code / Body | Behaviour |
-|---|---|---|---|
-| `floorCents` row missing in `AppData_Table` | n/a | n/a | Fall back to `BOOST_PRICING[duration]` as effective floor; emit a single `warn`-level log per cold-start with `branch=floor_loaded_from_const_fallback` (R3.2). |
-| `computedPriceCents < effectiveFloorCents` | 400 | `AppError` `code=BOOST_BELOW_FLOOR`, message `"Booster price is below the configured floor for this duration"` (R3.3). | Emit `BoostFloorViolation` metric; no Yoco call. |
-| Yoco API call fails | 502 / propagate existing behaviour | unchanged | Existing path. |
-| Metric emission to CloudWatch fails | n/a | n/a | Log error; **do not** swallow the rejection — the 400 still returns (R9.5). |
+| Condition                                   | HTTP                               | Code / Body                                                                                                            | Behaviour                                                                                                                                                       |
+| ------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `floorCents` row missing in `AppData_Table` | n/a                                | n/a                                                                                                                    | Fall back to `BOOST_PRICING[duration]` as effective floor; emit a single `warn`-level log per cold-start with `branch=floor_loaded_from_const_fallback` (R3.2). |
+| `computedPriceCents < effectiveFloorCents`  | 400                                | `AppError` `code=BOOST_BELOW_FLOOR`, message `"Booster price is below the configured floor for this duration"` (R3.3). | Emit `BoostFloorViolation` metric; no Yoco call.                                                                                                                |
+| Yoco API call fails                         | 502 / propagate existing behaviour | unchanged                                                                                                              | Existing path.                                                                                                                                                  |
+| Metric emission to CloudWatch fails         | n/a                                | n/a                                                                                                                    | Log error; **do not** swallow the rejection — the 400 still returns (R9.5).                                                                                     |
 
 ### Yoco webhook → BoosterPurchase persistence
 
-| Condition | Outcome |
-|---|---|
-| `eventId` already in `WEBHOOK#…` | Existing layer: 200 `{duplicate:true}` (R2.5). `branch=purchase_audit_duplicate_event_id`. |
-| `Idempotency_Marker` `BOOST_CHECKOUT#<yocoCheckoutId>` already exists | Skip the BoosterPurchase write; 200 `{duplicate:true}` (R2.3). `branch=purchase_audit_duplicate_yoco_checkout_id`. |
-| Marker `PutItem` fails with non-conditional error | Re-throw → webhook returns non-2xx → Yoco retries (R1.5). |
-| `BoosterPurchase` `PutItem` fails with `ConditionalCheckFailedException` after marker just written | Treat as duplicate; return without raising (R1.6). |
-| `BoosterPurchase` `PutItem` fails with non-conditional error | Best-effort `DeleteItem` of the marker (R2.4); emit `BoostPurchaseAuditMissing` metric (R9.6); re-throw. If the compensating delete itself fails, still re-throw — the next Yoco retry will land on the existing marker and treat the event as a duplicate, surfacing as a missing-purchase outlier on the metric. |
-| Webhook payload missing/invalid `metadata.type`, `businessId`, `nodeId`, `duration`, `amount` | The branch is skipped (no booster persistence) and the existing webhook handler returns 200 — same as today's behaviour for unrecognised metadata, so a non-booster event never accidentally triggers booster persistence (R1.1 prerequisite). |
+| Condition                                                                                          | Outcome                                                                                                                                                                                                                                                                                                            |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `eventId` already in `WEBHOOK#…`                                                                   | Existing layer: 200 `{duplicate:true}` (R2.5). `branch=purchase_audit_duplicate_event_id`.                                                                                                                                                                                                                         |
+| `Idempotency_Marker` `BOOST_CHECKOUT#<yocoCheckoutId>` already exists                              | Skip the BoosterPurchase write; 200 `{duplicate:true}` (R2.3). `branch=purchase_audit_duplicate_yoco_checkout_id`.                                                                                                                                                                                                 |
+| Marker `PutItem` fails with non-conditional error                                                  | Re-throw → webhook returns non-2xx → Yoco retries (R1.5).                                                                                                                                                                                                                                                          |
+| `BoosterPurchase` `PutItem` fails with `ConditionalCheckFailedException` after marker just written | Treat as duplicate; return without raising (R1.6).                                                                                                                                                                                                                                                                 |
+| `BoosterPurchase` `PutItem` fails with non-conditional error                                       | Best-effort `DeleteItem` of the marker (R2.4); emit `BoostPurchaseAuditMissing` metric (R9.6); re-throw. If the compensating delete itself fails, still re-throw — the next Yoco retry will land on the existing marker and treat the event as a duplicate, surfacing as a missing-purchase outlier on the metric. |
+| Webhook payload missing/invalid `metadata.type`, `businessId`, `nodeId`, `duration`, `amount`      | The branch is skipped (no booster persistence) and the existing webhook handler returns 200 — same as today's behaviour for unrecognised metadata, so a non-booster event never accidentally triggers booster persistence (R1.1 prerequisite).                                                                     |
 
 ### Admin floor update
 
-| Condition | HTTP | Behaviour |
-|---|---|---|
-| Missing or non-admin JWT | 403 | `AppError.forbidden` (R4.5). |
-| `duration ∉ {'2hr','6hr','24hr'}` | 400 | No persistence (R4.6). |
-| `floorCents` not integer in `[1, 1_000_000]` | 400 | No persistence (R4.3). |
-| `Floor_Change_Audit_Row` write fails | 500 | No `BoostFloor_Row` update performed (R5.3). |
-| `BoostFloor_Row` write fails after audit succeeded | 500 | The audit row exists with `previousFloorCents = (the value read before the update)` and `newFloorCents = (the requested but never-applied value)`. This is acceptable — the audit reflects an attempt; an operator reading the audit will see a subsequent successful audit row when the admin retries. The current floor is unchanged. |
+| Condition                                          | HTTP | Behaviour                                                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Missing or non-admin JWT                           | 403  | `AppError.forbidden` (R4.5).                                                                                                                                                                                                                                                                                                            |
+| `duration ∉ {'2hr','6hr','24hr'}`                  | 400  | No persistence (R4.6).                                                                                                                                                                                                                                                                                                                  |
+| `floorCents` not integer in `[1, 1_000_000]`       | 400  | No persistence (R4.3).                                                                                                                                                                                                                                                                                                                  |
+| `Floor_Change_Audit_Row` write fails               | 500  | No `BoostFloor_Row` update performed (R5.3).                                                                                                                                                                                                                                                                                            |
+| `BoostFloor_Row` write fails after audit succeeded | 500  | The audit row exists with `previousFloorCents = (the value read before the update)` and `newFloorCents = (the requested but never-applied value)`. This is acceptable — the audit reflects an attempt; an operator reading the audit will see a subsequent successful audit row when the admin retries. The current floor is unchanged. |
 
 ### Admin and operator queries
 
-| Condition | HTTP | Behaviour |
-|---|---|---|
-| Operator JWT `businessId` ≠ path `businessId` | 403 | No rows returned (R6.3). |
-| Malformed pagination cursor | 400 | (R6.4). |
-| Admin date-range with `from > to` or `(to − from) > 367 days` | 400 | No DynamoDB call (R7.5). |
-| Admin combined-mode with malformed date range | 400 | No fallback to single-payment lookup; the malformed range short-circuits (R7.4). |
-| Admin combined-mode with valid range and `yocoCheckoutId` | 200 | Range mode wins; the `yocoCheckoutId` parameter is ignored. R7.4 specifies fallback to single-payment mode only when both `from` and `to` are absent. |
-| Admin single-payment lookup, no marker exists for `yocoCheckoutId` | 200 with empty result | Same shape as a date-range query that matched zero rows. |
+| Condition                                                          | HTTP                  | Behaviour                                                                                                                                             |
+| ------------------------------------------------------------------ | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Operator JWT `businessId` ≠ path `businessId`                      | 403                   | No rows returned (R6.3).                                                                                                                              |
+| Malformed pagination cursor                                        | 400                   | (R6.4).                                                                                                                                               |
+| Admin date-range with `from > to` or `(to − from) > 367 days`      | 400                   | No DynamoDB call (R7.5).                                                                                                                              |
+| Admin combined-mode with malformed date range                      | 400                   | No fallback to single-payment lookup; the malformed range short-circuits (R7.4).                                                                      |
+| Admin combined-mode with valid range and `yocoCheckoutId`          | 200                   | Range mode wins; the `yocoCheckoutId` parameter is ignored. R7.4 specifies fallback to single-payment mode only when both `from` and `to` are absent. |
+| Admin single-payment lookup, no marker exists for `yocoCheckoutId` | 200 with empty result | Same shape as a date-range query that matched zero rows.                                                                                              |
 
 ### Logging
 
@@ -687,17 +689,17 @@ This tag is the single source of cross-reference to this design document. Each p
 
 ### Coverage map (property → test file)
 
-| Property | Test file (planned) |
-|---|---|
-| 1. Floor decision and metric | `backend/src/features/business/__tests__/floor-check.property.test.ts` |
-| 2. Webhook idempotence | `backend/src/features/business/__tests__/webhook-idempotence.property.test.ts` |
-| 3. BoosterPurchase round-trip | `backend/src/features/business/__tests__/booster-purchase-roundtrip.property.test.ts` |
-| 4. Floor update convergence | `backend/src/features/business/__tests__/floor-update.property.test.ts` |
-| 5. Floor input validation | `backend/src/features/business/__tests__/floor-input.property.test.ts` |
-| 6. Admin date-range query | `backend/src/features/business/__tests__/admin-date-range.property.test.ts` |
-| 7. Operator pagination | `backend/src/features/business/__tests__/operator-pagination.property.test.ts` |
-| 8. Render visibility | `apps/web/src/__tests__/operator-boost-render.property.test.ts` and `apps/admin/src/__tests__/admin-boost-render.property.test.ts` |
-| 9. Retention cleanup | `backend/src/workers/__tests__/cleanup-boost-retention.property.test.ts` |
+| Property                      | Test file (planned)                                                                                                                |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Floor decision and metric  | `backend/src/features/business/__tests__/floor-check.property.test.ts`                                                             |
+| 2. Webhook idempotence        | `backend/src/features/business/__tests__/webhook-idempotence.property.test.ts`                                                     |
+| 3. BoosterPurchase round-trip | `backend/src/features/business/__tests__/booster-purchase-roundtrip.property.test.ts`                                              |
+| 4. Floor update convergence   | `backend/src/features/business/__tests__/floor-update.property.test.ts`                                                            |
+| 5. Floor input validation     | `backend/src/features/business/__tests__/floor-input.property.test.ts`                                                             |
+| 6. Admin date-range query     | `backend/src/features/business/__tests__/admin-date-range.property.test.ts`                                                        |
+| 7. Operator pagination        | `backend/src/features/business/__tests__/operator-pagination.property.test.ts`                                                     |
+| 8. Render visibility          | `apps/web/src/__tests__/operator-boost-render.property.test.ts` and `apps/admin/src/__tests__/admin-boost-render.property.test.ts` |
+| 9. Retention cleanup          | `backend/src/workers/__tests__/cleanup-boost-retention.property.test.ts`                                                           |
 
 ### Performance and cost
 

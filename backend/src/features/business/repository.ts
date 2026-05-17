@@ -515,9 +515,7 @@ export async function getBoostFloor(duration: BoostDuration): Promise<BoostFloor
 
   const parsed = boostFloorRowSchema.safeParse(result.Item)
   if (!parsed.success) {
-    console.warn(
-      `[business] getBoostFloor: malformed BoostFloor_Row for duration=${duration}: ${parsed.error.message}`,
-    )
+    console.warn(`[business] getBoostFloor: malformed BoostFloor_Row for duration=${duration}: ${parsed.error.message}`)
     return null
   }
   return parsed.data
@@ -758,9 +756,7 @@ export async function queryBoosterPurchasesByTimeRange(
   }
 }
 
-export async function getBoosterCheckoutMarker(
-  yocoCheckoutId: string,
-): Promise<BoosterCheckoutMarkerRow | null> {
+export async function getBoosterCheckoutMarker(yocoCheckoutId: string): Promise<BoosterCheckoutMarkerRow | null> {
   const key = `BOOST_CHECKOUT#${yocoCheckoutId}`
   const result = await documentClient.send(
     new GetCommand({
@@ -785,10 +781,7 @@ export async function getBoosterCheckoutMarker(
 // then uses its stored `boostPk` / `boostSk` to retrieve the audit row.
 // Exposed here so the service layer does not need to import `documentClient`
 // directly.
-export async function getBoosterPurchaseByKey(
-  boostPk: string,
-  boostSk: string,
-): Promise<BoosterPurchaseRow | null> {
+export async function getBoosterPurchaseByKey(boostPk: string, boostSk: string): Promise<BoosterPurchaseRow | null> {
   const result = await documentClient.send(
     new GetCommand({
       TableName: TableNames.appData,

@@ -10,9 +10,7 @@ const wordDashStringArb = (minLength: number, maxLength: number) =>
   fc.string({
     minLength,
     maxLength,
-    unit: fc.constantFrom(
-      ...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-'.split(''),
-    ),
+    unit: fc.constantFrom(...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-'.split('')),
   })
 
 const businessIdArb = wordDashStringArb(1, 64)

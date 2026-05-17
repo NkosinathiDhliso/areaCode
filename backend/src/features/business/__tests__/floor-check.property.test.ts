@@ -2,11 +2,7 @@ import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
 
 import { checkBoostFloor } from '../service.js'
-import {
-  decideBoostFloorWithMetric,
-  type BoostMetricInput,
-  type PutMetricFn,
-} from '../floor-decision.js'
+import { decideBoostFloorWithMetric, type BoostMetricInput, type PutMetricFn } from '../floor-decision.js'
 import type { BoostDuration } from '../types.js'
 
 /**
@@ -91,9 +87,7 @@ describe('Property 1: floor decision is exact and rejection emits metric', () =>
 
   it('decideBoostFloorWithMetric still rejects when the metric emission throws', async () => {
     // Constrain to the reject case: computedPriceCents < floorCents.
-    const rejectCaseArb = fc
-      .tuple(computedPriceCentsArb, floorCentsArb)
-      .filter(([price, floor]) => price < floor)
+    const rejectCaseArb = fc.tuple(computedPriceCentsArb, floorCentsArb).filter(([price, floor]) => price < floor)
 
     await fc.assert(
       fc.asyncProperty(

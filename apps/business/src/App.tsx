@@ -64,7 +64,9 @@ function AppContent() {
       }
       setTokenReady(true)
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [isAuthenticated])
 
   // Initialize socket with businessId for room authorization — only after token is valid

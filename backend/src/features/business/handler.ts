@@ -464,12 +464,10 @@ export async function businessRoutes(app: FastifyInstance) {
         email = '<admin-no-email>@areacode.co.za'
       }
 
-      return service.updateBoostFloor(
-        params.duration,
-        body.floorCents,
-        body.changeReason ?? null,
-        { sub: auth.cognitoSub, email },
-      )
+      return service.updateBoostFloor(params.duration, body.floorCents, body.changeReason ?? null, {
+        sub: auth.cognitoSub,
+        email,
+      })
     },
   )
 
@@ -547,10 +545,7 @@ export async function businessRoutes(app: FastifyInstance) {
   app.get(
     '/v1/admin/boost-purchases',
     {
-      preHandler: [
-        requireAuth('admin'),
-        validate({ query: boostPurchasesAdminQuerySchema }),
-      ],
+      preHandler: [requireAuth('admin'), validate({ query: boostPurchasesAdminQuerySchema })],
     },
     async (request) => {
       const query = request.query as z.infer<typeof boostPurchasesAdminQuerySchema>
@@ -566,12 +561,7 @@ export async function businessRoutes(app: FastifyInstance) {
           // ignored. The service layer enforces R7.5 before any DynamoDB
           // call, so a malformed range surfaces as 400 INVALID_DATE_RANGE
           // and never falls back to single-payment mode.
-          return await service.listBoosterPurchasesByDateRange(
-            from,
-            to,
-            cursor ?? null,
-            25,
-          )
+          return await service.listBoosterPurchasesByDateRange(from, to, cursor ?? null, 25)
         }
 
         if (hasFrom || hasTo) {
@@ -579,11 +569,7 @@ export async function businessRoutes(app: FastifyInstance) {
           // supplied only one bound. Reject explicitly rather than silently
           // falling through to single-payment, which would surprise the
           // caller.
-          throw new AppError(
-            400,
-            'INVALID_QUERY',
-            'Both from and to required for date-range mode',
-          )
+          throw new AppError(400, 'INVALID_QUERY', 'Both from and to required for date-range mode')
         }
 
         if (yocoCheckoutId !== undefined) {
@@ -595,11 +581,7 @@ export async function businessRoutes(app: FastifyInstance) {
           return { items: row ? [row] : [], nextCursor: null as string | null }
         }
 
-        throw new AppError(
-          400,
-          'INVALID_QUERY',
-          'Either from+to or yocoCheckoutId is required',
-        )
+        throw new AppError(400, 'INVALID_QUERY', 'Either from+to or yocoCheckoutId is required')
       } catch (err) {
         // Parity with the other admin/operator boost routes: a malformed
         // pagination cursor surfaces from the repo as MalformedCursorError;

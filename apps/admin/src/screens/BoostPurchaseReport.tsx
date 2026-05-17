@@ -139,9 +139,7 @@ export function BoostPurchaseReport() {
       params.set('from', dateInputToIsoStartOfDay(fromDate))
       params.set('to', dateInputToIsoEndOfDay(toDate))
       if (cursor) params.set('cursor', cursor)
-      const res = await api.get<BoostPurchasesResponse>(
-        `/v1/admin/boost-purchases?${params.toString()}`,
-      )
+      const res = await api.get<BoostPurchasesResponse>(`/v1/admin/boost-purchases?${params.toString()}`)
       if (cursor) {
         setItems((prev) => [...prev, ...res.items])
       } else {
@@ -181,9 +179,7 @@ export function BoostPurchaseReport() {
     try {
       const params = new URLSearchParams()
       params.set('yocoCheckoutId', yocoCheckoutId.trim())
-      const res = await api.get<BoostPurchasesResponse>(
-        `/v1/admin/boost-purchases?${params.toString()}`,
-      )
+      const res = await api.get<BoostPurchasesResponse>(`/v1/admin/boost-purchases?${params.toString()}`)
       setItems(res.items)
       setNextCursor(null)
       if (res.items.length === 0) {
@@ -252,9 +248,7 @@ export function BoostPurchaseReport() {
           onSubmit={handleDateRangeSubmit}
           className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-3"
         >
-          <h3 className="text-[var(--text-primary)] font-bold text-sm font-[Syne]">
-            Search by date range
-          </h3>
+          <h3 className="text-[var(--text-primary)] font-bold text-sm font-[Syne]">Search by date range</h3>
           <div className="flex flex-row gap-3">
             <label className="flex flex-col gap-1 flex-1">
               <span className="text-[var(--text-secondary)] text-xs">From</span>
@@ -284,9 +278,7 @@ export function BoostPurchaseReport() {
           >
             {loading && mode === 'date-range' ? 'Searching…' : 'Search'}
           </button>
-          {dateRangeError && (
-            <p className="text-[var(--danger)] text-xs">{dateRangeError}</p>
-          )}
+          {dateRangeError && <p className="text-[var(--danger)] text-xs">{dateRangeError}</p>}
           <p className="text-[var(--text-muted)] text-[10px]">
             Maximum range is 367 days. Times are inclusive of full UTC days.
           </p>
@@ -297,9 +289,7 @@ export function BoostPurchaseReport() {
           onSubmit={handleYocoSubmit}
           className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-3"
         >
-          <h3 className="text-[var(--text-primary)] font-bold text-sm font-[Syne]">
-            Look up by Yoco checkout id
-          </h3>
+          <h3 className="text-[var(--text-primary)] font-bold text-sm font-[Syne]">Look up by Yoco checkout id</h3>
           <label className="flex flex-col gap-1">
             <span className="text-[var(--text-secondary)] text-xs">Yoco checkout id</span>
             <input
@@ -318,9 +308,7 @@ export function BoostPurchaseReport() {
           >
             {loading && mode === 'yoco-checkout' ? 'Looking up…' : 'Look up'}
           </button>
-          {yocoLookupError && (
-            <p className="text-[var(--danger)] text-xs">{yocoLookupError}</p>
-          )}
+          {yocoLookupError && <p className="text-[var(--danger)] text-xs">{yocoLookupError}</p>}
         </form>
       </div>
 
@@ -345,10 +333,7 @@ export function BoostPurchaseReport() {
             <tbody>
               {items.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={10}
-                    className="px-3 py-6 text-center text-[var(--text-muted)] italic"
-                  >
+                  <td colSpan={10} className="px-3 py-6 text-center text-[var(--text-muted)] italic">
                     {emptyMessage ?? 'Run a query to see purchases.'}
                   </td>
                 </tr>
@@ -364,19 +349,13 @@ export function BoostPurchaseReport() {
                   <td className="px-3 py-2 font-mono">{row.businessId}</td>
                   <td className="px-3 py-2 font-mono">{row.nodeId}</td>
                   <td className="px-3 py-2 font-mono">{row.duration}</td>
-                  <td className="px-3 py-2 text-right whitespace-nowrap">
-                    {formatAmountCents(row.amountCents)}
-                  </td>
+                  <td className="px-3 py-2 text-right whitespace-nowrap">{formatAmountCents(row.amountCents)}</td>
                   <td className="px-3 py-2">{row.tierSnapshot}</td>
-                  <td className="px-3 py-2 font-mono">
-                    {row.neighbourhoodIdSnapshot ?? '—'}
-                  </td>
+                  <td className="px-3 py-2 font-mono">{row.neighbourhoodIdSnapshot ?? '—'}</td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">
                     {formatAmountCents(row.floorAtPurchaseCents)}
                   </td>
-                  <td className="px-3 py-2 font-mono break-all max-w-[18ch]">
-                    {row.yocoCheckoutId}
-                  </td>
+                  <td className="px-3 py-2 font-mono break-all max-w-[18ch]">{row.yocoCheckoutId}</td>
                   <td className="px-3 py-2 text-right">
                     <button
                       type="button"

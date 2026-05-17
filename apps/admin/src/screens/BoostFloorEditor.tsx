@@ -214,10 +214,7 @@ function FloorCard({ floor, onUpdated }: FloorCardProps) {
       if (changeReason.trim().length > 0) {
         body.changeReason = changeReason.trim()
       }
-      const updated = await api.put<BoostFloorView>(
-        `/v1/admin/boost-floors/${floor.duration}`,
-        body,
-      )
+      const updated = await api.put<BoostFloorView>(`/v1/admin/boost-floors/${floor.duration}`, body)
       onUpdated(updated)
       setChangeReason('')
     } catch (err) {
@@ -253,9 +250,7 @@ function FloorCard({ floor, onUpdated }: FloorCardProps) {
         <div className="text-[var(--text-muted)] text-xs italic">default — never edited</div>
       ) : (
         <div className="flex flex-col gap-0.5 text-[var(--text-muted)] text-xs">
-          <div>
-            Updated {floor.updatedAt ? formatTimestamp(floor.updatedAt) : '—'}
-          </div>
+          <div>Updated {floor.updatedAt ? formatTimestamp(floor.updatedAt) : '—'}</div>
           <div title={floor.updatedBy ?? undefined}>by {truncateSub(floor.updatedBy)}</div>
         </div>
       )}

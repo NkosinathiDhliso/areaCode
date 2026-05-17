@@ -146,8 +146,7 @@ describe('Property 9: retention cleanup boundary', () => {
     fc.assert(
       fc.property(malformedTimestampArb, msArb, (paidAt, nowMs) => {
         // Spread an object so `undefined` results in a row without the field.
-        const row =
-          paidAt === undefined ? ({} as { paidAt?: unknown }) : ({ paidAt } as { paidAt?: unknown })
+        const row = paidAt === undefined ? ({} as { paidAt?: unknown }) : ({ paidAt } as { paidAt?: unknown })
         expect(isBoosterPurchaseExpired(row, nowMs)).toBe(false)
       }),
       { numRuns: 200 },
@@ -158,9 +157,7 @@ describe('Property 9: retention cleanup boundary', () => {
     fc.assert(
       fc.property(malformedTimestampArb, msArb, (changedAt, nowMs) => {
         const row =
-          changedAt === undefined
-            ? ({} as { changedAt?: unknown })
-            : ({ changedAt } as { changedAt?: unknown })
+          changedAt === undefined ? ({} as { changedAt?: unknown }) : ({ changedAt } as { changedAt?: unknown })
         expect(isFloorChangeAuditExpired(row, nowMs)).toBe(false)
       }),
       { numRuns: 200 },
@@ -171,9 +168,7 @@ describe('Property 9: retention cleanup boundary', () => {
     fc.assert(
       fc.property(malformedTimestampArb, msArb, (createdAt, nowMs) => {
         const row =
-          createdAt === undefined
-            ? ({} as { createdAt?: unknown })
-            : ({ createdAt } as { createdAt?: unknown })
+          createdAt === undefined ? ({} as { createdAt?: unknown }) : ({ createdAt } as { createdAt?: unknown })
         expect(isIdempotencyMarkerExpired(row, nowMs)).toBe(false)
       }),
       { numRuns: 200 },
