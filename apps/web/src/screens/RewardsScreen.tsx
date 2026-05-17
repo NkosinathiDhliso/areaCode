@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
@@ -5,6 +6,7 @@ import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
+import { useGeolocation } from '@area-code/shared/hooks'
 import { Skeleton } from '@area-code/shared/components/Skeleton'
 import { EmptyState } from '@area-code/shared/components/EmptyState'
 import { CountdownBadge } from '@area-code/shared/components/CountdownBadge'
@@ -34,6 +36,22 @@ export function RewardsScreen({ onNavigate }: RewardsScreenProps) {
   const connectivity = useConnectivityStore((s) => s.state)
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
   const setFocusNodeId = useMapStore((s) => s.setFocusNodeId)
+  const { requestLocation } = useGeolocation()
+
+  /**
+   * Acquire location on mount when missing.
+   *
+   * Without this, a hard refresh while sitting on /gets renders an empty
+   * list: locationStore is not persisted, so `pos` is null until something
+   * (previously only MapScreen) calls requestLocation. The query falls back
+   * to the JHB downtown default coords, and any users elsewhere see "no
+   * gets nearby". Refresh-on-/gets is the exact path the bug report calls
+   * out — re-trigger the GPS request here so the screen is self-sufficient.
+   */
+  useEffect(() => {
+    if (!isAuthenticated || pos) return
+    void requestLocation()
+  }, [isAuthenticated, pos, requestLocation])
 
   // Near-me rewards require auth
   const {
