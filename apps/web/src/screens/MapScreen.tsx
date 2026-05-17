@@ -266,7 +266,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
         </div>
       )}
 
-      <div className="absolute top-4 left-0 right-0 z-10">
+      <div className="absolute top-4 left-0 right-0 z-10 pointer-events-none [&>*]:pointer-events-auto">
         <CategoryFilterBar onFilter={setCategoryFilter} />
       </div>
 
@@ -315,8 +315,8 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       )}
 
       {!onboarding.hintSeen && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
-          <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-2xl px-4 py-3 flex items-center gap-2">
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 pointer-events-none [&>*]:pointer-events-auto">
+          <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-2xl px-4 py-3 flex items-center gap-2 shadow-lg">
             <span className="text-[var(--text-secondary)] text-sm">{t('map.tapHint')}</span>
             <button
               onClick={() => markHintSeen('hintSeen')}
