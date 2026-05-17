@@ -4,9 +4,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import 'mapbox-gl/dist/mapbox-gl.css'
 
+import { installPreloadErrorHandler } from '@area-code/shared/lib/preloadErrorHandler'
 import { App } from './App'
 import './i18n'
 import './app.css'
+
+installPreloadErrorHandler()
 
 const queryClient = new QueryClient({
   defaultOptions: {

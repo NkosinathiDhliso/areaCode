@@ -18,6 +18,25 @@ frontend:
     paths:
       - node_modules/**/*
   customHeaders:
+    # Hashed Vite build artifacts — safe to cache forever.
+    - pattern: '/assets/**'
+      headers:
+        - key: 'Cache-Control'
+          value: 'public, max-age=31536000, immutable'
+    # HTML entry and service worker must never be cached, otherwise
+    # tabs end up referencing chunk hashes from a previous deploy.
+    - pattern: '/index.html'
+      headers:
+        - key: 'Cache-Control'
+          value: 'no-cache, no-store, must-revalidate'
+    - pattern: '/'
+      headers:
+        - key: 'Cache-Control'
+          value: 'no-cache, no-store, must-revalidate'
+    - pattern: '/sw.js'
+      headers:
+        - key: 'Cache-Control'
+          value: 'no-cache, no-store, must-revalidate'
     - pattern: '**/*'
       headers:
         - key: 'X-Frame-Options'

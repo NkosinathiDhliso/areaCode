@@ -1,9 +1,12 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 
+import { installPreloadErrorHandler } from '@area-code/shared/lib/preloadErrorHandler'
 import { App } from './App'
 import './i18n'
 import './app.css'
+
+installPreloadErrorHandler()
 
 async function bootstrap() {
   if (import.meta.env.VITE_DEV_MOCK === 'true') {
