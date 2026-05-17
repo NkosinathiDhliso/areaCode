@@ -1337,6 +1337,37 @@ module "amplify_domain_staff" {
   ]
 }
 
+# --- CloudWatch RUM (frontend error/perf monitoring, replaces Sentry) ---
+# Pay-per-event ($1 / 100k events). Cookies disabled at SDK level so no
+# consent banner is required under POPIA. See module docs for details.
+module "rum" {
+  source = "../../modules/cloudwatch-rum"
+  env    = local.env
+
+  monitors = {
+    web = {
+      domain              = "areacode.co.za"
+      additional_domains  = ["www.areacode.co.za"]
+      session_sample_rate = 1.0 # capture every session pre-launch
+    }
+    business = {
+      domain              = "business.areacode.co.za"
+      additional_domains  = []
+      session_sample_rate = 1.0
+    }
+    staff = {
+      domain              = "staff.areacode.co.za"
+      additional_domains  = []
+      session_sample_rate = 1.0
+    }
+    admin = {
+      domain              = "admin.areacode.co.za"
+      additional_domains  = []
+      session_sample_rate = 1.0
+    }
+  }
+}
+
 # --- Outputs ---
 output "api_endpoint" {
   value = module.api_gateway.api_endpoint
@@ -1420,4 +1451,12 @@ module "websocket" {
 
 output "websocket_api_endpoint" {
   value = module.websocket.websocket_api_endpoint
+}
+
+# CloudWatch RUM: per-monitor SDK config consumed by the frontend.
+# scripts/update-all-amplify-apps.ps1 reads these and pushes the matching
+# VITE_RUM_* env vars to each Amplify app.
+output "rum_monitors" {
+  value       = module.rum.monitors
+  description = "RUM app monitor IDs and identity pool IDs, keyed by app (web, business, staff, admin)."
 }

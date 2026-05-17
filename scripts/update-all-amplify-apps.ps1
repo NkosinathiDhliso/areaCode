@@ -10,7 +10,17 @@ param(
     [string]$Region = "us-east-1",
     [string]$ApiUrl = "https://iyj02gvt12.execute-api.us-east-1.amazonaws.com",
     [string]$WebSocketUrl = "wss://iyj02gvt12.execute-api.us-east-1.amazonaws.com/prod",
-    [string]$MapboxToken = $env:VITE_MAPBOX_TOKEN
+    [string]$MapboxToken = $env:VITE_MAPBOX_TOKEN,
+    # CloudWatch RUM monitor + identity pool IDs per app.
+    # Pull these from `terraform output -json rum_monitors` after applying.
+    [string]$RumWebMonitorId = $env:RUM_WEB_MONITOR_ID,
+    [string]$RumWebIdentityPool = $env:RUM_WEB_IDENTITY_POOL,
+    [string]$RumBusinessMonitorId = $env:RUM_BUSINESS_MONITOR_ID,
+    [string]$RumBusinessIdentityPool = $env:RUM_BUSINESS_IDENTITY_POOL,
+    [string]$RumStaffMonitorId = $env:RUM_STAFF_MONITOR_ID,
+    [string]$RumStaffIdentityPool = $env:RUM_STAFF_IDENTITY_POOL,
+    [string]$RumAdminMonitorId = $env:RUM_ADMIN_MONITOR_ID,
+    [string]$RumAdminIdentityPool = $env:RUM_ADMIN_IDENTITY_POOL
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,10 +33,22 @@ function Write-Warn($msg) { Write-Host $msg -ForegroundColor Yellow }
 
 # Your 4 Amplify Apps
 $AmplifyApps = @(
-    @{ Name = "Web (Main)"; AppId = "d3pm78r41ma6w6"; Branch = "master"; Domain = "areacode.co.za" },
-    @{ Name = "Admin"; AppId = "d1ay6jict0ql9w"; Branch = "master"; Domain = "admin.areacode.co.za" },
-    @{ Name = "Business"; AppId = "dbp54yxhyjvk0"; Branch = "master"; Domain = "business.areacode.co.za" },
-    @{ Name = "Staff"; AppId = "d166bb81tg4k61"; Branch = "master"; Domain = "staff.areacode.co.za" }
+    @{
+        Name = "Web (Main)"; AppId = "d3pm78r41ma6w6"; Branch = "master"; Domain = "areacode.co.za"
+        RumMonitorId = $RumWebMonitorId; RumIdentityPool = $RumWebIdentityPool
+    },
+    @{
+        Name = "Admin"; AppId = "d1ay6jict0ql9w"; Branch = "master"; Domain = "admin.areacode.co.za"
+        RumMonitorId = $RumAdminMonitorId; RumIdentityPool = $RumAdminIdentityPool
+    },
+    @{
+        Name = "Business"; AppId = "dbp54yxhyjvk0"; Branch = "master"; Domain = "business.areacode.co.za"
+        RumMonitorId = $RumBusinessMonitorId; RumIdentityPool = $RumBusinessIdentityPool
+    },
+    @{
+        Name = "Staff"; AppId = "d166bb81tg4k61"; Branch = "master"; Domain = "staff.areacode.co.za"
+        RumMonitorId = $RumStaffMonitorId; RumIdentityPool = $RumStaffIdentityPool
+    }
 )
 
 Write-Host ""
@@ -60,6 +82,13 @@ foreach ($app in $AmplifyApps) {
     $envVars = "VITE_API_URL=$ApiUrl,VITE_SOCKET_URL=$ApiUrl,VITE_WEBSOCKET_URL=$WebSocketUrl"
     if ($app.Name -eq "Web (Main)" -and $MapboxToken) {
         $envVars += ",VITE_MAPBOX_TOKEN=$MapboxToken"
+    }
+    if ($app.RumMonitorId -and $app.RumIdentityPool) {
+        $envVars += ",VITE_RUM_APP_MONITOR_ID=$($app.RumMonitorId)"
+        $envVars += ",VITE_RUM_IDENTITY_POOL_ID=$($app.RumIdentityPool)"
+        $envVars += ",VITE_RUM_REGION=$Region"
+    } else {
+        Write-Warn "  ⚠ RUM env vars not provided for $($app.Name) — frontend monitoring will be disabled"
     }
 
     aws amplify update-branch `

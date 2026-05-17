@@ -30,10 +30,10 @@ const queryClient = new QueryClient({
 async function bootstrap() {
   // Initialize error monitoring first (non-blocking)
   try {
-    const { initSentry } = await import('./lib/sentry')
-    await initSentry()
+    const { initRum } = await import('@area-code/shared/lib/rum')
+    await initRum()
   } catch {
-    // Sentry init failed — app continues without monitoring
+    // RUM init failed — app continues without monitoring
   }
 
   if (import.meta.env.VITE_DEV_MOCK === 'true') {
