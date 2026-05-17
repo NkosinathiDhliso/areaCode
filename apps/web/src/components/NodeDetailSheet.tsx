@@ -85,6 +85,10 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
   const [reportError, setReportError] = useState('')
   const [reportSuccess, setReportSuccess] = useState(false)
   const [qrSheetOpen, setQrSheetOpen] = useState(false)
+  // Currently expanded reward — tapping a chip toggles it open to show the
+  // description, expiry, and slots-remaining details. Customers complained
+  // the chips looked tappable but did nothing; this gives the tap a payoff.
+  const [expandedRewardId, setExpandedRewardId] = useState<string | null>(null)
 
   if (!node) return null
 
@@ -267,25 +271,74 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
                 {activeRewards.map((reward) => {
                   const slotsLeft = reward.totalSlots ? reward.totalSlots - reward.claimedCount : null
                   const isLow = slotsLeft !== null && slotsLeft <= 5
+                  const isExpanded = expandedRewardId === reward.id
+                  const expiresLabel = reward.expiresAt
+                    ? new Date(reward.expiresAt).toLocaleDateString(undefined, {
+                        day: 'numeric',
+                        month: 'short',
+                      })
+                    : null
 
                   return (
-                    <div
+                    <button
                       key={reward.id}
-                      className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-2xl px-4 py-3"
+                      type="button"
+                      onClick={() => setExpandedRewardId(isExpanded ? null : reward.id)}
+                      aria-expanded={isExpanded}
+                      aria-label={t('node.rewardDetails', 'Tap for reward details')}
+                      className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-2xl px-4 py-3 text-left transition-all duration-150 hover:border-[var(--accent)] focus:outline-none focus:border-[var(--accent)]"
                     >
-                      <div className="flex flex-row items-center justify-between">
-                        <span className="text-[var(--text-primary)] text-sm font-medium">{reward.title}</span>
-                        {slotsLeft !== null && (
-                          <span
-                            className={`text-xs font-medium ${
-                              isLow ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'
+                      <div className="flex flex-row items-center justify-between gap-3">
+                        <span className="text-[var(--text-primary)] text-sm font-medium flex-1 min-w-0">
+                          {reward.title}
+                        </span>
+                        <div className="flex flex-row items-center gap-2 shrink-0">
+                          {slotsLeft !== null && (
+                            <span
+                              className={`text-xs font-medium ${
+                                isLow ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'
+                              }`}
+                            >
+                              {slotsLeft} {t('node.left')}
+                            </span>
+                          )}
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className={`text-[var(--text-muted)] transition-transform duration-150 ${
+                              isExpanded ? 'rotate-180' : ''
                             }`}
+                            aria-hidden="true"
                           >
-                            {slotsLeft} {t('node.left')}
-                          </span>
-                        )}
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </div>
                       </div>
-                    </div>
+                      {isExpanded && (
+                        <div className="mt-3 pt-3 border-t border-[var(--border)] flex flex-col gap-2">
+                          {reward.description && (
+                            <p className="text-[var(--text-secondary)] text-xs leading-relaxed">{reward.description}</p>
+                          )}
+                          {expiresLabel && (
+                            <p className="text-[var(--text-muted)] text-xs">
+                              {t('node.rewardExpires', 'Expires')} {expiresLabel}
+                            </p>
+                          )}
+                          <p className="text-[var(--text-muted)] text-xs">
+                            {t(
+                              'node.rewardHowTo',
+                              'Tap Check In below when you’re at the venue. Show the redemption code to staff to claim.',
+                            )}
+                          </p>
+                        </div>
+                      )}
+                    </button>
                   )
                 })}
               </div>
