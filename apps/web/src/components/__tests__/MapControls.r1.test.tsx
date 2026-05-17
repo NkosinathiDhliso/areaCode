@@ -11,10 +11,11 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import { MapControls } from '../MapControls'
 
-// `useMapStore` and `useLiveVibeOnMap` are loaded from the shared package.
-// We don't need to mock the store because the test queries are insensitive
-// to the City Pulse readout; `useLiveVibeOnMap` defaults to false so the
-// legacy glass card renders, which is fine for these assertions.
+// `useMapStore` is loaded from the shared package. We don't need to mock
+// the store because the test queries are insensitive to the network's
+// pulse total — they look up the sidebar buttons by data-testid. The
+// legacy permanent City_Pulse glass card has been removed; the City_Pulse
+// readout now lives on a once-per-session toast (R2 / R2.7).
 beforeEach(() => {
   vi.useRealTimers()
 })

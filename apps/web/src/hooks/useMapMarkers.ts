@@ -2,7 +2,6 @@ import { createElement, useEffect, useRef } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import mapboxgl from 'mapbox-gl'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
-import { useLiveVibeOnMap } from '@area-code/shared/lib/featureGating'
 import type { Node, NodeCategory, NodeState } from '@area-code/shared/types'
 import { getNodeState, getCategoryColour } from '../lib/mapHelpers'
 import { ArchetypeGlyph } from '../components/ArchetypeGlyph'
@@ -11,47 +10,61 @@ import { ArchetypeGlyph } from '../components/ArchetypeGlyph'
  * Default Live_Archetype id used while no live value has arrived for a
  * node and the node has no `defaultArchetypeId`. Mirrors R7.8's
  * eclectic-fallback rule on the rendering side, so the glyph is never
- * blank while the flag is on.
+ * blank.
  */
 const DEFAULT_ARCHETYPE_ID = 'archetype-eclectic'
 
-/** Marker sub-element marked as the React glyph mount host. */
+/** Marker sub-element that owns the React glyph mount. */
 const GLYPH_HOST_LAYER = 'glyph-host'
 
-const STATE_CONFIG: Record<NodeState, { animation: string; speed: string; haloOpacity: number; ringOpacity: number }> =
-  {
-    dormant: { animation: 'breathe', speed: '4s', haloOpacity: 0.12, ringOpacity: 0.08 },
-    quiet: { animation: 'breathe', speed: '3s', haloOpacity: 0.2, ringOpacity: 0.25 },
-    active: { animation: 'pulse', speed: '1.5s', haloOpacity: 0.3, ringOpacity: 0.5 },
-    buzzing: { animation: 'pulse', speed: '0.8s', haloOpacity: 0.4, ringOpacity: 0.6 },
-    popping: { animation: 'pulse', speed: '0.4s', haloOpacity: 0.5, ringOpacity: 0.7 },
-  }
-
-// Bigger base sizes so nodes are actually visible on the map
-const CORE_SIZE: Record<NodeState, number> = {
-  dormant: 12,
-  quiet: 16,
-  active: 22,
-  buzzing: 30,
-  popping: 40,
+/**
+ * Per-Pulse_State animation, halo opacity, and ripple settings. The old
+ * "core dot" layer has been retired (see R8.1 redesign): the
+ * Archetype_Glyph is the marker now. Halo + ripple stay because they
+ * are the Pulse_State channel (R8.5) and they don't compete with the
+ * glyph for identity.
+ */
+const STATE_CONFIG: Record<NodeState, { animation: string; speed: string; haloOpacity: number; ripple: boolean }> = {
+  dormant: { animation: 'breathe', speed: '4s', haloOpacity: 0.12, ripple: false },
+  quiet: { animation: 'breathe', speed: '3s', haloOpacity: 0.2, ripple: false },
+  active: { animation: 'pulse', speed: '1.5s', haloOpacity: 0.3, ripple: false },
+  buzzing: { animation: 'pulse', speed: '0.8s', haloOpacity: 0.4, ripple: false },
+  popping: { animation: 'pulse', speed: '0.4s', haloOpacity: 0.5, ripple: true },
 }
 
-function getCoreSize(state: NodeState, score: number): number {
-  const base = CORE_SIZE[state]
-  return Math.min(base + score * 0.3, base * 2)
+/**
+ * Glyph diameter per Pulse_State. Bigger Pulse_States get bigger
+ * glyphs the same way the old core dot did, so density still reads at
+ * the city-overview zoom. Floor of 16px (R8.9 floor of 8px is for the
+ * inner SVG strokes, not the silhouette).
+ */
+const GLYPH_SIZE: Record<NodeState, number> = {
+  dormant: 18,
+  quiet: 22,
+  active: 28,
+  buzzing: 36,
+  popping: 46,
+}
+
+function getGlyphSize(state: NodeState, score: number): number {
+  const base = GLYPH_SIZE[state]
+  return Math.min(base + score * 0.3, base * 1.8)
 }
 
 function buildMarkerElement(
   node: Node,
-  coreSize: number,
+  glyphSize: number,
   colour: string,
   state: NodeState,
   score: number,
   onTap: () => void,
 ): HTMLDivElement {
+  void node
   const cfg = STATE_CONFIG[state]
-  // Container must be large enough for the halo + blur spread
-  const totalSize = coreSize * 4
+  // Container holds the halo, the optional ripple ring, the glyph mount,
+  // and the optional live-count badge. Sized off the glyph so the halo
+  // can extend past the silhouette on every Pulse_State.
+  const totalSize = glyphSize * 3
   const container = document.createElement('div')
   container.className = 'node-marker'
   Object.assign(container.style, {
@@ -63,12 +76,11 @@ function buildMarkerElement(
     justifyContent: 'center',
     cursor: 'pointer',
     overflow: 'visible',
-    // Let clicks on the transparent area pass through to the map
     pointerEvents: 'none',
   })
 
-  // ── Layer 1: Blur halo ──
-  const haloSize = coreSize * 2.5
+  // ── Halo (Pulse_State channel) ──
+  const haloSize = glyphSize * 2.2
   const blurRadius = state === 'popping' ? 16 : state === 'buzzing' ? 12 : 8
   const halo = document.createElement('div')
   Object.assign(halo.style, {
@@ -85,84 +97,52 @@ function buildMarkerElement(
   halo.dataset.layer = 'halo'
   container.appendChild(halo)
 
-  // ── Layer 2: Outer ring(s) ──
-  if (state === 'popping') {
-    const outerGlow = document.createElement('div')
-    Object.assign(outerGlow.style, {
+  // ── Popping ripple ──
+  if (cfg.ripple) {
+    const ripple = document.createElement('div')
+    Object.assign(ripple.style, {
       position: 'absolute',
-      width: `${coreSize * 2.2}px`,
-      height: `${coreSize * 2.2}px`,
+      width: `${glyphSize * 1.8}px`,
+      height: `${glyphSize * 1.8}px`,
       borderRadius: '50%',
       border: `1.5px solid ${colour}`,
       opacity: '0.3',
-      animation: `ripple 2s ease-out infinite`,
+      animation: 'ripple 2s ease-out infinite',
       pointerEvents: 'none',
     })
-    container.appendChild(outerGlow)
+    ripple.dataset.layer = 'ripple'
+    container.appendChild(ripple)
   }
 
-  const ring = document.createElement('div')
-  Object.assign(ring.style, {
-    position: 'absolute',
-    width: `${coreSize * 1.7}px`,
-    height: `${coreSize * 1.7}px`,
-    borderRadius: '50%',
-    border: `2px solid ${colour}`,
-    opacity: String(cfg.ringOpacity),
-    cursor: 'pointer',
-    pointerEvents: 'auto',
-  })
-  ring.dataset.layer = 'ring'
-  ring.addEventListener('mousedown', (e) => e.stopPropagation())
-  ring.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true })
-  ring.addEventListener('click', (e) => {
-    e.stopPropagation()
-    onTap()
-  })
-  container.appendChild(ring)
-
-  if (state === 'buzzing' || state === 'popping') {
-    const innerRing = document.createElement('div')
-    Object.assign(innerRing.style, {
-      position: 'absolute',
-      width: `${coreSize * 1.35}px`,
-      height: `${coreSize * 1.35}px`,
-      borderRadius: '50%',
-      border: `1.5px solid ${colour}`,
-      opacity: '0.35',
-      pointerEvents: 'none',
-    })
-    container.appendChild(innerRing)
-  }
-
-  // ── Layer 3: Core dot ──
-  const core = document.createElement('div')
-  const glowSpread = coreSize * 0.5
-  Object.assign(core.style, {
+  // ── Glyph wrapper (the marker itself) ──
+  // Owns the breathe / pulse animation that the old core dot used to
+  // own, so the glyph's scale curve drives identity + alive-ness in one
+  // element. Tap target is here — the glyph silhouette is what the user
+  // is actually pointing at.
+  const glyphWrapper = document.createElement('div')
+  Object.assign(glyphWrapper.style, {
     position: 'relative',
-    width: `${coreSize}px`,
-    height: `${coreSize}px`,
-    borderRadius: '50%',
-    background: `radial-gradient(circle at 35% 35%, ${colour}ff, ${colour}cc 60%, ${colour}88)`,
+    width: `${glyphSize}px`,
+    height: `${glyphSize}px`,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     animation: `${cfg.animation} ${cfg.speed} ease-in-out infinite`,
-    boxShadow: state === 'dormant' ? 'none' : `0 0 ${glowSpread}px ${colour}60, 0 0 ${glowSpread * 2}px ${colour}30`,
     cursor: 'pointer',
     pointerEvents: 'auto',
+    // Soft drop-shadow so the silhouette reads on light tiles. Not a
+    // glow per se — the halo handles glow. This is just edge separation.
+    filter: state === 'dormant' ? 'none' : `drop-shadow(0 0 ${glyphSize * 0.25}px ${colour}66)`,
   })
-  core.dataset.layer = 'core'
-  // Stop mousedown/touchstart so Mapbox doesn't interpret it as a drag
-  core.addEventListener('mousedown', (e) => e.stopPropagation())
-  core.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true })
-  core.addEventListener('click', (e) => {
+  glyphWrapper.dataset.layer = 'glyph-wrapper'
+  glyphWrapper.addEventListener('mousedown', (e) => e.stopPropagation())
+  glyphWrapper.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true })
+  glyphWrapper.addEventListener('click', (e) => {
     e.stopPropagation()
     onTap()
   })
 
-  // ── Layer 3a: Archetype glyph mount host ──
-  // Mounted inside the core so the breathe/pulse animation on the core
-  // drives the glyph's scale curve in lockstep (R8.5). The host is the
-  // full size of the core; ArchetypeGlyph sizes itself relative to
-  // that with its own min-floor (R8.9).
+  // The React mount target. ArchetypeGlyph fills 100% of this host.
   const glyphHost = document.createElement('div')
   Object.assign(glyphHost.style, {
     position: 'absolute',
@@ -172,17 +152,16 @@ function buildMarkerElement(
     pointerEvents: 'none',
   })
   glyphHost.dataset.layer = GLYPH_HOST_LAYER
-  core.appendChild(glyphHost)
+  glyphWrapper.appendChild(glyphHost)
+  container.appendChild(glyphWrapper)
 
-  container.appendChild(core)
-
-  // ── Layer 4: Live count badge ──
+  // ── Live count badge (buzzing / popping only) ──
   if ((state === 'buzzing' || state === 'popping') && score > 0) {
     const badge = document.createElement('div')
     Object.assign(badge.style, {
       position: 'absolute',
-      top: `${totalSize * 0.15}px`,
-      right: `${totalSize * 0.15}px`,
+      top: `${totalSize * 0.18}px`,
+      right: `${totalSize * 0.18}px`,
       background: '#1e1e2e',
       border: '1px solid rgba(255,255,255,0.08)',
       borderRadius: '9999px',
@@ -202,13 +181,20 @@ function buildMarkerElement(
   return container
 }
 
-function updateMarkerElement(el: HTMLElement, coreSize: number, colour: string, state: NodeState, score: number): void {
+function updateMarkerElement(
+  el: HTMLElement,
+  glyphSize: number,
+  colour: string,
+  state: NodeState,
+  score: number,
+): void {
   const cfg = STATE_CONFIG[state]
-  const totalSize = coreSize * 4
+  const totalSize = glyphSize * 3
   el.style.width = `${totalSize}px`
   el.style.height = `${totalSize}px`
 
-  const haloSize = coreSize * 2.5
+  // Halo
+  const haloSize = glyphSize * 2.2
   const blurRadius = state === 'popping' ? 16 : state === 'buzzing' ? 12 : 8
   const halo = el.querySelector('[data-layer="halo"]') as HTMLElement | null
   if (halo) {
@@ -222,36 +208,60 @@ function updateMarkerElement(el: HTMLElement, coreSize: number, colour: string, 
     })
   }
 
-  const ring = el.querySelector('[data-layer="ring"]') as HTMLElement | null
-  if (ring) {
-    Object.assign(ring.style, {
-      width: `${coreSize * 1.7}px`,
-      height: `${coreSize * 1.7}px`,
-      borderColor: colour,
-      opacity: String(cfg.ringOpacity),
-    })
+  // Ripple — add when entering popping, remove otherwise.
+  let ripple = el.querySelector('[data-layer="ripple"]') as HTMLElement | null
+  if (cfg.ripple) {
+    if (!ripple) {
+      ripple = document.createElement('div')
+      Object.assign(ripple.style, {
+        position: 'absolute',
+        width: `${glyphSize * 1.8}px`,
+        height: `${glyphSize * 1.8}px`,
+        borderRadius: '50%',
+        border: `1.5px solid ${colour}`,
+        opacity: '0.3',
+        animation: 'ripple 2s ease-out infinite',
+        pointerEvents: 'none',
+      })
+      ripple.dataset.layer = 'ripple'
+      // Insert before the glyph wrapper so it renders behind it.
+      const glyphWrapper = el.querySelector('[data-layer="glyph-wrapper"]')
+      if (glyphWrapper) {
+        el.insertBefore(ripple, glyphWrapper)
+      } else {
+        el.appendChild(ripple)
+      }
+    } else {
+      Object.assign(ripple.style, {
+        width: `${glyphSize * 1.8}px`,
+        height: `${glyphSize * 1.8}px`,
+        borderColor: colour,
+      })
+    }
+  } else if (ripple) {
+    ripple.remove()
   }
 
-  const glowSpread = coreSize * 0.5
-  const core = el.querySelector('[data-layer="core"]') as HTMLElement | null
-  if (core) {
-    Object.assign(core.style, {
-      width: `${coreSize}px`,
-      height: `${coreSize}px`,
-      background: `radial-gradient(circle at 35% 35%, ${colour}ff, ${colour}cc 60%, ${colour}88)`,
+  // Glyph wrapper
+  const glyphWrapper = el.querySelector('[data-layer="glyph-wrapper"]') as HTMLElement | null
+  if (glyphWrapper) {
+    Object.assign(glyphWrapper.style, {
+      width: `${glyphSize}px`,
+      height: `${glyphSize}px`,
       animation: `${cfg.animation} ${cfg.speed} ease-in-out infinite`,
-      boxShadow: state === 'dormant' ? 'none' : `0 0 ${glowSpread}px ${colour}60, 0 0 ${glowSpread * 2}px ${colour}30`,
+      filter: state === 'dormant' ? 'none' : `drop-shadow(0 0 ${glyphSize * 0.25}px ${colour}66)`,
     })
   }
 
+  // Live count badge
   let badge = el.querySelector('[data-layer="badge"]') as HTMLElement | null
   if ((state === 'buzzing' || state === 'popping') && score > 0) {
     if (!badge) {
       badge = document.createElement('div')
       Object.assign(badge.style, {
         position: 'absolute',
-        top: `${totalSize * 0.15}px`,
-        right: `${totalSize * 0.15}px`,
+        top: `${totalSize * 0.18}px`,
+        right: `${totalSize * 0.18}px`,
         background: '#1e1e2e',
         border: '1px solid rgba(255,255,255,0.08)',
         borderRadius: '9999px',
@@ -273,8 +283,12 @@ function updateMarkerElement(el: HTMLElement, coreSize: number, colour: string, 
 }
 
 /**
- * Manages Mapbox markers for nodes. Creates multi-layered animated markers
- * with blur halo, outer ring, core dot, and live count badge.
+ * Manages Mapbox markers for nodes. The marker is the Archetype_Glyph
+ * itself — there is no longer a coloured core circle. Halo carries
+ * Pulse_State, ripple carries the popping signal, the glyph carries
+ * identity (which archetype the venue is catering to right now) plus
+ * category colour through `dynamicContrastForCategory` + the
+ * category-coloured drop-shadow on the glyph wrapper.
  */
 export function useMapMarkers(
   mapRef: React.RefObject<mapboxgl.Map | null>,
@@ -285,12 +299,10 @@ export function useMapMarkers(
   const nodes = useMapStore((s) => s.nodes)
   const pulseScores = useMapStore((s) => s.pulseScores)
   const archetypeIds = useMapStore((s) => s.archetypeIds)
-  const liveVibeOnMap = useLiveVibeOnMap()
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map())
-  // Per-marker React roots used to render <ArchetypeGlyph> inside the
-  // marker's core layer. Tracked in parallel with `markersRef` so we can
-  // unmount the root when the marker is removed (avoids leaking React
-  // commit work for nodes that have left the viewport / filter).
+  // Per-marker React roots used to render <ArchetypeGlyph> inside each
+  // marker. Tracked in parallel with `markersRef` so we can unmount the
+  // root when the marker is removed.
   const glyphRootsRef = useRef<Map<string, Root>>(new Map())
   // Keep a stable ref to the latest onNodeTap so marker click handlers are never stale
   const onNodeTapRef = useRef(onNodeTap)
@@ -304,7 +316,6 @@ export function useMapMarkers(
 
     let cancelled = false
 
-    // Wait for map style to be loaded before adding markers
     const addMarkers = () => {
       if (cancelled) return
 
@@ -317,14 +328,8 @@ export function useMapMarkers(
         if (!filteredIds.has(id)) {
           marker.remove()
           markersRef.current.delete(id)
-          // Unmount the React glyph root for this marker so React stops
-          // tracking its element. Without this we'd keep committing to
-          // an unmounted DOM node.
           const root = glyphRootsRef.current.get(id)
           if (root) {
-            // Defer unmount one microtask to avoid React 18's "synchronous
-            // unmount during render" warning when this runs from inside a
-            // useEffect commit phase.
             queueMicrotask(() => root.unmount())
             glyphRootsRef.current.delete(id)
           }
@@ -334,7 +339,7 @@ export function useMapMarkers(
       for (const node of filtered) {
         const score = pulseScores[node.id] ?? 0
         const state = getNodeState(score)
-        const coreSize = getCoreSize(state, score)
+        const glyphSize = getGlyphSize(state, score)
         const colour = getCategoryColour(node.category)
         const existing = markersRef.current.get(node.id)
         // R7.8 / R8 fallback ladder: live archetype id from the store
@@ -344,29 +349,19 @@ export function useMapMarkers(
 
         if (existing) {
           existing.setLngLat([node.lng, node.lat])
-          updateMarkerElement(existing.getElement(), coreSize, colour, state, score)
-          // Re-render the glyph so opacity (R8.3/R8.4) and crossfade
-          // (R8.6) reflect the latest pulse state and archetype id.
-          renderGlyph(
-            glyphRootsRef.current,
-            existing.getElement(),
-            node.id,
-            archetypeId,
-            state,
-            node.category,
-            liveVibeOnMap,
-          )
+          updateMarkerElement(existing.getElement(), glyphSize, colour, state, score)
+          renderGlyph(glyphRootsRef.current, existing.getElement(), node.id, archetypeId, state, node.category)
           continue
         }
 
-        const el = buildMarkerElement(node, coreSize, colour, state, score, () => {
+        const el = buildMarkerElement(node, glyphSize, colour, state, score, () => {
           onNodeTapRef.current(node)
         })
 
         const marker = new mapboxgl.Marker({ element: el, anchor: 'center' }).setLngLat([node.lng, node.lat]).addTo(map)
 
         markersRef.current.set(node.id, marker)
-        renderGlyph(glyphRootsRef.current, el, node.id, archetypeId, state, node.category, liveVibeOnMap)
+        renderGlyph(glyphRootsRef.current, el, node.id, archetypeId, state, node.category)
       }
     }
 
@@ -380,7 +375,7 @@ export function useMapMarkers(
       cancelled = true
       map.off('load', addMarkers)
     }
-  }, [nodes, pulseScores, archetypeIds, categoryFilter, mapRef, mapReady, liveVibeOnMap])
+  }, [nodes, pulseScores, archetypeIds, categoryFilter, mapRef, mapReady])
 
   // Tear down every glyph root on unmount so a remount of the map screen
   // doesn't leak React commits to dead DOM.
@@ -397,9 +392,11 @@ export function useMapMarkers(
 
 /**
  * Mount or update the ArchetypeGlyph React subtree for a marker's
- * glyph host. While the `live_vibe_on_map` flag is `false` (R12.4) we
- * unmount any previously-rendered root and render nothing — the legacy
- * marker shape stays untouched.
+ * glyph host. The glyph is now the marker (no flag gate) — what the
+ * `live_vibe_on_map` flag still gates is the live `node:archetype_change`
+ * subscription in `MapScreen`, which controls how often the
+ * `archetypeIds` cache updates. While the flag is off, the glyph still
+ * renders using `defaultArchetypeId ?? 'archetype-eclectic'`.
  */
 function renderGlyph(
   roots: Map<string, Root>,
@@ -408,19 +405,9 @@ function renderGlyph(
   archetypeId: string,
   state: NodeState,
   category: NodeCategory,
-  enabled: boolean,
 ): void {
   const host = markerEl.querySelector(`[data-layer="${GLYPH_HOST_LAYER}"]`) as HTMLElement | null
   if (!host) return
-
-  if (!enabled) {
-    const existing = roots.get(nodeId)
-    if (existing) {
-      queueMicrotask(() => existing.unmount())
-      roots.delete(nodeId)
-    }
-    return
-  }
 
   let root = roots.get(nodeId)
   if (!root) {

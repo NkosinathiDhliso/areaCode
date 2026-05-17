@@ -87,7 +87,7 @@ This plan implements the five Live Vibe on Map deliverables bottom-up: shared ty
     - Generate valid `LiveArchetypeInputs` covering each branch, assert the returned archetype `id` is always present in `ARCHETYPE_CATALOG` and that two consecutive calls return the same `id` and `branch`
     - **Validates: Requirements 7.1, 7.9, 10.6, 10.7**
 
-- [ ] 4. Checkpoint — pure resolver layer green
+- [x] 4. Checkpoint — pure resolver layer green
   - Ensure all tests pass, ask the user if questions arise.
 
 - [x] 5. Build the music-schedule backend feature
@@ -148,10 +148,10 @@ This plan implements the five Live Vibe on Map deliverables bottom-up: shared ty
     - Add `GET`, `POST`, `DELETE /v1/business/{businessId}/music-schedule[/...]` to the existing API Gateway HTTP API IaC, wired to the schedule-crud Lambda
     - _Requirements: 3.1, 4.1_
 
-- [ ] 8. Checkpoint — backend integration green
+- [x] 8. Checkpoint — backend integration green
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 9. Implement R1 sidebar correctness fixes (un-flagged)
+- [x] 9. Implement R1 sidebar correctness fixes (un-flagged)
   - [x] 9.1 Replace stale singletonMap access in useMapInit
     - Edit `apps/web/src/hooks/useMapInit.ts` to replace module-level `singletonMap` access in `resetNorth` and `recenterUser` with a closure over `mapRef.current`
     - Guard both callbacks with `mapRef.current?.loaded()`; on early-out emit at most one debug-level log per ignored tap
@@ -172,7 +172,7 @@ This plan implements the five Live Vibe on Map deliverables bottom-up: shared ty
     - Cover: data-testids present (R1.8); disabled aria/cursor state when no fresh position (R1.4); enabled when fresh; 250ms shared debounce across both buttons (R1.7); `pauseIdleDrift(4000)` is called on every accepted sidebar tap (R1.5)
     - _Requirements: 1.3, 1.4, 1.5, 1.7, 1.8_
 
-  - [ ] 9.4 Write hook-level R1 tests for useMapInit
+  - [x] 9.4 Write hook-level R1 tests for useMapInit
     - Create `apps/web/src/hooks/__tests__/useMapInit.r1.test.ts`
     - Cover: compass tap with bearing > 1° → `easeTo({ bearing: 0 })` within 1000ms (R1.1); compass tap within ±1° of 0° → no animation, no error log (R1.2); recenter tap with stale `Last_Known_Position` (>60s old) → no fly-to (R1.3, R1.4); recenter tap with fresh position → `flyTo` within 1500ms (R1.3); both buttons with `mapRef.current?.loaded() === false` → silent early-out with at most one debug log per ignored tap (R1.6); double-tap of either button within 250ms → debounced to a single intent (R1.8)
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.6, 1.8_
@@ -191,33 +191,34 @@ This plan implements the five Live Vibe on Map deliverables bottom-up: shared ty
     - Honour `prefers-reduced-motion` via the existing `LiveToast` component
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.8, 2.9, 2.10_
 
-  - [x] 10.3 Remove the legacy permanent City Pulse glass card behind the flag
-    - Edit `apps/web/src/components/MapControls.tsx` to gate the legacy permanent City_Pulse glass card with `useLiveVibeOnMap()`: when `true` the card unmounts, when `false` it renders as today
-    - Mount `useCityPulseToast()` from `apps/web/src/screens/MapScreen.tsx` (via a flag-gated `CityPulseToastMount` wrapper) so the toast surfaces only on the map tab
+  - [x] 10.3 Remove the legacy permanent City Pulse glass card
+    - Delete the legacy permanent City_Pulse glass card from `apps/web/src/components/MapControls.tsx` unconditionally; the City_Pulse readout lives only on the toast going forward (R2.7, R12.4)
+    - Mount `useCityPulseToast()` from `apps/web/src/screens/MapScreen.tsx` via a `CityPulseToastMount` wrapper so the toast surfaces only on the map tab
     - _Requirements: 2.5, 2.7, 12.4_
 
   - [x] 10.4 Write tests for the City Pulse toast behaviour
     - Create `packages/shared/hooks/__tests__/useCityPulseToast.test.ts` covering: once per session by default; re-surface on cross from < 60 to ≥ 60; suppressed on `totalPulse === 0` without burning the slot; suppressed on retrieval failure; auto-dismiss after 6000ms; `prefers-reduced-motion` respected; not rendered while on a tab other than the map
     - _Requirements: 2.1, 2.3, 2.4, 2.5, 2.6, 2.8, 2.9, 2.10_
 
-- [x] 11. Implement R8 Archetype glyph rendering
+- [x] 11. Implement R8 Archetype glyph as the live-map node
   - [x] 11.1 Create the shared archetype glyph registry
-    - Create `packages/shared/constants/archetype-glyphs.ts` exporting a `Record<iconId, ReactNode>` of inline SVGs for every catalog `iconId`, plus a `dynamicContrastForCategory(category)` helper that picks white or near-black based on the node-core colour
+    - Create `packages/shared/constants/archetype-glyphs.tsx` exporting a `Record<iconId, ReactNode>` of inline SVGs (each painting with `fill="currentColor"`) for every catalog `iconId`, plus a `dynamicContrastForCategory(category)` helper that picks white or near-black so the silhouette/outline pair clears the WCAG 3:1 floor
     - Add a build-time check that every catalog `iconId` has a registered glyph
     - _Requirements: 8.2, 8.7, 8.9_
 
   - [x] 11.2 Implement the ArchetypeGlyph component
-    - Create `apps/web/src/components/ArchetypeGlyph.tsx` accepting `{ archetypeId, pulseState, size? }`
+    - Create `apps/web/src/components/ArchetypeGlyph.tsx` accepting `{ archetypeId, pulseState, category, size? }`
     - Render the registered glyph; on missing `iconId` render a generic dot fallback and (in dev builds only) emit one `console.warn` per session per missing id
-    - Render at 40% ± 2% opacity for `dormant`, 100% otherwise
-    - Inherit the existing breathe / pulse animation by mounting inside the existing pulse `<g>` element so the scale curve stays within 16ms of the halo
+    - Stack the glyph SVG twice: a stroked outline pass underneath in `dynamicContrastForCategory(category)` colour, a fill pass on top in `getCategoryColour(category)` colour. Pair with the `.archetype-glyph-outline svg` rule in `packages/shared/tokens.css` so the outline pass strokes every nested SVG with `paint-order: stroke` and a width that scales with size
+    - Render at 50-55% opacity for `dormant`, 100% otherwise
+    - Share the marker wrapper's breathe / pulse animation so the scale curve stays within 16ms of the halo
     - On `archetypeId` prop change, crossfade the new glyph over 400ms ± 20ms with linear easing using the two-phase opacity transition (no intermediate frame at 0% opacity)
-    - Render at no smaller than 8px and pair the glyph foreground colour with `dynamicContrastForCategory` so the 3:1 contrast holds
+    - Render at no smaller than 8px
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9_
 
-  - [x] 11.3 Wire ArchetypeGlyph into the map node renderer
-    - Edit `apps/web/src/hooks/useMapMarkers.ts` (and the React node renderer) to add `<ArchetypeGlyph archetypeId={archetypeId} pulseState={state} />` as a child of the existing pulse layer, gated by `useLiveVibeOnMap()`
-    - Source `archetypeId` from `useMapStore((s) => s.archetypeIds[nodeId] ?? node.defaultArchetypeId ?? 'archetype-eclectic')`
+  - [x] 11.3 Make the ArchetypeGlyph the marker in the map renderer
+    - Edit `apps/web/src/hooks/useMapMarkers.ts` to drop the legacy core / ring / inner-ring layers; the only retained chrome is the halo, the popping ripple, and the live-count badge. Mount `<ArchetypeGlyph archetypeId={archetypeId} pulseState={state} category={category} />` inside a `glyph-wrapper` element that owns the per-state breathe / pulse animation, the category-coloured drop-shadow, and the click target
+    - Glyph renders unconditionally (no flag gate). Source `archetypeId` from `useMapStore((s) => s.archetypeIds[nodeId] ?? node.defaultArchetypeId ?? 'archetype-eclectic')`
     - _Requirements: 8.1, 12.4_
 
   - [x] 11.4 Surface the glyph and display name in the node detail sheet
@@ -225,9 +226,9 @@ This plan implements the five Live Vibe on Map deliverables bottom-up: shared ty
     - _Requirements: 8.10, 9.6_
 
   - [x] 11.5 Write the contrast property test for ArchetypeGlyph
-    - **Property 10: Archetype_Glyph contrast ≥ 3:1 across the cross-product**
+    - **Property 10: Archetype_Glyph silhouette ≥ 3:1 against its outline**
     - Create `apps/web/src/components/__tests__/ArchetypeGlyph.contrast.test.tsx`
-    - Enumerate the cross-product (15 archetypes × 5 pulse states × 6 categories) at the smallest supported glyph size; assert the glyph foreground colour vs the node-core colour produces a contrast ratio ≥ 3:1 using a colour-pair contrast helper
+    - Enumerate the cross-product (15 archetypes × 5 pulse states × 6 categories) at the smallest supported glyph size; assert the silhouette colour (category hex) vs the outline colour (`dynamicContrastForCategory(category)`) produces a contrast ratio ≥ 3:1 using a colour-pair contrast helper. Pulse_State does not affect the formula because both layers render at 1.0 opacity inside the SVG and the wrapper opacity scales them together
     - **Validates: Requirements 8.9, 10.10**
 
 - [x] 12. Implement live archetype delivery on the web client
@@ -292,24 +293,52 @@ This plan implements the five Live Vibe on Map deliverables bottom-up: shared ty
     - For `archetype-uncharted`, also surface the existing helper copy ("Connect a streaming service or pick your genres") so the rename does not erase the call to action
     - _Requirements: 9.8, 9.11, 9.12_
 
-- [ ] 15. Final checkpoint — full feature green behind the flag
+- [x] 15. Final checkpoint — full feature green behind the flag
   - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 16. Tier-driven glyph size multiplier (boost = paid lever, halo = honest lever)
+  - [ ] 16.1 Expose `businessTier` on the nodes-for-city REST payload
+    - Edit `backend/src/features/nodes/repository.ts` `getNodesByCitySlug` to include the owning business's `tier` field in the returned node objects (already fetched during the paid-tier filter pass — just pass it through)
+    - Add `businessTier?: BusinessTier` to the shared `Node` interface in `packages/shared/types/index.ts`; default to `'starter'` when absent on the client
+    - _Requirements: 8.1 (size driven by tier), 12.4 (data plumbing)_
+
+  - [ ] 16.2 Add `TIER_SIZE_MULTIPLIER` constant and apply in `useMapMarkers.ts`
+    - Create `packages/shared/constants/tier-size.ts` exporting `TIER_SIZE_MULTIPLIER: Record<BusinessTier, number>` with values `{ free: 1.0, starter: 1.0, payg: 1.0, growth: 1.3, pro: 1.6 }`
+    - In `useMapMarkers.ts`, multiply the base glyph size (`getGlyphSize(state, score)`) by `TIER_SIZE_MULTIPLIER[node.businessTier ?? 'starter']` so tier drives size independently of pulse score
+    - Halo radius stays proportional to the multiplied glyph size (bigger venue = bigger halo radius) but halo brightness/speed stays locked to pulse score only — no tier influence on animation
+    - _Requirements: 8.1 (size = paid lever), 8.5 (halo = honest lever)_
+
+  - [ ] 16.3 Smooth size transition on tier change
+    - Add a CSS `transition: width 400ms ease, height 400ms ease` on the `glyph-wrapper` element in `buildMarkerElement` so a mid-session tier upgrade rescales smoothly rather than snapping
+    - _Requirements: 8.6 (crossfade / smooth transitions)_
+
+  - [ ] 16.4 Write property test: glyph size is non-decreasing with tier rank
+    - Create `apps/web/src/hooks/__tests__/useMapMarkers.tier-size.test.ts`
+    - For every (Pulse_State × score × tier) triple, assert `glyphSize(state, score, tierA) <= glyphSize(state, score, tierB)` whenever `tierRank(tierA) <= tierRank(tierB)`
+    - Assert that halo animation speed is identical across tiers for the same Pulse_State (tier does not buy brightness)
+    - **Validates: size = paid lever, halo = honest lever invariant**
+
+  - [ ] 16.5 Confirm free-tier exclusion from the map (existing behaviour)
+    - Write a focused integration test in `backend/src/features/nodes/__tests__/repository.test.ts` asserting that `getNodesByCitySlug` returns zero nodes for businesses with `tier = 'free'`
+    - This is existing behaviour (the `PAID_TIERS_SET` filter) but not currently tested — pin it so a future refactor can't accidentally expose free-tier venues
+    - _Requirements: map visibility = paid subscription only_
+
+- [ ] 17. Checkpoint — tier-driven size green
+  - Run all new tests from 16.x plus the existing contrast test (which should still pass since tier doesn't affect the silhouette/outline colour pairing)
+  - Ensure no regressions in the full task 15 surface
 
 ## Notes
 
 - The R1 sidebar fixes (Task 9) are pure bug fixes and ship un-flagged per R12.7
-- Every other consumer-facing change is gated behind the `live_vibe_on_map` flag; the Schedule_Editor stays reachable while the flag is `false` so operators can prep schedules ahead of launch (R12.5)
+- The City Pulse toast (Task 10) ships un-flagged — the legacy permanent glass card is removed unconditionally
+- The Archetype_Glyph is the marker (no more coloured core circle) and renders unconditionally; only the live `node:archetype_change` subscription is gated by `live_vibe_on_map`
+- Glyph size is driven by `businessTier` (the paid lever); halo brightness/speed is driven by pulse score from real check-ins (the honest lever). These are independent channels — tier cannot buy halo brightness, and check-ins cannot buy size
+- Free-tier businesses (`tier = 'free'`) do not appear on the map at all (existing `PAID_TIERS_SET` filter in `getNodesByCitySlug`)
+- Dynamic pricing (adjusting subscription cost based on neighbourhood demand) is deferred to a separate spec — the data foundation (`businessTier` on the node payload, the existing `neighbourhoodId` field) is in place for it to hook into
 - All Lambdas are arm64; the `MusicSchedules` table is PAY_PER_REQUEST; no new always-on resources are introduced (no ECS, RDS, ElastiCache, ALB, NAT Gateway)
 - The R9 rename is id-stable: no DynamoDB migration is required and the catalog `name` field is preserved for admin tools (Property 15)
 - Property tests use the existing `fast-check` setup that already lives in `packages/shared/lib/__tests__/`
 - The `live-archetype-evaluator` runs in-process inside the `schedule-transition-tick` Lambda (called directly, not via `lambda.Invoke`) and short-circuits on `live_vibe_on_map === false`, so the worker can be deployed before the flag flip without consuming DynamoDB budget
-
-### Outstanding work as of this update
-
-The shared resolver layer, backend handlers (incl. the transition-tick fanout test), Terraform packaging for the worker + EventBridge rule, frontend glyph rendering, archetype rename, the music-schedule editor with full Cross_Midnight_Pair handling, the City Pulse toast rollout (gated card + flag-gated mount on `MapScreen`), and the live archetype delivery hook + reconnect tests are all in. What remains:
-
-1. **Hook-level R1 tests (9.4).** `apps/web/src/components/__tests__/MapControls.r1.test.tsx` covers the component side (R1.3-R1.5, R1.7, R1.8). The hook-side suite at `apps/web/src/hooks/__tests__/useMapInit.r1.test.ts` does not exist yet and needs to cover compass bearing > 1° → `easeTo` (R1.1), within ±1° no-op (R1.2), recenter freshness gate (R1.3, R1.4), `loaded() === false` silent early-out (R1.6), and the 250ms double-tap debounce against a hook-driven map mock (R1.8).
-2. **Checkpoints (4, 8, 15).** Pure-resolver, backend-integration, and full-feature checkpoints remain to be ticked once tests pass.
 
 ## Task Dependency Graph
 
@@ -324,7 +353,11 @@ The shared resolver layer, backend handlers (incl. the transition-tick fanout te
     { "id": 5, "tasks": ["5.3", "6.2", "7.1", "7.3", "10.1", "11.3", "12.1", "13.2", "14.1"] },
     { "id": 6, "tasks": ["6.3", "7.2", "9.1", "10.2", "11.4", "11.5", "12.3", "13.3", "14.2"] },
     { "id": 7, "tasks": ["9.2", "10.3", "12.4", "13.4"] },
-    { "id": 8, "tasks": ["9.3", "9.4", "10.4"] }
+    { "id": 8, "tasks": ["9.3", "9.4", "10.4"] },
+    { "id": 9, "tasks": ["16.1"] },
+    { "id": 10, "tasks": ["16.2", "16.5"] },
+    { "id": 11, "tasks": ["16.3", "16.4"] },
+    { "id": 12, "tasks": ["17"] }
   ]
 }
 ```

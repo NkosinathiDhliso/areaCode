@@ -1,10 +1,7 @@
-import { useLiveVibeOnMap } from '@area-code/shared/lib/featureGating'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import { Box, Square, Compass, Crosshair, Activity } from 'lucide-react'
 import { useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-
-import { getNodeState } from '../lib/mapHelpers'
 
 /**
  * R1 debounce window shared by Compass_Button and Recenter_Button. A
@@ -50,9 +47,11 @@ interface MapControlsProps {
  * - 3D / Flat toggle: switches pitch and bearing for the layered city view.
  * - Compass: spins with the map; tap to snap back to north.
  * - Recenter: flies to the user's last known position.
- * - City Pulse readout: live sum of every node's pulse score in the
- *   current category filter. The mission is "your venue is alive — see it";
- *   this surfaces the network heartbeat in one number.
+ * - "Live" pill: a small breathing badge that surfaces only when the
+ *   network is awake (`totalPulse > 0`). The City_Pulse number itself
+ *   has moved out of this cluster and onto the once-per-session toast
+ *   surfaced by `useCityPulseToast` (R2 / R2.7) so the map stays the
+ *   focus.
  */
 export function MapControls({
   is3D,
@@ -66,7 +65,6 @@ export function MapControls({
   const { t } = useTranslation()
   const pulseScores = useMapStore((s) => s.pulseScores)
   const nodes = useMapStore((s) => s.nodes)
-  const liveVibeOnMap = useLiveVibeOnMap()
 
   // Shared debounce timestamp across Compass_Button and Recenter_Button so a
   // double-tap within 250ms is collapsed to a single intent (R1.7).
@@ -94,60 +92,18 @@ export function MapControls({
     onRecenter()
   }, [onRecenter, pauseIdleDrift])
 
-  const { totalPulse, hottestState } = useMemo(() => {
+  // The City_Pulse total used to drive a permanent glass card here. R2 moved
+  // it to a once-per-session toast (`useCityPulseToast`), so this component
+  // only needs the boolean "is anything pulsing right now?" to gate the
+  // small "LIVE" badge below.
+  const totalPulse = useMemo(() => {
     let total = 0
-    let hottest = 0
-    for (const id of Object.keys(nodes)) {
-      const score = pulseScores[id] ?? 0
-      total += score
-      if (score > hottest) hottest = score
-    }
-    return { totalPulse: total, hottestState: getNodeState(hottest) }
+    for (const id of Object.keys(nodes)) total += pulseScores[id] ?? 0
+    return total
   }, [pulseScores, nodes])
-
-  const pulseTone =
-    hottestState === 'popping'
-      ? 'var(--node-food)'
-      : hottestState === 'buzzing'
-        ? 'var(--warning)'
-        : hottestState === 'active'
-          ? 'var(--success)'
-          : 'var(--accent-bright)'
 
   return (
     <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex flex-col items-end gap-2 pointer-events-none">
-      {/*
-        Legacy permanent City_Pulse glass card. Live Vibe on Map R2 replaces
-        this with a once-per-session toast surfaced via `useCityPulseToast`,
-        so behind the `live_vibe_on_map` flag we unmount the card entirely.
-        While the flag is `false` the card renders exactly as it does today.
-      */}
-      {!liveVibeOnMap && (
-        <div
-          className="glass-raised rounded-2xl px-3 py-2 flex items-center gap-2 pointer-events-auto"
-          style={{ minWidth: '88px' }}
-          aria-label={t('map.controls.cityPulse')}
-          title={t('map.controls.cityPulseHint')}
-        >
-          <span
-            className="relative inline-flex h-2 w-2 rounded-full"
-            style={{
-              background: pulseTone,
-              boxShadow: `0 0 8px ${pulseTone}, 0 0 16px ${pulseTone}`,
-              animation: 'breathe 2s ease-in-out infinite',
-            }}
-          />
-          <div className="flex flex-col leading-tight">
-            <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">
-              {t('map.controls.cityPulse')}
-            </span>
-            <span className="text-[var(--text-primary)] text-sm font-bold tabular-nums">
-              {totalPulse > 999 ? '999+' : totalPulse}
-            </span>
-          </div>
-        </div>
-      )}
-
       {/* Control stack */}
       <div className="glass-raised rounded-2xl p-1 flex flex-col gap-1 pointer-events-auto">
         {/*

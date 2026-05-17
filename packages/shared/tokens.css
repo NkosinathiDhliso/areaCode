@@ -237,6 +237,26 @@
     opacity: 0;
   }
 }
+
+/**
+ * Archetype glyph outline pass. The marker draws the same SVG twice
+ * stacked: once stroked underneath as a contrasting outline so the
+ * silhouette reads on any basemap (light, dark, satellite), once filled
+ * with the category colour on top. Every glyph in
+ * `packages/shared/constants/archetype-glyphs.tsx` paints with
+ * `fill="currentColor"`, so the outline pass sets `color` to the
+ * contrast hex and applies stroke + paint-order to every nested SVG.
+ *
+ * `--glyph-outline-width` is set inline by the React layer so the
+ * stroke scales with the glyph size from 8px through 80px+.
+ */
+.archetype-glyph-outline svg {
+  paint-order: stroke;
+  stroke: currentColor;
+  stroke-width: var(--glyph-outline-width, 2px);
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
 @keyframes popIn {
   0% {
     transform: scale(0);

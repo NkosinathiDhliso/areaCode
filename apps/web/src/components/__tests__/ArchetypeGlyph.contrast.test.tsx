@@ -1,52 +1,38 @@
 /**
- * Property 10: Archetype_Glyph contrast ≥ 3:1 across the cross-product.
+ * Property 10: Archetype_Glyph silhouette ≥ 3:1 against its outline.
  *
  * Validates: Requirements 8.9, 10.10.
  *
- * R10.10 enumerates every (archetype × Pulse_State × category) triple
- * (currently 15 archetypes × 5 pulse states × 6 categories = 450
- * combinations) at the smallest supported glyph size and asserts the
- * rendered glyph foreground produces a contrast ratio ≥ 3:1 against
- * the node-core colour (R8.9).
+ * Layout note (R8 redesign).
+ *   The glyph is no longer a small icon overlaid on a coloured node
+ *   core. It is the marker. Each glyph is drawn twice stacked: a
+ *   stroked outline pass underneath in `dynamicContrastForCategory`'s
+ *   colour, and a fill pass on top in the venue's category colour
+ *   (`getCategoryColour`). The outline gives the silhouette edge
+ *   separation against any Mapbox basemap (light, dark, satellite),
+ *   and the silhouette carries the category channel.
  *
- * Notes on opacity (R8.3 / R8.4):
- *   - `pulseState` does not change the chosen foreground colour — that
- *     comes from `dynamicContrastForCategory(category)` and is purely a
- *     function of the node-core colour. Pulse_State only changes the
- *     glyph layer's CSS `opacity` (40% for `dormant`, 100% for the four
- *     active states).
- *   - CSS `opacity` on a child element is equivalent to source-over
- *     alpha compositing in gamma space (browsers do not linearise
- *     before blending the `opacity` property). The pixel the user
- *     actually sees is therefore `α·FG + (1-α)·BG`, with BG being the
- *     node-core fill drawn one layer behind.
- *   - This means the effective foreground colour gets closer to the
- *     node-core as opacity drops, which compresses the contrast ratio.
- *     The worst case across Pulse_States is therefore `dormant` at 40%
- *     opacity. R8.9 requires ≥ 3:1 "at every Pulse_State", so the
- *     property has to hold at that worst case too.
+ *   The relevant contrast pairing is therefore **silhouette vs
+ *   outline** — those two colours determine whether the silhouette
+ *   reads on top of its own outline. Both colours render at 1.0
+ *   opacity inside the SVG; the wrapper's CSS `opacity` (R8.3 / R8.4)
+ *   scales them together against the basemap, so the silhouette /
+ *   outline pair stays in lockstep at every Pulse_State and the
+ *   gamma-space compositing footgun from the previous design no longer
+ *   applies. R8.9's 3:1 floor therefore holds across all five
+ *   Pulse_States in the new layout, and the cross-product reverts to
+ *   the original 15 × 5 × 6 = 450 cells.
  *
  * Notes on size (R8.9):
- *   - The smallest supported glyph size is 8px (R8.9, enforced by the
- *     `MIN_GLYPH_SIZE_PX` constant in `ArchetypeGlyph.tsx`). Size does
- *     not enter the WCAG 2.0 contrast formula, but we pin the smallest
- *     supported size here so any future size-dependent relaxation
- *     (e.g. a "≥ 3:1 only at large-text size" rule) starts from the
- *     worst case.
+ *   The smallest supported glyph size is 8px. Size does not enter the
+ *   WCAG 2.0 contrast formula, but we pin it here so any future size-
+ *   dependent relaxation starts from the worst case.
  *
  * Notes on the contrast formula:
- *   - WCAG 2.0 relative luminance from sRGB:
- *       channel_lin = c ≤ 0.04045 ? c/12.92 : ((c+0.055)/1.055)^2.4
- *       L = 0.2126·R_lin + 0.7152·G_lin + 0.0722·B_lin
- *     and contrast(a, b) = (Lmax + 0.05) / (Lmin + 0.05).
- *
- * Notes on the node-core hex map:
- *   - `NODE_CATEGORY_HEX` is module-private inside
- *     `packages/shared/constants/archetype-glyphs.tsx`, so we mirror
- *     the canonical values here. The runtime source of truth is
- *     `packages/shared/tokens.css` (`--node-*` vars). If the tokens
- *     drift, both this fixture and the registry's internal map need to
- *     be updated together.
+ *   WCAG 2.0 relative luminance from sRGB:
+ *     channel_lin = c ≤ 0.04045 ? c/12.92 : ((c+0.055)/1.055)^2.4
+ *     L = 0.2126·R_lin + 0.7152·G_lin + 0.0722·B_lin
+ *   contrast(a, b) = (Lmax + 0.05) / (Lmin + 0.05).
  */
 import { describe, expect, it } from 'vitest'
 
@@ -55,7 +41,7 @@ import type { NodeCategory, NodeState } from '@area-code/shared/types'
 
 // ─── Cross-product domain ───────────────────────────────────────────────────
 
-/** Every value of `NodeState` (R8.3 / R8.4). */
+/** Every Pulse_State (R8.3 / R8.4). */
 const PULSE_STATES: readonly NodeState[] = ['dormant', 'quiet', 'active', 'buzzing', 'popping'] as const
 
 /** Every value of `NodeCategory` mirrored from `NODE_CATEGORIES`. */
@@ -63,9 +49,11 @@ const CATEGORIES: readonly NodeCategory[] = ['food', 'coffee', 'nightlife', 'ret
 
 /**
  * Mirrors `NODE_CATEGORY_HEX` from
- * `packages/shared/constants/archetype-glyphs.tsx`. The runtime source
- * of truth is `packages/shared/tokens.css` — these are the dark-theme
- * `--node-*` values, which is the production default.
+ * `packages/shared/constants/archetype-glyphs.tsx` and
+ * `apps/web/src/lib/mapHelpers.ts`'s `getCategoryColour`. The runtime
+ * source of truth is `packages/shared/tokens.css` (`--node-*` vars).
+ * If those tokens drift, both this fixture and the registry's internal
+ * map need to be updated together.
  */
 const NODE_CATEGORY_HEX: Readonly<Record<NodeCategory, string>> = {
   food: '#ff6b6b',
@@ -76,20 +64,7 @@ const NODE_CATEGORY_HEX: Readonly<Record<NodeCategory, string>> = {
   arts: '#ff9f43',
 }
 
-/**
- * Per R8.3 / R8.4: dormant renders at 40% opacity, every other state
- * at 100%. Mirrors `DORMANT_OPACITY` / `ACTIVE_OPACITY` constants in
- * `apps/web/src/components/ArchetypeGlyph.tsx`.
- */
-const STATE_OPACITY: Readonly<Record<NodeState, number>> = {
-  dormant: 0.4,
-  quiet: 1.0,
-  active: 1.0,
-  buzzing: 1.0,
-  popping: 1.0,
-}
-
-/** R8.9 contrast floor for glyph foreground vs node-core. */
+/** R8.9 contrast floor for silhouette vs outline. */
 const MIN_CONTRAST_RATIO = 3.0
 
 /** R8.9 minimum supported glyph size. Pinned for documentation only. */
@@ -132,53 +107,43 @@ function contrastRatio(a: RGB, b: RGB): number {
   return (hi + 0.05) / (lo + 0.05)
 }
 
-/**
- * Source-over alpha compositing in gamma (sRGB) space. This is what
- * the browser does for CSS `opacity` on a child element — it does NOT
- * linearise before blending the opacity property.
- */
-function compositeOver(fg: RGB, bg: RGB, alpha: number): RGB {
-  return {
-    r: alpha * fg.r + (1 - alpha) * bg.r,
-    g: alpha * fg.g + (1 - alpha) * bg.g,
-    b: alpha * fg.b + (1 - alpha) * bg.b,
-  }
-}
-
 // ─── Property 10 ────────────────────────────────────────────────────────────
 
-describe('Property 10: Archetype_Glyph contrast ≥ 3:1 across the cross-product', () => {
+describe('Property 10: Archetype_Glyph silhouette ≥ 3:1 against its outline', () => {
   /**
    * Sanity check the cross-product cardinality so the test fails loud
    * if a future catalog change drops or adds an entry without updating
-   * R10.10's enumerated count.
+   * R10.10's documented count.
+   *
+   * Domain: 15 archetypes × 5 pulse states × 6 categories = 450.
    */
   it('enumerates the documented cross-product (15 × 5 × 6 = 450)', () => {
     expect(ARCHETYPE_CATALOG.length).toBe(15)
     expect(PULSE_STATES.length).toBe(5)
     expect(CATEGORIES.length).toBe(6)
     expect(ARCHETYPE_CATALOG.length * PULSE_STATES.length * CATEGORIES.length).toBe(450)
-    // Smallest supported glyph size is pinned for documentation; size
-    // does not enter the WCAG 2.0 colour-pair contrast formula.
     expect(MIN_GLYPH_SIZE_PX).toBe(8)
   })
 
   /**
    * Validates: Requirements 8.9, 10.10.
    *
-   * For every (archetype × pulse_state × category) triple, the
-   * rendered glyph foreground (alpha-composited per the Pulse_State
-   * opacity rules) maintains a contrast ratio of ≥ 3:1 against the
-   * node-core colour.
+   * For every (archetype × pulse_state × category) triple, the glyph's
+   * silhouette colour (the category hex) maintains a contrast ratio of
+   * ≥ 3:1 against its outline colour (the WCAG-safe contrast colour
+   * from `dynamicContrastForCategory`). Pulse_State does not appear in
+   * the formula because both colours render at 1.0 opacity inside the
+   * SVG and the wrapper's CSS opacity scales them together — pulse
+   * state only affects the marker's overall presence against the
+   * basemap, not the silhouette/outline pairing.
    */
-  it('every (archetype × pulse_state × category) renders at ≥ 3:1 contrast against the node-core colour', () => {
+  it('every (archetype × pulse_state × category) silhouette is ≥ 3:1 against its outline', () => {
     interface Failure {
       archetypeId: string
       pulseState: NodeState
       category: NodeCategory
-      foreground: string
-      compositedForeground: string
-      background: string
+      silhouette: string
+      outline: string
       contrast: number
     }
 
@@ -186,26 +151,17 @@ describe('Property 10: Archetype_Glyph contrast ≥ 3:1 across the cross-product
     for (const archetype of ARCHETYPE_CATALOG) {
       for (const pulseState of PULSE_STATES) {
         for (const category of CATEGORIES) {
-          const fgHex = dynamicContrastForCategory(category)
-          const bgHex = NODE_CATEGORY_HEX[category]
-          const fg = hexToRgb(fgHex)
-          const bg = hexToRgb(bgHex)
-          const alpha = STATE_OPACITY[pulseState]
-          const composited = compositeOver(fg, bg, alpha)
-          const ratio = contrastRatio(composited, bg)
+          const silhouetteHex = NODE_CATEGORY_HEX[category]
+          const outlineHex = dynamicContrastForCategory(category)
+          const ratio = contrastRatio(hexToRgb(silhouetteHex), hexToRgb(outlineHex))
 
           if (ratio < MIN_CONTRAST_RATIO) {
             failures.push({
               archetypeId: archetype.id,
               pulseState,
               category,
-              foreground: fgHex,
-              compositedForeground:
-                '#' +
-                [composited.r, composited.g, composited.b]
-                  .map((c) => Math.round(c).toString(16).padStart(2, '0'))
-                  .join(''),
-              background: bgHex,
+              silhouette: silhouetteHex,
+              outline: outlineHex,
               contrast: Math.round(ratio * 100) / 100,
             })
           }
@@ -216,7 +172,7 @@ describe('Property 10: Archetype_Glyph contrast ≥ 3:1 across the cross-product
     expect(
       failures,
       `Found ${failures.length} (archetype × pulse_state × category) ` +
-        `combinations with contrast < ${MIN_CONTRAST_RATIO}:1.\n` +
+        `combinations with silhouette/outline contrast < ${MIN_CONTRAST_RATIO}:1.\n` +
         `First 5 (of ${failures.length}):\n` +
         JSON.stringify(failures.slice(0, 5), null, 2),
     ).toEqual([])

@@ -45,12 +45,12 @@ function LiveArchetypeSubscriber({ token, citySlug }: { token: string | undefine
 }
 
 /**
- * Flag-gated mount for the once-per-session City_Pulse toast (R2, R10.3).
+ * Mount for the once-per-session City_Pulse toast (R2).
  *
- * Mounted only when `live_vibe_on_map` is true so that while the flag is
- * `false` the legacy permanent glass card in `MapControls` keeps rendering
- * and no toast slot is ever consumed. Unmounting tears down the grace and
- * auto-dismiss timers via `useCityPulseToast`'s cleanup effect.
+ * The legacy permanent glass card has been removed entirely; the toast is
+ * the only surface for the City_Pulse readout on the map tab. Unmounting
+ * tears down the grace and auto-dismiss timers via `useCityPulseToast`'s
+ * cleanup effect.
  */
 function CityPulseToastMount({ mapReady }: { mapReady: boolean }) {
   useCityPulseToast({ mapReady })
@@ -345,7 +345,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       <ProximityNudgeBanner onNavigate={onNavigate} />
 
       {liveVibeOnMap && <LiveArchetypeSubscriber token={accessToken ?? undefined} citySlug={citySlug} />}
-      {liveVibeOnMap && <CityPulseToastMount mapReady={mapReady} />}
+      <CityPulseToastMount mapReady={mapReady} />
 
       <NodeDetailSheet
         node={selectedNode}

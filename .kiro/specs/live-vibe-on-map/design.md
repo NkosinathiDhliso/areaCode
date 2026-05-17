@@ -126,7 +126,7 @@ A new hook `useCityPulseToast()` in `packages/shared/hooks/`:
 - Auto-dismiss is the existing 6000ms behaviour in `ToastOverlay.tsx`.
 - `prefers-reduced-motion` (R2.8) is already honoured by the `LiveToast` shared component; no change needed.
 
-The legacy permanent City_Pulse glass card in `MapControls.tsx` (lines 60-90) is removed when `live_vibe_on_map === true` and kept when `false` (R12.4). The cleanest pattern is a feature-flag guard around the JSX block; both branches share the same `totalPulse` and `pulseTone` calculation.
+The legacy permanent City_Pulse glass card in `MapControls.tsx` is removed unconditionally — the City_Pulse readout lives only on the toast (R2.7, R12.4). `MapControls` keeps its compass / recenter / 3D buttons; the small "LIVE" pill below the buttons (gated only by `totalPulse > 0`) is the only City_Pulse-derived chrome that remains in the cluster.
 
 ### Backend: R3 Music Schedule data model
 
@@ -319,7 +319,9 @@ Every consumer-facing surface that today renders `archetype.name` switches to `g
 
 R9.13's "no per-locale override" rule is enforced at the type level by the function signature: `getArchetypeDisplayName` takes only an `id` and a future locale parameter cannot be added without a code review touching this central module. If a future i18n requirement asks for a localised name, the answer is "translate the description in R9.11, not the display name."
 
-### Frontend: R8 Archetype glyph rendering
+### Frontend: R8 Archetype glyph as the live-map node
+
+The previous design overlaid a small glyph on a category-coloured node-core circle. The new design retires that core circle entirely: the glyph itself is the marker. Halo + popping ripple stay because they are the Pulse_State channel; the glyph carries identity (which archetype the venue is catering to right now) and the category channel (silhouette colour).
 
 New component `apps/web/src/components/ArchetypeGlyph.tsx`:
 
@@ -327,21 +329,22 @@ New component `apps/web/src/components/ArchetypeGlyph.tsx`:
 interface ArchetypeGlyphProps {
   archetypeId: string
   pulseState: NodeState
-  size?: number // defaults to node-core diameter
+  category: NodeCategory
+  size?: number // defaults to 32px; clamped to a floor of 8px
 }
 ```
 
 Behaviour:
 
 - Looks up `iconId` from `ARCHETYPE_CATALOG` (the `id`→`iconId` map is stable per R9.3).
-- Uses a new shared glyph registry `packages/shared/constants/archetype-glyphs.ts` exporting a `Record<iconId, ReactNode>` of inline SVGs.
+- Uses the shared glyph registry `packages/shared/constants/archetype-glyphs.tsx` exporting a `Record<iconId, ReactNode>` of inline SVGs that all paint with `fill="currentColor"`.
 - Falls back to a generic dot SVG if `iconId` is not in the registry (R8.7), and logs once per session in dev builds (R8.8).
-- Opacity rule (R8.3, R8.4): `dormant → 0.4`, all other states → `1.0`.
-- Inherits the existing breathe / pulse animation by being rendered as a child of the existing pulse `<g>` element so its scale stays in sync (R8.5).
-- On `archetypeId` prop change, transitions opacity in two phases via CSS — fade in the new glyph from 0.99 → 1.0 while keeping the previous frame for 200ms, then unmount the old. This sidesteps the R8.6 "no intermediate frame at 0% opacity" trap.
-- Contrast is enforced at the registry level: each glyph's foreground colour is paired with a `dynamicContrastForCategory(category)` helper that picks white or near-black based on the node-core colour. The R10.10 property test asserts the cross-product holds at the smallest supported size.
+- Opacity rule (R8.3, R8.4): `dormant → 0.55`, all other states → `1.0`. The dormant level was lifted from 0.4 in the previous design because the glyph is no longer composited against a coloured core background — its visual recession comes from the wrapper opacity scaling the silhouette + outline pair against the basemap, not from collapsing the contrast against a sibling fill.
+- Inherits the existing breathe / pulse animation by being mounted inside the marker's `glyph-wrapper` element, which owns the per-state animation. The halo runs the same animation in parallel so the two scale curves stay within 16ms of each other (R8.5).
+- On `archetypeId` prop change, transitions opacity in two phases via CSS — fade in the new glyph from 0.99 → 1.0 while keeping the previous frame for 400ms, then unmount the old. This sidesteps the R8.6 "no intermediate frame at 0% opacity" trap.
+- Contrast is enforced by stacking the glyph SVG twice: a stroked outline pass underneath in `dynamicContrastForCategory(category)`'s colour, and a fill pass on top in the venue's category colour from `getCategoryColour(category)`. Each registered SVG paints with `fill="currentColor"`, so the wrapper sets `color` per layer and the global CSS rule `.archetype-glyph-outline svg { paint-order: stroke; stroke: currentColor; ... }` adds the stroke for the outline pass. The R10.10 property test asserts ≥ 3:1 silhouette/outline contrast across the cross-product (15 archetypes × 5 pulse states × 6 categories = 450 cells); pulse_state does not enter the contrast formula because both layers render at 1.0 opacity inside the SVG and the wrapper's CSS opacity scales them together.
 
-The Node renderer (the existing layered HTML/SVG nodes in `apps/web/src/lib/mapMarkers.ts`) gets one new child: `<ArchetypeGlyph archetypeId={archetypeId} pulseState={state} />`. The `archetypeId` comes from `useMapStore((s) => s.archetypeIds[nodeId] ?? node.defaultArchetypeId ?? 'archetype-eclectic')`.
+The Node renderer (`apps/web/src/hooks/useMapMarkers.ts`) drops the legacy core / ring / inner-ring layers and renders one `glyph-wrapper` element instead. The wrapper carries the per-state animation, the category-coloured `drop-shadow` filter, and the click target. `<ArchetypeGlyph archetypeId={archetypeId} pulseState={state} category={category} />` mounts inside the wrapper. The `archetypeId` comes from `useMapStore((s) => s.archetypeIds[nodeId] ?? node.defaultArchetypeId ?? 'archetype-eclectic')` and renders unconditionally — the `live_vibe_on_map` flag only gates the live `node:archetype_change` socket subscription, not the glyph itself.
 
 ### Frontend: archetype reveal modal (R9.11, R9.12)
 
@@ -418,8 +421,8 @@ The default `false` (R12.2) and the unreachable-store fallback `false` (R12.3) a
 
 While `live_vibe_on_map === false`:
 
-- `MapControls` renders the legacy permanent City_Pulse glass card (R12.4).
-- `VenueNode` renders without the ArchetypeGlyph (R12.4).
+- `MapControls` no longer renders the legacy permanent City_Pulse glass card under any flag state; the City_Pulse readout lives on the once-per-session toast and ships un-flagged (R2.7, R12.4).
+- `VenueNode` always renders the `ArchetypeGlyph` (using `defaultArchetypeId` or `archetype-eclectic` while the flag is off — R12.4). The flag only gates the live `node:archetype_change` socket subscription, so glyph values stay on the venue's default until the flag flips and the live deltas start arriving.
 - The Schedule_Editor remains reachable in Business_Portal (R12.5) so operators can prep schedules before launch.
 - The `live-archetype-evaluator` Lambda short-circuits at the start: if the flag is `false`, return immediately without DynamoDB reads or socket emits (R12.5).
 
@@ -519,7 +522,7 @@ The R10 property test surface is the heart of this. Existing fast-check setup in
   - Idempotence (R10.7).
 
 - `apps/web/src/components/__tests__/ArchetypeGlyph.contrast.test.tsx`
-  - The R10.10 cross-product: (15 archetypes × 5 pulse states × 6 categories) at the smallest supported glyph size. Asserts contrast ≥ 3:1 using a colour-pair contrast helper.
+  - The R10.10 cross-product: (15 archetypes × 5 pulse states × 6 categories = 450) at the smallest supported glyph size. Asserts ≥ 3:1 contrast between the glyph silhouette colour (category hex) and the outline colour (`dynamicContrastForCategory(category)`) using a colour-pair contrast helper. Both layers render at 1.0 opacity inside the SVG, so the silhouette / outline pair stays in lockstep at every Pulse_State and the gamma-space compositing trap from the previous design no longer applies.
 
 ### Backend integration tests
 
@@ -610,10 +613,10 @@ The properties below are the design-level invariants that survive across impleme
 **Validates: Requirements 3.5, 3.7, 3.9, 10.8.**
 **Holds because** all validation runs server-side in a single `schedule-validator.ts` module before any DynamoDB write. Rejected operations short-circuit before the write, so prior persisted state is untouched.
 
-### Property 10: Archetype_Glyph contrast ≥ 3:1 across the cross-product
+### Property 10: Archetype_Glyph silhouette ≥ 3:1 against its outline
 
 **Validates: Requirements 8.9, 10.10.**
-**Holds because** the glyph registry pairs each glyph foreground colour with a `dynamicContrastForCategory` helper that picks white or near-black based on the node-core colour. The R10.10 property test enumerates every (archetype × pulse_state × category) triple at the smallest supported glyph size and asserts the contrast ratio.
+**Holds because** every glyph is drawn twice stacked: a stroked outline pass underneath in `dynamicContrastForCategory(category)`'s colour, and a fill pass on top in the venue's category colour from `getCategoryColour(category)`. The R10.10 property test enumerates every (archetype × pulse_state × category) triple at the smallest supported glyph size and asserts the silhouette/outline contrast ratio is ≥ 3:1. Pulse_State does not enter the formula because both layers render at 1.0 opacity inside the SVG; the wrapper's CSS opacity for R8.3/R8.4 scales them together against the basemap, so the silhouette/outline pair stays in lockstep at every Pulse_State and the gamma-space compositing trap from the previous design (when the glyph was overlaid on a coloured node-core circle) no longer applies.
 
 ### Property 11: Every catalog Archetype has exactly one rename entry
 
@@ -654,7 +657,7 @@ The properties below are the design-level invariants that survive across impleme
 
 ### Rollback
 
-Flip `live_vibe_on_map === false`. Within one socket reconnect cycle (≤10s per R12.6 read in reverse), the map reverts: glyphs unmount, City_Pulse glass card returns, Lambda short-circuits.
+Flip `live_vibe_on_map === false`. Within one socket reconnect cycle (≤10s per R12.6 read in reverse), the live archetype subscriber tears down and the evaluator Lambda short-circuits. Existing nodes stay rendered as their `defaultArchetypeId` (or `archetype-eclectic`) glyphs — the marker layout doesn't revert, only the live deltas stop arriving. The City_Pulse_Toast remains because R2 ships un-flagged.
 
 The Schedule_Editor stays reachable so any in-flight operator work isn't lost (R12.5).
 
