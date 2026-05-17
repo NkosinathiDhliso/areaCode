@@ -1059,7 +1059,7 @@ Anonymous users connect to Socket.io without JWT. Server joins them to `city:{ci
 
 ### Auth Gate Pattern
 
-Gated actions trigger a sign-up bottom sheet — never a redirect to `/login`. The bottom sheet presents the hard-fork: "I'm a customer" / "I'm a business".
+Gated actions trigger a sign-up bottom sheet — never a redirect to `/login`. The sheet presents a single primary "Sign Up" button that routes to `/signup` (the consumer flow), with a secondary "Already have an account? Sign in" link to `/login`. The earlier "I'm a customer / I'm a business" hard-fork on this surface was removed: businesses reach `business.areacode.co.za` via a direct sales-onboarding link, and exposing a business path on the consumer surface leaks the existence of the business portal to consumers.
 
 ## User Tiers and Profile Design
 
@@ -1822,10 +1822,12 @@ No data point in any API response or report may represent fewer than 20 unique u
 
 Triggered on any gated action. Slides up with:
 
-- "Sign up to check in, earn rewards, and join the leaderboard"
-- "I'm a customer" / "I'm a business" buttons
-- Routes to `/signup/consumer` or `/signup/business`
-- Never redirects to a separate `/login` page
+- "Sign up to check in, earn gets, and climb the ranks"
+- A single "Sign Up" primary button that routes to `/signup` (consumer flow)
+- A secondary "Already have an account? Sign in" link that routes to `/login`
+- Never redirects to a separate `/login` page on its own
+
+The previous "I'm a customer / I'm a business" hard-fork was removed from this sheet because businesses are onboarded via a direct link to `business.areacode.co.za` from the sales pipeline, not by self-service discovery from the consumer app. Surfacing a business toggle on a consumer-facing surface leaks that the two portals are part of one platform — something we don't want consumers to see.
 
 ---
 

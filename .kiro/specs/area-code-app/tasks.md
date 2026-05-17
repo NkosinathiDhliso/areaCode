@@ -541,14 +541,14 @@ Implementation language: **TypeScript** throughout (React 18 + Vite frontend, Fa
     - _Requirements: 38.1, 38.2, 38.3, 38.4, 38.5_
 
   - [x] 18.8 Implement consumer auth screens
-    - Hard-fork landing: "I'm a customer" / "I'm a business" → routes to `/signup/consumer` or `/signup/business`
-    - Consumer login at `/login`, sign-up at `/signup/consumer` — share no components with business auth
+    - No hard-fork landing on the consumer web app — the consumer surface routes directly to `/signup` (consumer flow). The business portal lives on a separate subdomain (`business.areacode.co.za`) reached via direct link from sales onboarding, not from the consumer app.
+    - Consumer login at `/login`, sign-up at `/signup` — share no components with business auth
     - OTP verification screen
     - Profile setup screen
     - Sign-up consent: two explicit opt-ins — "Contribute anonymised check-in data to city insights" (OFF default), "Show my activity on the map" (ON default with explanation)
     - Wrong-door hint: if consumer login fails and account-type returns `business` → "This number is registered to a business account. Sign in here →"
     - ProtectedRoute: show error screen with retry on thrown auth errors — never redirect to login on network failure
-    - Sign-up bottom sheet for anonymous users attempting gated actions: "Sign up to check in, earn rewards, and join the leaderboard" with "I'm a customer" / "I'm a business" buttons; never redirects to separate `/login` page
+    - Sign-up bottom sheet for anonymous users attempting gated actions: "Sign up to check in, earn gets, and climb the ranks" with a single "Sign Up" button (routes to `/signup`) and a "Sign in" link (routes to `/login`); never redirects to a separate `/login` page on its own. The earlier "I'm a customer / I'm a business" hard-fork on this sheet was removed to avoid surfacing the business portal on a consumer surface.
     - _Requirements: 2.4, 2.5, 2.6, 2.10, 2.15, 2.16, 17.7, 19.3_
 
   - [x] 18.9 Implement anonymous user experience

@@ -29,3 +29,7 @@ tfplan
 scripts/deploy-secrets.sh
 
 push-env.ps1
+
+# Windows reserved-name redirection accidents (e.g. > nul.txt)
+nul.txt
+

@@ -234,6 +234,21 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
             <a href="mailto:support@areacode.co.za" className="hover:text-[var(--accent)] underline underline-offset-2">
               Contact
             </a>
+            <span aria-hidden="true">·</span>
+            {/*
+              Discoverable, low-key entry point to the business portal. Lives
+              here (not in the sign-up sheet, not in the hero CTAs) so that a
+              business owner who lands on the consumer site can still find
+              their way to business.areacode.co.za, without surfacing the
+              business path to ordinary customers. Uses a regular external
+              link so the subdomain handles its own auth flow.
+            */}
+            <a
+              href="https://business.areacode.co.za"
+              className="hover:text-[var(--accent)] underline underline-offset-2"
+            >
+              For businesses →
+            </a>
           </nav>
         </div>
       </div>
