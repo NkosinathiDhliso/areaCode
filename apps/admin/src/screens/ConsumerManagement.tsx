@@ -181,7 +181,7 @@ export function ConsumerManagement() {
 
       {/* Disable confirmation dialog */}
       {confirmDisable && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-5">
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
             <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">Disable Account?</h3>
             <p className="text-[var(--text-secondary)] text-sm mb-4">

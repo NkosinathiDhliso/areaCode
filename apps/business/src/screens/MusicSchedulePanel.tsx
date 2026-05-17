@@ -1117,7 +1117,7 @@ function SlotEditorSheet({ schedule, slot, onSaved, onClose }: SlotEditorSheetPr
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-5"
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-5 backdrop-blur-sm"
       data-testid="music-schedule-editor"
       role="dialog"
       aria-modal="true"
@@ -1348,7 +1348,7 @@ function SlotEditorSheet({ schedule, slot, onSaved, onClose }: SlotEditorSheetPr
       {/* Delete confirmation (R4.6) */}
       {confirmDelete && (
         <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-5"
+          className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[60] p-5"
           data-testid="slot-editor-delete-confirm"
         >
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full flex flex-col gap-3">

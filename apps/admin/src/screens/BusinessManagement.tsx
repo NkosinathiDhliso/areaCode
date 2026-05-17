@@ -274,7 +274,7 @@ export function BusinessManagement() {
 
       {/* Extend trial dialog */}
       {extendTrialId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-5">
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
             <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">Extend Trial</h3>
             <p className="text-[var(--text-secondary)] text-sm mb-4">How many days to extend the trial? (1–30)</p>
@@ -307,7 +307,7 @@ export function BusinessManagement() {
 
       {/* Disable confirmation dialog */}
       {confirmDisable && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-5">
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
             <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">Disable Business?</h3>
             <p className="text-[var(--text-secondary)] text-sm mb-4">
@@ -334,7 +334,7 @@ export function BusinessManagement() {
 
       {/* Staff Members dialog */}
       {staffBizId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-5">
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full max-h-[80vh] flex flex-col">
             <div className="flex flex-row items-center justify-between mb-4">
               <h3 className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">
@@ -385,7 +385,7 @@ export function BusinessManagement() {
 
       {/* Revoke staff confirmation */}
       {confirmRevokeId && staffBizId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-5">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[60] p-5">
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
             <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">Revoke Staff Access?</h3>
             {revokeError && <p className="text-[var(--danger)] text-xs mb-3">{revokeError}</p>}
@@ -412,7 +412,7 @@ export function BusinessManagement() {
 
       {/* Set Tier dialog */}
       {setTierId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-5">
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
             <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
               {t('admin.businesses.setTier')}
