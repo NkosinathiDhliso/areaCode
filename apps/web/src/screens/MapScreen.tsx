@@ -20,6 +20,7 @@ import { NodeDetailSheet } from '../components/NodeDetailSheet'
 import { SignupSheet } from '../components/SignupSheet'
 import { SearchSheet, type SearchResult } from '../components/SearchSheet'
 import { NotificationPrimingSheet, isDeferredRecently } from '../components/NotificationPrimingSheet'
+import { MapControls } from '../components/MapControls'
 import type { AppRoute } from '../types'
 
 interface MapScreenProps {
@@ -32,7 +33,8 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
-  const { containerRef, mapRef, mapReady, mapError, retryMap } = useMapInit()
+  const { containerRef, mapRef, mapReady, mapError, retryMap, is3D, setPitch3D, bearing, resetNorth, recenterUser } =
+    useMapInit()
   const setNodes = useMapStore((s) => s.setNodes)
   const pulseScores = useMapStore((s) => s.pulseScores)
   const nodesById = useMapStore((s) => s.nodes)
@@ -220,6 +222,17 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       <div className="absolute top-4 left-0 right-0 z-10">
         <CategoryFilterBar onFilter={setCategoryFilter} />
       </div>
+
+      {mapReady && !mapError && (
+        <MapControls
+          is3D={is3D}
+          bearing={bearing}
+          onToggle3D={() => setPitch3D(!is3D)}
+          onResetNorth={resetNorth}
+          onRecenter={recenterUser}
+          hasUserLocation={!!lastKnownPosition}
+        />
+      )}
 
       {/* Location banner, non-blocking */}
       {showLocationBanner && (
