@@ -115,9 +115,14 @@ export function initSocketServer(httpServer: HttpServer): TypedServer {
   return io
 }
 
-export function getIO(): TypedServer {
-  if (!io) {
-    throw new Error('Socket.io server not initialised. Call initSocketServer first.')
-  }
+/**
+ * Returns the Socket.io server instance, or null when running in a context
+ * without a long-running HTTP server (notably Lambda). Callers that emit
+ * realtime events MUST treat this as nullable: realtime fan-out is a UX
+ * nice-to-have, never a correctness requirement. Throwing here used to
+ * 500 successful check-ins because the DB write succeeded but the post-
+ * commit broadcast crashed.
+ */
+export function getIO(): TypedServer | null {
   return io
 }

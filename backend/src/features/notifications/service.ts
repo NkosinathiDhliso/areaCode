@@ -117,12 +117,14 @@ export async function sendNotification(options: SendNotificationOptions): Promis
   // 2. Deliver via WebSocket or push
   const io = getIO()
   const room = userRoom(userId)
-  const sockets = await io.in(room).fetchSockets()
+  // In serverless contexts (Lambda) there's no in-process Socket.io server,
+  // so fall straight through to push-token delivery.
+  const sockets = io ? await io.in(room).fetchSockets() : []
 
   let deliveryChannel: 'socket' | 'push' | 'none' = 'none'
   let pushCount = 0
 
-  if (sockets.length > 0) {
+  if (io && sockets.length > 0) {
     // Deliver via WebSocket
     io.to(room).emit(
       'notification:new' as 'reward:claimed',
@@ -195,9 +197,9 @@ export async function sendNotification(options: SendNotificationOptions): Promis
 export async function notifyUser(userId: string, event: string, payload: Record<string, unknown>) {
   const io = getIO()
   const room = userRoom(userId)
-  const sockets = await io.in(room).fetchSockets()
+  const sockets = io ? await io.in(room).fetchSockets() : []
 
-  if (sockets.length > 0) {
+  if (io && sockets.length > 0) {
     io.to(room).emit(event as 'reward:claimed', payload as never)
     return { delivered: 'socket' }
   }

@@ -187,145 +187,159 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
     await kvIncr(`leaderboard:${cityId}:${userId}`, 0) // no TTL
   }
 
-  // 7. Emit socket events
-  if (citySlug) {
-    emitPulseUpdate(citySlug, {
-      nodeId: input.nodeId,
-      pulseScore,
-      checkInCount: dailyCount,
-      state: getNodeState(pulseScore),
-    })
+  // 7. Emit socket events (best-effort; never fail the check-in over fan-out)
+  try {
+    if (citySlug) {
+      emitPulseUpdate(citySlug, {
+        nodeId: input.nodeId,
+        pulseScore,
+        checkInCount: dailyCount,
+        state: getNodeState(pulseScore),
+      })
 
-    // Always emit anonymous city toast , no identity fields
-    emitToast(citySlug, {
-      type: 'checkin',
-      message: `${node.name} is heating up , ${dailyCount} check-ins`,
-      nodeId: input.nodeId,
-      nodeLat: node.lat,
-      nodeLng: node.lng,
-    })
+      // Always emit anonymous city toast , no identity fields
+      emitToast(citySlug, {
+        type: 'checkin',
+        message: `${node.name} is heating up , ${dailyCount} check-ins`,
+        nodeId: input.nodeId,
+        nodeLat: node.lat,
+        nodeLng: node.lng,
+      })
 
-    // Emit personalised friend toasts to each mutual follow's user room
-    // Only emit if the user's privacy allows identity sharing
-    try {
-      const canEmit = await canEmitIdentity(userId)
-      if (canEmit) {
-        const followingIds = await getFollowingIds(userId)
-        const friendIds = await getMutualFollowIds(userId, followingIds)
-        if (friendIds.size > 0) {
-          const user = await getUserById(userId)
-          const displayName = user?.displayName ?? 'Someone'
-          const friendPayload: {
-            type: 'checkin'
-            message: string
-            nodeId: string
-            avatarUrl?: string
-          } = {
-            type: 'checkin',
-            message: `${displayName} just checked in at ${node.name}`,
-            nodeId: input.nodeId,
-          }
-          if (user?.avatarUrl) {
-            friendPayload.avatarUrl = user.avatarUrl
-          }
-          for (const friendId of friendIds) {
-            emitFriendToast(friendId, friendPayload)
+      // Emit personalised friend toasts to each mutual follow's user room
+      // Only emit if the user's privacy allows identity sharing
+      try {
+        const canEmit = await canEmitIdentity(userId)
+        if (canEmit) {
+          const followingIds = await getFollowingIds(userId)
+          const friendIds = await getMutualFollowIds(userId, followingIds)
+          if (friendIds.size > 0) {
+            const user = await getUserById(userId)
+            const displayName = user?.displayName ?? 'Someone'
+            const friendPayload: {
+              type: 'checkin'
+              message: string
+              nodeId: string
+              avatarUrl?: string
+            } = {
+              type: 'checkin',
+              message: `${displayName} just checked in at ${node.name}`,
+              nodeId: input.nodeId,
+            }
+            if (user?.avatarUrl) {
+              friendPayload.avatarUrl = user.avatarUrl
+            }
+            for (const friendId of friendIds) {
+              emitFriendToast(friendId, friendPayload)
+            }
           }
         }
+      } catch {
+        // Friend toast failures are non-critical , don't affect check-in response
       }
-    } catch {
-      // Friend toast failures are non-critical , don't affect check-in response
     }
+  } catch (err) {
+    console.warn(`[check-in] city socket emit failed: ${String(err)}`)
   }
 
   // 7b. Emit to business room if node is owned by a business
   // Business owners see aggregate data; strip username/avatarUrl for non-public users
   if (node.businessId) {
-    const canShowIdentity = await canEmitIdentity(userId)
-    const user = await getUserById(userId)
-    const tier = user?.tier ?? 'local'
-    const visitCount = await getUserCheckInCountAtNode(userId, input.nodeId)
-
-    const businessPayload: Record<string, unknown> = {
-      nodeId: input.nodeId,
-      nodeName: node.name,
-      checkInCount: dailyCount,
-      tier,
-      visitCount,
-      timestamp: new Date().toISOString(),
-      type: input.type,
-    }
-    if (canShowIdentity && user?.displayName) {
-      businessPayload['displayName'] = user.displayName
-    }
-
-    // Sanitize payload to ensure only privacy-safe fields are emitted
-    const sanitizedPayload = sanitizeForBusiness(businessPayload)
-
-    emitBusinessCheckin(
-      node.businessId,
-      sanitizedPayload as {
-        nodeId: string
-        nodeName: string
-        checkInCount: number
-        timestamp: string
-        consumerDisplayName?: string
-      },
-    )
-
-    emitBusinessCheckinDetail(node.businessId, {
-      nodeId: input.nodeId,
-      nodeName: node.name,
-      displayName: canShowIdentity ? (user?.displayName ?? undefined) : undefined,
-      tier,
-      visitCount,
-      timestamp: new Date().toISOString(),
-    })
-
-    // Write business check-in cache record to app-data table for later querying
-    const dateStr = new Date().toISOString().slice(0, 10)
-    const ts = Date.now()
-    const ttl = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60 // 30-day TTL
     try {
-      await documentClient.send(
-        new PutCommand({
-          TableName: TableNames.appData,
-          Item: {
-            pk: `BIZ_CHECKIN#${node.businessId}#${dateStr}`,
-            sk: `CHECKIN#${ts}#${checkIn.checkInId}`,
-            displayName: canShowIdentity ? (user?.displayName ?? null) : null,
-            tier,
-            visitCount,
-            nodeId: input.nodeId,
-            nodeName: node.name,
-            timestamp: new Date().toISOString(),
-            ttl,
-          },
-        }),
+      const canShowIdentity = await canEmitIdentity(userId)
+      const user = await getUserById(userId)
+      const tier = user?.tier ?? 'local'
+      const visitCount = await getUserCheckInCountAtNode(userId, input.nodeId)
+
+      const businessPayload: Record<string, unknown> = {
+        nodeId: input.nodeId,
+        nodeName: node.name,
+        checkInCount: dailyCount,
+        tier,
+        visitCount,
+        timestamp: new Date().toISOString(),
+        type: input.type,
+      }
+      if (canShowIdentity && user?.displayName) {
+        businessPayload['displayName'] = user.displayName
+      }
+
+      // Sanitize payload to ensure only privacy-safe fields are emitted
+      const sanitizedPayload = sanitizeForBusiness(businessPayload)
+
+      emitBusinessCheckin(
+        node.businessId,
+        sanitizedPayload as {
+          nodeId: string
+          nodeName: string
+          checkInCount: number
+          timestamp: string
+          consumerDisplayName?: string
+        },
       )
-    } catch {
-      // Cache write failure is non-critical
+
+      emitBusinessCheckinDetail(node.businessId, {
+        nodeId: input.nodeId,
+        nodeName: node.name,
+        displayName: canShowIdentity ? (user?.displayName ?? undefined) : undefined,
+        tier,
+        visitCount,
+        timestamp: new Date().toISOString(),
+      })
+
+      // Write business check-in cache record to app-data table for later querying
+      const dateStr = new Date().toISOString().slice(0, 10)
+      const ts = Date.now()
+      const ttl = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60 // 30-day TTL
+      try {
+        await documentClient.send(
+          new PutCommand({
+            TableName: TableNames.appData,
+            Item: {
+              pk: `BIZ_CHECKIN#${node.businessId}#${dateStr}`,
+              sk: `CHECKIN#${ts}#${checkIn.checkInId}`,
+              displayName: canShowIdentity ? (user?.displayName ?? null) : null,
+              tier,
+              visitCount,
+              nodeId: input.nodeId,
+              nodeName: node.name,
+              timestamp: new Date().toISOString(),
+              ttl,
+            },
+          }),
+        )
+      } catch {
+        // Cache write failure is non-critical
+      }
+    } catch (err) {
+      console.warn(`[check-in] business fan-out failed: ${String(err)}`)
     }
   }
 
-  // 8. Publish to SQS reward queue
+  // 8. Publish to SQS reward queue (best-effort)
   if (input.type === 'reward') {
-    const { SQSClient, SendMessageCommand } = await import('@aws-sdk/client-sqs')
-    const sqsUrl = process.env['AREA_CODE_REWARD_QUEUE_URL']
-    if (sqsUrl) {
-      const sqs = new SQSClient({ region: process.env['AWS_REGION'] ?? 'us-east-1' })
-      await sqs.send(
-        new SendMessageCommand({
-          QueueUrl: sqsUrl,
-          MessageBody: JSON.stringify({
-            userId,
-            nodeId: input.nodeId,
-            checkInId: checkIn.checkInId,
+    try {
+      const { SQSClient, SendMessageCommand } = await import('@aws-sdk/client-sqs')
+      const sqsUrl = process.env['AREA_CODE_REWARD_QUEUE_URL']
+      if (sqsUrl) {
+        const sqs = new SQSClient({ region: process.env['AWS_REGION'] ?? 'us-east-1' })
+        await sqs.send(
+          new SendMessageCommand({
+            QueueUrl: sqsUrl,
+            MessageBody: JSON.stringify({
+              userId,
+              nodeId: input.nodeId,
+              checkInId: checkIn.checkInId,
+            }),
           }),
-        }),
-      )
-    } else {
-      // SQS not configured , skip reward evaluation silently in dev
+        )
+      } else {
+        // SQS not configured , skip reward evaluation silently in dev
+      }
+    } catch (err) {
+      // Reward evaluation is async; user can retry by checking in again later.
+      // Don't fail the check-in itself.
+      console.warn(`[check-in] SQS reward enqueue failed: ${String(err)}`)
     }
   }
 

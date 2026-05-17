@@ -67,7 +67,9 @@ async function emitClaimEvents(
   const slotsRemaining = slots !== null ? slots - (reward.claimedCount ?? 0) - 1 : null
 
   const io = getIO()
-  const sockets = await io.in(userRoom(userId)).fetchSockets()
+  // No socket server in serverless: skip the live presence check and emit
+  // through emitRewardClaimed regardless (which itself no-ops without io).
+  const sockets = io ? await io.in(userRoom(userId)).fetchSockets() : []
 
   if (sockets.length > 0) {
     emitRewardClaimed(userId, {

@@ -11,24 +11,32 @@ import { cityRoom, nodeRoom, userRoom, businessRoom } from './rooms.js'
 
 /**
  * Typed event emitters for Socket.io broadcasts.
+ *
+ * Every emitter no-ops when no Socket.io server is attached (Lambda).
+ * Realtime fan-out is a UX enhancement, never a correctness invariant —
+ * the source-of-truth state has already been committed to DynamoDB by
+ * the time these are called. In Lambda we rely on API Gateway WebSocket
+ * fan-out instead; that path is plumbed separately. Throwing here would
+ * 500 perfectly successful writes (e.g. a check-in that hit the DB but
+ * couldn't broadcast its pulse update).
  */
 
 export function emitPulseUpdate(
   citySlug: string,
   payload: { nodeId: string; pulseScore: number; checkInCount: number; state: NodeState },
 ) {
-  getIO().to(cityRoom(citySlug)).emit('node:pulse_update', payload)
+  getIO()?.to(cityRoom(citySlug)).emit('node:pulse_update', payload)
 }
 
 export function emitStateSurge(
   citySlug: string,
   payload: { nodeId: string; fromState: NodeState; toState: NodeState },
 ) {
-  getIO().to(cityRoom(citySlug)).emit('node:state_surge', payload)
+  getIO()?.to(cityRoom(citySlug)).emit('node:state_surge', payload)
 }
 
 export function emitStateChange(citySlug: string, payload: { nodeId: string; state: NodeState }) {
-  getIO().to(cityRoom(citySlug)).emit('node:state_change', payload)
+  getIO()?.to(cityRoom(citySlug)).emit('node:state_change', payload)
 }
 
 export function emitNodeCreated(
@@ -45,7 +53,7 @@ export function emitNodeCreated(
     isVerified?: boolean
   },
 ) {
-  getIO().to(cityRoom(citySlug)).emit('node:created', payload)
+  getIO()?.to(cityRoom(citySlug)).emit('node:created', payload)
 }
 
 export function emitToast(
@@ -59,7 +67,7 @@ export function emitToast(
     avatarUrl?: string
   },
 ) {
-  getIO().to(cityRoom(citySlug)).emit('toast:new', payload)
+  getIO()?.to(cityRoom(citySlug)).emit('toast:new', payload)
 }
 
 export function emitRewardClaimed(
@@ -71,23 +79,23 @@ export function emitRewardClaimed(
     codeExpiresAt: string
   },
 ) {
-  getIO().to(userRoom(userId)).emit('reward:claimed', payload)
+  getIO()?.to(userRoom(userId)).emit('reward:claimed', payload)
 }
 
 export function emitRewardSlotsUpdate(nodeId: string, payload: { rewardId: string; slotsRemaining: number }) {
-  getIO().to(nodeRoom(nodeId)).emit('reward:slots_update', payload)
+  getIO()?.to(nodeRoom(nodeId)).emit('reward:slots_update', payload)
 }
 
 export function emitLeaderboardUpdate(userId: string, payload: { userId: string; rank: number; delta: number }) {
-  getIO().to(userRoom(userId)).emit('leaderboard:update', payload)
+  getIO()?.to(userRoom(userId)).emit('leaderboard:update', payload)
 }
 
 export function emitBusinessCheckin(businessId: string, payload: BusinessCheckinPayload) {
-  getIO().to(businessRoom(businessId)).emit('business:checkin', payload)
+  getIO()?.to(businessRoom(businessId)).emit('business:checkin', payload)
 }
 
 export function emitBusinessRewardClaimed(businessId: string, payload: BusinessRewardClaimedPayload) {
-  getIO().to(businessRoom(businessId)).emit('business:reward_claimed', payload)
+  getIO()?.to(businessRoom(businessId)).emit('business:reward_claimed', payload)
 }
 
 export function emitFriendToast(
@@ -99,13 +107,13 @@ export function emitFriendToast(
     avatarUrl?: string
   },
 ) {
-  getIO().to(userRoom(userId)).emit('toast:friend_checkin', payload)
+  getIO()?.to(userRoom(userId)).emit('toast:friend_checkin', payload)
 }
 
 export function emitBusinessCheckinDetail(businessId: string, payload: BusinessCheckinDetailPayload) {
-  getIO().to(businessRoom(businessId)).emit('business:checkin_detail', payload)
+  getIO()?.to(businessRoom(businessId)).emit('business:checkin_detail', payload)
 }
 
 export function emitTierChanged(userId: string, payload: TierChangedPayload) {
-  getIO().to(userRoom(userId)).emit('tier:changed', payload)
+  getIO()?.to(userRoom(userId)).emit('tier:changed', payload)
 }
