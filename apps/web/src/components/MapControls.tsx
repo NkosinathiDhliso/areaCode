@@ -85,13 +85,29 @@ export function MapControls({
 
       {/* Control stack */}
       <div className="glass-raised rounded-2xl p-1 flex flex-col gap-1 pointer-events-auto">
-        <ControlButton
+        {/*
+          3D toggle — a clear two-state pill. We render it as a wider
+          button with both an icon and a "3D" / "2D" label so the active
+          state is obvious. Earlier the active icon swap (Box↔Square)
+          was easy to misread as broken once flattened.
+        */}
+        <button
           onClick={onToggle3D}
-          active={is3D}
-          label={is3D ? t('map.controls.flatten') : t('map.controls.lift')}
+          aria-pressed={is3D}
+          aria-label={is3D ? t('map.controls.flatten') : t('map.controls.lift')}
+          title={is3D ? t('map.controls.flatten') : t('map.controls.lift')}
+          className={`
+            w-10 h-10 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all
+            ${
+              is3D
+                ? 'bg-[var(--accent)] text-[var(--on-accent)] shadow-[var(--shadow-glow)]'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)]'
+            }
+          `}
         >
-          {is3D ? <Box size={18} strokeWidth={1.75} /> : <Square size={18} strokeWidth={1.75} />}
-        </ControlButton>
+          {is3D ? <Box size={16} strokeWidth={1.75} /> : <Square size={16} strokeWidth={1.75} />}
+          <span className="text-[9px] font-bold tracking-wider leading-none">{is3D ? '3D' : '2D'}</span>
+        </button>
 
         <ControlButton onClick={onResetNorth} label={t('map.controls.north')}>
           <span

@@ -8,39 +8,17 @@ import { useErrorStore } from '@area-code/shared/stores/errorStore'
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import type { GeoStatus } from '@area-code/shared/stores/locationStore'
 import { CrowdVibeSection } from './CrowdVibeSection'
+import { DirectionsSheet } from './DirectionsSheet'
 import { QrScannerSheet } from './QrScannerSheet'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 
-// ─── Directions Helper ──────────────────────────────────────────────────────
-
-/**
- * Opens the device's default navigation app with directions to the given
- * coordinates. Uses a geo: URI on Android (opens app picker) and Apple Maps
- * URL on iOS. Falls back to Google Maps web on desktop.
- *
- * This approach lets the OS handle app selection — no need to maintain
- * integrations with Waze, Google Maps, Apple Maps, etc.
- */
-function openDirections(lat: number, lng: number, name: string): void {
-  const encodedName = encodeURIComponent(name)
-  const ua = navigator.userAgent.toLowerCase()
-  const isIOS = /iphone|ipad|ipod/.test(ua)
-  const isAndroid = /android/.test(ua)
-
-  if (isIOS) {
-    // Apple Maps — iOS will offer to open in Google Maps/Waze if installed
-    window.open(`maps://maps.apple.com/?daddr=${lat},${lng}&q=${encodedName}`, '_blank')
-  } else if (isAndroid) {
-    // geo: URI triggers Android's app picker (Google Maps, Waze, etc.)
-    window.open(`geo:${lat},${lng}?q=${lat},${lng}(${encodedName})`, '_blank')
-  } else {
-    // Desktop fallback — Google Maps directions
-    window.open(
-      `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&destination_place_id=${encodedName}`,
-      '_blank',
-    )
-  }
-}
+// ─── Directions ────────────────────────────────────────────────────────────
+//
+// Directions are presented in a custom picker (`DirectionsSheet`) rather
+// than launched directly. iOS doesn't expose a system "default navigation
+// app" picker — `maps://` always opens Apple Maps and ignores the user's
+// preference for Google Maps or Waze. The sheet gives users an explicit
+// choice and falls back to the HTTPS URL if the chosen app isn't installed.
 
 interface NodeDetailSheetProps {
   node: Node | null
@@ -92,6 +70,7 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
   const [reportError, setReportError] = useState('')
   const [reportSuccess, setReportSuccess] = useState(false)
   const [qrSheetOpen, setQrSheetOpen] = useState(false)
+  const [directionsSheetOpen, setDirectionsSheetOpen] = useState(false)
   // Currently expanded reward — tapping a chip toggles it open to show the
   // description, expiry, and slots-remaining details. Customers complained
   // the chips looked tappable but did nothing; this gives the tap a payoff.
@@ -157,7 +136,7 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
 
   function handleDirections() {
     if (node) {
-      openDirections(node.lat, node.lng, node.name)
+      setDirectionsSheetOpen(true)
     }
     setMenuOpen(false)
   }
@@ -511,6 +490,14 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
       )}
 
       <QrScannerSheet isOpen={qrSheetOpen} onClose={() => setQrSheetOpen(false)} onScanned={handleQrScanned} />
+
+      <DirectionsSheet
+        isOpen={directionsSheetOpen}
+        onClose={() => setDirectionsSheetOpen(false)}
+        lat={node.lat}
+        lng={node.lng}
+        name={node.name}
+      />
     </BottomSheet>
   )
 })

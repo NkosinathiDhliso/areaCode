@@ -36,6 +36,8 @@
   "node.share": "Share node",
   "node.report": "Report this venue",
   "node.directions": "Get directions",
+  "directions.title": "Open directions in",
+  "directions.fallbackHint": "If the app isn't installed we'll open the web version instead.",
   "node.whoIsHere": "Who's here",
   "node.isHere": "{{name}} is here",
   "node.andOthers": "{{name}} and {{count}} others you follow are here",
