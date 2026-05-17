@@ -80,86 +80,36 @@
   </head>
   <body>
     <!--
-      Static SEO/crawler fallback. React mounts on window load and replaces
-      the contents of #root with the live AuthLanding/MapScreen components,
-      so end users with JavaScript never see this. Search engines, social
-      previews, and Google OAuth brand-verification reviewers (which do not
-      execute JavaScript) see the markup below — which gives them the app
-      name, a description of the app's purpose, and visible links to the
-      privacy policy and terms.
+      The JSON-LD, OpenGraph, and meta tags in <head> give crawlers everything
+      they need to identify the app. We don't render a visible HTML fallback
+      here because it flashes a jarring white-themed placeholder before React
+      mounts. AuthLanding (in apps/web/src/screens/AuthLanding.tsx) carries
+      the same content for end users.
     -->
-    <div id="root">
+    <div id="root" style="background: #0c1018; min-height: 100dvh">
       <noscript>
         <p style="background: #fffbe6; color: #5b4500; padding: 12px; text-align: center; margin: 0">
           Area Code requires JavaScript. Please enable it in your browser settings to use the app.
         </p>
-      </noscript>
-      <main
-        id="ssr-fallback"
-        style="font-family: system-ui, -apple-system, sans-serif; max-width: 640px; margin: 0 auto; padding: 32px 20px; color: #0c1018; background: #ffffff"
-      >
-        <header style="margin-bottom: 24px">
+        <main style="font-family: system-ui, -apple-system, sans-serif; max-width: 640px; margin: 0 auto; padding: 32px 20px; color: #e6e1d6">
           <h1 style="font-size: 32px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 8px">Area Code</h1>
-          <p style="color: #555; margin: 0; font-size: 16px">
+          <p style="color: #a8a397; margin: 0 0 16px; font-size: 16px">
             A real-time venue discovery and rewards app for South Africa.
           </p>
-        </header>
-
-        <section style="margin-bottom: 24px">
-          <h2 style="font-size: 20px; font-weight: 700; margin: 0 0 8px">About Area Code</h2>
-          <p style="font-size: 16px; line-height: 1.5; margin: 0 0 12px">
+          <p style="font-size: 15px; line-height: 1.5; color: #c9c4b6">
             Area Code is a mobile and web application that lets people in Johannesburg, Cape Town, and Durban see which
             cafes, restaurants, bars, and nightlife venues are alive right now. Each venue shows a live status (quiet,
             active, buzzing, or popping) updated in real time as customers check in.
           </p>
-          <p style="font-size: 16px; line-height: 1.5; margin: 0 0 12px">
-            Customers check in when they arrive at a participating venue to earn rewards from that venue, climb local
-            leaderboards, build streaks, and discover places that match their taste in coffee, food, and music.
+          <p style="margin-top: 24px; font-size: 14px">
+            <a href="https://www.areacode.co.za/legal/privacy" style="color: #87a8d3">Privacy Policy</a>
+            &middot;
+            <a href="https://www.areacode.co.za/legal/terms" style="color: #87a8d3">Terms of Service</a>
+            &middot;
+            <a href="mailto:support@areacode.co.za" style="color: #87a8d3">support@areacode.co.za</a>
           </p>
-          <p style="font-size: 16px; line-height: 1.5; margin: 0">
-            You can sign in to Area Code with Google or with an email and password. There is no phone number required.
-            Your location is used only to verify check-ins at the moment they happen and is never stored.
-          </p>
-        </section>
-
-        <section style="margin-bottom: 24px">
-          <h2 style="font-size: 20px; font-weight: 700; margin: 0 0 8px">For consumers</h2>
-          <ul style="margin: 0; padding-left: 20px; line-height: 1.7">
-            <li>Live map of South African venues, updated in real time as people check in</li>
-            <li>Rewards from local cafes, bars, restaurants, and nightlife venues</li>
-            <li>Loyalty tiers, streaks, leaderboards, and a friends feed</li>
-            <li>Music taste profiles powered by Spotify and Apple Music (optional)</li>
-          </ul>
-        </section>
-
-        <section style="margin-bottom: 32px">
-          <h2 style="font-size: 20px; font-weight: 700; margin: 0 0 8px">For businesses</h2>
-          <p style="font-size: 16px; line-height: 1.5; margin: 0 0 8px">
-            Area Code gives venue owners a live dashboard, anonymized customer intelligence reports, and a rewards
-            engine. Visit
-            <a href="https://business.areacode.co.za/" style="color: #0066cc">https://business.areacode.co.za/</a>
-            to learn more.
-          </p>
-        </section>
-
-        <nav
-          aria-label="Legal"
-          style="border-top: 1px solid #e0e0e0; padding-top: 16px; font-size: 14px; color: #666"
-        >
-          <p style="margin: 0 0 8px">
-            <strong>Area Code</strong> &middot; operated by Area Code, Johannesburg, South Africa.
-          </p>
-          <p style="margin: 0">
-            <a href="https://www.areacode.co.za/legal/privacy" style="color: #0066cc; margin-right: 12px"
-              >Privacy Policy</a
-            >
-            <a href="https://www.areacode.co.za/legal/terms" style="color: #0066cc; margin-right: 12px"
-              >Terms of Service</a
-            >
-            <a href="mailto:support@areacode.co.za" style="color: #0066cc">support@areacode.co.za</a>
-          </p>
-        </nav>
-      </main>
+        </main>
+      </noscript>
     </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
