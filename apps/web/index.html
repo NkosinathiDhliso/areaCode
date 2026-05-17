@@ -3,7 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Area Code</title>
+    <title>Area Code — Live venue map for South Africa</title>
+    <meta
+      name="description"
+      content="Area Code is a real-time venue discovery platform for South Africa. See which spots are buzzing right now, check in to earn rewards, and find places that match your taste in coffee, food, music, and nightlife."
+    />
+    <link rel="canonical" href="https://areacode.co.za/" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
     <!-- Google Search Console domain ownership verification (URL prefix property).
@@ -41,7 +46,80 @@
     <!-- Mapbox GL CSS loaded via npm package in main.tsx -->
   </head>
   <body>
-    <div id="root"></div>
+    <!--
+      Static SEO/crawler fallback. React mounts on window load and replaces
+      the contents of #root with the live AuthLanding/MapScreen components,
+      so end users with JavaScript never see this. Search engines, social
+      previews, and Google OAuth brand-verification reviewers (which do not
+      execute JavaScript) see the markup below — which gives them the app
+      name, a description of the app's purpose, and visible links to the
+      privacy policy and terms.
+    -->
+    <div id="root">
+      <noscript>
+        <p style="background: #fffbe6; color: #5b4500; padding: 12px; text-align: center; margin: 0">
+          Area Code requires JavaScript. Please enable it in your browser settings to use the app.
+        </p>
+      </noscript>
+      <main style="font-family: system-ui, -apple-system, sans-serif; max-width: 640px; margin: 0 auto; padding: 32px 20px; color: #0c1018" id="ssr-fallback">
+        <header style="margin-bottom: 24px">
+          <h1 style="font-size: 32px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 8px">Area Code</h1>
+          <p style="color: #555; margin: 0; font-size: 15px">See what's alive in your city.</p>
+        </header>
+
+        <section style="margin-bottom: 24px">
+          <p style="font-size: 16px; line-height: 1.5; margin: 0 0 12px">
+            Area Code is a real-time venue discovery and rewards platform for South Africa. Open the app to see a live
+            map of cafes, restaurants, bars, and nightlife venues in Johannesburg, Cape Town, and Durban — with each
+            spot showing whether it's quiet, active, buzzing, or popping right now.
+          </p>
+          <p style="font-size: 16px; line-height: 1.5; margin: 0 0 12px">
+            Check in when you arrive to earn rewards from the venue, climb local leaderboards, build streaks, and
+            discover places that match your taste in coffee, food, and music.
+          </p>
+          <p style="font-size: 16px; line-height: 1.5; margin: 0">
+            Sign in with Google or with an email and password. There is no phone number required. Your location is used
+            only to verify check-ins at the moment they happen and is never stored.
+          </p>
+        </section>
+
+        <section style="margin-bottom: 24px">
+          <h2 style="font-size: 20px; font-weight: 700; margin: 0 0 8px">For consumers</h2>
+          <ul style="margin: 0; padding-left: 20px; line-height: 1.7">
+            <li>Live map of South African venues, updated in real time as people check in</li>
+            <li>Rewards from local cafes, bars, restaurants, and nightlife venues</li>
+            <li>Loyalty tiers, streaks, leaderboards, and a friends feed</li>
+            <li>Music taste profiles powered by Spotify and Apple Music (optional)</li>
+          </ul>
+        </section>
+
+        <section style="margin-bottom: 32px">
+          <h2 style="font-size: 20px; font-weight: 700; margin: 0 0 8px">For businesses</h2>
+          <p style="font-size: 16px; line-height: 1.5; margin: 0 0 8px">
+            Area Code gives venue owners a live dashboard, anonymized customer intelligence reports, and a rewards
+            engine. Visit
+            <a href="https://business.areacode.co.za" style="color: #0066cc">business.areacode.co.za</a>
+            to learn more.
+          </p>
+        </section>
+
+        <nav aria-label="Legal" style="border-top: 1px solid #e0e0e0; padding-top: 16px; font-size: 14px; color: #666">
+          <a href="/legal/privacy" style="color: #0066cc; margin-right: 12px">Privacy Policy</a>
+          <a href="/legal/terms" style="color: #0066cc; margin-right: 12px">Terms of Service</a>
+          <a href="mailto:support@areacode.co.za" style="color: #0066cc">Contact: support@areacode.co.za</a>
+        </nav>
+      </main>
+    </div>
+    <script>
+      // Hide the SEO fallback as soon as the JS bundle starts executing,
+      // so end users never see the static text. Crawlers that don't run JS
+      // still get the full content above. React then replaces #root entirely
+      // when it mounts.
+      (function () {
+        var f = document.getElementById('ssr-fallback')
+        if (f) f.style.display = 'none'
+      })()
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
