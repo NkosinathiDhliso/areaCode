@@ -35,6 +35,9 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const { containerRef, mapRef, mapReady, mapError, retryMap } = useMapInit()
   const setNodes = useMapStore((s) => s.setNodes)
   const pulseScores = useMapStore((s) => s.pulseScores)
+  const nodesById = useMapStore((s) => s.nodes)
+  const focusNodeId = useMapStore((s) => s.focusNodeId)
+  const setFocusNodeId = useMapStore((s) => s.setFocusNodeId)
   const accessToken = useConsumerAuthStore((s) => s.accessToken)
   const permissionState = useLocationStore((s) => s.permissionState)
   const lastKnownPosition = useLocationStore((s) => s.lastKnownPosition)
@@ -97,6 +100,20 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
   // Marker management (extracted hook)
   useMapMarkers(mapRef, categoryFilter, handleNodeTap, mapReady)
+
+  // Cross-screen focus: when another surface (e.g. Gets list) sets focusNodeId,
+  // fly to that node and open its detail sheet. We wait for the map to be
+  // ready and the node to be present in the store before consuming the signal.
+  useEffect(() => {
+    if (!focusNodeId || !mapReady) return
+    const node = nodesById[focusNodeId]
+    if (!node) return
+    setSelectedNode(node)
+    setSheetOpen(true)
+    resetQrFallback()
+    mapRef.current?.flyTo({ center: [node.lng, node.lat], zoom: 16 })
+    setFocusNodeId(null)
+  }, [focusNodeId, mapReady, nodesById, mapRef, setFocusNodeId, resetQrFallback])
 
   // Fetch rewards for the selected node
   const { data: nodeRewards } = useQuery({

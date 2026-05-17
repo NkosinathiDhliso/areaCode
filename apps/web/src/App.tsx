@@ -252,7 +252,7 @@ function AppContent() {
             {activeRoute === 'forgot-password' && <ForgotPassword onNavigate={setRoute} />}
             {activeRoute === 'first-get-prompt' && <FirstGetPrompt onNavigate={setRoute} />}
             {activeRoute === 'map' && <MapScreen onNavigate={setRoute} />}
-            {activeRoute === 'gets' && <RewardsScreen />}
+            {activeRoute === 'gets' && <RewardsScreen onNavigate={setRoute} />}
             {activeRoute === 'ranks' && <LeaderboardScreen />}
             {activeRoute === 'feed' && <FeedScreen />}
             {activeRoute === 'friends' && <FriendsScreen />}
