@@ -50,6 +50,12 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
+  /**
+   * True when the sheet was opened via the cross-screen focus signal (e.g.
+   * a tap on the Gets list). Drives a lighter backdrop so the user keeps
+   * seeing pulsing neighbour venues, planting the second-outing thought.
+   */
+  const [sheetOpenedFromFocus, setSheetOpenedFromFocus] = useState(false)
   const [signupOpen, setSignupOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState<NodeCategory | null>(null)
@@ -92,6 +98,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     (node: Node) => {
       setSelectedNode(node)
       setSheetOpen(true)
+      setSheetOpenedFromFocus(false)
       resetQrFallback()
       if (!onboarding.hintSeen) markHintSeen('hintSeen')
     },
@@ -104,14 +111,21 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   // Cross-screen focus: when another surface (e.g. Gets list) sets focusNodeId,
   // fly to that node and open its detail sheet. We wait for the map to be
   // ready and the node to be present in the store before consuming the signal.
+  //
+  // Zoom 14 (not 16) is deliberate: it keeps several neighbouring venues in
+  // view alongside the focused one. Combined with the lighter backdrop on the
+  // sheet, the user sees other pulsing nodes while reading the discount —
+  // that peripheral vision is what plants "and then we go to X next" in their
+  // head before they leave for the first venue.
   useEffect(() => {
     if (!focusNodeId || !mapReady) return
     const node = nodesById[focusNodeId]
     if (!node) return
     setSelectedNode(node)
     setSheetOpen(true)
+    setSheetOpenedFromFocus(true)
     resetQrFallback()
-    mapRef.current?.flyTo({ center: [node.lng, node.lat], zoom: 16 })
+    mapRef.current?.flyTo({ center: [node.lng, node.lat], zoom: 14 })
     setFocusNodeId(null)
   }, [focusNodeId, mapReady, nodesById, mapRef, setFocusNodeId, resetQrFallback])
 
@@ -143,6 +157,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       // Haptic feedback on successful check-in (Issue #31)
       if (navigator.vibrate) navigator.vibrate(50)
       setSheetOpen(false)
+      setSheetOpenedFromFocus(false)
       void queryClient.invalidateQueries({ queryKey: ['nodes'] })
       if (!onboarding.firstCheckIn) {
         markHintSeen('firstCheckIn')
@@ -274,14 +289,19 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
         pulseScore={selectedScore}
         state={getNodeState(selectedScore)}
         isOpen={sheetOpen}
-        onClose={() => setSheetOpen(false)}
+        onClose={() => {
+          setSheetOpen(false)
+          setSheetOpenedFromFocus(false)
+        }}
         onCheckIn={handleCheckIn}
         onSignup={() => {
           setSheetOpen(false)
+          setSheetOpenedFromFocus(false)
           setSignupOpen(true)
         }}
         qrFallback={qrFallback}
         isCheckingIn={checkInPending}
+        transparentBackdrop={sheetOpenedFromFocus}
       />
 
       <SignupSheet isOpen={signupOpen} onClose={() => setSignupOpen(false)} onNavigate={onNavigate} />
@@ -312,6 +332,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
           }
           setSelectedNode(node)
           setSheetOpen(true)
+          setSheetOpenedFromFocus(false)
           mapRef.current?.flyTo({ center: [node.lng, node.lat], zoom: 16 })
         }}
       />

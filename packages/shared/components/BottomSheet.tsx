@@ -8,9 +8,16 @@ interface BottomSheetProps {
   isOpen: boolean
   onClose: () => void
   children: ReactNode
+  /**
+   * When true, the backdrop is rendered with a lighter dim so the map
+   * (or other underlying content) stays visible behind the sheet. Used by
+   * the Gets-to-map redirect so that pulsing neighbour venues stay in
+   * peripheral vision while the user reads the focused venue's details.
+   */
+  transparentBackdrop?: boolean
 }
 
-export function BottomSheet({ isOpen, onClose, children }: BottomSheetProps) {
+export function BottomSheet({ isOpen, onClose, children, transparentBackdrop = false }: BottomSheetProps) {
   const setBottomSheetOpen = useToastStore((s) => s.setBottomSheetOpen)
   const backdropMouseDownRef = useRef(false)
   const sheetRef = useRef<HTMLDivElement>(null)
@@ -95,7 +102,7 @@ export function BottomSheet({ isOpen, onClose, children }: BottomSheetProps) {
     >
       {/* Backdrop overlay */}
       <Box
-        className="absolute inset-0 bg-[var(--bg-overlay)]"
+        className={`absolute inset-0 ${transparentBackdrop ? 'bg-[rgba(8,10,14,0.25)]' : 'bg-[var(--bg-overlay)]'}`}
         onMouseDown={handleBackdropMouseDown}
         onClick={handleBackdropClick}
         role="presentation"

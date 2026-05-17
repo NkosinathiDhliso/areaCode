@@ -53,6 +53,12 @@ interface NodeDetailSheetProps {
   onSignup: () => void
   qrFallback?: boolean
   isCheckingIn?: boolean
+  /**
+   * When the sheet was opened via the cross-screen focus signal (e.g. from
+   * the Gets list), use a lighter backdrop so neighbouring pulsing venues
+   * stay visible behind the sheet. Encourages multi-venue evening planning.
+   */
+  transparentBackdrop?: boolean
 }
 
 export const NodeDetailSheet = memo(function NodeDetailSheet({
@@ -65,6 +71,7 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
   onSignup,
   qrFallback = false,
   isCheckingIn = false,
+  transparentBackdrop = false,
 }: NodeDetailSheetProps) {
   const { t } = useTranslation()
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
@@ -201,7 +208,7 @@ export const NodeDetailSheet = memo(function NodeDetailSheet({
   const ctaInfo = getCtaInfo(geoStatus, qrFallback, isCheckingIn, t)
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose}>
+    <BottomSheet isOpen={isOpen} onClose={onClose} transparentBackdrop={transparentBackdrop}>
       {/* Header */}
       <div className="flex flex-row items-start justify-between mb-4">
         <div className="flex-1">
