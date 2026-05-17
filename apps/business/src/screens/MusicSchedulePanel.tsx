@@ -1117,12 +1117,12 @@ function SlotEditorSheet({ schedule, slot, onSaved, onClose }: SlotEditorSheetPr
 
   return (
     <div
-      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-5 backdrop-blur-sm"
+      className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-5"
       data-testid="music-schedule-editor"
       role="dialog"
       aria-modal="true"
     >
-      <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-lg w-full max-h-[92vh] overflow-y-auto flex flex-col gap-4">
+      <div className="bg-[var(--bg-modal)] border border-[var(--border)] rounded-2xl p-6 max-w-lg w-full max-h-[92vh] overflow-y-auto flex flex-col gap-4 shadow-2xl">
         <div className="flex flex-row items-center justify-between">
           <h3 className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">
             {isEditing ? 'Edit slot' : 'New slot'}
@@ -1348,10 +1348,10 @@ function SlotEditorSheet({ schedule, slot, onSaved, onClose }: SlotEditorSheetPr
       {/* Delete confirmation (R4.6) */}
       {confirmDelete && (
         <div
-          className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[60] p-5"
+          className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[60] p-5"
           data-testid="slot-editor-delete-confirm"
         >
-          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full flex flex-col gap-3">
+          <div className="bg-[var(--bg-modal)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full flex flex-col gap-3 shadow-2xl">
             <h4 className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">Delete this slot?</h4>
             <p className="text-[var(--text-secondary)] text-sm">
               This removes the slot from your weekly schedule. You can add it back later.

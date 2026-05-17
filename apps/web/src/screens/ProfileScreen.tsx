@@ -265,8 +265,8 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
 
       {/* Delete confirmation dialog (Issue #4) */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-5">
-          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-5">
+          <div className="bg-[var(--bg-modal)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
             <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
               {t('profile.deleteHistoryConfirmTitle', 'Delete check-in history?')}
             </h3>
@@ -301,8 +301,8 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
 
       {/* Delete account confirmation dialog */}
       {showDeleteAccountConfirm && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-5">
-          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-5">
+          <div className="bg-[var(--bg-modal)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
             <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
               {t('profile.deleteAccountTitle', 'Delete your account?')}
             </h3>

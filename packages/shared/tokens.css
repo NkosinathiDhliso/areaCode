@@ -7,6 +7,7 @@
   --bg-surface: rgba(18, 26, 38, 0.65);
   --bg-raised: rgba(26, 36, 52, 0.7);
   --bg-overlay: rgba(8, 10, 14, 0.8);
+  --bg-modal: #121a26;
   --glass-blur: 16px;
   --glass-border: rgba(255, 255, 255, 0.06);
   --glass-highlight: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 60%);
@@ -74,6 +75,7 @@
   --bg-surface: rgba(255, 255, 255, 0.55);
   --bg-raised: rgba(255, 255, 255, 0.7);
   --bg-overlay: rgba(240, 236, 230, 0.85);
+  --bg-modal: #ffffff;
   --glass-blur: 20px;
   --glass-border: rgba(0, 0, 0, 0.06);
   --glass-highlight: linear-gradient(135deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.2) 60%);

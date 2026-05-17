@@ -147,8 +147,8 @@ export function NodeManagement() {
 
       {/* Edit modal */}
       {editingNode && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-5">
-          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-5">
+          <div className="bg-[var(--bg-modal)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
             <h3 className="text-[var(--text-primary)] font-bold text-lg mb-4 font-[Syne]">
               {t('admin.nodes.editTitle', 'Edit Node')}
             </h3>
