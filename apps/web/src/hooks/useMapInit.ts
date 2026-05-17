@@ -1,3 +1,4 @@
+import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import type { MapInstance } from '@area-code/shared/types'
@@ -80,12 +81,6 @@ let singletonMap: mapboxgl.Map | null = null
 let singletonContainer: HTMLDivElement | null = null
 let singletonLoaded = false
 let singletonStyleTheme: ThemeMode | null = null
-
-function readDocumentTheme(): ThemeMode {
-  if (typeof document === 'undefined') return 'dark'
-  const t = document.documentElement.getAttribute('data-theme')
-  return t === 'light' ? 'light' : 'dark'
-}
 
 function prefersReducedMotion(): boolean {
   if (typeof window === 'undefined' || !window.matchMedia) return false
@@ -261,6 +256,14 @@ export function useMapInit() {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
   const setMapInstance = useMapStore((s) => s.setMapInstance)
+  // Subscribe to the resolved theme directly. Using useTheme() (rather than
+  // reading data-theme off the DOM) is important because:
+  //   1. data-theme isn't applied until useTheme()'s effect runs, which
+  //      may be AFTER this hook's init effect on first paint, leaving the
+  //      map locked to the dark default.
+  //   2. A reactive value lets us key the style-swap effect on it directly,
+  //      no MutationObserver gymnastics.
+  const { resolved } = useTheme()
   // Increment counter when map becomes ready. This is more reliable than a
   // boolean that can flip false→true→false during React strict-mode remounts.
   const [mapReadyKey, setMapReadyKey] = useState(0)
@@ -363,7 +366,7 @@ export function useMapInit() {
       return
     }
 
-    const initialTheme = readDocumentTheme()
+    const initialTheme: ThemeMode = resolved
 
     try {
       mapboxgl.accessToken = MAPBOX_TOKEN
@@ -407,7 +410,7 @@ export function useMapInit() {
       // setStyle() swaps the basemap (e.g. dark↔light theme switch).
       // We re-apply terrain, sky, fog, and 3D buildings every time.
       map.on('style.load', () => {
-        const theme = singletonStyleTheme ?? readDocumentTheme()
+        const theme = singletonStyleTheme ?? 'dark'
         applyCustomLayers(map, theme)
       })
 
@@ -452,43 +455,33 @@ export function useMapInit() {
       setMapError('Could not load the map. Please try again.')
       return
     }
+    // `resolved` is intentionally omitted from deps. The init effect reads
+    // it to seed the initial style URL, but theme changes after init are
+    // handled by the dedicated theme-sync effect below via setStyle().
+    // Including it here would re-create the entire map on every theme flip.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setMapInstance, mapError])
 
-  // ── Theme observer ──
-  // Watch <html data-theme="..."> and swap the basemap when it changes.
-  // Markers are HTML elements, so they survive style swaps untouched.
+  // ── Reactive theme sync ──
+  // Whenever the resolved theme flips (e.g. SAST 06:00 transition,
+  // user toggles mode in profile, or the auto path re-evaluates),
+  // swap the basemap style. The `style.load` listener installed above
+  // re-applies terrain, sky, fog, and 3D buildings on every swap.
+  // Markers are HTML elements anchored to lng/lat, so they survive untouched.
   useEffect(() => {
-    if (typeof document === 'undefined') return
-    const root = document.documentElement
-
-    const swapStyle = () => {
-      const map = singletonMap
-      if (!map) return
-      const next = readDocumentTheme()
-      if (singletonStyleTheme === next) return
-      singletonStyleTheme = next
-      try {
-        // diff: false forces a clean reload so terrain re-binds reliably.
-        // Cast because mapbox-gl's declared SetStyleOptions marks fields
-        // as required even though the runtime accepts a partial object.
-        map.setStyle(STYLE_URL[next], { diff: false } as Parameters<typeof map.setStyle>[1])
-      } catch {
-        /* ignore — style.load handler will re-apply layers next time */
-      }
+    const map = singletonMap
+    if (!map) return
+    if (singletonStyleTheme === resolved) return
+    singletonStyleTheme = resolved
+    try {
+      // diff: false forces a clean reload so terrain re-binds reliably.
+      // Cast because mapbox-gl's declared SetStyleOptions marks fields
+      // as required even though the runtime accepts a partial object.
+      map.setStyle(STYLE_URL[resolved], { diff: false } as Parameters<typeof map.setStyle>[1])
+    } catch {
+      /* ignore — style.load handler will re-apply layers next time */
     }
-
-    const observer = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        if (m.type === 'attributes' && m.attributeName === 'data-theme') {
-          swapStyle()
-          return
-        }
-      }
-    })
-    observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] })
-
-    return () => observer.disconnect()
-  }, [])
+  }, [resolved, mapReadyKey])
 
   // ── Idle bearing drift ──
   // A near-imperceptible rotation (≈ 0.3°/sec) while the user is idle.

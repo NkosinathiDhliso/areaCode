@@ -61,6 +61,14 @@
     opacity: 0.3;
   }
 
+  /* The map container's intrinsic background flashes during style swaps
+     (Mapbox briefly clears to a default near-black between dark↔light).
+     Tint it with the theme-aware --bg-map token so swaps blend in. */
+  .mapboxgl-map,
+  .mapboxgl-canvas-container {
+    background: var(--bg-map);
+  }
+
   /* Focus ring for accessibility */
   *:focus-visible {
     outline: 2px solid var(--accent);

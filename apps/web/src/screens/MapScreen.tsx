@@ -191,12 +191,12 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const showLocationBanner = permissionState === 'denied' && !locationBannerDismissed
 
   return (
-    <div className="h-full w-full relative">
-      <div ref={containerRef} className="absolute inset-0 w-full h-full" />
+    <div className="h-full w-full relative" style={{ background: 'var(--bg-map)' }}>
+      <div ref={containerRef} className="absolute inset-0 w-full h-full" style={{ background: 'var(--bg-map)' }} />
 
       {/* Map loading overlay */}
       {!mapReady && !mapError && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[var(--bg-base)] z-5">
+        <div className="absolute inset-0 flex items-center justify-center z-5" style={{ background: 'var(--bg-map)' }}>
           <div className="flex flex-col items-center gap-3">
             <Spinner size="lg" />
             <span className="text-[var(--text-muted)] text-sm">Loading map...</span>

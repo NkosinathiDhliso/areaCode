@@ -68,7 +68,7 @@
 }
 
 :root[data-theme='light'] {
-  --bg-map: #e4e8ec;
+  --bg-map: #eef0f2;
   --bg-gradient: linear-gradient(145deg, #f0ece6 0%, #e8e4de 50%, #dfe6ec 100%);
   --bg-base: #f0ece6;
   --bg-surface: rgba(255, 255, 255, 0.55);
