@@ -50,7 +50,7 @@ export function ToastOverlay() {
     <div
       className="fixed left-4 right-4"
       style={{
-        bottom: 'calc(var(--nav-height, 56px) + 8px)',
+        bottom: 'calc(var(--nav-height, 56px) + env(safe-area-inset-bottom, 0px) + 8px)',
         zIndex: isBottomSheetOpen ? 10000 : 9998,
         transform: `translateX(${translateX}px)`,
         opacity: Math.max(0, 1 - Math.abs(translateX) / 120),

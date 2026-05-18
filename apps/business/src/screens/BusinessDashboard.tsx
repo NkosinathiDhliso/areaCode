@@ -166,7 +166,10 @@ export function BusinessDashboard() {
   return (
     <div className="flex flex-col h-dvh bg-[var(--bg-base)] overflow-hidden">
       {/* Header */}
-      <header className="flex flex-row items-center justify-between px-5 py-3 border-b border-[var(--border)]">
+      <header
+        className="flex flex-row items-center justify-between px-5 py-3 border-b border-[var(--border)]"
+        style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top, 0px))' }}
+      >
         <div className="flex flex-row items-center gap-2">
           {headerImageUrl && (
             <img

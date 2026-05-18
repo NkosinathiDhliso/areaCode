@@ -47,7 +47,10 @@ export function StaffHome() {
 
   return (
     <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
-      <header className="flex flex-row items-center justify-between px-5 py-4 border-b border-[var(--border)]">
+      <header
+        className="flex flex-row items-center justify-between px-5 py-4 border-b border-[var(--border)]"
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+      >
         <div className="flex flex-col">
           <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">{staffName ?? 'Area Code'}</span>
           {businessName && <span className="text-[var(--text-muted)] text-xs">{businessName}</span>}

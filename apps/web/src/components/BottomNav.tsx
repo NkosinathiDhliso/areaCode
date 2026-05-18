@@ -31,8 +31,11 @@ export function BottomNav({ active, onNavigate }: BottomNavProps) {
 
   return (
     <nav
-      className="flex flex-row items-center justify-around glass border-t border-[var(--glass-border)] px-2 shrink-0 relative z-50"
-      style={{ height: 'var(--nav-height)' }}
+      className="fixed bottom-0 left-0 right-0 flex flex-row items-center justify-around glass border-t border-[var(--glass-border)] px-2 z-50"
+      style={{
+        height: 'calc(var(--nav-height) + env(safe-area-inset-bottom, 0px))',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      }}
       role="navigation"
       aria-label="Main navigation"
     >
