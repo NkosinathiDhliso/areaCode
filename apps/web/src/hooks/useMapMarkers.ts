@@ -27,6 +27,26 @@ const DEFAULT_ARCHETYPE_ID = 'archetype-eclectic'
  */
 const GLYPH_ZOOM_THRESHOLD = 12.5
 
+/**
+ * Below this zoom markers are fully hidden. At continent/globe zoom,
+ * individual venue markers cover huge geographic areas and visually
+ * detach from the globe surface — hiding them is cleaner than showing
+ * an oversized dot at the wrong visual scale.
+ */
+const MIN_MARKER_ZOOM = 8
+
+/**
+ * Returns a 0–1 CSS scale factor for the given zoom level.
+ * Mapbox owns the `transform` property on marker elements, so we use the
+ * independent CSS `scale` property which composes with `transform` rather
+ * than overriding it. Scale 0 = fully hidden, 1 = full size.
+ */
+function scaleForZoom(zoom: number): number {
+  if (zoom >= GLYPH_ZOOM_THRESHOLD) return 1
+  if (zoom < MIN_MARKER_ZOOM) return 0
+  return (zoom - MIN_MARKER_ZOOM) / (GLYPH_ZOOM_THRESHOLD - MIN_MARKER_ZOOM)
+}
+
 /** Marker sub-element that owns the React glyph mount. */
 const GLYPH_HOST_LAYER = 'glyph-host'
 
@@ -83,7 +103,13 @@ function buildMarkerElement(
   Object.assign(container.style, {
     width: `${totalSize}px`,
     height: `${totalSize}px`,
-    position: 'relative',
+    // Must stay 'absolute' so Mapbox's per-frame `transform: translate(x,y)`
+    // geo-anchors the marker to the map origin. Mapbox's `.mapboxgl-marker`
+    // class sets this, but an inline value here would override the class —
+    // 'relative' drops the marker back into normal flow and it visibly
+    // drifts off its lng/lat as you pan/zoom. 'absolute' also still works as
+    // the containing block for the halo/ripple/badge children below.
+    position: 'absolute',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -344,6 +370,17 @@ export function useMapMarkers(
       } catch {
         /* map gone */
       }
+
+      // HTML markers don't scale with Mapbox's WebGL zoom. Apply CSS `scale`
+      // (independent from Mapbox's `transform`) so markers shrink at low zoom
+      // instead of covering half the globe.
+      const scale = scaleForZoom(zoom)
+      for (const [, marker] of markersRef.current) {
+        const el = marker.getElement()
+        el.style.scale = String(scale)
+        el.style.pointerEvents = scale < 0.05 ? 'none' : ''
+      }
+
       setShowIcon((prev) => {
         const next = zoom >= GLYPH_ZOOM_THRESHOLD
         return prev === next ? prev : next
@@ -421,6 +458,18 @@ export function useMapMarkers(
         })
 
         const marker = new mapboxgl.Marker({ element: el, anchor: 'center' }).setLngLat([node.lng, node.lat]).addTo(map)
+
+        // Sync scale to current zoom immediately so newly added markers don't
+        // flash at full size before the next zoom event fires.
+        let curZoom = GLYPH_ZOOM_THRESHOLD
+        try {
+          curZoom = map.getZoom()
+        } catch {
+          /* ignore */
+        }
+        const curScale = scaleForZoom(curZoom)
+        el.style.scale = String(curScale)
+        if (curScale < 0.05) el.style.pointerEvents = 'none'
 
         markersRef.current.set(node.id, marker)
         renderGlyph(glyphRootsRef.current, el, node.id, archetypeId, state, node.category, showIcon)
