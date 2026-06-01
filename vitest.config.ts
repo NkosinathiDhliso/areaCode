@@ -11,6 +11,8 @@ export default defineConfig({
     globals: true,
     /** Cold Fastify `buildApp()` in integration suites can exceed 30s on some machines. */
     hookTimeout: 120_000,
+    /** Property tests with 200–500 async iterations need more than the default 5 s. */
+    testTimeout: 60_000,
     include: ['**/*.test.ts', '**/*.test.tsx'],
     exclude: ['node_modules', 'dist', '**/node_modules/**'],
     env: {
