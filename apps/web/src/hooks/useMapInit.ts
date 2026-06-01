@@ -448,6 +448,15 @@ export function useMapInit() {
         bearing: BEARING_3D,
         antialias: true,
         failIfMajorPerformanceCaveat: false,
+        // Globe projection uses spherical math for marker screen-coordinate
+        // projection. Without this, the implicit mercator projection at very
+        // low zoom + high pitch produces incorrect screen positions, causing
+        // markers to detach from the globe surface (mapbox-gl issue #12592).
+        projection: 'globe' as unknown as mapboxgl.ProjectionSpecification,
+        // Prevent zooming out past a meaningful regional overview. Below
+        // zoom 4 the positioning math degrades even in globe mode and
+        // individual venue markers are meaningless at continent/world scale.
+        minZoom: 4,
       })
 
       singletonMap = map

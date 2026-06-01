@@ -50,7 +50,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ],
   extra: {
     eas: {
-      projectId: 'area-code-expo-project-id',
+      // Set EXPO_PUBLIC_EAS_PROJECT_ID (or EAS_PROJECT_ID) before building.
+      // `eas init` / `eas build` will also populate this automatically.
+      projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? process.env.EAS_PROJECT_ID ?? '',
     },
     apiUrl: process.env.EXPO_PUBLIC_API_URL ?? '',
     webSocketUrl: process.env.EXPO_PUBLIC_WEBSOCKET_URL ?? '',

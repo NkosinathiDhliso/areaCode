@@ -457,7 +457,16 @@ export function useMapMarkers(
           onNodeTapRef.current(node)
         })
 
-        const marker = new mapboxgl.Marker({ element: el, anchor: 'center' }).setLngLat([node.lng, node.lat]).addTo(map)
+        const marker = new mapboxgl.Marker({
+          element: el,
+          anchor: 'center',
+          // 'horizon' keeps the marker oriented relative to the globe's
+          // horizon during bearing drift. Without this, markers can appear
+          // to spin or drift visually as the globe rotates.
+          rotationAlignment: 'horizon' as mapboxgl.MarkerOptions['rotationAlignment'],
+        })
+          .setLngLat([node.lng, node.lat])
+          .addTo(map)
 
         // Sync scale to current zoom immediately so newly added markers don't
         // flash at full size before the next zoom event fires.

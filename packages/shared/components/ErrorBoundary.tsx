@@ -22,8 +22,18 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    // Log to console in dev, silently report in prod
-    if (import.meta.env?.DEV) {
+    // Log to console in dev, silently report in prod.
+    // Read `import.meta.env` defensively: the shared tsconfig doesn't include
+    // Vite client types, so access it via a cast (mirrors lib/featureGating.ts)
+    // and guard so non-Vite contexts (RN, Node tests) don't throw.
+    let isDev = false
+    try {
+      const meta = (import.meta as unknown as { env?: { DEV?: boolean } })?.env
+      isDev = meta?.DEV === true
+    } catch {
+      // import.meta unavailable — assume prod.
+    }
+    if (isDev) {
       console.error('[ErrorBoundary] Unhandled error:', error, errorInfo)
     }
     // Try to report to Sentry if available

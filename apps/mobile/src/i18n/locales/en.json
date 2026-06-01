@@ -241,5 +241,6 @@
   "privacy.block.yes": "Block",
   "privacy.block.cancel": "Cancel",
   "privacy.block.blocking": "Blocking…",
-  "privacy.block.unblocking": "Unblocking…"
+  "privacy.block.unblocking": "Unblocking…",
+  "errors.dismiss": "Dismiss"
 }

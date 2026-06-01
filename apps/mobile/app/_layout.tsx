@@ -14,8 +14,9 @@ import { useNodePulse } from '@area-code/shared/hooks/useNodePulse'
 import { useRewardSocket } from '@area-code/shared/hooks/useRewardSocket'
 import { useNotificationSocket } from '@area-code/shared/hooks/useNotificationSocket'
 
+import { GlobalErrorToast } from '../src/components/GlobalErrorToast'
 import { bootstrapNative } from '../src/lib/bootstrap'
-import { registerForPushNotifications } from '../src/lib/push'
+import { registerForPushNotifications, attachNotificationResponseHandler } from '../src/lib/push'
 import '../src/i18n'
 
 const queryClient = new QueryClient({
@@ -67,6 +68,22 @@ export default function RootLayout() {
   // Subscribe to live pulse updates so map markers reflect realtime activity.
   useNodePulse(accessToken ?? undefined, { citySlug: CITY_SLUG })
 
+  // Register for push notifications once authenticated. Fire-and-forget: the
+  // helper requests OS permission, acquires an Expo push token, and upserts it
+  // to the backend (POST /v1/users/me/push-token). Re-runs on token change so a
+  // fresh sign-in re-attributes the device token to the new user.
+  useEffect(() => {
+    if (!ready || !isAuthenticated) return
+    void registerForPushNotifications()
+  }, [ready, isAuthenticated, accessToken])
+
+  // Deep-link notification taps to the relevant screen (reward → /rewards,
+  // node/check-in → map). Also drains a cold-start tap that launched the app.
+  useEffect(() => {
+    if (!ready) return
+    return attachNotificationResponseHandler(router)
+  }, [ready, router])
+
   // Resume a pending QR check-in after sign-in. An unauthenticated visitor who
   // scans a venue QR has {nodeId, token} stashed by the QR screen; once
   // authenticated, send them back to the deep link to complete the check-in.
@@ -91,6 +108,7 @@ export default function RootLayout() {
           animation: 'fade',
         }}
       />
+      <GlobalErrorToast />
     </QueryClientProvider>
   )
 }
