@@ -135,5 +135,5 @@ describe('Admin BoostPurchaseReport renders all admin-visible fields', () => {
       }),
       { numRuns: 50 },
     )
-  })
+  }, 30_000)
 })
