@@ -267,7 +267,7 @@ function AppContent() {
       <ConnectivityBanner />
       <div
         ref={contentRef}
-        className="flex-1 relative overflow-hidden"
+        className="flex-1 relative overflow-x-hidden overflow-y-auto"
         style={{ paddingBottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom, 0px))' }}
       >
         {showAuthGate ? (

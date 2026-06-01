@@ -52,7 +52,13 @@ export function ForgotPassword({ onNavigate }: ForgotPasswordProps) {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-dvh px-6 bg-[var(--bg-base)]">
+    <div
+      className="flex flex-col items-center justify-center min-h-dvh px-6 bg-[var(--bg-base)]"
+      style={{
+        paddingTop: 'max(2rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
+      }}
+    >
       <div className="w-full max-w-sm flex flex-col gap-4">
         <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] text-center">
           {phase === 'success' ? t('auth.resetSuccess', 'Password reset') : t('auth.forgotPassword', 'Forgot password')}

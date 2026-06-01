@@ -1,6 +1,6 @@
+import { TIER_PERMANENCE_SHORT } from '@area-code/shared/constants/legal'
 import { TIER_LEVELS } from '@area-code/shared/constants/tier-levels'
 import type { TierLevel } from '@area-code/shared/constants/tier-levels'
-import { TIER_PERMANENCE_SHORT } from '@area-code/shared/constants/legal'
 import { api } from '@area-code/shared/lib/api'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useUserStore } from '@area-code/shared/stores/userStore'

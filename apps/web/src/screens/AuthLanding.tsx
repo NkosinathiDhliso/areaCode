@@ -78,7 +78,13 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
         <div className="absolute left-1/2 top-16 h-56 w-56 -translate-x-1/2 rounded-full bg-[var(--accent)]/15 blur-3xl" />
       </div>
 
-      <div className="relative mx-auto w-full max-w-md flex flex-col flex-1 px-5 pt-12 pb-8">
+      <div
+        className="relative mx-auto w-full max-w-md flex flex-col flex-1 px-5"
+        style={{
+          paddingTop: 'max(3rem, env(safe-area-inset-top))',
+          paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
+        }}
+      >
         {/* Logo */}
         <div className="flex items-center gap-2.5 mb-10">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)]/20 ring-1 ring-[var(--border)]">

@@ -10,19 +10,24 @@
  *  - WebSocket URL         → expo-constants extra / EXPO_PUBLIC_WEBSOCKET_URL
  *  - token refresh handler → consumer auth store
  *  - geolocation provider  → expo-location
+ *  - OAuth PKCE crypto      → expo-crypto (Hermes has no Web Crypto)
+ *  - Mapbox access token    → expo-constants extra / EXPO_PUBLIC_MAPBOX_TOKEN
  *
  * `bootstrapNative()` must run (and its storage hydration awaited) before the
  * first React render so the auth store reads persisted tokens.
  */
 
 import { api } from '@area-code/shared/lib/api'
+import { setOAuthCryptoProvider } from '@area-code/shared/lib/cognitoHostedUiOAuth'
 import { setGeolocationProvider } from '@area-code/shared/lib/platform'
 import { setWebSocketUrl } from '@area-code/shared/lib/socket'
 import { storage } from '@area-code/shared/lib/storage'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useUserStore } from '@area-code/shared/stores/userStore'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import MapboxGL from '@rnmapbox/maps'
 import Constants from 'expo-constants'
+import * as Crypto from 'expo-crypto'
 import * as Location from 'expo-location'
 
 function extra(): Record<string, string | undefined> {
@@ -35,6 +40,10 @@ function resolveApiUrl(): string | undefined {
 
 function resolveWebSocketUrl(): string | undefined {
   return process.env.EXPO_PUBLIC_WEBSOCKET_URL?.trim() || extra()['webSocketUrl']
+}
+
+function resolveMapboxToken(): string | undefined {
+  return process.env.EXPO_PUBLIC_MAPBOX_TOKEN?.trim() || extra()['mapboxAccessToken']
 }
 
 /** Wire the shared layer for React Native. Idempotent. */
@@ -91,6 +100,28 @@ export async function bootstrapNative(): Promise<void> {
       })()
     },
   })
+
+  // 6. OAuth PKCE crypto. Hermes has no Web Crypto, `btoa`, or `TextEncoder`,
+  //    so back the shared PKCE helpers with expo-crypto. `digestStringAsync`
+  //    returns standard base64; convert to base64url (no padding) here.
+  setOAuthCryptoProvider({
+    getRandomValues: (buf) => Crypto.getRandomValues(buf),
+    sha256Base64Url: async (input) => {
+      const b64 = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, input, {
+        encoding: Crypto.CryptoEncoding.BASE64,
+      })
+      return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    },
+    randomUUID: () => Crypto.randomUUID(),
+  })
+
+  // 7. Mapbox runtime access token. The config plugin's download token is
+  //    build-time only; @rnmapbox/maps needs the public token set at runtime
+  //    or map tiles never load.
+  const mapboxToken = resolveMapboxToken()
+  if (mapboxToken) {
+    void MapboxGL.setAccessToken(mapboxToken)
+  }
 }
 
 /**

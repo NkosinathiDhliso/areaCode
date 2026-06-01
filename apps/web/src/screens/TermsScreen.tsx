@@ -1,5 +1,7 @@
 import { ChevronLeft } from 'lucide-react'
+
 import { TIER_PERMANENCE_CLAUSE } from '@area-code/shared/constants/legal'
+
 import type { AppRoute } from '../types'
 
 interface TermsScreenProps {

@@ -54,6 +54,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     apiUrl: process.env.EXPO_PUBLIC_API_URL ?? '',
     webSocketUrl: process.env.EXPO_PUBLIC_WEBSOCKET_URL ?? '',
+    mapboxAccessToken: process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? process.env.AREA_CODE_MAPBOX_TOKEN_MOBILE ?? '',
     cognitoHostedUiDomain: process.env.EXPO_PUBLIC_COGNITO_HOSTED_UI_DOMAIN ?? '',
     cognitoConsumerClientId: process.env.EXPO_PUBLIC_COGNITO_CLIENT_ID_CONSUMER ?? '',
   },

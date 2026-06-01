@@ -3,6 +3,7 @@ import {
   pkceChallengeS256,
   buildHostedUiAuthorizeUrl,
   exchangeCodeForTokens,
+  oauthRandomState,
 } from '@area-code/shared/lib/cognitoHostedUiOAuth'
 import Constants from 'expo-constants'
 import * as Linking from 'expo-linking'
@@ -30,7 +31,7 @@ export async function signInWithGoogleConsumerMobile(): Promise<{
 
   const verifier = randomPkceVerifier()
   const challenge = await pkceChallengeS256(verifier)
-  const state = globalThis.crypto.randomUUID()
+  const state = oauthRandomState()
   const redirectUri = Linking.createURL('auth/callback')
 
   const url = buildHostedUiAuthorizeUrl({
