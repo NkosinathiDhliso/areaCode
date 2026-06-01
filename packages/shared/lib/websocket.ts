@@ -228,7 +228,10 @@ function isDevMock(): boolean {
   } catch {
     /* import.meta unavailable (RN) */
   }
-  if (typeof process !== 'undefined' && process.env?.['EXPO_PUBLIC_DEV_MOCK'] === 'true') return true
+  // Reach for `process` via `globalThis` so this compiles under the web
+  // tsconfig (no `@types/node`); the web bundle never hits this branch.
+  const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+  if (proc?.env?.['EXPO_PUBLIC_DEV_MOCK'] === 'true') return true
   return false
 }
 
@@ -268,8 +271,9 @@ function getWebSocketUrl(): string | null {
   }
 
   // ── React Native (Expo) ──
-  if (!url && typeof process !== 'undefined') {
-    url = process.env?.['EXPO_PUBLIC_WEBSOCKET_URL'] ?? null
+  if (!url) {
+    const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    url = proc?.env?.['EXPO_PUBLIC_WEBSOCKET_URL'] ?? null
   }
 
   return normaliseWsUrl(url)

@@ -18,10 +18,13 @@ function resolveApiBaseUrl(): string {
   } catch {
     // `import.meta` access throws in some non-ESM/RN contexts — ignore.
   }
-  if (typeof process !== 'undefined') {
-    const fromExpo = process.env?.['EXPO_PUBLIC_API_URL']
-    if (fromExpo) return fromExpo
-  }
+  // React Native (Expo): reach for `process` via `globalThis` so this module
+  // compiles under the web tsconfig, which omits `@types/node` and would
+  // otherwise raise TS2591 on a bare `process` reference. The web bundle never
+  // takes this branch at runtime because `process` is undefined there.
+  const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+  const fromExpo = proc?.env?.['EXPO_PUBLIC_API_URL']
+  if (fromExpo) return fromExpo
   return 'http://localhost:4000'
 }
 
