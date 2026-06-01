@@ -10,6 +10,8 @@
  * update this file. Contact: privacy@areacode.co.za / legal@areacode.co.za.
  */
 
+import { TIER_PERMANENCE_CLAUSE } from './legal'
+
 export interface LegalSection {
   heading: string
   /** One or more paragraphs. Bullet lists are represented as `• ` prefixed lines. */
@@ -140,9 +142,10 @@ export const TERMS_OF_SERVICE: LegalDocument = {
       ],
     },
     {
-      heading: '4. Rewards',
+      heading: '4. Rewards and tier permanence',
       body: [
         "Rewards are configured and granted by participating venues, each stating its own conditions, expiry, and redemption rules. We are not responsible if a venue withdraws a reward or changes its conditions for reasons within the venue's control.",
+        TIER_PERMANENCE_CLAUSE,
       ],
     },
     {

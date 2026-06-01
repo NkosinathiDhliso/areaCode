@@ -1,5 +1,6 @@
 import { TIER_LEVELS } from '@area-code/shared/constants/tier-levels'
 import type { TierLevel } from '@area-code/shared/constants/tier-levels'
+import { TIER_PERMANENCE_SHORT } from '@area-code/shared/constants/legal'
 import { api } from '@area-code/shared/lib/api'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useUserStore } from '@area-code/shared/stores/userStore'
@@ -187,6 +188,8 @@ export default function ProfileScreen() {
         </View>
       )}
 
+      <Text style={styles.tierPermanence}>{TIER_PERMANENCE_SHORT}</Text>
+
       <ArchetypeReveal archetypeId={displayUser?.archetypeId ?? 'archetype-uncharted'} />
 
       <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/friends')}>
@@ -262,6 +265,7 @@ const styles = StyleSheet.create({
   },
   statValue: { color: colors.textPrimary, fontWeight: '700', fontSize: 20 },
   statLabel: { color: colors.textMuted, fontSize: 11, marginTop: 4 },
+  tierPermanence: { color: colors.textMuted, fontSize: 12, marginTop: -4, marginBottom: 4 },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',

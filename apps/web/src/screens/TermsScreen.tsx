@@ -1,4 +1,5 @@
 import { ChevronLeft } from 'lucide-react'
+import { TIER_PERMANENCE_CLAUSE } from '@area-code/shared/constants/legal'
 import type { AppRoute } from '../types'
 
 interface TermsScreenProps {
@@ -59,13 +60,16 @@ export function TermsScreen({ onNavigate }: TermsScreenProps) {
             coordinated abuse will result in permanent removal.
           </p>
 
-          <h2 className="font-[Syne] text-xl font-bold text-[var(--text-primary)] pt-4">4. Rewards</h2>
+          <h2 className="font-[Syne] text-xl font-bold text-[var(--text-primary)] pt-4">
+            4. Rewards and tier permanence
+          </h2>
           <p>
             Rewards are configured and granted by participating venues. Each reward states its conditions, expiry, and
             redemption rules. We are not responsible if a venue withdraws a reward, changes its conditions, or refuses
             redemption for reasons within the venue&apos;s control. Where we are notified of a venue acting in bad faith
             we will investigate and may remove that venue from the platform.
           </p>
+          <p className="font-medium text-[var(--text-primary)]">{TIER_PERMANENCE_CLAUSE}</p>
 
           <h2 className="font-[Syne] text-xl font-bold text-[var(--text-primary)] pt-4">5. Streaming connections</h2>
           <p>

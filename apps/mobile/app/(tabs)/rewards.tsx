@@ -1,3 +1,4 @@
+import { REWARD_EXPIRY_NOTICE } from '@area-code/shared/constants/legal'
 import { api } from '@area-code/shared/lib/api'
 import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
@@ -66,6 +67,7 @@ export default function RewardsScreen() {
       )}
 
       <Text style={styles.title}>{t('rewards.nearYou')}</Text>
+      <Text style={styles.expiryNotice}>{REWARD_EXPIRY_NOTICE}</Text>
 
       {isLoading ? (
         <>
@@ -109,6 +111,7 @@ const styles = StyleSheet.create({
   walletHint: { color: colors.textMuted, fontSize: 12, marginTop: -4 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   title: { color: colors.textPrimary, fontWeight: '700', fontSize: 20, marginBottom: 4 },
+  expiryNotice: { color: colors.textMuted, fontSize: 12, marginTop: -2, marginBottom: 4 },
   card: {
     backgroundColor: colors.bgSurface,
     borderColor: colors.border,

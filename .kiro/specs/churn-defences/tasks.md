@@ -19,7 +19,7 @@ Each phase ships independently. None introduce always-on infra. None violate the
 ### Task 2: Tier-permanence T&C commitment · Req 3
 
 - [x] 2.1 Create `packages/shared/constants/legal.ts` exporting the canonical clause.
-- [ ] 2.2 Update `AREA_CODE_CONSENT_VERSION` and surface clause on T&Cs screen.
+- [x] 2.2 Surface the tier-permanence clause on the T&Cs screen (web `TermsScreen` + shared `legal-content.ts`). Note: `AREA_CODE_CONSENT_VERSION` bump deferred — a major bump forces re-consent on next open, so it is a deliberate ops step.
 - [x] 2.3 Add the same line to the consumer profile screen.
 - [x] 2.4 Add a backend guard rejecting tier downgrades below the visit-count-implied tier.
 - [x] 2.5 Property test the guard.
