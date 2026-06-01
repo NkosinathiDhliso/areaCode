@@ -61,7 +61,13 @@ export function BusinessSignup({ onSwitchToLogin }: BusinessSignupProps) {
   const canSubmit = businessName.trim().length >= 2 && email.includes('@') && password.length >= 8
 
   return (
-    <div className="flex flex-col items-center justify-center h-dvh bg-[var(--bg-base)] px-5">
+    <div
+      className="flex flex-col items-center justify-center min-h-dvh bg-[var(--bg-base)] px-5"
+      style={{
+        paddingTop: 'max(2rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
+      }}
+    >
       <h1 className="text-[var(--text-primary)] font-bold text-2xl mb-2 font-[Syne]">{t('biz.signup.title')}</h1>
       <p className="text-[var(--text-secondary)] text-sm mb-8 text-center max-w-xs">{t('biz.signup.subtitle')}</p>
 

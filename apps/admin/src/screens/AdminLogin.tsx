@@ -33,7 +33,13 @@ export function AdminLogin() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center h-dvh bg-[var(--bg-base)] px-5">
+    <div
+      className="flex flex-col items-center justify-center min-h-dvh bg-[var(--bg-base)] px-5"
+      style={{
+        paddingTop: 'max(2rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
+      }}
+    >
       <h1 className="text-[var(--text-primary)] font-bold text-2xl mb-8 font-[Syne]">{t('admin.login.title')}</h1>
 
       <div className="flex flex-col gap-4 w-full max-w-xs">

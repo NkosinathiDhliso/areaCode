@@ -63,7 +63,11 @@ export function NotificationSettings({ onNavigate }: NotificationSettingsProps) 
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4" data-scroll-container>
+    <div
+      className="flex flex-col h-full overflow-y-auto px-5 pb-4"
+      style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }}
+      data-scroll-container
+    >
       <div className="flex flex-row items-center gap-3 mb-4">
         <button onClick={() => onNavigate('notifications')} aria-label="Back" className="text-[var(--text-muted)]">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

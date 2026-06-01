@@ -57,7 +57,11 @@ export function FeedScreen() {
   const allItems = data?.pages.flatMap((p) => p.items) ?? []
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4" data-scroll-container>
+    <div
+      className="flex flex-col h-full overflow-y-auto px-5 pb-4"
+      style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }}
+      data-scroll-container
+    >
       <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-4">{t('feed.title')}</h1>
 
       {isLoading ? (

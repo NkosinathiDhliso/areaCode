@@ -99,7 +99,13 @@ export function StaffInvite({ token }: StaffInviteProps) {
 
   if (metaLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-dvh bg-[var(--bg-base)] px-5">
+      <div
+        className="flex flex-col items-center justify-center min-h-dvh bg-[var(--bg-base)] px-5"
+        style={{
+          paddingTop: 'max(2rem, env(safe-area-inset-top))',
+          paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
+        }}
+      >
         <Spinner size="lg" />
       </div>
     )
@@ -107,7 +113,13 @@ export function StaffInvite({ token }: StaffInviteProps) {
 
   if (!meta) {
     return (
-      <div className="flex flex-col items-center justify-center h-dvh bg-[var(--bg-base)] px-5">
+      <div
+        className="flex flex-col items-center justify-center min-h-dvh bg-[var(--bg-base)] px-5"
+        style={{
+          paddingTop: 'max(2rem, env(safe-area-inset-top))',
+          paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
+        }}
+      >
         <p className="text-[var(--danger)] text-sm text-center">Invite not found.</p>
       </div>
     )
@@ -115,7 +127,13 @@ export function StaffInvite({ token }: StaffInviteProps) {
 
   if (meta.accepted) {
     return (
-      <div className="flex flex-col items-center justify-center h-dvh bg-[var(--bg-base)] px-5">
+      <div
+        className="flex flex-col items-center justify-center min-h-dvh bg-[var(--bg-base)] px-5"
+        style={{
+          paddingTop: 'max(2rem, env(safe-area-inset-top))',
+          paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
+        }}
+      >
         <p className="text-[var(--text-secondary)] text-sm text-center">This invite was already used.</p>
       </div>
     )
@@ -123,7 +141,13 @@ export function StaffInvite({ token }: StaffInviteProps) {
 
   if (meta.expired) {
     return (
-      <div className="flex flex-col items-center justify-center h-dvh bg-[var(--bg-base)] px-5">
+      <div
+        className="flex flex-col items-center justify-center min-h-dvh bg-[var(--bg-base)] px-5"
+        style={{
+          paddingTop: 'max(2rem, env(safe-area-inset-top))',
+          paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
+        }}
+      >
         <p className="text-[var(--danger)] text-sm text-center">This invite has expired.</p>
       </div>
     )

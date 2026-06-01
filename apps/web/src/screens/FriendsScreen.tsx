@@ -38,7 +38,11 @@ export function FriendsScreen() {
   const [search, setSearch] = useState('')
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4" data-scroll-container>
+    <div
+      className="flex flex-col h-full overflow-y-auto px-5 pb-4"
+      style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }}
+      data-scroll-container
+    >
       <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-4">{t('friends.title')}</h1>
 
       {/* Tab bar */}

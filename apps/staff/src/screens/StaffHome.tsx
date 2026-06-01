@@ -32,7 +32,13 @@ export function StaffHome() {
 
   if (businessDeactivated) {
     return (
-      <div className="flex flex-col items-center justify-center h-dvh px-6 bg-[var(--bg-base)] gap-4">
+      <div
+        className="flex flex-col items-center justify-center min-h-dvh px-6 bg-[var(--bg-base)] gap-4"
+        style={{
+          paddingTop: 'max(2rem, env(safe-area-inset-top))',
+          paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
+        }}
+      >
         <ShieldOff size={32} strokeWidth={1.5} className="text-[var(--danger)]" />
         <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] text-center">Business deactivated</h1>
         <p className="text-[var(--text-secondary)] text-sm text-center">
@@ -49,7 +55,7 @@ export function StaffHome() {
     <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
       <header
         className="flex flex-row items-center justify-between px-5 py-4 border-b border-[var(--border)]"
-        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+        style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}
       >
         <div className="flex flex-col">
           <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">{staffName ?? 'Area Code'}</span>

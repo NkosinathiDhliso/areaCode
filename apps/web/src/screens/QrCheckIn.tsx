@@ -86,7 +86,13 @@ export function QrCheckIn({ nodeId, token, onNavigate }: QrCheckInProps) {
   }, [isAuthenticated, nodeId, token, onNavigate, t])
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-dvh px-6 bg-[var(--bg-base)]">
+    <div
+      className="flex flex-col items-center justify-center min-h-dvh px-6 bg-[var(--bg-base)]"
+      style={{
+        paddingTop: 'max(2rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
+      }}
+    >
       <div className="w-full max-w-sm flex flex-col items-center gap-4 text-center">
         {phase === 'submitting' && (
           <>

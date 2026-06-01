@@ -36,7 +36,11 @@ export function NotificationCenter({ onNavigate }: NotificationCenterProps) {
   }, [isPending])
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4" data-scroll-container>
+    <div
+      className="flex flex-col h-full overflow-y-auto px-5 pb-4"
+      style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }}
+      data-scroll-container
+    >
       <div className="flex flex-row items-center justify-between mb-4">
         <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('notif.center.title')}</h1>
         <button

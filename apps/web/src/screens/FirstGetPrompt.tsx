@@ -49,7 +49,13 @@ export function FirstGetPrompt({ onNavigate }: FirstGetPromptProps) {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-dvh bg-[var(--bg-base)] px-5 py-8">
+    <div
+      className="flex flex-col items-center justify-center min-h-dvh bg-[var(--bg-base)] px-5"
+      style={{
+        paddingTop: 'max(2rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
+      }}
+    >
       <div className="w-full max-w-sm flex flex-col gap-4">
         <h1 className="text-[var(--text-primary)] font-bold text-xl text-center font-[Syne]">
           {t('auth.firstGet.title', 'Got a code from a venue?')}
