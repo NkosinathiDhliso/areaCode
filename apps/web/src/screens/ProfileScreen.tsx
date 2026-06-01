@@ -164,6 +164,7 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
 
       {/* Navigation links with proper chevron icons (Issue #24) */}
       <NavLink label={t('profile.checkInHistory', 'Check-in History')} onClick={() => onNavigate('history')} />
+      <NavLink label={t('profile.notifications', 'Notifications')} onClick={() => onNavigate('notifications')} />
       <NavLink label={t('friends.title')} onClick={() => onNavigate('friends')} />
       <NavLink
         label={t('privacy.settings.link')}

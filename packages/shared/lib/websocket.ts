@@ -2,6 +2,7 @@
 // Replaces Socket.io with native WebSocket for serverless
 
 import type { ClientToServerEvents, ServerToClientEvents } from '../types'
+
 import { onTokenRefresh } from './api'
 
 type EventCallback = (payload: any) => void
@@ -223,41 +224,68 @@ function isDevMock(): boolean {
   try {
     const env =
       typeof import.meta !== 'undefined' ? (import.meta as unknown as Record<string, Record<string, string>>).env : {}
-    return env?.VITE_DEV_MOCK === 'true'
+    if (env?.VITE_DEV_MOCK === 'true') return true
   } catch {
-    return false
+    /* import.meta unavailable (RN) */
   }
+  if (typeof process !== 'undefined' && process.env?.['EXPO_PUBLIC_DEV_MOCK'] === 'true') return true
+  return false
+}
+
+function normaliseWsUrl(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  let url = raw
+  // Auto-convert http(s) URLs to ws(s)
+  if (url.startsWith('https://')) url = 'wss://' + url.substring(8)
+  else if (url.startsWith('http://')) url = 'ws://' + url.substring(7)
+  return url
 }
 
 function getWebSocketUrl(): string | null {
   // In dev mock mode, don't resolve a real WebSocket URL — the mock layer handles events
   if (isDevMock()) return null
 
-  const env =
-    typeof import.meta !== 'undefined' ? (import.meta as unknown as Record<string, Record<string, string>>).env : {}
+  // ── Web (Vite) ──
+  let url: string | null = null
+  try {
+    if (typeof import.meta !== 'undefined') {
+      const env = (import.meta as unknown as Record<string, Record<string, string>>).env
 
-  // VITE_WEBSOCKET_URL must point to a WebSocket API Gateway (wss://)
-  // VITE_SOCKET_URL is the legacy fallback (only works for local dev with Socket.io)
-  let url = env?.VITE_WEBSOCKET_URL ?? null
+      // VITE_WEBSOCKET_URL must point to a WebSocket API Gateway (wss://)
+      // VITE_SOCKET_URL is the legacy fallback (only works for local dev with Socket.io)
+      url = env?.VITE_WEBSOCKET_URL ?? null
 
-  // Fall back to VITE_SOCKET_URL only in local dev (localhost)
-  if (!url) {
-    const fallback = env?.VITE_SOCKET_URL
-    if (fallback && (fallback.includes('localhost') || fallback.includes('127.0.0.1'))) {
-      url = fallback
+      // Fall back to VITE_SOCKET_URL only in local dev (localhost)
+      if (!url) {
+        const fallback = env?.VITE_SOCKET_URL
+        if (fallback && (fallback.includes('localhost') || fallback.includes('127.0.0.1'))) {
+          url = fallback
+        }
+      }
     }
+  } catch {
+    /* import.meta unavailable (RN) */
   }
 
-  if (!url) return null
+  // ── React Native (Expo) ──
+  if (!url && typeof process !== 'undefined') {
+    url = process.env?.['EXPO_PUBLIC_WEBSOCKET_URL'] ?? null
+  }
 
-  // Auto-convert http(s) URLs to ws(s)
-  if (url.startsWith('https://')) url = 'wss://' + url.substring(8)
-  else if (url.startsWith('http://')) url = 'ws://' + url.substring(7)
-
-  return url
+  return normaliseWsUrl(url)
 }
 
-const WEBSOCKET_URL = getWebSocketUrl()
+let WEBSOCKET_URL = getWebSocketUrl()
+
+/**
+ * Override the WebSocket base URL at runtime. Used by the React Native app to
+ * configure the socket origin from `expo-constants` extra at boot, since the
+ * module-eval-time env lookup can't see Expo's extra config. Call before the
+ * first `getSocket()`/`getWebSocket()`.
+ */
+export function setWebSocketUrl(url: string | null): void {
+  WEBSOCKET_URL = normaliseWsUrl(url)
+}
 
 export function getWebSocket(
   token?: string,

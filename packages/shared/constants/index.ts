@@ -10,5 +10,11 @@ export {
   getArchetypeEtymology,
   type ArchetypeNameEntry,
 } from './archetype-names'
-export { ARCHETYPE_GLYPHS, getArchetypeGlyph, dynamicContrastForCategory } from './archetype-glyphs'
+export {
+  ARCHETYPE_ICONS,
+  getArchetypeIcon,
+  dynamicContrastForCategory,
+  FALLBACK_ARCHETYPE_ICON,
+} from './archetype-icons'
+export type { ArchetypeIconSpec, ArchetypeIconWeight } from './archetype-icons'
 export { TIER_SIZE_MULTIPLIER } from './tier-size'

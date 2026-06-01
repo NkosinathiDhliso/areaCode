@@ -1,21 +1,35 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { View, Text, TouchableOpacity, TextInput, FlatList, StyleSheet } from 'react-native'
-import { useTranslation } from 'react-i18next'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import MapboxGL from '@rnmapbox/maps'
-
+import { ARCHETYPE_CATALOG } from '@area-code/shared/constants/archetype-catalog'
+import { useGeolocation, useCheckIn } from '@area-code/shared/hooks'
 import { api } from '@area-code/shared/lib/api'
 import { useMapStore, useConsumerAuthStore, useLocationStore, useUserStore } from '@area-code/shared/stores'
-import { useGeolocation, useCheckIn } from '@area-code/shared/hooks'
 import type { Node, NodeCategory } from '@area-code/shared/types'
+import MapboxGL from '@rnmapbox/maps'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
+import { View, Text, TouchableOpacity, TextInput, FlatList, StyleSheet } from 'react-native'
 
+import { ArchetypeIcon } from '../../src/components/ArchetypeIcon'
 import { CategoryFilterBar } from '../../src/components/CategoryFilterBar'
 import { NodeDetailSheet } from '../../src/components/NodeDetailSheet'
-import { colors } from '../../src/theme'
+import { ProximityNudgeBanner } from '../../src/components/ProximityNudgeBanner'
+import { colors, getCategoryColour } from '../../src/theme'
 
 const CITY_SLUG = 'johannesburg'
 const DEFAULT_CENTER: [number, number] = [28.0473, -26.2041]
 const SEARCH_DEBOUNCE_MS = 300
+const DEFAULT_ARCHETYPE_ID = 'archetype-eclectic'
+/**
+ * Below this zoom the detailed archetype icon collapses to a simple category
+ * dot, matching the web map. Default browse zoom is 13, so icons show by
+ * default and only simplify at the city/region overview.
+ */
+const GLYPH_ZOOM_THRESHOLD = 12.5
+
+/** iconId lookup keyed by archetype id, for fast marker rendering. */
+const ARCHETYPE_ICON_ID_BY_ID: Record<string, string> = Object.fromEntries(
+  ARCHETYPE_CATALOG.map((a) => [a.id, a.iconId]),
+)
 
 interface SearchResult {
   id: string
@@ -30,6 +44,7 @@ export default function MapScreen() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { setNodes, pulseScores } = useMapStore()
+  const archetypeIds = useMapStore((s) => s.archetypeIds)
   const accessToken = useConsumerAuthStore((s) => s.accessToken)
   const permissionState = useLocationStore((s) => s.permissionState)
   const { onboarding, markHintSeen } = useUserStore()
@@ -41,6 +56,18 @@ export default function MapScreen() {
   const [categoryFilter, setCategoryFilter] = useState<NodeCategory | null>(null)
   const [browseOnly, setBrowseOnly] = useState(false)
   const [cameraCenter, setCameraCenter] = useState(DEFAULT_CENTER)
+  // Show the detailed archetype icon at/above the threshold zoom; collapse to a
+  // simple category dot when zoomed out so a packed city overview stays legible.
+  const [showIcon, setShowIcon] = useState(true)
+
+  const handleCameraChanged = useCallback((state: { properties?: { zoom?: number } }) => {
+    const zoom = state.properties?.zoom
+    if (typeof zoom !== 'number') return
+    setShowIcon((prev) => {
+      const next = zoom >= GLYPH_ZOOM_THRESHOLD
+      return prev === next ? prev : next
+    })
+  }, [])
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('')
@@ -139,6 +166,20 @@ export default function MapScreen() {
     [onboarding.hintSeen, markHintSeen, resetQrFallback],
   )
 
+  // Proximity nudge "Check in" tap: locate the node in the loaded list and
+  // open its detail sheet so the user can complete the check-in.
+  const handleProximityCheckIn = useCallback(
+    (nodeId: string) => {
+      const node = nodeList?.find((n) => n.id === nodeId)
+      if (node) {
+        setSelectedNode(node)
+        setSheetOpen(true)
+        resetQrFallback()
+      }
+    },
+    [nodeList, resetQrFallback],
+  )
+
   async function handleCheckIn() {
     if (!selectedNode) return
     const pos = await requestLocation()
@@ -177,25 +218,39 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
-      <MapboxGL.MapView style={styles.map} styleURL="mapbox://styles/mapbox/dark-v11">
+      <MapboxGL.MapView
+        style={styles.map}
+        styleURL="mapbox://styles/mapbox/dark-v11"
+        onCameraChanged={handleCameraChanged}
+      >
         <MapboxGL.Camera
           centerCoordinate={cameraCenter}
           zoomLevel={13}
           animationMode="flyTo"
           animationDuration={1000}
         />
-        {filteredNodes.map((node) => (
-          <MapboxGL.PointAnnotation
-            key={node.id}
-            id={node.id}
-            coordinate={[node.lng, node.lat]}
-            onSelected={() => handleNodePress(node)}
-          >
-            <View style={[styles.marker, { opacity: (pulseScores[node.id] ?? 0) > 0 ? 1 : 0.5 }]}>
-              <View style={styles.markerDot} />
-            </View>
-          </MapboxGL.PointAnnotation>
-        ))}
+        {filteredNodes.map((node) => {
+          const archetypeId = archetypeIds[node.id] ?? node.defaultArchetypeId ?? DEFAULT_ARCHETYPE_ID
+          const iconId = ARCHETYPE_ICON_ID_BY_ID[archetypeId] ?? 'eclectic'
+          const isActive = (pulseScores[node.id] ?? 0) > 0
+          const categoryColour = getCategoryColour(node.category)
+          return (
+            <MapboxGL.PointAnnotation
+              key={`${node.id}-${showIcon ? 'icon' : 'dot'}`}
+              id={node.id}
+              coordinate={[node.lng, node.lat]}
+              onSelected={() => handleNodePress(node)}
+            >
+              <View style={[styles.marker, { opacity: isActive ? 1 : 0.6 }]}>
+                {showIcon ? (
+                  <ArchetypeIcon iconId={iconId} size={26} color={categoryColour} />
+                ) : (
+                  <View style={[styles.markerDot, { backgroundColor: categoryColour }]} />
+                )}
+              </View>
+            </MapboxGL.PointAnnotation>
+          )
+        })}
       </MapboxGL.MapView>
 
       {/* Search bar */}
@@ -247,6 +302,8 @@ export default function MapScreen() {
       <View style={styles.filterOverlay}>
         <CategoryFilterBar onFilter={setCategoryFilter} />
       </View>
+
+      <ProximityNudgeBanner onCheckIn={handleProximityCheckIn} />
 
       {!onboarding.hintSeen && (
         <View style={styles.hintOverlay}>
@@ -363,12 +420,13 @@ const styles = StyleSheet.create({
   },
   hintText: { color: colors.textSecondary, fontSize: 13 },
   hintDismiss: { color: colors.textMuted, fontSize: 12 },
-  marker: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+  marker: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
   markerDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: colors.accent,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.25)',
   },
   permissionContainer: {
     flex: 1,

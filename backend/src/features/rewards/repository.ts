@@ -99,22 +99,49 @@ export async function getRewardsNearMe(lat: number, lng: number) {
 
 export async function getUnclaimedRewards(userId: string) {
   const redemptions = await dynamo.getRedemptionsByUserId(userId)
-  const unclaimed = redemptions.filter((r) => !r.redeemedAt)
+  const nowIso = new Date().toISOString()
+  // Active = not yet redeemed AND not past code expiry. Expired codes stay in
+  // the table (90-day analytics window) but must not appear in the wallet.
+  const active = redemptions.filter((r) => {
+    const rec = r as unknown as Record<string, unknown>
+    if (rec['redeemedAt']) return false
+    const exp = rec['codeExpiresAt'] as string | undefined
+    if (exp && exp < nowIso) return false
+    return true
+  })
+
   const enriched = []
-  for (const rdm of unclaimed) {
-    const reward = await dynamo.getRewardById(rdm.rewardId)
-    let nodeName = ''
-    if (reward) {
-      const node = await getNodeById(reward.nodeId)
-      nodeName = node?.name ?? ''
+  for (const rdm of active) {
+    const rec = rdm as unknown as Record<string, unknown>
+    // Prefer the denormalised fields written at claim time; fall back to a
+    // reward/node lookup for older rows that predate the denormalisation.
+    let rewardTitle = (rec['rewardTitle'] as string) ?? ''
+    let nodeName = (rec['nodeName'] as string) ?? ''
+    let rewardType = ''
+    if (!rewardTitle || !nodeName) {
+      const reward = rec['rewardId'] ? await dynamo.getRewardById(rec['rewardId'] as string) : null
+      if (reward) {
+        rewardTitle = rewardTitle || reward.title
+        rewardType = reward.type
+        if (!nodeName) {
+          const node = await getNodeById(reward.nodeId)
+          nodeName = node?.name ?? ''
+        }
+      }
     }
     enriched.push({
-      ...rdm,
-      id: rdm.redemptionId,
-      reward: reward ? { title: reward.title, type: reward.type, node: { name: nodeName } } : null,
+      id: (rec['redemptionId'] ?? rec['pk']) as string,
+      rewardTitle,
+      rewardType,
+      redemptionCode: rec['redemptionCode'] as string,
+      codeExpiresAt: rec['codeExpiresAt'] as string,
+      nodeName,
+      createdAt: rec['createdAt'] as string,
     })
   }
-  return enriched
+  // Newest first (GSI1 already returns descending, but be explicit for the
+  // fallback-enriched path).
+  return enriched.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
 }
 
 export async function findRedemptionByCode(code: string) {

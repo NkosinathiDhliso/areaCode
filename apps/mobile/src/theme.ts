@@ -24,3 +24,17 @@ export const colors = {
   tierFixture: '#c0c0c0',
   tierInstitution: '#ffd700',
 } as const
+
+/** Node category hex colours (mirrors apps/web getCategoryColour). */
+const CATEGORY_HEX: Record<string, string> = {
+  food: '#ff6b6b',
+  coffee: '#a0785a',
+  nightlife: '#3B7DD8',
+  retail: '#38bdf8',
+  fitness: '#22d3a0',
+  arts: '#ff9f43',
+}
+
+export function getCategoryColour(category: string): string {
+  return CATEGORY_HEX[category] ?? colors.accent
+}

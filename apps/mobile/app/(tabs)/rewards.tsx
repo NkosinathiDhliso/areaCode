@@ -1,10 +1,13 @@
-import { View, Text, ScrollView, StyleSheet } from 'react-native'
-import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
-import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
+import { useLocationStore } from '@area-code/shared/stores/locationStore'
+import { useUnclaimedRewards } from '@area-code/shared/hooks'
+import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
+import { View, Text, ScrollView, StyleSheet } from 'react-native'
+
 import { SkeletonBox } from '../../src/components/Skeleton'
+import { RedemptionCodeCard } from '../../src/components/RedemptionCodeCard'
 import { colors } from '../../src/theme'
 
 interface NearbyReward {
@@ -32,6 +35,9 @@ export default function RewardsScreen() {
     staleTime: 30_000,
   })
 
+  // Earned-but-unredeemed reward codes (the consumer's wallet).
+  const { rewards: earnedCodes } = useUnclaimedRewards()
+
   if (connectivity === 'offline') {
     return (
       <View style={styles.centered}>
@@ -42,6 +48,23 @@ export default function RewardsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {earnedCodes.length > 0 && (
+        <View style={styles.walletSection}>
+          <Text style={styles.title}>{t('rewards.yourCodes')}</Text>
+          <Text style={styles.walletHint}>{t('rewards.yourCodesHint')}</Text>
+          {earnedCodes.map((c) => (
+            <RedemptionCodeCard
+              key={c.id}
+              rewardTitle={c.rewardTitle}
+              redemptionCode={c.redemptionCode}
+              nodeName={c.nodeName}
+              codeExpiresAt={c.codeExpiresAt}
+              hint={t('rewards.codeHint')}
+            />
+          ))}
+        </View>
+      )}
+
       <Text style={styles.title}>{t('rewards.nearYou')}</Text>
 
       {isLoading ? (
@@ -82,6 +105,8 @@ export default function RewardsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bgBase },
   content: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 16, gap: 12 },
+  walletSection: { gap: 12, marginBottom: 12 },
+  walletHint: { color: colors.textMuted, fontSize: 12, marginTop: -4 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   title: { color: colors.textPrimary, fontWeight: '700', fontSize: 20, marginBottom: 4 },
   card: {

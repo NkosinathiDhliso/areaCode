@@ -1,13 +1,25 @@
-import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
+import { getArchetypeIcon, FALLBACK_ARCHETYPE_ICON } from '@area-code/shared/constants'
+import { ARCHETYPE_CATALOG } from '@area-code/shared/constants/archetype-catalog'
 import { api } from '@area-code/shared/lib/api'
 import type { CrowdVibeSnapshot, MusicGenre } from '@area-code/shared/types'
-import { ARCHETYPE_CATALOG } from '@area-code/shared/constants/archetype-catalog'
+import * as PhosphorIcons from '@phosphor-icons/react'
+import type { Icon } from '@phosphor-icons/react'
+import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { resolveArchetypeDisplayName } from '../lib/archetypeDisplay'
 
 interface CrowdVibeSectionProps {
   nodeId: string
+}
+
+/** Small Phosphor icon for an archetype iconId. */
+function ArchetypeChipIcon({ iconId }: { iconId: string | undefined }) {
+  const spec = (iconId ? getArchetypeIcon(iconId) : undefined) ?? FALLBACK_ARCHETYPE_ICON
+  const registry = PhosphorIcons as unknown as Record<string, Icon | undefined>
+  const Component = registry[spec.name]
+  if (!Component) return null
+  return <Component size={16} weight={spec.weight} className="text-[var(--text-secondary)]" />
 }
 
 const GENRE_LABELS: Record<MusicGenre, string> = {
@@ -79,7 +91,7 @@ export function CrowdVibeSection({ nodeId }: CrowdVibeSectionProps) {
                 key={name}
                 className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-2xl px-3 py-2 flex flex-row items-center gap-2"
               >
-                <span className="text-[var(--text-muted)] text-xs">{arch?.iconId ?? '?'}</span>
+                <ArchetypeChipIcon iconId={arch?.iconId} />
                 <span className="text-[var(--text-primary)] text-sm font-medium">{pct}%</span>
                 <span className="text-[var(--text-secondary)] text-xs">{displayName}</span>
               </div>

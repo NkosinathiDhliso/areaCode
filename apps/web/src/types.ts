@@ -7,6 +7,8 @@ export type AppRoute =
   | 'friends'
   | 'profile'
   | 'privacy'
+  | 'notifications'
+  | 'notification-settings'
   | 'history'
   | 'login'
   | 'signup'

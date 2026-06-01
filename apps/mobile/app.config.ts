@@ -52,6 +52,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     eas: {
       projectId: 'area-code-expo-project-id',
     },
+    apiUrl: process.env.EXPO_PUBLIC_API_URL ?? '',
+    webSocketUrl: process.env.EXPO_PUBLIC_WEBSOCKET_URL ?? '',
     cognitoHostedUiDomain: process.env.EXPO_PUBLIC_COGNITO_HOSTED_UI_DOMAIN ?? '',
     cognitoConsumerClientId: process.env.EXPO_PUBLIC_COGNITO_CLIENT_ID_CONSUMER ?? '',
   },

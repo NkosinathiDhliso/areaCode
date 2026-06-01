@@ -1,6 +1,7 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
-import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
+import { useTranslation } from 'react-i18next'
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+
 import { colors } from '../../src/theme'
 
 export default function AuthLanding() {
@@ -34,6 +35,16 @@ export default function AuthLanding() {
       <TouchableOpacity onPress={() => router.replace('/')}>
         <Text style={styles.mutedLink}>{t('auth.landing.browseOnly')}</Text>
       </TouchableOpacity>
+
+      <View style={styles.legalRow}>
+        <TouchableOpacity onPress={() => router.push('/legal/privacy')}>
+          <Text style={styles.legalLink}>{t('legal.privacy', 'Privacy Policy')}</Text>
+        </TouchableOpacity>
+        <Text style={styles.legalSep}> · </Text>
+        <TouchableOpacity onPress={() => router.push('/legal/terms')}>
+          <Text style={styles.legalLink}>{t('legal.terms', 'Terms of Service')}</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   )
 }
@@ -67,4 +78,7 @@ const styles = StyleSheet.create({
   secondaryButtonText: { color: colors.textPrimary, fontSize: 16 },
   link: { color: colors.accent, fontSize: 14, marginTop: 24 },
   mutedLink: { color: colors.textMuted, fontSize: 12, marginTop: 16 },
+  legalRow: { flexDirection: 'row', alignItems: 'center', marginTop: 24 },
+  legalLink: { color: colors.textMuted, fontSize: 12, textDecorationLine: 'underline' },
+  legalSep: { color: colors.textMuted, fontSize: 12 },
 })

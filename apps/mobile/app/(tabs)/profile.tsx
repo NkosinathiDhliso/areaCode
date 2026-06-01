@@ -1,14 +1,17 @@
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native'
-import { useTranslation } from 'react-i18next'
-import { useRouter } from 'expo-router'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { TIER_LEVELS } from '@area-code/shared/constants/tier-levels'
+import type { TierLevel } from '@area-code/shared/constants/tier-levels'
 import { api } from '@area-code/shared/lib/api'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useUserStore } from '@area-code/shared/stores/userStore'
 import type { User } from '@area-code/shared/types'
 import type { Tier } from '@area-code/shared/types'
-import { TIER_LEVELS, getTier } from '@area-code/shared/constants/tier-levels'
-import type { TierLevel } from '@area-code/shared/constants/tier-levels'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useRouter } from 'expo-router'
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Share } from 'react-native'
+
+import { ArchetypeReveal } from '../../src/components/ArchetypeReveal'
 import { AvatarCircle } from '../../src/components/AvatarCircle'
 import { NativeTierBadge } from '../../src/components/NativeTierBadge'
 import { colors } from '../../src/theme'
@@ -16,8 +19,10 @@ import { colors } from '../../src/theme'
 export default function ProfileScreen() {
   const { t } = useTranslation()
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { isAuthenticated, logout } = useConsumerAuthStore()
   const { user, tier, totalCheckIns, streakCount, setUser } = useUserStore()
+  const [busy, setBusy] = useState(false)
 
   const { data: profile } = useQuery({
     queryKey: ['user', 'me'],
@@ -34,6 +39,9 @@ export default function ProfileScreen() {
 
   const deleteHistoryMutation = useMutation({
     mutationFn: () => api.delete('/v1/users/me/check-in-history'),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['check-in-history'] })
+    },
   })
 
   interface TierProgressData {
@@ -52,9 +60,68 @@ export default function ProfileScreen() {
   })
 
   function handleLogout() {
-    void api.post('/v1/auth/logout', {}).catch(() => {})
+    const currentSessionId = useConsumerAuthStore.getState().sessionId
+    void api.post('/v1/auth/logout', { sessionId: currentSessionId ?? undefined }).catch(() => {})
     logout()
     router.replace('/')
+  }
+
+  // POPIA full-data export. RN has no file download, so we share the JSON
+  // payload via the native share sheet (save to Files, email, etc.).
+  async function handleDataExport() {
+    setBusy(true)
+    try {
+      const data = await api.get<Record<string, unknown>>('/v1/users/me/data-export')
+      await Share.share({
+        title: 'Area Code data export',
+        message: JSON.stringify(data, null, 2),
+      })
+    } catch {
+      Alert.alert(t('profile.exportFailed', "Couldn't download your data. Try again."))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function confirmDeleteHistory() {
+    Alert.alert(
+      t('profile.deleteHistoryConfirmTitle', 'Delete check-in history?'),
+      t(
+        'profile.deleteHistoryConfirmBody',
+        'This will permanently delete all your check-in history. This action cannot be undone.',
+      ),
+      [
+        { text: t('common.cancel', 'Cancel'), style: 'cancel' },
+        { text: t('profile.deleteHistory'), style: 'destructive', onPress: () => deleteHistoryMutation.mutate() },
+      ],
+    )
+  }
+
+  function confirmDeleteAccount() {
+    Alert.alert(
+      t('profile.deleteAccountTitle', 'Delete your account?'),
+      t(
+        'profile.deleteAccountBody',
+        'This will permanently delete your account, check-in history, rewards, and all associated data. This action cannot be undone.',
+      ),
+      [
+        { text: t('common.cancel', 'Cancel'), style: 'cancel' },
+        {
+          text: t('profile.deleteAccountConfirm', 'Delete account'),
+          style: 'destructive',
+          onPress: () => {
+            setBusy(true)
+            void api
+              .delete('/v1/users/me')
+              .then(() => {
+                logout()
+                router.replace('/')
+              })
+              .catch(() => setBusy(false))
+          },
+        },
+      ],
+    )
   }
 
   const displayUser = profile ?? user
@@ -120,8 +187,20 @@ export default function ProfileScreen() {
         </View>
       )}
 
+      <ArchetypeReveal archetypeId={displayUser?.archetypeId ?? 'archetype-uncharted'} />
+
       <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/friends')}>
         <Text style={styles.menuText}>{t('friends.title')}</Text>
+        <Text style={styles.menuArrow}>→</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/history')}>
+        <Text style={styles.menuText}>{t('profile.checkInHistory', 'Check-in History')}</Text>
+        <Text style={styles.menuArrow}>→</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/privacy')}>
+        <Text style={styles.menuText}>{t('privacy.settings.link')}</Text>
         <Text style={styles.menuArrow}>→</Text>
       </TouchableOpacity>
 
@@ -131,12 +210,12 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.section}>
-        <TouchableOpacity style={styles.actionRow}>
-          <Text style={styles.menuText}>{t('profile.exportHistory')}</Text>
+        <TouchableOpacity style={styles.actionRow} onPress={() => void handleDataExport()} disabled={busy}>
+          <Text style={styles.menuText}>{t('profile.downloadData', 'Download my data')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.actionRow}
-          onPress={() => deleteHistoryMutation.mutate()}
+          onPress={confirmDeleteHistory}
           disabled={deleteHistoryMutation.isPending}
         >
           <Text style={styles.dangerText}>{t('profile.deleteHistory')}</Text>
@@ -145,6 +224,10 @@ export default function ProfileScreen() {
 
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Text style={styles.logoutText}>{t('auth.gated.signOut')}</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.deleteAccountButton} onPress={confirmDeleteAccount} disabled={busy}>
+        <Text style={styles.dangerText}>{t('profile.deleteAccount', 'Delete my account')}</Text>
       </TouchableOpacity>
     </ScrollView>
   )
@@ -219,6 +302,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   logoutText: { color: colors.textPrimary, fontSize: 14 },
+  deleteAccountButton: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginTop: 4,
+  },
   primaryButton: {
     backgroundColor: colors.accent,
     borderRadius: 12,

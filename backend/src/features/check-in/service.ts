@@ -154,14 +154,18 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
         newTier,
         benefits: TIER_BENEFITS[newTier] ?? [],
       })
-      // Also send via notification service for push fallback
-      const { notifyUser } = await import('../notifications/service.js')
-      await notifyUser(userId, 'tier:changed', {
+      // Persist to the notification center + deliver via push when the user
+      // has no live socket. `sendNotification` writes history (so the upgrade
+      // is visible later in the notification center) and skips preference
+      // checks for this system-critical milestone event.
+      const { sendNotification } = await import('../notifications/service.js')
+      await sendNotification({
+        userId,
+        type: 'tier_change',
         title: 'Tier Upgrade!',
-        message: `Congratulations! You've reached ${newTier} tier.`,
-        oldTier,
-        newTier,
-        benefits: TIER_BENEFITS[newTier] ?? [],
+        body: `Congratulations! You've reached ${newTier} tier.`,
+        data: { oldTier, newTier, benefits: TIER_BENEFITS[newTier] ?? [] },
+        skipPreferenceCheck: true,
       })
     } catch {
       // Tier notification failure is non-critical

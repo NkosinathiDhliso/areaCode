@@ -129,24 +129,30 @@ export async function getRedemptionById(redemptionId: string): Promise<RewardRed
 }
 
 export async function getRedemptionsByRewardId(rewardId: string): Promise<RewardRedemption[]> {
+  // Redemption rows carry `rewardId` as a plain attribute (the only GSI on
+  // app-data is GSI1, used for per-user lookups). Scan + filter is acceptable
+  // here: this is an admin/analytics path, not a hot consumer query.
   const result = await documentClient.send(
-    new QueryCommand({
+    new ScanCommand({
       TableName: TableNames.appData,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'gsi1pk = :rewardId',
-      ExpressionAttributeValues: { ':rewardId': `REWARD#${rewardId}` },
+      FilterExpression: 'begins_with(pk, :prefix) AND rewardId = :rewardId',
+      ExpressionAttributeValues: { ':prefix': 'REDEMPTION#', ':rewardId': rewardId },
     }),
   )
   return (result.Items || []) as RewardRedemption[]
 }
 
 export async function getRedemptionsByUserId(userId: string): Promise<RewardRedemption[]> {
+  // Per-user lookup via GSI1 (`USER_REDEMPTIONS#{userId}`), newest first.
+  // This is the only secondary index on the app-data table — the previous
+  // implementation queried a non-existent "GSI2", so every wallet read threw.
   const result = await documentClient.send(
     new QueryCommand({
       TableName: TableNames.appData,
-      IndexName: 'GSI2',
-      KeyConditionExpression: 'gsi2pk = :userId',
-      ExpressionAttributeValues: { ':userId': `USER#${userId}` },
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'gsi1pk = :userKey',
+      ExpressionAttributeValues: { ':userKey': `USER_REDEMPTIONS#${userId}` },
+      ScanIndexForward: false,
     }),
   )
   return (result.Items || []) as RewardRedemption[]
@@ -157,11 +163,11 @@ export async function getRedemptionByRewardAndUser(rewardId: string, userId: str
     new QueryCommand({
       TableName: TableNames.appData,
       IndexName: 'GSI1',
-      KeyConditionExpression: 'gsi1pk = :rewardId',
-      FilterExpression: 'userId = :userId',
+      KeyConditionExpression: 'gsi1pk = :userKey',
+      FilterExpression: 'rewardId = :rewardId',
       ExpressionAttributeValues: {
-        ':rewardId': `REWARD#${rewardId}`,
-        ':userId': userId,
+        ':userKey': `USER_REDEMPTIONS#${userId}`,
+        ':rewardId': rewardId,
       },
       Limit: 1,
     }),
@@ -187,10 +193,8 @@ export async function createRedemption(
       Item: {
         pk: `REDEMPTION#${redemptionId}`,
         sk: `REDEMPTION#${redemptionId}`,
-        gsi1pk: `REWARD#${data.rewardId}`,
+        gsi1pk: `USER_REDEMPTIONS#${data.userId}`,
         gsi1sk: now,
-        gsi2pk: `USER#${data.userId}`,
-        gsi2sk: now,
         ...redemption,
       },
     }),

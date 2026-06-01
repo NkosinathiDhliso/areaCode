@@ -1,7 +1,8 @@
 import { Tabs } from 'expo-router'
 import { useTranslation } from 'react-i18next'
-import { ConnectivityBanner } from '../../src/components/ConnectivityBanner'
 import { View } from 'react-native'
+
+import { ConnectivityBanner } from '../../src/components/ConnectivityBanner'
 
 export default function TabsLayout() {
   const { t } = useTranslation()

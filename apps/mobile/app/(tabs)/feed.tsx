@@ -1,8 +1,9 @@
-import { View, Text, ScrollView, StyleSheet } from 'react-native'
-import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
 import { formatRelativeTime } from '@area-code/shared/lib/formatters'
+import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
+import { View, Text, ScrollView, StyleSheet } from 'react-native'
+
 import { AvatarCircle } from '../../src/components/AvatarCircle'
 import { SkeletonBox } from '../../src/components/Skeleton'
 import { colors } from '../../src/theme'

@@ -37,7 +37,28 @@ export function isSaveDataEnabled(): boolean {
 }
 
 export function hasGeolocation(): boolean {
+  if (injectedGeolocation) return true
   return isWeb && 'geolocation' in navigator
+}
+
+// ── Injectable geolocation (React Native) ────────────────────────────────────
+// On web we use the browser `navigator.geolocation` API. React Native has no
+// such global, so the native app injects an implementation backed by
+// `expo-location` at boot via `setGeolocationProvider`.
+
+interface GeolocationProvider {
+  getCurrentPosition(
+    onSuccess: (coords: { latitude: number; longitude: number; accuracy: number }) => void,
+    onError: (error: { code: number; PERMISSION_DENIED: number }) => void,
+    options?: { enableHighAccuracy?: boolean; timeout?: number; maximumAge?: number },
+  ): void
+}
+
+let injectedGeolocation: GeolocationProvider | null = null
+
+/** Wire a native geolocation implementation (e.g. expo-location). No-op on web. */
+export function setGeolocationProvider(provider: GeolocationProvider | null): void {
+  injectedGeolocation = provider
 }
 
 export function getCurrentPosition(
@@ -45,7 +66,11 @@ export function getCurrentPosition(
   onError: (error: { code: number; PERMISSION_DENIED: number }) => void,
   options?: { enableHighAccuracy?: boolean; timeout?: number; maximumAge?: number },
 ): void {
-  if (!hasGeolocation()) {
+  if (injectedGeolocation) {
+    injectedGeolocation.getCurrentPosition(onSuccess, onError, options)
+    return
+  }
+  if (!isWeb || !('geolocation' in navigator)) {
     onError({ code: 2, PERMISSION_DENIED: 1 })
     return
   }

@@ -1,11 +1,12 @@
-import { createElement, useEffect, useRef } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
-import mapboxgl from 'mapbox-gl'
+import { TIER_SIZE_MULTIPLIER } from '@area-code/shared/constants'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import type { Node, NodeCategory, NodeState } from '@area-code/shared/types'
-import { TIER_SIZE_MULTIPLIER } from '@area-code/shared/constants'
-import { getNodeState, getCategoryColour } from '../lib/mapHelpers'
+import mapboxgl from 'mapbox-gl'
+import { createElement, useEffect, useRef, useState } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+
 import { ArchetypeGlyph } from '../components/ArchetypeGlyph'
+import { getNodeState, getCategoryColour } from '../lib/mapHelpers'
 
 /**
  * Default Live_Archetype id used while no live value has arrived for a
@@ -14,6 +15,17 @@ import { ArchetypeGlyph } from '../components/ArchetypeGlyph'
  * blank.
  */
 const DEFAULT_ARCHETYPE_ID = 'archetype-eclectic'
+
+/**
+ * Below this zoom the detailed archetype icon is replaced with a simple
+ * category-coloured dot. At a city-overview zoom the markers pack together
+ * and the expressive icon detail (a mic, a crown, a vinyl) reads as visual
+ * noise; the dot keeps density legible. At or above the threshold the icon
+ * is the marker again. Default browsing zoom is 13, so the icon shows by
+ * default and only collapses to a dot when the user zooms out to the
+ * city/region overview.
+ */
+const GLYPH_ZOOM_THRESHOLD = 12.5
 
 /** Marker sub-element that owns the React glyph mount. */
 const GLYPH_HOST_LAYER = 'glyph-host'
@@ -313,6 +325,42 @@ export function useMapMarkers(
   const onNodeTapRef = useRef(onNodeTap)
   onNodeTapRef.current = onNodeTap
 
+  // Whether to render the detailed archetype icon (true) or a simple dot
+  // (false), driven by the live map zoom. Starts true so the default
+  // browsing zoom (13) shows icons immediately.
+  const [showIcon, setShowIcon] = useState(true)
+
+  // Track zoom and flip `showIcon` when crossing the threshold. Reading via
+  // state (not a ref) lets the marker effect below re-run and re-render every
+  // glyph host when the mode changes.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady) return
+
+    const syncFromZoom = () => {
+      let zoom = GLYPH_ZOOM_THRESHOLD
+      try {
+        zoom = map.getZoom()
+      } catch {
+        /* map gone */
+      }
+      setShowIcon((prev) => {
+        const next = zoom >= GLYPH_ZOOM_THRESHOLD
+        return prev === next ? prev : next
+      })
+    }
+
+    syncFromZoom()
+    map.on('zoom', syncFromZoom)
+    return () => {
+      try {
+        map.off('zoom', syncFromZoom)
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [mapRef, mapReady])
+
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReady) {
@@ -356,7 +404,15 @@ export function useMapMarkers(
         if (existing) {
           existing.setLngLat([node.lng, node.lat])
           updateMarkerElement(existing.getElement(), glyphSize, colour, state, score)
-          renderGlyph(glyphRootsRef.current, existing.getElement(), node.id, archetypeId, state, node.category)
+          renderGlyph(
+            glyphRootsRef.current,
+            existing.getElement(),
+            node.id,
+            archetypeId,
+            state,
+            node.category,
+            showIcon,
+          )
           continue
         }
 
@@ -367,7 +423,7 @@ export function useMapMarkers(
         const marker = new mapboxgl.Marker({ element: el, anchor: 'center' }).setLngLat([node.lng, node.lat]).addTo(map)
 
         markersRef.current.set(node.id, marker)
-        renderGlyph(glyphRootsRef.current, el, node.id, archetypeId, state, node.category)
+        renderGlyph(glyphRootsRef.current, el, node.id, archetypeId, state, node.category, showIcon)
       }
     }
 
@@ -381,7 +437,7 @@ export function useMapMarkers(
       cancelled = true
       map.off('load', addMarkers)
     }
-  }, [nodes, pulseScores, archetypeIds, categoryFilter, mapRef, mapReady])
+  }, [nodes, pulseScores, archetypeIds, categoryFilter, mapRef, mapReady, showIcon])
 
   // Tear down every glyph root on unmount so a remount of the map screen
   // doesn't leak React commits to dead DOM.
@@ -397,12 +453,14 @@ export function useMapMarkers(
 }
 
 /**
- * Mount or update the ArchetypeGlyph React subtree for a marker's
- * glyph host. The glyph is now the marker (no flag gate) — what the
- * `live_vibe_on_map` flag still gates is the live `node:archetype_change`
- * subscription in `MapScreen`, which controls how often the
- * `archetypeIds` cache updates. While the flag is off, the glyph still
- * renders using `defaultArchetypeId ?? 'archetype-eclectic'`.
+ * Mount or update the marker's React subtree for its glyph host.
+ *
+ * When `showIcon` is true the full `ArchetypeGlyph` is rendered. Below the
+ * zoom threshold (`showIcon` false) a simple category-coloured dot is rendered
+ * instead, so a packed city-overview reads as clean density rather than a
+ * collage of tiny detailed icons. The glyph is the marker either way — what
+ * the `live_vibe_on_map` flag gates is the live `node:archetype_change`
+ * subscription in `MapScreen`, not the rendering here.
  */
 function renderGlyph(
   roots: Map<string, Root>,
@@ -411,6 +469,7 @@ function renderGlyph(
   archetypeId: string,
   state: NodeState,
   category: NodeCategory,
+  showIcon: boolean,
 ): void {
   const host = markerEl.querySelector(`[data-layer="${GLYPH_HOST_LAYER}"]`) as HTMLElement | null
   if (!host) return
@@ -421,10 +480,38 @@ function renderGlyph(
     roots.set(nodeId, root)
   }
   root.render(
-    createElement(ArchetypeGlyph, {
-      archetypeId,
-      pulseState: state,
-      category,
-    }),
+    showIcon
+      ? createElement(ArchetypeGlyph, {
+          archetypeId,
+          pulseState: state,
+          category,
+        })
+      : createElement(DotMarker, { category, pulseState: state }),
   )
+}
+
+/**
+ * Simple category-coloured dot shown at city-overview zoom in place of the
+ * detailed archetype icon. Fills its host (the same `glyph-host` layer) so it
+ * inherits the marker wrapper's breathe / pulse animation and sizing.
+ */
+function DotMarker({ category, pulseState }: { category: NodeCategory; pulseState: NodeState }) {
+  const colour = getCategoryColour(category)
+  const opacity = pulseState === 'dormant' ? 0.55 : 1
+  return createElement('div', {
+    'aria-hidden': true,
+    style: {
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      width: '62%',
+      height: '62%',
+      transform: 'translate(-50%, -50%)',
+      borderRadius: '50%',
+      background: colour,
+      opacity,
+      boxShadow: `0 0 0 1.5px rgba(0,0,0,0.25)`,
+      pointerEvents: 'none',
+    },
+  })
 }

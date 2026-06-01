@@ -1,7 +1,31 @@
-const API_BASE_URL =
-  typeof import.meta !== 'undefined'
-    ? ((import.meta as unknown as Record<string, Record<string, string>>).env?.VITE_API_URL ?? 'http://localhost:4000')
-    : 'http://localhost:4000'
+/**
+ * Resolve the API base URL across platforms.
+ *
+ * Web (Vite): `import.meta.env.VITE_API_URL`.
+ * React Native (Expo): `process.env.EXPO_PUBLIC_API_URL` (inlined by Expo at
+ *   build time). `import.meta` is not available in the RN runtime, so the
+ *   guarded access below falls through to the process.env branch.
+ *
+ * Falls back to localhost for local dev. The native app may also call
+ * `api.setBaseUrl()` at boot to override this from `expo-constants` extra.
+ */
+function resolveApiBaseUrl(): string {
+  try {
+    if (typeof import.meta !== 'undefined') {
+      const env = (import.meta as unknown as Record<string, Record<string, string>>).env
+      if (env?.VITE_API_URL) return env.VITE_API_URL
+    }
+  } catch {
+    // `import.meta` access throws in some non-ESM/RN contexts — ignore.
+  }
+  if (typeof process !== 'undefined') {
+    const fromExpo = process.env?.['EXPO_PUBLIC_API_URL']
+    if (fromExpo) return fromExpo
+  }
+  return 'http://localhost:4000'
+}
+
+const API_BASE_URL = resolveApiBaseUrl()
 
 // Error toast handler — wired at app startup via setApiErrorHandler()
 let _showError: ((msg: string) => void) | null = null
@@ -72,6 +96,15 @@ class ApiClient {
 
   setTokenProvider(provider: () => string | null) {
     this.getToken = provider
+  }
+
+  /**
+   * Override the base URL at runtime. Used by the React Native app to set the
+   * API origin from `expo-constants` extra when the build-time env var isn't
+   * available. No-op-safe to call before any request.
+   */
+  setBaseUrl(url: string) {
+    if (url) this.baseUrl = url
   }
 
   setRefreshHandler(opts: {

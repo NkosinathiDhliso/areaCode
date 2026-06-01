@@ -435,6 +435,7 @@ export interface ServerToClientEvents {
     rewardTitle: string
     redemptionCode: string
     codeExpiresAt: string
+    nodeName?: string
   }) => void
   'reward:slots_update': (payload: { rewardId: string; slotsRemaining: number }) => void
   'leaderboard:update': (payload: { userId: string; rank: number; delta: number }) => void
@@ -442,6 +443,14 @@ export interface ServerToClientEvents {
   'business:reward_claimed': (payload: BusinessRewardClaimedPayload) => void
   'toast:friend_checkin': (payload: { type: 'checkin'; message: string; nodeId?: string; avatarUrl?: string }) => void
   'node:archetype_change': (payload: { nodeId: string; liveArchetypeId: string; branch: LiveArchetypeBranch }) => void
+  'tier:changed': (payload: { oldTier: string; newTier: string; benefits?: string[] }) => void
+  'notification:new': (payload: {
+    type: string
+    title: string
+    body: string
+    data: Record<string, unknown>
+    createdAt: string
+  }) => void
 }
 
 export interface ClientToServerEvents {

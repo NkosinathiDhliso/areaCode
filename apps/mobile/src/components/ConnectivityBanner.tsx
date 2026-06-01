@@ -1,6 +1,7 @@
-import { View, Text, StyleSheet } from 'react-native'
-import { useTranslation } from 'react-i18next'
 import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
+import { useTranslation } from 'react-i18next'
+import { View, Text, StyleSheet } from 'react-native'
+
 import { colors } from '../theme'
 
 export function ConnectivityBanner() {

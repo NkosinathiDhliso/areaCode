@@ -1,5 +1,6 @@
-import { View, Text, StyleSheet } from 'react-native'
 import type { Tier } from '@area-code/shared/types'
+import { View, Text, StyleSheet } from 'react-native'
+
 import { colors } from '../theme'
 
 interface NativeTierBadgeProps {

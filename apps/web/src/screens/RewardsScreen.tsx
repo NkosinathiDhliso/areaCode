@@ -6,10 +6,11 @@ import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
-import { useGeolocation } from '@area-code/shared/hooks'
+import { useGeolocation, useUnclaimedRewards } from '@area-code/shared/hooks'
 import { Skeleton } from '@area-code/shared/components/Skeleton'
 import { EmptyState } from '@area-code/shared/components/EmptyState'
 import { CountdownBadge } from '@area-code/shared/components/CountdownBadge'
+import { RedemptionCodeCard } from '@area-code/shared/components/RedemptionCodeCard'
 import { REWARD_EXPIRY_NOTICE } from '@area-code/shared/constants/legal'
 import type { AppRoute } from '../types'
 
@@ -66,6 +67,10 @@ export function RewardsScreen({ onNavigate }: RewardsScreenProps) {
     staleTime: 30_000,
   })
 
+  // Earned-but-unredeemed reward codes (the consumer's wallet). Surfaced at
+  // the top so the code a user just earned is immediately presentable to staff.
+  const { rewards: earnedCodes } = useUnclaimedRewards()
+
   /**
    * Tapping a reward card jumps to that venue on the map with its detail
    * sheet open. The map screen reads `focusNodeId` from the shared store and
@@ -104,6 +109,25 @@ export function RewardsScreen({ onNavigate }: RewardsScreenProps) {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-4" data-scroll-container>
+      {earnedCodes.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-[var(--text-primary)] font-bold text-lg font-[Syne] mb-1">{t('rewards.yourCodes')}</h2>
+          <p className="text-[var(--text-muted)] text-xs mb-3">{t('rewards.yourCodesHint')}</p>
+          <div className="flex flex-col gap-3">
+            {earnedCodes.map((c) => (
+              <RedemptionCodeCard
+                key={c.id}
+                rewardTitle={c.rewardTitle}
+                redemptionCode={c.redemptionCode}
+                nodeName={c.nodeName}
+                codeExpiresAt={c.codeExpiresAt}
+                hint={t('rewards.codeHint')}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-1">{t('rewards.nearYou')}</h1>
       <p className="text-[var(--text-muted)] text-xs mb-4">{REWARD_EXPIRY_NOTICE}</p>
 

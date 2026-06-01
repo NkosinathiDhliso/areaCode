@@ -77,6 +77,7 @@ export function emitRewardClaimed(
     rewardTitle: string
     redemptionCode: string
     codeExpiresAt: string
+    nodeName?: string
   },
 ) {
   getIO()?.to(userRoom(userId)).emit('reward:claimed', payload)

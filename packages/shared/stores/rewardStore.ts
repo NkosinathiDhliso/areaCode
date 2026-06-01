@@ -1,13 +1,31 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 
-import type { Reward, RewardRedemption } from '../types'
+import type { Reward } from '../types'
+
+/**
+ * A reward the consumer has earned but not yet had redeemed by staff.
+ * Carries the redemption code the consumer must present at the venue.
+ */
+export interface UnclaimedReward {
+  id: string
+  rewardTitle: string
+  rewardType?: string
+  redemptionCode: string
+  codeExpiresAt: string
+  nodeName: string
+  createdAt?: string
+}
 
 interface RewardState {
   activeRewards: Record<string, Reward[]>
-  unclaimedRewards: RewardRedemption[]
+  unclaimedRewards: UnclaimedReward[]
   setNodeRewards: (nodeId: string, rewards: Reward[]) => void
-  setUnclaimedRewards: (rewards: RewardRedemption[]) => void
+  setUnclaimedRewards: (rewards: UnclaimedReward[]) => void
+  /** Insert or replace a single earned reward (e.g. from a live socket event). */
+  upsertUnclaimedReward: (reward: UnclaimedReward) => void
+  /** Remove an earned reward once it's been redeemed or has expired. */
+  removeUnclaimedReward: (id: string) => void
   updateSlots: (rewardId: string, slotsRemaining: number) => void
 }
 
@@ -22,6 +40,19 @@ export const useRewardStore = create<RewardState>()(
     setUnclaimedRewards: (rewards) =>
       set((state) => {
         state.unclaimedRewards = rewards
+      }),
+    upsertUnclaimedReward: (reward) =>
+      set((state) => {
+        const idx = state.unclaimedRewards.findIndex((r) => r.id === reward.id)
+        if (idx >= 0) {
+          state.unclaimedRewards[idx] = reward
+        } else {
+          state.unclaimedRewards.unshift(reward)
+        }
+      }),
+    removeUnclaimedReward: (id) =>
+      set((state) => {
+        state.unclaimedRewards = state.unclaimedRewards.filter((r) => r.id !== id)
       }),
     updateSlots: (rewardId, slotsRemaining) =>
       set((state) => {

@@ -1,12 +1,12 @@
-import * as WebBrowser from 'expo-web-browser'
-import * as Linking from 'expo-linking'
-import Constants from 'expo-constants'
 import {
   randomPkceVerifier,
   pkceChallengeS256,
   buildHostedUiAuthorizeUrl,
   exchangeCodeForTokens,
 } from '@area-code/shared/lib/cognitoHostedUiOAuth'
+import Constants from 'expo-constants'
+import * as Linking from 'expo-linking'
+import * as WebBrowser from 'expo-web-browser'
 
 function apiUrl(): string {
   const v = typeof process !== 'undefined' ? process.env['EXPO_PUBLIC_API_URL']?.trim() : undefined
@@ -18,6 +18,7 @@ export async function signInWithGoogleConsumerMobile(): Promise<{
   refreshToken: string
   userId: string
   sessionId?: string
+  isNewUser?: boolean
 }> {
   const extra = Constants.expoConfig?.extra as {
     cognitoHostedUiDomain?: string
@@ -68,12 +69,13 @@ export async function signInWithGoogleConsumerMobile(): Promise<{
   })
 
   if (!syncRes.ok) throw new Error(`sync_${syncRes.status}`)
-  const sync = (await syncRes.json()) as { userId: string; sessionId?: string }
+  const sync = (await syncRes.json()) as { userId: string; sessionId?: string; isNewUser?: boolean }
 
   return {
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
     userId: sync.userId,
     sessionId: sync.sessionId,
+    isNewUser: sync.isNewUser,
   }
 }

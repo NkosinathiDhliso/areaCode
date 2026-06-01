@@ -18,8 +18,10 @@
  *      consumer's profile screen so the user can re-read it."
  */
 
+import { getArchetypeEtymology, getArchetypeIcon, FALLBACK_ARCHETYPE_ICON } from '@area-code/shared/constants'
 import { ARCHETYPE_CATALOG } from '@area-code/shared/constants/archetype-catalog'
-import { getArchetypeEtymology } from '@area-code/shared/constants'
+import * as PhosphorIcons from '@phosphor-icons/react'
+import type { Icon } from '@phosphor-icons/react'
 import { useTranslation } from 'react-i18next'
 
 import { resolveArchetypeDisplayName } from '../lib/archetypeDisplay'
@@ -28,6 +30,15 @@ const UNCHARTED_ARCHETYPE_ID = 'archetype-uncharted'
 
 interface ArchetypeRevealProps {
   archetypeId: string
+}
+
+/** Render the archetype's Phosphor icon at a given size. */
+function ArchetypeIcon({ iconId, size = 28 }: { iconId: string; size?: number }) {
+  const spec = getArchetypeIcon(iconId) ?? FALLBACK_ARCHETYPE_ICON
+  const registry = PhosphorIcons as unknown as Record<string, Icon | undefined>
+  const Component = registry[spec.name]
+  if (!Component) return null
+  return <Component size={size} weight={spec.weight} className="text-[var(--accent)]" />
 }
 
 export function ArchetypeReveal({ archetypeId }: ArchetypeRevealProps) {
@@ -60,7 +71,9 @@ export function ArchetypeReveal({ archetypeId }: ArchetypeRevealProps) {
   return (
     <>
       <div className="flex flex-row items-start gap-3 mb-3">
-        <span className="text-[var(--text-muted)] text-lg">{archetype.iconId}</span>
+        <span className="shrink-0 mt-0.5">
+          <ArchetypeIcon iconId={archetype.iconId} size={28} />
+        </span>
         <div className="flex-1">
           <p className="text-[var(--text-primary)] text-sm font-medium">{displayName}</p>
           {etymology && <p className="text-[var(--text-muted)] text-xs italic mt-0.5">{etymology}</p>}

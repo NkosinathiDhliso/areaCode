@@ -66,7 +66,7 @@ const TIER_THRESHOLDS = [
   { min: 0, tier: 'local' },
 ] as const
 
-function getTierForCount(count: number): string {
+export function getTierForCount(count: number): string {
   for (const t of TIER_THRESHOLDS) {
     if (count >= t.min) return t.tier
   }

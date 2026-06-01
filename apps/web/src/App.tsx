@@ -4,6 +4,8 @@ import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore
 import { useNavigationStore } from '@area-code/shared/stores/navigationStore'
 import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
 import { useTheme } from '@area-code/shared/hooks/useTheme'
+import { useRewardSocket } from '@area-code/shared/hooks/useRewardSocket'
+import { useNotificationSocket } from '@area-code/shared/hooks/useNotificationSocket'
 import { api } from '@area-code/shared/lib/api'
 import { getSocket } from '@area-code/shared/lib/socket'
 import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
@@ -17,6 +19,8 @@ import { FeedScreen } from './screens/FeedScreen'
 import { FriendsScreen } from './screens/FriendsScreen'
 import { ProfileScreen } from './screens/ProfileScreen'
 import { PrivacySettingsScreen } from './screens/PrivacySettingsScreen'
+import { NotificationCenter } from './screens/NotificationCenter'
+import { NotificationSettings } from './screens/NotificationSettings'
 import { CheckInHistoryScreen } from './screens/CheckInHistoryScreen'
 import { ConsumerLogin } from './screens/ConsumerLogin'
 import { ConsumerSignup } from './screens/ConsumerSignup'
@@ -56,6 +60,8 @@ const ROUTE_PATHS: Record<AppRoute, string> = {
   friends: '/friends',
   profile: '/profile',
   privacy: '/privacy',
+  notifications: '/notifications',
+  'notification-settings': '/notifications/settings',
   history: '/history',
   'legal-privacy': '/legal/privacy',
   'legal-terms': '/legal/terms',
@@ -73,6 +79,8 @@ function pathToRoute(path: string): AppRoute {
   if (path === '/friends') return 'friends'
   if (path === '/profile') return 'profile'
   if (path === '/privacy') return 'privacy'
+  if (path === '/notifications/settings') return 'notification-settings'
+  if (path === '/notifications') return 'notifications'
   if (path === '/history') return 'history'
   if (path === '/legal/privacy') return 'legal-privacy'
   if (path === '/legal/terms') return 'legal-terms'
@@ -98,6 +106,12 @@ function AppContent() {
 
   // Activate SAST time-based theme (06:00–18:00 light, 18:00–06:00 dark)
   useTheme()
+
+  // App-wide live subscriptions: reward codes land in the wallet and
+  // notification/tier events feed the notification center from any screen,
+  // not just the map. These no-op until a token is present.
+  useRewardSocket(accessToken ?? undefined)
+  useNotificationSocket(accessToken ?? undefined)
 
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [onboardingChecked, setOnboardingChecked] = useState(false)
@@ -235,7 +249,17 @@ function AppContent() {
   }
 
   // Gated routes for unauthenticated users fall back to the auth landing
-  const GATED: ReadonlyArray<AppRoute> = ['gets', 'ranks', 'feed', 'friends', 'profile', 'privacy', 'history']
+  const GATED: ReadonlyArray<AppRoute> = [
+    'gets',
+    'ranks',
+    'feed',
+    'friends',
+    'profile',
+    'privacy',
+    'notifications',
+    'notification-settings',
+    'history',
+  ]
   const showAuthGate = !isAuthenticated && GATED.includes(activeRoute)
 
   return (
@@ -262,6 +286,8 @@ function AppContent() {
             {activeRoute === 'friends' && <FriendsScreen />}
             {activeRoute === 'profile' && <ProfileScreen onNavigate={setRoute} />}
             {activeRoute === 'privacy' && <PrivacySettingsScreen onNavigate={setRoute} />}
+            {activeRoute === 'notifications' && <NotificationCenter onNavigate={setRoute} />}
+            {activeRoute === 'notification-settings' && <NotificationSettings onNavigate={setRoute} />}
             {activeRoute === 'history' && <CheckInHistoryScreen onNavigate={setRoute} />}
           </>
         )}

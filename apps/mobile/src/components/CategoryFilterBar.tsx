@@ -1,8 +1,9 @@
-import { useState } from 'react'
-import { ScrollView, TouchableOpacity, Text, StyleSheet } from 'react-native'
-import { useTranslation } from 'react-i18next'
 import { NODE_CATEGORIES } from '@area-code/shared/constants/node-categories'
 import type { NodeCategory } from '@area-code/shared/types'
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { ScrollView, TouchableOpacity, Text, StyleSheet } from 'react-native'
+
 import { colors } from '../theme'
 
 interface CategoryFilterBarProps {

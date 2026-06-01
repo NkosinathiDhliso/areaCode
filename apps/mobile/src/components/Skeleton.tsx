@@ -1,4 +1,5 @@
 import { View, StyleSheet } from 'react-native'
+
 import { colors } from '../theme'
 
 interface SkeletonBoxProps {

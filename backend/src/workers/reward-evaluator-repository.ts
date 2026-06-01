@@ -34,12 +34,23 @@ export async function createRedemption(data: {
   userId: string
   redemptionCode: string
   codeExpiresAt: string
+  businessId?: string
+  nodeId?: string
+  nodeName?: string
+  rewardTitle?: string
 }) {
   const redemptionId = generateId()
   const now = new Date().toISOString()
-  const item = {
+  // Canonical redemption row. The `sk` MUST mirror `pk` so that
+  // `markRedemptionAsRedeemed` (which keys on { pk: REDEMPTION#id, sk:
+  // REDEMPTION#id }) updates THIS row rather than silently creating a
+  // phantom one. Per-user lookups go through GSI1 (`USER_REDEMPTIONS#`),
+  // which is the only secondary index that exists on the app-data table.
+  // `businessId` is denormalised on so the staff-leaderboard scan and the
+  // business redemption reports can filter without a node round-trip.
+  const item: Record<string, unknown> = {
     pk: `REDEMPTION#${redemptionId}`,
-    sk: `USER#${data.userId}`,
+    sk: `REDEMPTION#${redemptionId}`,
     gsi1pk: `USER_REDEMPTIONS#${data.userId}`,
     gsi1sk: now,
     redemptionId,
@@ -50,6 +61,10 @@ export async function createRedemption(data: {
     redeemedAt: null,
     createdAt: now,
   }
+  if (data.businessId) item['businessId'] = data.businessId
+  if (data.nodeId) item['nodeId'] = data.nodeId
+  if (data.nodeName) item['nodeName'] = data.nodeName
+  if (data.rewardTitle) item['rewardTitle'] = data.rewardTitle
   await documentClient.send(new PutCommand({ TableName: TableNames.appData, Item: item }))
   return { id: redemptionId, ...data, createdAt: now }
 }

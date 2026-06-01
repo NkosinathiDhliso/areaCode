@@ -8,6 +8,7 @@ import { authRoutes } from './features/auth/handler.js'
 import { sessionRoutes } from './features/auth/session-handler.js'
 import { profileRoutes } from './features/auth/profile-handler.js'
 import { businessRoutes } from './features/business/handler.js'
+import { campaignRoutes, campaignConsumerRoutes } from './features/campaigns/handler.js'
 import { notificationRoutes } from './features/notifications/handler.js'
 import { musicRoutes } from './features/music/handler.js'
 import { nodeRoutes } from './features/nodes/handler.js'
@@ -88,6 +89,9 @@ export async function buildApp() {
       if ('cooldownUntil' in error) {
         body['cooldownUntil'] = (error as AppError & { cooldownUntil: string }).cooldownUntil
       }
+      if ('remaining' in error && typeof (error as AppError & { remaining: unknown }).remaining === 'number') {
+        body['remaining'] = (error as AppError & { remaining: number }).remaining
+      }
       return reply.status(error.statusCode).send(body)
     }
 
@@ -160,6 +164,8 @@ export async function buildApp() {
   await app.register(staffRoutes)
   await app.register(privacyRoutes)
   await app.register(reportRoutes)
+  await app.register(campaignRoutes)
+  await app.register(campaignConsumerRoutes)
 
   return app
 }

@@ -1,11 +1,12 @@
-import { View, Text, ScrollView, StyleSheet } from 'react-native'
-import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
 import type { LeaderboardEntry, Tier } from '@area-code/shared/types'
-import { SkeletonBox } from '../../src/components/Skeleton'
+import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
+import { View, Text, ScrollView, StyleSheet } from 'react-native'
+
 import { AvatarCircle } from '../../src/components/AvatarCircle'
 import { NativeTierBadge } from '../../src/components/NativeTierBadge'
+import { SkeletonBox } from '../../src/components/Skeleton'
 import { colors } from '../../src/theme'
 
 interface LeaderboardResponse {

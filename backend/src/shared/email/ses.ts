@@ -43,3 +43,56 @@ export async function sendTrialExpiryEmail(to: string, businessName: string, day
     }),
   )
 }
+
+/**
+ * Sends a promotional win-back campaign email on behalf of a business.
+ *
+ * Unlike the transactional senders above, this is marketing email, so it MUST
+ * carry a working unsubscribe affordance (POPIA / Requirement 12.2):
+ *   - a `List-Unsubscribe` header (plus `List-Unsubscribe-Post` for one-click
+ *     unsubscribe per RFC 8058), added via the SESv2 Simple-content `Headers`
+ *     field, and
+ *   - a visible unsubscribe link in both the text and HTML bodies.
+ *
+ * Email-only delivery — there is no phone/SMS path here (Constraint C1).
+ */
+export async function sendCampaignEmail(
+  to: string,
+  businessName: string,
+  subject: string,
+  bodyText: string,
+  unsubscribeUrl: string,
+): Promise<void> {
+  await ses.send(
+    new SendEmailCommand({
+      FromEmailAddress: FROM_EMAIL,
+      Destination: { ToAddresses: [to] },
+      Content: {
+        Simple: {
+          Headers: [
+            { Name: 'List-Unsubscribe', Value: `<${unsubscribeUrl}>` },
+            { Name: 'List-Unsubscribe-Post', Value: 'List-Unsubscribe=One-Click' },
+          ],
+          Subject: { Data: subject },
+          Body: {
+            Text: {
+              Data: `${bodyText}\n\n---\nYou're receiving this because you've visited ${businessName}.\nUnsubscribe: ${unsubscribeUrl}`,
+            },
+            Html: {
+              Data: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:20px"><p style="color:#333;font-size:16px;line-height:1.5;white-space:pre-wrap">${escapeHtml(bodyText)}</p><hr style="border:none;border-top:1px solid #eee;margin:24px 0"><p style="color:#999;font-size:12px">You're receiving this because you've visited ${escapeHtml(businessName)}. <a href="${unsubscribeUrl}" style="color:#6366f1">Unsubscribe</a>.</p></div>`,
+            },
+          },
+        },
+      },
+    }),
+  )
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}

@@ -1,8 +1,13 @@
-import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet, Linking, Platform } from 'react-native'
-import { useTranslation } from 'react-i18next'
-import type { Node } from '@area-code/shared/types'
+import { api } from '@area-code/shared/lib/api'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
+import type { Node, Reward } from '@area-code/shared/types'
+import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
+import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet, Linking, Platform } from 'react-native'
+
 import { colors } from '../theme'
+
+import { CrowdVibeSection } from './CrowdVibeSection'
 
 interface NodeDetailSheetProps {
   node: Node | null
@@ -40,9 +45,17 @@ export function NodeDetailSheet({ node, pulseScore, isOpen, onClose, onCheckIn }
   const { t } = useTranslation()
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
 
+  const { data: rewards } = useQuery({
+    queryKey: ['node-rewards', node?.id],
+    queryFn: () => api.get<{ items: Reward[] }>(`/v1/nodes/${node!.id}/rewards`).then((r) => r.items),
+    enabled: !!node && isOpen,
+    staleTime: 30_000,
+  })
+
   if (!node) return null
 
   const state = getNodeState(pulseScore)
+  const activeRewards = rewards?.filter((r) => r.isActive) ?? []
 
   return (
     <Modal visible={isOpen} animationType="slide" transparent onRequestClose={onClose}>
@@ -57,6 +70,29 @@ export function NodeDetailSheet({ node, pulseScore, isOpen, onClose, onCheckIn }
               <View style={[styles.stateDot, { backgroundColor: stateColor(state) }]} />
               <Text style={styles.stateText}>{state}</Text>
             </View>
+
+            {activeRewards.length > 0 && (
+              <View style={styles.rewardsSection}>
+                <Text style={styles.rewardsHeading}>{t('node.activeRewards')}</Text>
+                {activeRewards.map((reward) => {
+                  const slotsLeft = reward.totalSlots ? reward.totalSlots - reward.claimedCount : null
+                  const isLow = slotsLeft !== null && slotsLeft <= 5
+                  return (
+                    <View key={reward.id} style={styles.rewardRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.rewardTitle}>{reward.title}</Text>
+                        {reward.description ? <Text style={styles.rewardDesc}>{reward.description}</Text> : null}
+                      </View>
+                      {slotsLeft !== null && (
+                        <Text style={[styles.rewardSlots, isLow && styles.rewardSlotsLow]}>
+                          {slotsLeft} {t('node.left')}
+                        </Text>
+                      )}
+                    </View>
+                  )
+                })}
+              </View>
+            )}
 
             {isAuthenticated ? (
               <TouchableOpacity style={styles.checkInButton} onPress={onCheckIn}>
@@ -73,6 +109,8 @@ export function NodeDetailSheet({ node, pulseScore, isOpen, onClose, onCheckIn }
             >
               <Text style={styles.directionsText}>{t('node.directions', 'Get directions')}</Text>
             </TouchableOpacity>
+
+            <CrowdVibeSection nodeId={node.id} />
           </ScrollView>
         </View>
       </View>
@@ -120,6 +158,30 @@ const styles = StyleSheet.create({
   category: { color: colors.textSecondary, fontSize: 13, textTransform: 'capitalize' },
   stateDot: { width: 8, height: 8, borderRadius: 4 },
   stateText: { color: colors.textSecondary, fontSize: 13, textTransform: 'capitalize' },
+  rewardsSection: { gap: 8, marginBottom: 8 },
+  rewardsHeading: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  rewardRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    backgroundColor: colors.bgSurface,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  rewardTitle: { color: colors.textPrimary, fontSize: 14, fontWeight: '500' },
+  rewardDesc: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+  rewardSlots: { color: colors.textMuted, fontSize: 12, fontWeight: '500' },
+  rewardSlotsLow: { color: colors.danger },
   checkInButton: {
     backgroundColor: colors.accent,
     borderRadius: 12,

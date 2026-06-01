@@ -16,6 +16,15 @@ interface CheckInMessage {
 }
 
 /**
+ * How long a generated redemption code stays valid. Set to 24h so a
+ * consumer who earns a reward has a realistic window to walk up to the
+ * counter and present the code — the original 10-minute TTL expired
+ * before most users could reach the till, which (combined with the
+ * missing consumer wallet UI) made rewards effectively unredeemable.
+ */
+const REDEMPTION_CODE_TTL_MS = 24 * 60 * 60 * 1000
+
+/**
  * SQS reward-evaluator Lambda.
  * Triggered by check-in SQS messages. Evaluates all active rewards
  * at the node for the user and auto-claims qualified ones.
@@ -37,7 +46,7 @@ async function evaluateRewards(userId: string, nodeId: string) {
     if (slots !== null && (reward.claimedCount ?? 0) >= slots) continue
 
     const code = generateRedemptionCode()
-    const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+    const codeExpiresAt = new Date(Date.now() + REDEMPTION_CODE_TTL_MS).toISOString()
 
     try {
       await repo.createRedemption({
@@ -45,6 +54,10 @@ async function evaluateRewards(userId: string, nodeId: string) {
         userId,
         redemptionCode: code,
         codeExpiresAt,
+        ...(reward.node?.businessId ? { businessId: reward.node.businessId } : {}),
+        nodeId,
+        ...(reward.node?.name ? { nodeName: reward.node.name } : {}),
+        rewardTitle: reward.title,
       })
     } catch {
       continue // ON CONFLICT , already claimed
@@ -77,6 +90,7 @@ async function emitClaimEvents(
       rewardTitle: reward.title,
       redemptionCode: code,
       codeExpiresAt,
+      nodeName: reward.node?.name ?? '',
     })
   } else {
     // Deliver via push notification (Expo / Web Push)
