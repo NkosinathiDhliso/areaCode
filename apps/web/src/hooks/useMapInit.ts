@@ -12,6 +12,13 @@ const DEFAULT_ZOOM = 13
 const PITCH_3D = 55
 const PITCH_FLAT = 0
 const BEARING_3D = -17
+// Duration of the pitch/bearing easeTo when toggling between 3D and flat.
+const PITCH_ANIMATION_MS = 800
+// How long to suspend idle bearing-drift while that easeTo plays out. The
+// drift loop calls map.setBearing() every frame, which stops any in-flight
+// camera animation, so it must stay paused until the toggle finishes (plus a
+// small buffer) or the restore-to-3D animation gets cancelled mid-flight.
+const PITCH_DRIFT_PAUSE_MS = PITCH_ANIMATION_MS + 400
 
 type ThemeMode = 'light' | 'dark'
 
@@ -296,20 +303,30 @@ export function useMapInit() {
     }
   }, [])
 
-  const setPitch3D = useCallback((on: boolean) => {
-    setIs3D(on)
-    const map = singletonMap
-    if (!map) return
-    try {
-      map.easeTo({
-        pitch: on ? PITCH_3D : PITCH_FLAT,
-        bearing: on ? BEARING_3D : 0,
-        duration: 800,
-      })
-    } catch {
-      /* ignore */
-    }
-  }, [])
+  const setPitch3D = useCallback(
+    (on: boolean) => {
+      setIs3D(on)
+      const map = singletonMap
+      if (!map) return
+      // Suspend idle bearing-drift across the easeTo. The drift loop calls
+      // map.setBearing() each frame, which stops any in-flight camera
+      // animation. Without this pause, re-entering 3D from 2D would have the
+      // pitch easeTo cancelled on the very next animation frame, leaving the
+      // map stuck flat. (Going 3D→2D is unaffected because the drift effect
+      // tears itself down when is3D flips to false.)
+      pauseIdleDrift(PITCH_DRIFT_PAUSE_MS)
+      try {
+        map.easeTo({
+          pitch: on ? PITCH_3D : PITCH_FLAT,
+          bearing: on ? BEARING_3D : 0,
+          duration: PITCH_ANIMATION_MS,
+        })
+      } catch {
+        /* ignore */
+      }
+    },
+    [pauseIdleDrift],
+  )
 
   /**
    * Snap the bearing back to north when the user taps Compass_Button.

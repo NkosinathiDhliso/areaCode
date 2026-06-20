@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useNavigationStore } from '@area-code/shared/stores/navigationStore'
 import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
+import { useMapStore } from '@area-code/shared/stores/mapStore'
 import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { useRewardSocket } from '@area-code/shared/hooks/useRewardSocket'
 import { useNotificationSocket } from '@area-code/shared/hooks/useNotificationSocket'
@@ -103,6 +104,7 @@ function AppContent() {
   const setOnline = useConnectivityStore((s) => s.setOnline)
   const setApiOnly = useConnectivityStore((s) => s.setApiOnly)
   const setOffline = useConnectivityStore((s) => s.setOffline)
+  const setFocusNodeSlug = useMapStore((s) => s.setFocusNodeSlug)
 
   // Activate SAST time-based theme (06:00–18:00 light, 18:00–06:00 dark)
   useTheme()
@@ -143,6 +145,26 @@ function AppContent() {
     }
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  // Shared-venue deep link: /node/{slug}
+  // When someone opens a link shared from the NodeDetail "Share" action
+  // (https://areacode.co.za/node/{slug}), stash the slug for the map screen to
+  // resolve, then send them to the map. The map flies to the venue and opens
+  // its detail sheet once the city nodes have loaded. Works for both
+  // authenticated and unauthenticated visitors — the latter land on the map's
+  // public view and can still see the shared venue. Without this, the path
+  // fell through to `landing` and the recipient never found the node.
+  useEffect(() => {
+    const nodeMatch = window.location.pathname.match(/^\/node\/([^/?#]+)/)
+    const slug = nodeMatch?.[1]
+    if (slug) {
+      setFocusNodeSlug(decodeURIComponent(slug))
+      setRouteState('map')
+      window.history.replaceState({ route: 'map' }, '', ROUTE_PATHS.map)
+    }
+    // Run once on mount: this consumes the initial shared URL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Reset time-based nav default on fresh app open

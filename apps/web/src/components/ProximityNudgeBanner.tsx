@@ -66,7 +66,8 @@ export function ProximityNudgeBanner({ onNavigate }: ProximityNudgeBannerProps) 
     <div
       data-testid="proximity-nudge-banner"
       role="status"
-      className="absolute top-3 left-3 right-3 z-30 bg-[var(--bg-raised)] border border-[var(--accent)] rounded-2xl p-3 shadow-lg flex flex-row items-center gap-3"
+      className="absolute left-3 right-3 z-30 bg-[var(--bg-raised)] border border-[var(--accent)] rounded-2xl p-3 shadow-lg flex flex-row items-center gap-3"
+      style={{ top: 'max(0.75rem, env(safe-area-inset-top))' }}
     >
       <MapPin size={20} strokeWidth={1.5} className="text-[var(--accent)] shrink-0" />
       <div className="flex-1 min-w-0">

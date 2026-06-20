@@ -12,8 +12,10 @@ export function CategoryFilterBar({ onFilter }: CategoryFilterBarProps) {
   const [active, setActive] = useState<NodeCategory | null>(null)
 
   function handleTap(category: NodeCategory | null) {
-    setActive(category)
-    onFilter(category)
+    // Tapping the active category deselects it (returns to All).
+    const next = category !== null && active === category ? null : category
+    setActive(next)
+    onFilter(next)
   }
 
   return (

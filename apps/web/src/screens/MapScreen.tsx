@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { MapPinOff } from 'lucide-react'
+import { MapPinOff, Search } from 'lucide-react'
 
 import { api } from '@area-code/shared/lib/api'
 import { useMapStore, useConsumerAuthStore, useLocationStore, useUserStore } from '@area-code/shared/stores'
+import { useErrorStore } from '@area-code/shared/stores/errorStore'
 import { useGeolocation, useCheckIn, useNodeArchetype, useCityPulseToast } from '@area-code/shared/hooks'
 import { useLiveVibeOnMap } from '@area-code/shared/lib/featureGating'
 import { Spinner } from '@area-code/shared/components/Spinner'
@@ -79,6 +80,8 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const nodesById = useMapStore((s) => s.nodes)
   const focusNodeId = useMapStore((s) => s.focusNodeId)
   const setFocusNodeId = useMapStore((s) => s.setFocusNodeId)
+  const focusNodeSlug = useMapStore((s) => s.focusNodeSlug)
+  const setFocusNodeSlug = useMapStore((s) => s.setFocusNodeSlug)
   const accessToken = useConsumerAuthStore((s) => s.accessToken)
   const permissionState = useLocationStore((s) => s.permissionState)
   const lastKnownPosition = useLocationStore((s) => s.lastKnownPosition)
@@ -101,6 +104,13 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const [signupOpen, setSignupOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState<NodeCategory | null>(null)
+
+  // Reset the filter whenever the user's city changes so stale category
+  // selections don't carry over to a city that may have no matching nodes.
+  useEffect(() => {
+    setCategoryFilter(null)
+  }, [citySlug])
+
   const [primingOpen, setPrimingOpen] = useState(false)
   const [primingShownThisSession, setPrimingShownThisSession] = useState(false)
 
@@ -177,6 +187,31 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     mapRef.current?.flyTo({ center: [node.lng, node.lat], zoom: 14 })
     setFocusNodeId(null)
   }, [focusNodeId, mapReady, nodesById, mapRef, setFocusNodeId, resetQrFallback])
+
+  // Shared deep link focus: a recipient opening /node/{slug} arrives here with
+  // focusNodeSlug set (see App.tsx). Resolve the slug against the loaded city
+  // nodes, fly to it and open its detail sheet. If the slug isn't in this
+  // city's node set (different city, inactive, or bad link) we surface a
+  // gentle toast rather than silently stranding the user on the map.
+  useEffect(() => {
+    if (!focusNodeSlug || !mapReady) return
+    // Wait for the city nodes to load before deciding the slug is unknown.
+    const loaded = Object.values(nodesById)
+    if (loaded.length === 0) return
+    const node = loaded.find((n) => n.slug === focusNodeSlug)
+    if (node) {
+      setSelectedNode(node)
+      setSheetOpen(true)
+      setSheetOpenedFromFocus(true)
+      resetQrFallback()
+      mapRef.current?.flyTo({ center: [node.lng, node.lat], zoom: 14 })
+    } else {
+      useErrorStore
+        .getState()
+        .showError(t('share.nodeNotFound', "That venue isn't available here. It may have moved or closed."))
+    }
+    setFocusNodeSlug(null)
+  }, [focusNodeSlug, mapReady, nodesById, mapRef, setFocusNodeSlug, resetQrFallback, t])
 
   // Fetch rewards for the selected node
   const { data: nodeRewards } = useQuery({
@@ -266,8 +301,22 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
         </div>
       )}
 
-      <div className="absolute top-4 left-0 right-0 z-10 pointer-events-none [&>*]:pointer-events-auto">
-        <CategoryFilterBar onFilter={setCategoryFilter} />
+      <div
+        className="absolute left-0 right-0 z-10 pointer-events-none [&>*]:pointer-events-auto"
+        style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
+      >
+        <div className="flex items-center gap-2 pl-3 pr-1">
+          <button
+            onClick={() => setSearchOpen(true)}
+            aria-label={t('search.open', 'Search venues')}
+            className="shrink-0 glass-raised rounded-full w-9 h-9 flex items-center justify-center text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
+          >
+            <Search size={18} strokeWidth={1.75} />
+          </button>
+          <div className="flex-1 min-w-0">
+            <CategoryFilterBar key={citySlug} onFilter={setCategoryFilter} />
+          </div>
+        </div>
       </div>
 
       {mapReady && !mapError && (
@@ -284,7 +333,10 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
       {/* Location banner, non-blocking */}
       {showLocationBanner && (
-        <div className="absolute top-16 left-4 right-4 z-20">
+        <div
+          className="absolute left-4 right-4 z-20"
+          style={{ top: 'max(4.5rem, calc(env(safe-area-inset-top) + 3rem))' }}
+        >
           <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl px-4 py-3 flex items-center justify-between">
             <div className="flex-1 mr-3">
               <p className="text-[var(--text-primary)] text-xs font-medium">{t('location.permissionTitle')}</p>

@@ -54,7 +54,7 @@ export function StaffHome() {
   return (
     <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
       <header
-        className="flex flex-row items-center justify-between px-5 py-4 border-b border-[var(--border)]"
+        className="flex flex-row items-center justify-between px-5 py-4 border-b border-[var(--border)] shrink-0"
         style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}
       >
         <div className="flex flex-col">
@@ -66,10 +66,26 @@ export function StaffHome() {
         </button>
       </header>
 
-      <StaffValidator />
-      <FirstGetIssuer />
-      <MyRank />
-      <RecentRedemptions />
+      {/*
+        Single scroll container for the whole shift surface. Previously these
+        sections were stacked directly in the h-dvh column with only
+        RecentRedemptions set to flex-1/overflow — on short phones the
+        validator + first-get + rank cards alone overflowed the viewport, the
+        scroll region collapsed to zero height, and the lower cards were cut
+        off and unreachable. A plain block scroll wrapper lets the entire
+        surface scroll as one, with bottom safe-area padding so the last card
+        clears the home indicator.
+      */}
+      <div
+        className="flex-1 overflow-y-auto"
+        style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}
+        data-scroll-container
+      >
+        <StaffValidator />
+        <FirstGetIssuer />
+        <MyRank />
+        <RecentRedemptions />
+      </div>
     </div>
   )
 }

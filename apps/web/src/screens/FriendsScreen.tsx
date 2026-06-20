@@ -131,9 +131,9 @@ function FollowingTab() {
           className="flex flex-row items-center gap-3 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3"
         >
           <Avatar url={u.avatarUrl} displayName={u.displayName} size="sm" tier={u.tier} />
-          <div className="flex-1">
-            <p className="text-[var(--text-primary)] text-sm font-medium">{u.displayName}</p>
-            <p className="text-[var(--text-muted)] text-xs">@{u.username}</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-[var(--text-primary)] text-sm font-medium truncate">{u.displayName}</p>
+            <p className="text-[var(--text-muted)] text-xs truncate">@{u.username}</p>
           </div>
           {u.isMutual && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--success)]/10 text-[var(--success)]">
@@ -191,9 +191,9 @@ function FollowersTab() {
           className="flex flex-row items-center gap-3 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3"
         >
           <Avatar url={u.avatarUrl} displayName={u.displayName} size="sm" tier={u.tier} />
-          <div className="flex-1">
-            <p className="text-[var(--text-primary)] text-sm font-medium">{u.displayName}</p>
-            <p className="text-[var(--text-muted)] text-xs">@{u.username}</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-[var(--text-primary)] text-sm font-medium truncate">{u.displayName}</p>
+            <p className="text-[var(--text-muted)] text-xs truncate">@{u.username}</p>
           </div>
           {u.isFollowingBack ? (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--success)]/10 text-[var(--success)]">
@@ -270,9 +270,9 @@ function SearchTab({ search, setSearch }: { search: string; setSearch: (s: strin
               className="flex flex-row items-center gap-3 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3"
             >
               <Avatar url={u.avatarUrl} displayName={u.displayName} size="sm" tier={u.tier} />
-              <div className="flex-1">
-                <p className="text-[var(--text-primary)] text-sm font-medium">{u.displayName}</p>
-                <p className="text-[var(--text-muted)] text-xs">@{u.username}</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-[var(--text-primary)] text-sm font-medium truncate">{u.displayName}</p>
+                <p className="text-[var(--text-muted)] text-xs truncate">@{u.username}</p>
               </div>
               <TierBadge tier={u.tier} />
               {u.isMutual ? (
@@ -314,9 +314,9 @@ function UserRow({ user, badge, badgeColor }: { user: FriendEntry; badge?: strin
   return (
     <div className="flex flex-row items-center gap-3 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3">
       <Avatar url={user.avatarUrl} displayName={user.displayName} size="sm" tier={user.tier} />
-      <div className="flex-1">
-        <p className="text-[var(--text-primary)] text-sm font-medium">{user.displayName}</p>
-        <p className="text-[var(--text-muted)] text-xs">@{user.username}</p>
+      <div className="flex-1 min-w-0">
+        <p className="text-[var(--text-primary)] text-sm font-medium truncate">{user.displayName}</p>
+        <p className="text-[var(--text-muted)] text-xs truncate">@{user.username}</p>
       </div>
       <TierBadge tier={user.tier} />
       {badge && (

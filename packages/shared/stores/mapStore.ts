@@ -20,6 +20,14 @@ interface MapStore {
    * the focus.
    */
   focusNodeId: string | null
+  /**
+   * Cross-screen focus signal keyed by slug, set when a shared deep link
+   * (`/node/{slug}`) is opened. The map screen resolves the slug against the
+   * loaded city nodes, flies to the venue and opens its detail sheet, then
+   * clears the signal. Slug (not id) is used because shared URLs only carry
+   * the human-readable slug.
+   */
+  focusNodeSlug: string | null
   setNodes: (nodes: Node[]) => void
   addNode: (node: Node) => void
   updateNodePulse: (nodeId: string, score: number) => void
@@ -33,6 +41,7 @@ interface MapStore {
   clearArchetypeId: (nodeId: string) => void
   setMapInstance: (instance: MapInstance | null) => void
   setFocusNodeId: (nodeId: string | null) => void
+  setFocusNodeSlug: (slug: string | null) => void
 }
 
 export const useMapStore = create<MapStore>()(
@@ -42,11 +51,16 @@ export const useMapStore = create<MapStore>()(
     archetypeIds: {},
     mapInstance: null,
     focusNodeId: null,
+    focusNodeSlug: null,
     setNodes: (nodes) =>
       set((state) => {
+        // Replace the entire nodes record so nodes removed from the backend
+        // (or from a different city) don't persist as ghost markers.
+        const fresh: Record<string, Node> = {}
         for (const node of nodes) {
-          state.nodes[node.id] = node
+          fresh[node.id] = node
         }
+        state.nodes = fresh
       }),
     addNode: (node) =>
       set((state) => {
@@ -71,6 +85,10 @@ export const useMapStore = create<MapStore>()(
     setFocusNodeId: (nodeId) =>
       set((state) => {
         state.focusNodeId = nodeId
+      }),
+    setFocusNodeSlug: (slug) =>
+      set((state) => {
+        state.focusNodeSlug = slug
       }),
   })),
 )

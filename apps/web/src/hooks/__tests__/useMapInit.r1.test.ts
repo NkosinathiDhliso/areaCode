@@ -351,6 +351,40 @@ describe('useMapInit (R1 sidebar correctness)', () => {
     expect(map.easeTo).toHaveBeenCalledTimes(1)
   })
 
+  it('eases the pitch back up when re-entering 3D from 2D, and idle drift does not cancel it', () => {
+    // Regression: switching to 2D then back to 3D left the map stuck flat.
+    // The idle bearing-drift RAF loop calls map.setBearing() every frame,
+    // which stops any in-flight camera animation. setPitch3D must pause that
+    // drift across its easeTo so the pitch climb to 55° survives.
+    const { handle, map } = setup()
+
+    // Flatten to 2D.
+    act(() => {
+      handle.hook.setPitch3D(false)
+    })
+    const flattenCall = map.easeTo.mock.calls.at(-1)?.[0] as { pitch: number }
+    expect(flattenCall.pitch).toBe(0)
+
+    map.easeTo.mockClear()
+
+    // Re-enter 3D.
+    act(() => {
+      handle.hook.setPitch3D(true)
+    })
+    const liftCall = map.easeTo.mock.calls.at(-1)?.[0] as { pitch: number; bearing: number }
+    expect(liftCall.pitch).toBe(55)
+    expect(liftCall.bearing).toBe(-17)
+
+    // The drift loop must stay paused for the duration of the lift animation,
+    // so it does not call setBearing() (which would cancel the easeTo) on the
+    // frames immediately following the toggle.
+    const setBearingCallsBefore = map.setBearing.mock.calls.length
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
+    expect(map.setBearing.mock.calls.length).toBe(setBearingCallsBefore)
+  })
+
   it('debounces a double-tap of either button when wired through the MapControls 250ms guard (R1.8)', () => {
     // This exercises the documented composition: MapControls owns the
     // 250ms `lastTapAt` ref; the hook trusts the component to debounce.
