@@ -234,6 +234,12 @@ export interface CheckIn {
   checkedInAt: string
 }
 
+// Get category discriminator (event/offer gets). Absent => treated as 'loyalty'.
+export type GetCategory = 'loyalty' | 'event' | 'offer'
+
+// Lifecycle state for event/offer gets, derived from [startsAt, endsAt) at read time.
+export type GetLifecycle = 'upcoming' | 'live' | 'ended'
+
 export interface Reward {
   id: string
   nodeId: string
@@ -247,6 +253,12 @@ export interface Reward {
   isActive: boolean
   expiresAt: string | null
   createdAt: string
+  // Event & Offer gets (additive, optional on disk; absent getCategory => loyalty)
+  getCategory?: GetCategory
+  startsAt?: string
+  endsAt?: string
+  claimRequiresCheckIn?: boolean
+  lifecycle?: GetLifecycle
 }
 
 export interface RewardRedemption {

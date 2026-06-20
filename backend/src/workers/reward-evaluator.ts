@@ -7,6 +7,7 @@ import {
 } from '../shared/socket/events.js'
 import { userRoom } from '../shared/socket/rooms.js'
 import { getIO } from '../shared/socket/server.js'
+import { classifyLifecycle, isClaimEligible } from '../features/rewards/lifecycle.js'
 import * as repo from './reward-evaluator-repository.js'
 
 interface CheckInMessage {
@@ -38,10 +39,46 @@ export async function handler(event: { Records: Array<{ body: string }> }) {
 
 async function evaluateRewards(userId: string, nodeId: string) {
   const rewards = await repo.getActiveRewardsForNode(nodeId)
+  const nowMs = Date.now()
 
   for (const reward of rewards) {
-    const qualified = await checkQualification(userId, nodeId, reward)
-    if (!qualified) continue
+    const getCategory = reward.getCategory ?? 'loyalty'
+
+    if (getCategory === 'event' || getCategory === 'offer') {
+      // Event/Offer claim gate (R4.1, R4.2, R8.4). This is the consumer claim
+      // mint site, so "reject 400" maps to "do not mint" — we skip the reward.
+      // The lifecycle/eligibility decision is owned by the pure `isClaimEligible`
+      // truth table; the worker supplies the row's lifecycle and whether a
+      // qualifying check-in exists inside the Active_Window.
+      const hasWindow = Boolean(reward.startsAt && reward.endsAt)
+      const lifecycle = hasWindow ? classifyLifecycle(reward.startsAt!, reward.endsAt!, nowMs) : 'ended'
+      const claimRequiresCheckIn = reward.claimRequiresCheckIn ?? true
+      const hasQualifyingCheckIn = hasWindow
+        ? await repo.hasCheckInInWindow(userId, nodeId, reward.startsAt!, reward.endsAt!)
+        : false
+
+      const eligibility = isClaimEligible({
+        getCategory,
+        claimRequiresCheckIn,
+        lifecycle,
+        hasQualifyingCheckIn,
+      })
+
+      if (!eligibility.eligible) {
+        // R8.4: skip silently with a debug log (no HTTP response to return).
+        console.debug(
+          `[reward-evaluator] Skipping ${getCategory} get ${reward.id}: ${eligibility.code} (user=${userId} node=${nodeId} lifecycle=${lifecycle})`,
+        )
+        continue
+      }
+      // Eligible: the event/offer gate replaces the loyalty `checkQualification`
+      // switch (which returns false for non-loyalty `type` values). Fall through
+      // to the shared slot check + mint below.
+    } else {
+      const qualified = await checkQualification(userId, nodeId, reward)
+      if (!qualified) continue
+    }
+
     const slots = reward.totalSlots ?? null
     if (slots !== null && (reward.claimedCount ?? 0) >= slots) continue
 

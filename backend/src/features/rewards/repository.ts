@@ -16,6 +16,13 @@ export async function createReward(data: {
   triggerValue?: number
   totalSlots?: number
   expiresAt?: string
+  isFirstGet?: boolean
+  // Event/Offer get attributes (R1.1, R1.3, R1.5). All optional on disk so
+  // loyalty gets are unaffected; the service layer resolves defaults.
+  getCategory?: 'loyalty' | 'event' | 'offer'
+  startsAt?: string
+  endsAt?: string
+  claimRequiresCheckIn?: boolean
 }) {
   return dynamo.createReward(data as any)
 }
@@ -33,7 +40,19 @@ export async function getRewardById(id: string) {
 
 export async function updateReward(
   id: string,
-  data: Partial<{ title: string; description: string; isActive: boolean; expiresAt: string | null }>,
+  data: Partial<{
+    title: string
+    description: string
+    isActive: boolean
+    expiresAt: string | null
+    // Event/Offer get attributes (R1.3, R1.6). Threaded through so an update
+    // can (re)assert the category and window; undefined fields are dropped
+    // before persistence so loyalty rows are untouched.
+    getCategory: 'loyalty' | 'event' | 'offer'
+    startsAt: string
+    endsAt: string
+    claimRequiresCheckIn: boolean
+  }>,
 ) {
   return dynamo.updateReward(id, data as any)
 }
@@ -91,6 +110,12 @@ export async function getRewardsNearMe(lat: number, lng: number) {
         node_slug: node.slug,
         distance,
         expires_at: r['expiresAt'] ?? null,
+        // Event/Offer get attributes threaded through so the service layer can
+        // apply the lifecycle filter (R3.2-R3.4). A row written before this
+        // feature has no `getCategory`, so surface it as `loyalty` (R1.1).
+        getCategory: (r['getCategory'] as 'loyalty' | 'event' | 'offer' | undefined) ?? 'loyalty',
+        startsAt: (r['startsAt'] as string | undefined) ?? null,
+        endsAt: (r['endsAt'] as string | undefined) ?? null,
       })
     }
   }
