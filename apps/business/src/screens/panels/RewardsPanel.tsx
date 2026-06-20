@@ -458,8 +458,8 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
         <span className="flex-1">
           <span className="block text-[var(--text-primary)] text-sm font-medium">Make this the venue's First-Get</span>
           <span className="block text-[var(--text-muted)] text-[11px] mt-0.5">
-            Walk-ins without an account can claim this once with their phone number, no signup required. Only one
-            First-Get allowed per venue.
+            Walk-ins without an account get a one-time code to claim this. They enter it when they sign up — no phone
+            number needed. Only one First-Get allowed per venue.
           </span>
         </span>
       </label>

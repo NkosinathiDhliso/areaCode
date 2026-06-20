@@ -67,8 +67,8 @@ export function LeaderboardScreen() {
                   <TierBadge tier={entry.tier as Tier} />
                 </div>
               )}
-              <div className="flex-1">
-                <p className="text-[var(--text-primary)] text-sm font-medium">
+              <div className="flex-1 min-w-0">
+                <p className="text-[var(--text-primary)] text-sm font-medium truncate">
                   {entry.isFriend ? entry.displayName : t('leaderboard.anonymousExplorer')}
                 </p>
               </div>

@@ -215,6 +215,7 @@ export function BusinessDashboard() {
       <div
         ref={containerRef}
         className="flex-1 overflow-y-auto"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >

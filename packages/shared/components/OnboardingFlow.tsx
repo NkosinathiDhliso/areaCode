@@ -56,7 +56,13 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto"
       style={{ backgroundColor: 'var(--bg-base)' }}
     >
-      <div className="w-full max-w-[380px] mx-4 py-8 px-5 flex flex-col items-center min-h-full justify-center">
+      <div
+        className="w-full max-w-[380px] mx-4 py-8 px-5 flex flex-col items-center min-h-full justify-center"
+        style={{
+          paddingTop: 'max(2rem, env(safe-area-inset-top))',
+          paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
+        }}
+      >
         <h1 className="text-[var(--text-primary)] text-2xl font-extrabold text-center mb-2 font-[Syne]">
           What do you listen to?
         </h1>

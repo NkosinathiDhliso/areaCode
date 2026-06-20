@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { MapPinOff } from 'lucide-react'
+import { MapPinOff, Search } from 'lucide-react'
 
 import { api } from '@area-code/shared/lib/api'
 import { useMapStore, useConsumerAuthStore, useLocationStore, useUserStore } from '@area-code/shared/stores'
@@ -267,7 +267,18 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       )}
 
       <div className="absolute top-4 left-0 right-0 z-10 pointer-events-none [&>*]:pointer-events-auto">
-        <CategoryFilterBar onFilter={setCategoryFilter} />
+        <div className="flex items-center gap-2 pl-3 pr-1">
+          <button
+            onClick={() => setSearchOpen(true)}
+            aria-label={t('search.open', 'Search venues')}
+            className="shrink-0 glass-raised rounded-full w-9 h-9 flex items-center justify-center text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
+          >
+            <Search size={18} strokeWidth={1.75} />
+          </button>
+          <div className="flex-1 min-w-0">
+            <CategoryFilterBar onFilter={setCategoryFilter} />
+          </div>
+        </div>
       </div>
 
       {mapReady && !mapError && (
