@@ -2,9 +2,68 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@area-code/shared/lib/api'
+import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 import { useErrorStore } from '@area-code/shared/stores/errorStore'
-import type { Node, Reward } from '@area-code/shared/types'
+import type { GetCategory, GetLifecycle, Node, Reward } from '@area-code/shared/types'
 import { formatRelativeTime } from '@area-code/shared/lib/formatters'
+
+const MAX_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
+
+function isEventOrOffer(category?: GetCategory): boolean {
+  return category === 'event' || category === 'offer'
+}
+
+function LifecycleBadge({ lifecycle }: { lifecycle: GetLifecycle }) {
+  const styles: Record<GetLifecycle, string> = {
+    upcoming: 'bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)]',
+    live: 'bg-[var(--success)] text-white',
+    ended: 'bg-[var(--bg-raised)] text-[var(--text-muted)] border border-[var(--border)]',
+  }
+  const labels: Record<GetLifecycle, string> = {
+    upcoming: 'Upcoming',
+    live: 'Live',
+    ended: 'Ended',
+  }
+  return (
+    <span className={`text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 ${styles[lifecycle]}`}>
+      {labels[lifecycle]}
+    </span>
+  )
+}
+
+/**
+ * Non-blocking prompt that links a `live`/`upcoming` event/offer get to the
+ * existing boost purchase flow (R6.4). It only NAVIGATES the operator to the
+ * boost panel via the same `useBusinessStore.setPanel` mechanism the dashboard
+ * nav uses — it never POSTs to `/v1/business/boost` and never auto-purchases or
+ * auto-applies a boost (R5.5, R6.4). The copy points to the PAID boost and adds
+ * no implication of free city-wide promotion (R6.5).
+ *
+ * NOTE: R6.4 says to suppress this prompt when the node already has an active
+ * boost. No active-boost signal (e.g. `boostedUntil`/`activeBoost`/`isBoosted`)
+ * is exposed to this surface today — the `Node` type carries no boost state and
+ * the only boost data reachable here is the historical `BoosterPurchase` list
+ * (`GET /v1/business/{businessId}/boost-purchases`), which has no live-status
+ * field. Inventing a new backend boost-status endpoint is out of scope for this
+ * task, so we fall back to the safe default of R6.4: always prompt for
+ * `live`/`upcoming` event/offer gets. Once a node-level active-boost signal is
+ * exposed, gate the render on it here.
+ */
+function BoostPromptBanner() {
+  const setPanel = useBusinessStore((s) => s.setPanel)
+  return (
+    <div className="mt-3 flex flex-row items-center justify-between gap-3 bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl px-4 py-3">
+      <span className="text-[var(--text-secondary)] text-xs flex-1">Boost this so people across the city see it</span>
+      <button
+        type="button"
+        onClick={() => setPanel('boost')}
+        className="flex-shrink-0 bg-[var(--accent)] text-white text-xs font-semibold rounded-lg px-3 py-1.5"
+      >
+        Boost
+      </button>
+    </div>
+  )
+}
 
 export function RewardsPanel() {
   const { t } = useTranslation()
@@ -109,6 +168,7 @@ export function RewardsPanel() {
                 <div className="flex flex-row items-center justify-between mb-1">
                   <span className="text-[var(--text-primary)] font-medium">{r.title}</span>
                   <div className="flex items-center gap-2">
+                    {isEventOrOffer(r.getCategory) && r.lifecycle && <LifecycleBadge lifecycle={r.lifecycle} />}
                     <button
                       onClick={() => setEditingId(r.id)}
                       className="text-[var(--accent)] text-xs font-medium"
@@ -134,6 +194,9 @@ export function RewardsPanel() {
                     {r.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </div>
+                {isEventOrOffer(r.getCategory) && (r.lifecycle === 'live' || r.lifecycle === 'upcoming') && (
+                  <BoostPromptBanner />
+                )}
               </>
             )}
           </div>
@@ -208,12 +271,36 @@ function RewardEditForm({ reward, onSaved, onCancel }: { reward: Reward; onSaved
 function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void }) {
   const [nodeId, setNodeId] = useState(nodes[0]?.id ?? '')
   const [title, setTitle] = useState('')
+  const [getCategory, setGetCategory] = useState<GetCategory>('loyalty')
   const [type, setType] = useState('nth_checkin')
   const [triggerValue, setTriggerValue] = useState('')
+  const [startsAt, setStartsAt] = useState('')
+  const [endsAt, setEndsAt] = useState('')
+  const [claimRequiresCheckIn, setClaimRequiresCheckIn] = useState(true)
   const [slots, setSlots] = useState('')
   const [isFirstGet, setIsFirstGet] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const eventOrOffer = isEventOrOffer(getCategory)
+
+  function validateWindow(): string | null {
+    if (!startsAt || !endsAt) {
+      return 'Both start and end times are required.'
+    }
+    const startMs = new Date(startsAt).getTime()
+    const endMs = new Date(endsAt).getTime()
+    if (Number.isNaN(startMs) || Number.isNaN(endMs)) {
+      return 'Enter valid start and end times.'
+    }
+    if (startMs >= endMs) {
+      return 'Start time must be before end time.'
+    }
+    if (endMs - startMs > MAX_WINDOW_MS) {
+      return 'The window cannot be longer than 30 days.'
+    }
+    return null
+  }
 
   async function handleSubmit() {
     if (!nodeId) {
@@ -224,11 +311,26 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
       setError('Enter a reward title.')
       return
     }
+    if (eventOrOffer) {
+      const windowError = validateWindow()
+      if (windowError) {
+        setError(windowError)
+        return
+      }
+    }
     setLoading(true)
     setError(null)
     try {
-      const body: Record<string, unknown> = { nodeId, title: title.trim(), type }
-      if (triggerValue) body['triggerValue'] = parseInt(triggerValue, 10)
+      const body: Record<string, unknown> = { nodeId, title: title.trim() }
+      if (eventOrOffer) {
+        body['getCategory'] = getCategory
+        body['startsAt'] = new Date(startsAt).toISOString()
+        body['endsAt'] = new Date(endsAt).toISOString()
+        body['claimRequiresCheckIn'] = claimRequiresCheckIn
+      } else {
+        body['type'] = type
+        if (triggerValue) body['triggerValue'] = parseInt(triggerValue, 10)
+      }
       if (isFirstGet) body['isFirstGet'] = true
       if (slots) body['totalSlots'] = parseInt(slots, 10)
       await api.post('/v1/business/rewards', body)
@@ -256,6 +358,16 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
           ))}
         </select>
       )}
+      <select
+        value={getCategory}
+        onChange={(e) => setGetCategory(e.target.value as GetCategory)}
+        aria-label="Get category"
+        className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none appearance-none"
+      >
+        <option value="loyalty">Loyalty reward</option>
+        <option value="event">Event</option>
+        <option value="offer">Offer</option>
+      </select>
       <input
         type="text"
         value={title}
@@ -263,28 +375,70 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
         placeholder="Reward title"
         className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
       />
-      <select
-        value={type}
-        onChange={(e) => setType(e.target.value)}
-        className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none appearance-none"
-      >
-        <option value="nth_checkin">Nth Check-in</option>
-        <option value="daily_first">Daily First</option>
-        <option value="streak">Streak</option>
-        <option value="milestone">Milestone</option>
-      </select>
-      {(type === 'nth_checkin' || type === 'streak' || type === 'milestone') && (
+      {!eventOrOffer && (
         <>
-          <input
-            type="number"
-            value={triggerValue}
-            onChange={(e) => setTriggerValue(e.target.value)}
-            placeholder={type === 'nth_checkin' ? 'Every N check-ins (e.g. 5)' : 'Trigger count'}
-            className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-          />
-          <p className="text-[var(--text-muted)] text-[11px] -mt-1">
-            Existing customers stay on their original visit count. Only new customers see the new threshold.
-          </p>
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+            className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none appearance-none"
+          >
+            <option value="nth_checkin">Nth Check-in</option>
+            <option value="daily_first">Daily First</option>
+            <option value="streak">Streak</option>
+            <option value="milestone">Milestone</option>
+          </select>
+          {(type === 'nth_checkin' || type === 'streak' || type === 'milestone') && (
+            <>
+              <input
+                type="number"
+                value={triggerValue}
+                onChange={(e) => setTriggerValue(e.target.value)}
+                placeholder={type === 'nth_checkin' ? 'Every N check-ins (e.g. 5)' : 'Trigger count'}
+                className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+              />
+              <p className="text-[var(--text-muted)] text-[11px] -mt-1">
+                Existing customers stay on their original visit count. Only new customers see the new threshold.
+              </p>
+            </>
+          )}
+        </>
+      )}
+      {eventOrOffer && (
+        <>
+          <label className="flex flex-col gap-1">
+            <span className="text-[var(--text-secondary)] text-[11px]">Starts at</span>
+            <input
+              type="datetime-local"
+              value={startsAt}
+              onChange={(e) => setStartsAt(e.target.value)}
+              aria-label="Starts at"
+              className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[var(--text-secondary)] text-[11px]">Ends at</span>
+            <input
+              type="datetime-local"
+              value={endsAt}
+              onChange={(e) => setEndsAt(e.target.value)}
+              aria-label="Ends at"
+              className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-row items-start gap-3 bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl px-4 py-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={claimRequiresCheckIn}
+              onChange={(e) => setClaimRequiresCheckIn(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span className="flex-1">
+              <span className="block text-[var(--text-primary)] text-sm font-medium">Require check-in to claim</span>
+              <span className="block text-[var(--text-muted)] text-[11px] mt-0.5">
+                Customers claim this by checking in at your venue while it's live, which builds your node's pulse.
+              </span>
+            </span>
+          </label>
         </>
       )}
       <input

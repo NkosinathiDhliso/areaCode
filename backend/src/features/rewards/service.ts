@@ -3,6 +3,7 @@ import { findBusinessById } from '../business/repository.js'
 import { getEffectiveTier } from '../business/service.js'
 import * as repo from './repository.js'
 import { notifyNewRewardConsumers } from '../notifications/service.js'
+import { validateWindow, classifyLifecycle, isVisibleInFeed } from './lifecycle.js'
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
@@ -67,6 +68,42 @@ const DEV_REWARDS = [
     distance: 2000,
     expiresAt: null,
   },
+  // Event & Offer Gets dev fixtures (R7.3). DEV_MODE returns DEV_REWARDS
+  // directly (bypassing the lifecycle filter), so these carry a window that is
+  // live right now — `startsAt` an hour ago, `endsAt` six hours out — to model
+  // a live Event_Get and a live Offer_Get for the dev surfaces.
+  {
+    id: 'rew-6',
+    title: 'Live Amapiano Set Tonight',
+    type: 'event',
+    totalSlots: 200,
+    claimedCount: 37,
+    nodeId: 'dev-3',
+    nodeName: "Kitchener's Bar",
+    nodeSlug: 'kitcheners-bar',
+    distance: 800,
+    expiresAt: null,
+    getCategory: 'event',
+    startsAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    endsAt: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+    claimRequiresCheckIn: true,
+  },
+  {
+    id: 'rew-7',
+    title: '2-for-1 Cocktails (6-9pm)',
+    type: 'offer',
+    totalSlots: 80,
+    claimedCount: 19,
+    nodeId: 'dev-1',
+    nodeName: 'Father Coffee',
+    nodeSlug: 'father-coffee',
+    distance: 150,
+    expiresAt: null,
+    getCategory: 'offer',
+    startsAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    endsAt: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+    claimRequiresCheckIn: true,
+  },
 ]
 
 const TIER_REWARD_LIMITS: Record<string, number | null> = {
@@ -81,13 +118,21 @@ export async function createReward(
   businessId: string,
   data: {
     nodeId: string
-    type: string
+    // `type` is optional now that event/offer gets may omit it (R1.4). The
+    // authoritative resolution (default `type = getCategory`, window
+    // validation, persistence threading) lands in task 4.1; this signature is
+    // widened here so the extended create schema typechecks.
+    type?: string | undefined
     title: string
     description?: string | undefined
     triggerValue?: number | undefined
     totalSlots?: number | undefined
     expiresAt?: string | undefined
     isFirstGet?: boolean | undefined
+    getCategory?: 'loyalty' | 'event' | 'offer' | undefined
+    startsAt?: string | undefined
+    endsAt?: string | undefined
+    claimRequiresCheckIn?: boolean | undefined
   },
 ) {
   // Verify the node belongs to this business
@@ -105,6 +150,8 @@ export async function createReward(
   }
 
   // Enforce one First-Get per venue (Churn-defences spec, Req 6.1).
+  // Independent of get category (R2.6): an event/offer get may also be flagged
+  // First-Get, subject to the same one-per-node constraint.
   if (data.isFirstGet) {
     const existing = await repo.getActiveRewardsByNodeId(data.nodeId)
     if (existing.some((r) => (r as { isFirstGet?: boolean }).isFirstGet)) {
@@ -112,9 +159,29 @@ export async function createReward(
     }
   }
 
+  // Resolve the get category (R1.1). Absent → `loyalty`, preserving every
+  // existing behaviour.
+  const getCategory = data.getCategory ?? 'loyalty'
+  const isEventOrOffer = getCategory === 'event' || getCategory === 'offer'
+
+  // For event/offer gets, validate the Active_Window against the current clock
+  // (R1.3, R1.6, R2.4). The pure `validateWindow` returns a mapped rejection
+  // code; surface it as a 400 via the existing AppError machinery.
+  let claimRequiresCheckIn: boolean | undefined
+  if (isEventOrOffer) {
+    const windowCheck = validateWindow(data.startsAt ?? '', data.endsAt ?? '', Date.now())
+    if (!windowCheck.ok) {
+      throw AppError.badRequest(windowCheck.code)
+    }
+    // Default claim-on-check-in to `true` for event/offer gets (R1.5).
+    claimRequiresCheckIn = data.claimRequiresCheckIn ?? true
+  }
+
   const createData: Parameters<typeof repo.createReward>[0] = {
     nodeId: data.nodeId,
-    type: data.type,
+    // Keep `type` non-null on disk. When omitted for an event/offer get it
+    // falls back to the category (R1.4); loyalty gets always supply `type`.
+    type: data.type ?? (isEventOrOffer ? getCategory : 'nth_checkin'),
     title: data.title,
   }
   if (data.description !== undefined) createData.description = data.description
@@ -123,7 +190,32 @@ export async function createReward(
   if (data.expiresAt !== undefined) createData.expiresAt = data.expiresAt
   if (data.isFirstGet !== undefined) (createData as { isFirstGet?: boolean }).isFirstGet = data.isFirstGet
 
+  // Thread the event/offer attributes through to persistence (R2.5). Loyalty
+  // gets leave these undefined so existing rows are untouched.
+  if (isEventOrOffer) {
+    createData.getCategory = getCategory
+    if (data.startsAt !== undefined) createData.startsAt = data.startsAt
+    if (data.endsAt !== undefined) createData.endsAt = data.endsAt
+    createData.claimRequiresCheckIn = claimRequiresCheckIn
+  }
+
   const reward = await repo.createReward(createData)
+
+  // R8.1: structured info-level audit log for event/offer get creation.
+  if (isEventOrOffer) {
+    console.info(
+      JSON.stringify({
+        feature: 'rewards',
+        operation: 'createReward',
+        getCategory,
+        businessId,
+        nodeId: data.nodeId,
+        startsAt: data.startsAt ?? null,
+        endsAt: data.endsAt ?? null,
+        claimRequiresCheckIn,
+      }),
+    )
+  }
 
   // Fire-and-forget: notify consumers who checked in at this node recently
   // This runs asynchronously so it doesn't slow down the reward creation response
@@ -144,6 +236,13 @@ export async function updateReward(
     isActive?: boolean | undefined
     expiresAt?: string | null | undefined
     isFirstGet?: boolean | undefined
+    // Event/Offer get attributes (R1.3, R1.6). An update may (re)assert the
+    // category and/or move the window; the resulting row must still hold a
+    // valid Active_Window when it is an event/offer.
+    getCategory?: 'loyalty' | 'event' | 'offer' | undefined
+    startsAt?: string | undefined
+    endsAt?: string | undefined
+    claimRequiresCheckIn?: boolean | undefined
   },
 ) {
   const reward = await repo.getRewardById(rewardId)
@@ -165,6 +264,36 @@ export async function updateReward(
     }
   }
 
+  // Determine the effective category/window the row will have AFTER this
+  // update by merging the incoming fields over the persisted row. The read
+  // mapper already defaults a missing `getCategory` to `loyalty` (R1.1).
+  const persisted = reward as {
+    getCategory?: 'loyalty' | 'event' | 'offer'
+    startsAt?: string
+    endsAt?: string
+  }
+  const effectiveCategory = data.getCategory ?? persisted.getCategory ?? 'loyalty'
+  const isEventOrOffer = effectiveCategory === 'event' || effectiveCategory === 'offer'
+
+  if (isEventOrOffer) {
+    // Re-validate the Active_Window the row will end up with (R1.3, R1.6).
+    // Never allow an update that leaves an event/offer without a valid window:
+    // a missing bound parses to NaN and is rejected as `invalid_window` below.
+    const effectiveStartsAt = data.startsAt ?? persisted.startsAt ?? ''
+    const effectiveEndsAt = data.endsAt ?? persisted.endsAt ?? ''
+    const windowCheck = validateWindow(effectiveStartsAt, effectiveEndsAt, Date.now())
+
+    // The binding rules for an UPDATE are ordering (R1.3) and the 30-day max
+    // (R1.6). We intentionally tolerate `starts_in_past`: an event being edited
+    // may already be live (its `startsAt` is legitimately in the past), and
+    // re-validating against `Date.now()` would otherwise wrongly block editing
+    // a live event's title, end time, or check-in flag. So we enforce only
+    // `invalid_window` and `window_too_long` here and accept `starts_in_past`.
+    if (!windowCheck.ok && windowCheck.code !== 'starts_in_past') {
+      throw AppError.badRequest(windowCheck.code)
+    }
+  }
+
   const updateData: Parameters<typeof repo.updateReward>[1] = {}
   if (data.title !== undefined) updateData.title = data.title
   if (data.description !== undefined) updateData.description = data.description
@@ -176,6 +305,14 @@ export async function updateReward(
   }
   if (data.isFirstGet !== undefined) (updateData as { isFirstGet?: boolean }).isFirstGet = data.isFirstGet
 
+  // Thread the event/offer attributes through to persistence so an update can
+  // (re)assert the category and window. Undefined fields are dropped by the
+  // repository, leaving loyalty rows untouched.
+  if (data.getCategory !== undefined) updateData.getCategory = data.getCategory
+  if (data.startsAt !== undefined) updateData.startsAt = data.startsAt
+  if (data.endsAt !== undefined) updateData.endsAt = data.endsAt
+  if (data.claimRequiresCheckIn !== undefined) updateData.claimRequiresCheckIn = data.claimRequiresCheckIn
+
   return repo.updateReward(rewardId, updateData)
 }
 
@@ -183,18 +320,53 @@ export async function getRewardsNearMe(lat: number, lng: number) {
   if (DEV_MODE) return DEV_REWARDS
 
   const raw = await repo.getRewardsNearMe(lat, lng)
-  return raw.map((r) => ({
-    id: r.id,
-    title: r.title,
-    type: r.type,
-    totalSlots: r.total_slots,
-    claimedCount: r.claimed_count,
-    nodeId: r.node_id,
-    nodeName: r.node_name,
-    nodeSlug: r.node_slug,
-    distance: Math.round(r.distance),
-    expiresAt: r.expires_at?.toISOString() ?? null,
-  }))
+  const nowMs = Date.now()
+  return raw
+    .filter((r) => {
+      // Lifecycle filter (R3.2, R3.3, R3.4). Loyalty gets always pass through
+      // using the existing proximity selection (R3.3); event/offer gets are
+      // kept only while `live`; a missing window is treated as not-live. The
+      // pure `isVisibleInFeed` helper in lifecycle.ts is the single source of
+      // truth for this predicate (the repo defaults a missing `getCategory` to
+      // `loyalty`, so legacy rows are unaffected — R1.1).
+      return isVisibleInFeed(
+        {
+          getCategory: (r as { getCategory?: 'loyalty' | 'event' | 'offer' }).getCategory,
+          startsAt: (r as { startsAt?: string | null }).startsAt,
+          endsAt: (r as { endsAt?: string | null }).endsAt,
+        },
+        nowMs,
+      )
+    })
+    .map((r) => {
+      const getCategory = (r as { getCategory?: 'loyalty' | 'event' | 'offer' }).getCategory ?? 'loyalty'
+      const startsAt = (r as { startsAt?: string | null }).startsAt ?? null
+      const endsAt = (r as { endsAt?: string | null }).endsAt ?? null
+      return {
+        id: r.id,
+        title: r.title,
+        type: r.type,
+        totalSlots: r.total_slots,
+        claimedCount: r.claimed_count,
+        nodeId: r.node_id,
+        nodeName: r.node_name,
+        nodeSlug: r.node_slug,
+        distance: Math.round(r.distance),
+        // `expires_at` already comes back from the DynamoDB repo as an ISO string
+        // (legacy Prisma returned a Date here). Calling `.toISOString()` on a string
+        // throws a TypeError → 500 on the Gets page whenever a nearby reward has an
+        // expiry. Pass the string through as-is.
+        expiresAt: (r.expires_at as string | null) ?? null,
+        // Surface the category/window/lifecycle so the response stays a
+        // superset of today's shape (R7.2). Loyalty rows carry `lifecycle:
+        // 'live'` since they have no window but always show when selected.
+        getCategory,
+        startsAt,
+        endsAt,
+        lifecycle:
+          getCategory === 'loyalty' || !startsAt || !endsAt ? 'live' : classifyLifecycle(startsAt, endsAt, nowMs),
+      }
+    })
 }
 
 export async function getUnclaimedRewards(userId: string) {
@@ -267,7 +439,10 @@ export async function getRecentRedemptions(businessId: string) {
   return {
     items: items.map((r) => ({
       code: r.redemptionCode,
-      redeemedAt: r.redeemedAt?.toISOString(),
+      // `redeemedAt` is already an ISO string from the DynamoDB repo; the legacy
+      // `.toISOString()` call threw a TypeError (500) for the same reason as
+      // getRewardsNearMe above.
+      redeemedAt: (r.redeemedAt as string | undefined) ?? null,
     })),
   }
 }

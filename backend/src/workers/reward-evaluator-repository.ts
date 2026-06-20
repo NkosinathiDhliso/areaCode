@@ -100,3 +100,41 @@ export async function getRecentCheckInsForStreak(userId: string, nodeId: string,
     .slice(0, limit)
     .map((ci) => ({ checkedInAt: ci.checkedInAt }))
 }
+
+/**
+ * Event/Offer claim gate support (R4.1): does a check-in exist for
+ * `(userId, nodeId)` recorded inside the half-open Active_Window
+ * `[startsAt, endsAt)`?
+ *
+ * The `UserIndex` is queried with a `timestamp BETWEEN` range (inclusive on
+ * both ends) to bound the fetch; we then re-confirm each candidate against the
+ * node and the half-open window using the record's `checkedInAt` ISO string
+ * (the same field the rest of the worker keys off). A check-in's numeric
+ * `timestamp` SK and its `checkedInAt` ISO string are written from the same
+ * instant, so the range query and the precise half-open re-check agree.
+ *
+ * No type filter is applied: R4.1 only requires *a* check-in at the node inside
+ * the window, and the worker itself only runs because such a check-in occurred.
+ */
+export async function hasCheckInInWindow(
+  userId: string,
+  nodeId: string,
+  startsAt: string,
+  endsAt: string,
+): Promise<boolean> {
+  const startMs = Date.parse(startsAt)
+  const endMs = Date.parse(endsAt)
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return false
+
+  const { checkIns } = await getCheckInsByUser(userId, {
+    startTime: startsAt,
+    endTime: endsAt,
+    limit: 100,
+  })
+
+  return checkIns.some((ci) => {
+    if (ci.nodeId !== nodeId) return false
+    const t = Date.parse(ci.checkedInAt)
+    return !Number.isNaN(t) && t >= startMs && t < endMs
+  })
+}

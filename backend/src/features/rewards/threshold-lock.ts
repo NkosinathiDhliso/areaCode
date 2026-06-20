@@ -20,6 +20,7 @@ import { DeleteCommand, GetCommand, PutCommand, ScanCommand, UpdateCommand } fro
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 
 import { getRewardById, getActiveRewardsByNodeId } from './dynamodb-repository.js'
+import { classifyLifecycle } from './lifecycle.js'
 
 export interface ThresholdLock {
   userId: string
@@ -156,6 +157,16 @@ export async function processCheckInRewardLocks(userId: string, nodeId: string):
   }
 
   for (const reward of rewards) {
+    // R4.1/R8.4: a locked event/offer get must not advance (and therefore must
+    // not become claimable) outside its live Active_Window. Loyalty gets have
+    // no window and are unaffected.
+    const getCategory = (reward as { getCategory?: string }).getCategory ?? 'loyalty'
+    if (getCategory === 'event' || getCategory === 'offer') {
+      const startsAt = (reward as { startsAt?: string }).startsAt
+      const endsAt = (reward as { endsAt?: string }).endsAt
+      if (!startsAt || !endsAt || classifyLifecycle(startsAt, endsAt, Date.now()) !== 'live') continue
+    }
+
     const threshold = (reward as { triggerValue?: number }).triggerValue
     if (typeof threshold !== 'number' || threshold <= 0) continue
     const rewardId = (reward as { rewardId?: string; id?: string }).rewardId ?? (reward as { id?: string }).id

@@ -1,6 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { AppError } from '../../shared/errors/AppError.js'
 import { decideBoostFloorWithMetric, type BoostMetricInput } from './floor-decision.js'
+import { classifyLifecycle, type Lifecycle } from '../rewards/lifecycle.js'
 import * as repo from './repository.js'
 import {
   BUSINESS_PLANS,
@@ -823,12 +824,47 @@ export async function getRecentRedemptions(businessId: string) {
 
 // ─── Business Rewards (list) ────────────────────────────────────────────────
 
+/**
+ * Operator-facing get list. Returns every get the business owns, annotated
+ * with a `lifecycle` field so the portal can show scheduled/live/past
+ * happenings (R3.6, R6.3). The annotation is additive — every existing
+ * reward field is preserved, so the response stays a superset of today's
+ * shape (R7.2).
+ *
+ * Lifecycle rules:
+ *   - event/offer gets carrying a valid `[startsAt, endsAt)` window get their
+ *     true lifecycle via `classifyLifecycle(startsAt, endsAt, Date.now())`.
+ *   - loyalty gets (or any get without a window) are always `live` — they have
+ *     no Active_Window and are perpetually available.
+ *
+ * `getCategory` is normalised to `'loyalty'` when absent so callers never see
+ * `undefined` (R1.1, R7.1). The raw reward attributes (including
+ * `getCategory`/`startsAt`/`endsAt`/`claimRequiresCheckIn`) flow through from
+ * `repo.getRewardsForBusiness`, which reads full reward rows.
+ *
+ * Authorization (the business JWT) is enforced at the route layer
+ * (`requireAuth('business', 'staff')`) — R6.6.
+ */
 export async function getBusinessRewards(businessId: string) {
   if (DEV_MODE) {
     return { items: [] }
   }
   const items = await repo.getRewardsForBusiness(businessId)
-  return { items }
+  const nowMs = Date.now()
+  const annotated = items.map((item) => {
+    const rec = item as Record<string, unknown>
+    const getCategory = (rec['getCategory'] as string | undefined) ?? 'loyalty'
+    const startsAt = rec['startsAt'] as string | undefined
+    const endsAt = rec['endsAt'] as string | undefined
+
+    const lifecycle: Lifecycle =
+      (getCategory === 'event' || getCategory === 'offer') && startsAt && endsAt
+        ? classifyLifecycle(startsAt, endsAt, nowMs)
+        : 'live'
+
+    return { ...rec, getCategory, lifecycle }
+  })
+  return { items: annotated }
 }
 
 // ─── Check-In Details ───────────────────────────────────────────────────────

@@ -75,9 +75,18 @@ export async function updateReward(
   rewardId: string,
   data: Partial<Omit<Reward, 'rewardId' | 'createdAt'>>,
 ): Promise<Reward | null> {
-  const updateExpr = Object.keys(data)
-    .map((key) => `#${key} = :${key}`)
-    .join(', ')
+  // Only persist attributes that are actually present. Threading optional
+  // event/offer fields (`getCategory`, `startsAt`, `endsAt`,
+  // `claimRequiresCheckIn`) through here means undefined values must be
+  // dropped before building the expression — otherwise the UpdateExpression
+  // would reference a value that `removeUndefinedValues` strips out.
+  const definedEntries = Object.entries(data).filter(([, value]) => value !== undefined)
+
+  if (definedEntries.length === 0) {
+    return getRewardById(rewardId)
+  }
+
+  const updateExpr = definedEntries.map(([key]) => `#${key} = :${key}`).join(', ')
 
   const result = await documentClient.send(
     new UpdateCommand({
@@ -85,11 +94,11 @@ export async function updateReward(
       Key: { rewardId },
       UpdateExpression: `SET ${updateExpr}, #updatedAt = :updatedAt`,
       ExpressionAttributeNames: {
-        ...Object.keys(data).reduce((acc, key) => ({ ...acc, [`#${key}`]: key }), {}),
+        ...definedEntries.reduce((acc, [key]) => ({ ...acc, [`#${key}`]: key }), {}),
         '#updatedAt': 'updatedAt',
       },
       ExpressionAttributeValues: {
-        ...Object.entries(data).reduce((acc, [key, value]) => ({ ...acc, [`:${key}`]: value }), {}),
+        ...definedEntries.reduce((acc, [key, value]) => ({ ...acc, [`:${key}`]: value }), {}),
         ':updatedAt': new Date().toISOString(),
       },
       ReturnValues: 'ALL_NEW',
@@ -250,10 +259,14 @@ export async function getRewardsNeedingEvaluation(): Promise<Reward[]> {
   return (result.Items || []).map((i) => mapReward(i))
 }
 
-function mapReward(item: Record<string, unknown>): Reward {
+export function mapReward(item: Record<string, unknown>): Reward {
   const copy = { ...item } as Record<string, unknown>
   copy['id'] = (item['rewardId'] as string) ?? (item['id'] as string)
   copy['rewardId'] = (item['rewardId'] as string) ?? (item['id'] as string)
+  // R1.1 / R7.1: rows persisted before this feature lack a `getCategory`
+  // attribute. Surface them as `loyalty` so callers never observe `undefined`
+  // and every legacy row keeps its existing behaviour without a backfill.
+  copy['getCategory'] = (item['getCategory'] as Reward['getCategory']) ?? 'loyalty'
   return copy as unknown as Reward
 }
 
