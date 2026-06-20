@@ -46,6 +46,24 @@ export function getCategoryColour(category: NodeCategory | string): string {
   return CATEGORY_HEX[category] ?? '#778CA9'
 }
 
+/**
+ * Resolved hex colour per Pulse_State. Used by the Venue_Card to paint the
+ * archetype glyph in the venue's live Pulse_State colour (R1.2) and shared with
+ * any other surface that needs the state palette. Mirrors the mobile
+ * `stateColor` ladder so web and native read the same colour for a given state.
+ */
+const PULSE_STATE_HEX: Record<NodeState, string> = {
+  popping: '#ef4444',
+  buzzing: '#f59e0b',
+  active: '#10b981',
+  quiet: '#6b7280',
+  dormant: '#374151',
+}
+
+export function getPulseStateColour(state: NodeState): string {
+  return PULSE_STATE_HEX[state]
+}
+
 export function applyMarkerStyle(el: HTMLElement, size: number, colour: string): void {
   el.style.width = `${size}px`
   el.style.height = `${size}px`

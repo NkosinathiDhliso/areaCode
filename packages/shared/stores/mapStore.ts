@@ -6,6 +6,13 @@ interface MapStore {
   nodes: Record<string, Node>
   pulseScores: Record<string, number>
   /**
+   * Live check-in count per node, populated by the `node:pulse_update` socket
+   * event. Distinct from `pulseScores` (a weighted vibe score): this is the
+   * raw "how many people are here right now" headcount surfaced in the
+   * node-flick toast and the buzzing/popping marker badge.
+   */
+  checkInCounts: Record<string, number>
+  /**
    * Live-resolved Archetype id per node, populated by the
    * `node:archetype_change` socket event (see `useNodeArchetype`).
    * Cleared after the 5-minute retention window or replaced wholesale on
@@ -22,7 +29,7 @@ interface MapStore {
   focusNodeId: string | null
   setNodes: (nodes: Node[]) => void
   addNode: (node: Node) => void
-  updateNodePulse: (nodeId: string, score: number) => void
+  updateNodePulse: (nodeId: string, score: number, checkInCount?: number) => void
   setArchetypeId: (nodeId: string, id: string) => void
   /**
    * Drop the cached Live_Archetype id for a node. Called by
@@ -40,6 +47,7 @@ export const useMapStore = create<MapStore>()(
     nodes: {},
     pulseScores: {},
     archetypeIds: {},
+    checkInCounts: {},
     mapInstance: null,
     focusNodeId: null,
     setNodes: (nodes) =>
@@ -52,9 +60,12 @@ export const useMapStore = create<MapStore>()(
       set((state) => {
         state.nodes[node.id] = node
       }),
-    updateNodePulse: (nodeId, score) =>
+    updateNodePulse: (nodeId, score, checkInCount) =>
       set((state) => {
         state.pulseScores[nodeId] = score
+        if (checkInCount !== undefined) {
+          state.checkInCounts[nodeId] = checkInCount
+        }
       }),
     setArchetypeId: (nodeId, id) =>
       set((state) => {

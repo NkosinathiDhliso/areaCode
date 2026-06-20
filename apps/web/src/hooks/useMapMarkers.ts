@@ -6,46 +6,75 @@ import { createElement, useEffect, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 
 import { ArchetypeGlyph } from '../components/ArchetypeGlyph'
+import { DEFAULT_ARCHETYPE_ID, GLYPH_ZOOM_THRESHOLD, MIN_MARKER_ZOOM } from '../lib/carouselConstants'
 import { getNodeState, getCategoryColour } from '../lib/mapHelpers'
 
 /**
- * Default Live_Archetype id used while no live value has arrived for a
- * node and the node has no `defaultArchetypeId`. Mirrors R7.8's
- * eclectic-fallback rule on the rendering side, so the glyph is never
- * blank.
+ * The three legibility tiers the Marker_Layer renders, selected purely by
+ * the live Map_Canvas zoom (design Property 17):
+ *
+ * - `glyph`  — zoom ≥ `GLYPH_ZOOM_THRESHOLD` (12.5): detailed archetype glyph.
+ * - `dot`    — zoom in `[MIN_MARKER_ZOOM, GLYPH_ZOOM_THRESHOLD)` (8 → 12.5):
+ *              a simple category-coloured dot so a packed city-overview reads
+ *              as clean density rather than a collage of tiny icons.
+ * - `hidden` — zoom < `MIN_MARKER_ZOOM` (8): markers are hidden because at
+ *              continent/globe zoom an individual venue marker covers a huge
+ *              geographic area and visually detaches from the globe surface.
+ *
+ * `GLYPH_ZOOM_THRESHOLD` and `MIN_MARKER_ZOOM` are imported from
+ * `carouselConstants` — the single shared home for the map-presentation
+ * thresholds — so the carousel, camera, and marker layers all agree.
  */
-const DEFAULT_ARCHETYPE_ID = 'archetype-eclectic'
+export type MarkerPresentationTier = 'glyph' | 'dot' | 'hidden'
 
 /**
- * Below this zoom the detailed archetype icon is replaced with a simple
- * category-coloured dot. At a city-overview zoom the markers pack together
- * and the expressive icon detail (a mic, a crown, a vinyl) reads as visual
- * noise; the dot keeps density legible. At or above the threshold the icon
- * is the marker again. Default browsing zoom is 13, so the icon shows by
- * default and only collapses to a dot when the user zooms out to the
- * city/region overview.
+ * Pure mapping from a zoom level to its {@link MarkerPresentationTier}.
+ * Extracted as a total, side-effect-free function so it can be property-tested
+ * (design Property 17, task 13.2) independently of the React/Mapbox wiring.
+ *
+ * Validates: Requirements 12.1, 12.2, 12.3
  */
-const GLYPH_ZOOM_THRESHOLD = 12.5
+export function presentationTierForZoom(zoom: number): MarkerPresentationTier {
+  if (zoom >= GLYPH_ZOOM_THRESHOLD) return 'glyph'
+  if (zoom < MIN_MARKER_ZOOM) return 'hidden'
+  return 'dot'
+}
 
 /**
- * Below this zoom markers are fully hidden. At continent/globe zoom,
- * individual venue markers cover huge geographic areas and visually
- * detach from the globe surface — hiding them is cleaner than showing
- * an oversized dot at the wrong visual scale.
+ * Pure predicate: is `nodeId` the current Active_Venue? Extracted so the
+ * active-marker distinction (design Property 19, task 13.4) is testable without
+ * a live map. Returns false when there is no Active_Venue.
+ *
+ * Validates: Requirements 12.6
  */
-const MIN_MARKER_ZOOM = 8
+export function isActiveMarker(nodeId: string, activeVenueId: string | null): boolean {
+  return activeVenueId !== null && nodeId === activeVenueId
+}
 
 /**
  * Returns a 0–1 CSS scale factor for the given zoom level.
  * Mapbox owns the `transform` property on marker elements, so we use the
  * independent CSS `scale` property which composes with `transform` rather
  * than overriding it. Scale 0 = fully hidden, 1 = full size.
+ *
+ * Stays consistent with {@link presentationTierForZoom}: it is exactly 0 in the
+ * `hidden` tier and 1 in the `glyph` tier, ramping linearly across the `dot`
+ * tier so the transition across a threshold is smooth and never detaches the
+ * marker from its coordinates (design Property 18).
  */
-function scaleForZoom(zoom: number): number {
+export function scaleForZoom(zoom: number): number {
   if (zoom >= GLYPH_ZOOM_THRESHOLD) return 1
   if (zoom < MIN_MARKER_ZOOM) return 0
   return (zoom - MIN_MARKER_ZOOM) / (GLYPH_ZOOM_THRESHOLD - MIN_MARKER_ZOOM)
 }
+
+/**
+ * Visual styling applied to the Active_Venue's marker so it is distinguished
+ * from non-active markers (Requirement 12.6) and stays reachable when markers
+ * overlap at a packed zoom (Requirement 12.5). Implemented on a dedicated ring
+ * layer plus an elevated z-index, both toggled by {@link applyActiveStyling}.
+ */
+const ACTIVE_RING_LAYER = 'active-ring'
 
 /** Marker sub-element that owns the React glyph mount. */
 const GLYPH_HOST_LAYER = 'glyph-host'
@@ -89,7 +118,8 @@ function buildMarkerElement(
   glyphSize: number,
   colour: string,
   state: NodeState,
-  score: number,
+  liveCount: number,
+  isActive: boolean,
   onTap: () => void,
 ): HTMLDivElement {
   void node
@@ -199,7 +229,10 @@ function buildMarkerElement(
   container.appendChild(glyphWrapper)
 
   // ── Live count badge (buzzing / popping only) ──
-  if ((state === 'buzzing' || state === 'popping') && score > 0) {
+  // The badge shows the venue's Live_Check_In_Count (`mapStore.checkInCounts`),
+  // the raw "how many people are here right now" headcount — distinct from the
+  // weighted Pulse_Score that drives glyph size and animation.
+  if ((state === 'buzzing' || state === 'popping') && liveCount > 0) {
     const badge = document.createElement('div')
     Object.assign(badge.style, {
       position: 'absolute',
@@ -216,12 +249,67 @@ function buildMarkerElement(
       whiteSpace: 'nowrap',
       pointerEvents: 'none',
     })
-    badge.textContent = score > 99 ? '99+' : String(score)
+    badge.textContent = liveCount > 99 ? '99+' : String(liveCount)
     badge.dataset.layer = 'badge'
     container.appendChild(badge)
   }
 
+  applyActiveStyling(container, isActive, colour)
+
   return container
+}
+
+/**
+ * Toggle the Active_Venue distinction on a marker element. Exactly the
+ * Active_Venue's marker carries the ring + elevated z-index; every other
+ * marker has it removed (design Property 19). Idempotent and total so it can be
+ * called freely on both build and update without leaking ring layers.
+ *
+ * Validates: Requirements 12.5, 12.6
+ */
+function applyActiveStyling(el: HTMLElement, isActive: boolean, colour: string): void {
+  el.dataset.active = isActive ? 'true' : 'false'
+  let ring = el.querySelector(`[data-layer="${ACTIVE_RING_LAYER}"]`) as HTMLElement | null
+
+  if (isActive) {
+    if (!ring) {
+      ring = document.createElement('div')
+      Object.assign(ring.style, {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        borderRadius: '50%',
+        pointerEvents: 'none',
+      })
+      ring.dataset.layer = ACTIVE_RING_LAYER
+      // Behind the glyph wrapper so the ring frames the marker without
+      // covering the tap target.
+      const glyphWrapper = el.querySelector('[data-layer="glyph-wrapper"]')
+      if (glyphWrapper) {
+        el.insertBefore(ring, glyphWrapper)
+      } else {
+        el.appendChild(ring)
+      }
+    }
+    // Size the ring off the live glyph wrapper so it tracks tier/state sizing.
+    const glyphWrapper = el.querySelector('[data-layer="glyph-wrapper"]') as HTMLElement | null
+    const glyphSize = glyphWrapper ? parseFloat(glyphWrapper.style.width) || 0 : 0
+    const ringSize = glyphSize * 1.5
+    Object.assign(ring.style, {
+      width: `${ringSize}px`,
+      height: `${ringSize}px`,
+      border: `2.5px solid ${colour}`,
+      boxShadow: `0 0 0 2px rgba(255,255,255,0.55), 0 0 12px ${colour}`,
+      background: 'transparent',
+    })
+    // Keep the Active_Venue's marker (and its tap target) above overlapping
+    // neighbours at a packed zoom (Requirement 12.5).
+    el.style.zIndex = '10'
+  } else {
+    if (ring) ring.remove()
+    el.style.zIndex = ''
+  }
 }
 
 function updateMarkerElement(
@@ -229,7 +317,8 @@ function updateMarkerElement(
   glyphSize: number,
   colour: string,
   state: NodeState,
-  score: number,
+  liveCount: number,
+  isActive: boolean,
 ): void {
   const cfg = STATE_CONFIG[state]
   const totalSize = glyphSize * 3
@@ -296,9 +385,10 @@ function updateMarkerElement(
     })
   }
 
-  // Live count badge
+  // Live count badge — reflects the venue's Live_Check_In_Count, updated in
+  // place on each `node:pulse_update` without detaching the marker (R18.1).
   let badge = el.querySelector('[data-layer="badge"]') as HTMLElement | null
-  if ((state === 'buzzing' || state === 'popping') && score > 0) {
+  if ((state === 'buzzing' || state === 'popping') && liveCount > 0) {
     if (!badge) {
       badge = document.createElement('div')
       Object.assign(badge.style, {
@@ -319,10 +409,12 @@ function updateMarkerElement(
       badge.dataset.layer = 'badge'
       el.appendChild(badge)
     }
-    badge.textContent = score > 99 ? '99+' : String(score)
+    badge.textContent = liveCount > 99 ? '99+' : String(liveCount)
   } else if (badge) {
     badge.remove()
   }
+
+  applyActiveStyling(el, isActive, colour)
 }
 
 /**
@@ -338,9 +430,11 @@ export function useMapMarkers(
   categoryFilter: NodeCategory | null,
   onNodeTap: (node: Node) => void,
   mapReady = false,
+  activeVenueId: string | null = null,
 ) {
   const nodes = useMapStore((s) => s.nodes)
   const pulseScores = useMapStore((s) => s.pulseScores)
+  const checkInCounts = useMapStore((s) => s.checkInCounts)
   const archetypeIds = useMapStore((s) => s.archetypeIds)
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map())
   // Per-marker React roots used to render <ArchetypeGlyph> inside each
@@ -373,7 +467,9 @@ export function useMapMarkers(
 
       // HTML markers don't scale with Mapbox's WebGL zoom. Apply CSS `scale`
       // (independent from Mapbox's `transform`) so markers shrink at low zoom
-      // instead of covering half the globe.
+      // instead of covering half the globe. Crossing a threshold only changes
+      // the CSS scale and the glyph/dot render mode — the marker is never
+      // removed, so it stays geo-anchored to its lng/lat (R12.4, Property 18).
       const scale = scaleForZoom(zoom)
       for (const [, marker] of markersRef.current) {
         const el = marker.getElement()
@@ -381,8 +477,10 @@ export function useMapMarkers(
         el.style.pointerEvents = scale < 0.05 ? 'none' : ''
       }
 
+      // glyph tier → detailed icon; dot/hidden tiers → category dot (the
+      // `hidden` tier additionally collapses to scale 0 above).
       setShowIcon((prev) => {
-        const next = zoom >= GLYPH_ZOOM_THRESHOLD
+        const next = presentationTierForZoom(zoom) === 'glyph'
         return prev === next ? prev : next
       })
     }
@@ -429,6 +527,8 @@ export function useMapMarkers(
       for (const node of filtered) {
         const score = pulseScores[node.id] ?? 0
         const state = getNodeState(score)
+        const liveCount = checkInCounts[node.id] ?? 0
+        const active = isActiveMarker(node.id, activeVenueId)
         const tierMultiplier = TIER_SIZE_MULTIPLIER[node.businessTier ?? 'starter']
         const glyphSize = getGlyphSize(state, score) * tierMultiplier
         const colour = getCategoryColour(node.category)
@@ -440,7 +540,7 @@ export function useMapMarkers(
 
         if (existing) {
           existing.setLngLat([node.lng, node.lat])
-          updateMarkerElement(existing.getElement(), glyphSize, colour, state, score)
+          updateMarkerElement(existing.getElement(), glyphSize, colour, state, liveCount, active)
           renderGlyph(
             glyphRootsRef.current,
             existing.getElement(),
@@ -453,7 +553,7 @@ export function useMapMarkers(
           continue
         }
 
-        const el = buildMarkerElement(node, glyphSize, colour, state, score, () => {
+        const el = buildMarkerElement(node, glyphSize, colour, state, liveCount, active, () => {
           onNodeTapRef.current(node)
         })
 
@@ -495,7 +595,7 @@ export function useMapMarkers(
       cancelled = true
       map.off('load', addMarkers)
     }
-  }, [nodes, pulseScores, archetypeIds, categoryFilter, mapRef, mapReady, showIcon])
+  }, [nodes, pulseScores, checkInCounts, archetypeIds, categoryFilter, activeVenueId, mapRef, mapReady, showIcon])
 
   // Tear down every glyph root on unmount so a remount of the map screen
   // doesn't leak React commits to dead DOM.

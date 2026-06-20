@@ -11,7 +11,7 @@ export function useNodePulse(token?: string, opts?: { citySlug?: string }) {
     const socket = getSocket(token, opts?.citySlug ? { citySlug: opts.citySlug } : undefined)
 
     const handler = (payload: { nodeId: string; pulseScore: number; state: NodeState; checkInCount: number }) => {
-      updateNodePulse(payload.nodeId, payload.pulseScore)
+      updateNodePulse(payload.nodeId, payload.pulseScore, payload.checkInCount)
     }
 
     socket.on('node:pulse_update', handler)

@@ -17,6 +17,19 @@
     padding: 0;
   }
 
+  /* iOS standalone PWA: kill the document-level rubber-band / scroll-chaining
+     that lets Safari's address bar and toolbar peek in when launched from the
+     Home Screen. The app scrolls inside its own content container (see
+     App.tsx, .overscroll-y-contain), so the document itself never scrolls. */
+  html,
+  body {
+    overflow: hidden;
+    overscroll-behavior: none;
+    /* Avoid the bounce that reveals browser chrome on iOS. */
+    -webkit-overflow-scrolling: auto;
+    touch-action: manipulation;
+  }
+
   body {
     background: var(--bg-gradient);
     background-attachment: fixed;

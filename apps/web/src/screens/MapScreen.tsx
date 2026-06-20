@@ -1,34 +1,48 @@
-import { useEffect, useState, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { MapPinOff, Search } from 'lucide-react'
-
-import { api } from '@area-code/shared/lib/api'
-import { useMapStore, useConsumerAuthStore, useLocationStore, useUserStore } from '@area-code/shared/stores'
-import { useGeolocation, useCheckIn, useNodeArchetype, useCityPulseToast } from '@area-code/shared/hooks'
-import { useLiveVibeOnMap } from '@area-code/shared/lib/featureGating'
 import { Spinner } from '@area-code/shared/components/Spinner'
+import { useGeolocation, useNodeArchetype, useCityPulseToast } from '@area-code/shared/hooks'
+import { api } from '@area-code/shared/lib/api'
+import { useLiveVibeOnMap } from '@area-code/shared/lib/featureGating'
+import {
+  useMapStore,
+  useConsumerAuthStore,
+  useLocationStore,
+  useUserStore,
+  useSelectionStore,
+} from '@area-code/shared/stores'
 import type { Node, NodeCategory, Reward } from '@area-code/shared/types'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { MapPinOff, Search, Undo2 } from 'lucide-react'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 
+import { CategoryFilterBar } from '../components/CategoryFilterBar'
+import { MapControls } from '../components/MapControls'
+import { NotificationPrimingSheet, isDeferredRecently } from '../components/NotificationPrimingSheet'
+import { PeekCarousel } from '../components/PeekCarousel'
+import { ProximityNudgeBanner } from '../components/ProximityNudgeBanner'
+import { QrScannerSheet } from '../components/QrScannerSheet'
+import { SearchSheet, type SearchResult } from '../components/SearchSheet'
+import { SignupSheet } from '../components/SignupSheet'
+import { ToastOverlay } from '../components/ToastOverlay'
+import { useCarouselSelection } from '../hooks/useCarouselSelection'
+import { useCheckInFlow } from '../hooks/useCheckInFlow'
 import { useMapInit } from '../hooks/useMapInit'
 import { useMapMarkers } from '../hooks/useMapMarkers'
 import { useMapSockets } from '../hooks/useMapSockets'
+import { useOverlayCoordinator } from '../hooks/useOverlayCoordinator'
 import { getNodeState } from '../lib/mapHelpers'
-import { CategoryFilterBar } from '../components/CategoryFilterBar'
-import { ToastOverlay } from '../components/ToastOverlay'
-import { ProximityNudgeBanner } from '../components/ProximityNudgeBanner'
-import { NodeDetailSheet } from '../components/NodeDetailSheet'
-import { SignupSheet } from '../components/SignupSheet'
-import { SearchSheet, type SearchResult } from '../components/SearchSheet'
-import { NotificationPrimingSheet, isDeferredRecently } from '../components/NotificationPrimingSheet'
-import { MapControls } from '../components/MapControls'
 import type { AppRoute } from '../types'
 
 interface MapScreenProps {
   onNavigate: (route: AppRoute) => void
 }
 
-const DEFAULT_ZOOM = 13
+/**
+ * Zoom used when the user explicitly asks to be located (Recenter button or
+ * the "Enable location" banner): roughly a 20 km radius around them. The map
+ * otherwise opens on the full-country overview from useMapInit.
+ */
+const USER_VIEW_ZOOM = 10
 
 /**
  * Flag-gated subscriber for live archetype deltas (R11.1, R12.4, R12.6).
@@ -74,38 +88,48 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     recenterUser,
     pauseIdleDrift,
   } = useMapInit()
+
   const setNodes = useMapStore((s) => s.setNodes)
+  const addNode = useMapStore((s) => s.addNode)
+  const nodes = useMapStore((s) => s.nodes)
   const pulseScores = useMapStore((s) => s.pulseScores)
-  const nodesById = useMapStore((s) => s.nodes)
   const focusNodeId = useMapStore((s) => s.focusNodeId)
-  const setFocusNodeId = useMapStore((s) => s.setFocusNodeId)
   const accessToken = useConsumerAuthStore((s) => s.accessToken)
-  const permissionState = useLocationStore((s) => s.permissionState)
+  const userId = useConsumerAuthStore((s) => s.userId)
   const lastKnownPosition = useLocationStore((s) => s.lastKnownPosition)
   const lastKnownPositionCapturedAt = useLocationStore((s) => s.capturedAt)
   const onboarding = useUserStore((s) => s.onboarding)
   const markHintSeen = useUserStore((s) => s.markHintSeen)
-  const { requestLocation, geoStatus } = useGeolocation()
-  const { checkIn, isPending: checkInPending, qrFallback, resetQrFallback } = useCheckIn()
+  const { requestLocation } = useGeolocation()
 
   const citySlug = useUserStore((s) => s.user?.citySlug) ?? 'johannesburg'
 
-  const [selectedNode, setSelectedNode] = useState<Node | null>(null)
-  const [sheetOpen, setSheetOpen] = useState(false)
-  /**
-   * True when the sheet was opened via the cross-screen focus signal (e.g.
-   * a tap on the Gets list). Drives a lighter backdrop so the user keeps
-   * seeing pulsing neighbour venues, planting the second-outing thought.
-   */
-  const [sheetOpenedFromFocus, setSheetOpenedFromFocus] = useState(false)
-  const [signupOpen, setSignupOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState<NodeCategory | null>(null)
-  const [primingOpen, setPrimingOpen] = useState(false)
+  const [locationBannerDismissed, setLocationBannerDismissed] = useState(false)
+  // Session flags that gate the Notification_Priming_Sheet (R14.7, R17.5). The
+  // overlay coordinator turns these into the actual render decision.
+  const [hasCompletedFirstCheckIn, setHasCompletedFirstCheckIn] = useState(false)
   const [primingShownThisSession, setPrimingShownThisSession] = useState(false)
 
+  // ── Selection_Model: the single source of truth for the Active_Venue ──
+  // Drives the Peek_Carousel, the camera, and the marker layer. Replaces the
+  // legacy ad-hoc selectedNode/sheetOpen/handleFlick state.
+  const selection = useCarouselSelection({ categoryFilter, mapReady })
+  const {
+    activeVenueId,
+    notifyViewportChanged,
+    carouselOrder,
+    selectVenue,
+    onMarkerTap,
+    onSearchSelect,
+    dismiss,
+    mode,
+    lastVenueId,
+    reopenLast,
+  } = selection
+
   // Socket subscriptions, citySlug passed for anonymous room join
-  const userId = useConsumerAuthStore((s) => s.userId)
   useMapSockets(citySlug, accessToken ?? undefined, userId)
 
   // Live archetype delivery is gated by the `live_vibe_on_map` flag (R12.4,
@@ -128,103 +152,99 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     }
   }, [nodeList, setNodes])
 
-  // Geolocation acquisition via the GPS state machine hook
+  // Geolocation acquisition via the GPS state machine hook. We acquire the
+  // position (for check-in proximity and to enable the Recenter button) but
+  // deliberately do NOT move the camera — the map opens on the full-country
+  // overview and only flies to the user when they tap Recenter (USER_VIEW_ZOOM).
   useEffect(() => {
-    void requestLocation().then((pos) => {
-      if (pos) {
-        mapRef.current?.flyTo({
-          center: [pos.lng, pos.lat],
-          zoom: DEFAULT_ZOOM,
-        })
-      }
-    })
+    void requestLocation()
     // Only run on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Node tap handler, dismiss onboarding hint on first tap
-  const handleNodeTap = useCallback(
+  // ── Commit-mode check-in flow ──
+  // Owns the CTA orchestration: signup (email/password + Google OAuth only),
+  // GPS-too-far QR fallback, offline fail-safe, and duplicate-submission
+  // prevention. The success callback owns the side effects only the screen can
+  // perform: closing the carousel, query invalidation, and first-check-in
+  // notification priming (R14.7).
+  const handleCheckInSuccess = useCallback(() => {
+    dismiss()
+    void queryClient.invalidateQueries({ queryKey: ['nodes'] })
+    if (!onboarding.firstCheckIn) {
+      markHintSeen('firstCheckIn')
+      setHasCompletedFirstCheckIn(true)
+    }
+  }, [dismiss, queryClient, onboarding.firstCheckIn, markHintSeen])
+
+  const checkInFlow = useCheckInFlow({ onCheckInSuccess: handleCheckInSuccess })
+
+  // ── Marker layer ──
+  // The Active_Venue from the Selection_Model carries the active-marker
+  // distinction (R12.6); marker taps route through the selection hook so all
+  // input methods feed one model (R3.1, R3.4).
+  const handleMarkerTap = useCallback(
     (node: Node) => {
-      setSelectedNode(node)
-      setSheetOpen(true)
-      setSheetOpenedFromFocus(false)
-      resetQrFallback()
       if (!onboarding.hintSeen) markHintSeen('hintSeen')
+      onMarkerTap(node.id)
     },
-    [onboarding.hintSeen, markHintSeen, resetQrFallback],
+    [onboarding.hintSeen, markHintSeen, onMarkerTap],
   )
 
-  // Marker management (extracted hook)
-  useMapMarkers(mapRef, categoryFilter, handleNodeTap, mapReady)
+  useMapMarkers(mapRef, categoryFilter, handleMarkerTap, mapReady, activeVenueId)
 
-  // Cross-screen focus: when another surface (e.g. Gets list) sets focusNodeId,
-  // fly to that node and open its detail sheet. We wait for the map to be
-  // ready and the node to be present in the store before consuming the signal.
-  //
-  // Zoom 14 (not 16) is deliberate: it keeps several neighbouring venues in
-  // view alongside the focused one. Combined with the lighter backdrop on the
-  // sheet, the user sees other pulsing nodes while reading the discount —
-  // that peripheral vision is what plants "and then we go to X next" in their
-  // head before they leave for the first venue.
+  // ── Viewport-change recompute ──
+  // Pan/zoom recomputes the in-viewport Carousel_Order (R6.2). The selection
+  // hook debounces internally, so wiring both `moveend` and `zoom` is safe.
   useEffect(() => {
-    if (!focusNodeId || !mapReady) return
-    const node = nodesById[focusNodeId]
-    if (!node) return
-    setSelectedNode(node)
-    setSheetOpen(true)
-    setSheetOpenedFromFocus(true)
-    resetQrFallback()
-    mapRef.current?.flyTo({ center: [node.lng, node.lat], zoom: 14 })
-    setFocusNodeId(null)
-  }, [focusNodeId, mapReady, nodesById, mapRef, setFocusNodeId, resetQrFallback])
-
-  // Fetch rewards for the selected node
-  const { data: nodeRewards } = useQuery({
-    queryKey: ['node-rewards', selectedNode?.id],
-    queryFn: () => api.get<{ items: Reward[] }>(`/v1/nodes/${selectedNode!.id}/rewards`).then((r) => r.items),
-    enabled: !!selectedNode,
-    staleTime: 30_000,
-  })
-
-  // Check-in handler using the enhanced useCheckIn hook
-  async function handleCheckIn() {
-    if (!selectedNode) return
-
-    // Acquire fresh location before check-in
-    const pos = await requestLocation()
-    if (!pos && geoStatus !== 'poorAccuracy') return
-
-    const payload = {
-      nodeId: selectedNode.id,
-      type: 'reward' as const,
-      ...(pos ? { lat: pos.lat, lng: pos.lng } : {}),
-    }
-
-    const result = await checkIn(payload)
-
-    if (result) {
-      // Haptic feedback on successful check-in (Issue #31)
-      if (navigator.vibrate) navigator.vibrate(50)
-      setSheetOpen(false)
-      setSheetOpenedFromFocus(false)
-      void queryClient.invalidateQueries({ queryKey: ['nodes'] })
-      if (!onboarding.firstCheckIn) {
-        markHintSeen('firstCheckIn')
-        // Show notification priming after first check-in if not deferred and not already shown
-        if (userId && !primingShownThisSession && !isDeferredRecently(userId)) {
-          setPrimingShownThisSession(true)
-          setPrimingOpen(true)
-        }
+    const map = mapRef.current
+    if (!map || !mapReady) return
+    const handler = () => notifyViewportChanged()
+    map.on('moveend', handler)
+    map.on('zoom', handler)
+    return () => {
+      try {
+        map.off('moveend', handler)
+        map.off('zoom', handler)
+      } catch {
+        /* map already torn down */
       }
     }
-  }
+  }, [mapRef, mapReady, notifyViewportChanged])
+
+  // ── First-paint open into Browse_Mode (R1.1) ──
+  // Once the map is ready and the Carousel_Order has at least one in-viewport
+  // venue, open the carousel in Browse_Mode on the first (highest-ranked)
+  // venue. Skipped when a Focus_Signal is pending (it opens the carousel on its
+  // own target) or when the carousel is already open.
+  const autoOpenedRef = useRef(false)
+  useEffect(() => {
+    if (autoOpenedRef.current || !mapReady) return
+    if (useSelectionStore.getState().mode !== 'closed') {
+      autoOpenedRef.current = true
+      return
+    }
+    if (focusNodeId) return
+    const first = carouselOrder[0]
+    if (!first) return
+    autoOpenedRef.current = true
+    selectVenue(first, 'swipe')
+  }, [mapReady, carouselOrder, focusNodeId, selectVenue])
+
+  // Fetch rewards for the Active_Venue (Commit_Mode body).
+  const { data: nodeRewards } = useQuery({
+    queryKey: ['node-rewards', activeVenueId],
+    queryFn: () => api.get<{ items: Reward[] }>(`/v1/nodes/${activeVenueId!}/rewards`).then((r) => r.items),
+    enabled: !!activeVenueId,
+    staleTime: 30_000,
+  })
 
   function handleEnableLocation() {
     void requestLocation().then((pos) => {
       if (pos) {
         mapRef.current?.flyTo({
           center: [pos.lng, pos.lat],
-          zoom: DEFAULT_ZOOM,
+          zoom: USER_VIEW_ZOOM,
         })
       } else {
         // Permission still denied, dismiss banner
@@ -233,9 +253,20 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     })
   }
 
-  const selectedScore = selectedNode ? (pulseScores[selectedNode.id] ?? 0) : 0
-  const [locationBannerDismissed, setLocationBannerDismissed] = useState(false)
-  const showLocationBanner = permissionState === 'denied' && !locationBannerDismissed
+  // ── Overlay coordination ──
+  // Gates the Onboarding_Hint, Proximity_Nudge_Banner, Notification_Priming_Sheet,
+  // and Location_Banner: suppresses the first three while Commit_Mode is open
+  // (R17.3), enforces nudge/Location_Banner mutual exclusion (R17.4), and gates
+  // priming to after a successful first check-in, once per session (R17.5).
+  const overlay = useOverlayCoordinator({
+    nudgeAvailable: true,
+    locationBannerDismissed,
+    hasCompletedFirstCheckIn,
+    primingShownThisSession,
+    primingDeferred: userId ? isDeferredRecently(userId) : true,
+  })
+
+  const activeScore = activeVenueId ? (pulseScores[activeVenueId] ?? 0) : 0
 
   return (
     <div className="h-full w-full relative" style={{ background: 'var(--bg-map)' }}>
@@ -294,7 +325,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       )}
 
       {/* Location banner, non-blocking */}
-      {showLocationBanner && (
+      {overlay.showLocationBanner && (
         <div className="absolute top-16 left-4 right-4 z-20">
           <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl px-4 py-3 flex items-center justify-between">
             <div className="flex-1 mr-3">
@@ -325,7 +356,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
         </div>
       )}
 
-      {!onboarding.hintSeen && (
+      {overlay.showOnboardingHint && (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 pointer-events-none [&>*]:pointer-events-auto">
           <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-2xl px-4 py-3 flex items-center gap-2 shadow-lg">
             <span className="text-[var(--text-secondary)] text-sm">{t('map.tapHint')}</span>
@@ -353,69 +384,98 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       )}
 
       <ToastOverlay />
-      <ProximityNudgeBanner onNavigate={onNavigate} />
+      {overlay.showNudge && <ProximityNudgeBanner onNavigate={onNavigate} />}
 
       {liveVibeOnMap && <LiveArchetypeSubscriber token={accessToken ?? undefined} citySlug={citySlug} />}
       <CityPulseToastMount mapReady={mapReady} />
 
-      <NodeDetailSheet
-        node={selectedNode}
+      {/* Reopen-last affordance — surfaced only while the carousel is closed
+          and a previously-viewed venue is retained. Tapping it re-opens the
+          Peek_Carousel (Browse_Mode) on that venue without a marker hunt. */}
+      {mode === 'closed' && lastVenueId !== null && nodes[lastVenueId] && (
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 pointer-events-none [&>*]:pointer-events-auto">
+          <button
+            onClick={reopenLast}
+            className="glass-raised rounded-full pl-3 pr-4 py-2 flex items-center gap-2 text-[var(--text-primary)] text-sm font-semibold shadow-lg transition-all active:scale-95"
+            aria-label={t('map.reopenLast', {
+              name: nodes[lastVenueId]!.name,
+              defaultValue: `Reopen ${nodes[lastVenueId]!.name}`,
+            })}
+          >
+            <Undo2 size={16} strokeWidth={2} className="text-[var(--accent)]" />
+            <span className="max-w-[180px] truncate">
+              {t('map.reopenLast', {
+                name: nodes[lastVenueId]!.name,
+                defaultValue: `Reopen ${nodes[lastVenueId]!.name}`,
+              })}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* Peek_Carousel — the two-state browse-and-compare surface (R1.1, R2.x).
+          Browse_Mode (swipeable Venue_Card strip + FlickControls) and
+          Commit_Mode (full detail body) over a single shared BottomSheet. */}
+      <PeekCarousel
+        selection={selection}
         rewards={nodeRewards ?? []}
-        pulseScore={selectedScore}
-        state={getNodeState(selectedScore)}
-        isOpen={sheetOpen}
-        onClose={() => {
-          setSheetOpen(false)
-          setSheetOpenedFromFocus(false)
-        }}
-        onCheckIn={handleCheckIn}
-        onSignup={() => {
-          setSheetOpen(false)
-          setSheetOpenedFromFocus(false)
-          setSignupOpen(true)
-        }}
-        qrFallback={qrFallback}
-        isCheckingIn={checkInPending}
-        transparentBackdrop={sheetOpenedFromFocus}
+        pulseScore={activeScore}
+        state={getNodeState(activeScore)}
+        onCheckIn={checkInFlow.activateCheckIn}
+        onSignup={checkInFlow.activateCheckIn}
+        qrFallback={checkInFlow.qrFallback}
+        isCheckingIn={checkInFlow.isPending}
       />
 
-      <SignupSheet isOpen={signupOpen} onClose={() => setSignupOpen(false)} onNavigate={onNavigate} />
+      {/* Auth + QR surfaces owned by the check-in flow. The only auth entry
+          reachable from the map is the email/password + Google OAuth
+          SignupSheet — no phone-number or SMS surface (R20.1). */}
+      <SignupSheet isOpen={checkInFlow.signupOpen} onClose={checkInFlow.closeSignup} onNavigate={onNavigate} />
+      <QrScannerSheet
+        isOpen={checkInFlow.qrScannerOpen}
+        onClose={checkInFlow.closeQrScanner}
+        onScanned={checkInFlow.onQrScanned}
+      />
 
       <SearchSheet
         isOpen={searchOpen}
         onClose={() => setSearchOpen(false)}
         onSelectNode={(result: SearchResult) => {
           setSearchOpen(false)
-          const node: Node = {
-            id: result.id,
-            name: result.name,
-            slug: result.slug,
-            category: result.category as Node['category'],
-            lat: result.lat,
-            lng: result.lng,
-            cityId: '',
-            businessId: null,
-            submittedBy: null,
-            claimStatus: 'unclaimed',
-            claimCipcStatus: null,
-            nodeColour: 'default',
-            nodeIcon: null,
-            qrCheckinEnabled: false,
-            isVerified: false,
-            isActive: true,
-            createdAt: '',
+          // Ensure the searched venue is resolvable by the Selection_Model and
+          // the camera/detail layers even if it is not in the current city
+          // node set, then route the selection through the single model (R13.4).
+          if (!useMapStore.getState().nodes[result.id]) {
+            const node: Node = {
+              id: result.id,
+              name: result.name,
+              slug: result.slug,
+              category: result.category as Node['category'],
+              lat: result.lat,
+              lng: result.lng,
+              cityId: '',
+              businessId: null,
+              submittedBy: null,
+              claimStatus: 'unclaimed',
+              claimCipcStatus: null,
+              nodeColour: 'default',
+              nodeIcon: null,
+              qrCheckinEnabled: false,
+              isVerified: false,
+              isActive: true,
+              createdAt: '',
+            }
+            addNode(node)
           }
-          setSelectedNode(node)
-          setSheetOpen(true)
-          setSheetOpenedFromFocus(false)
-          mapRef.current?.flyTo({ center: [node.lng, node.lat], zoom: 16 })
+          if (!onboarding.hintSeen) markHintSeen('hintSeen')
+          onSearchSelect(result.id)
         }}
       />
 
-      {primingOpen && userId && lastKnownPosition && (
+      {overlay.showPriming && userId && lastKnownPosition && (
         <NotificationPrimingSheet
-          isOpen={primingOpen}
-          onClose={() => setPrimingOpen(false)}
+          isOpen
+          onClose={() => setPrimingShownThisSession(true)}
           lat={lastKnownPosition.lat}
           lng={lastKnownPosition.lng}
           userId={userId}

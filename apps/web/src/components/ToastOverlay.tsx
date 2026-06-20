@@ -43,14 +43,22 @@ export function ToastOverlay() {
     setTranslateX(0)
   }, [translateX, currentToast, removeToast])
 
-  // Hidden when bottom sheet is open
   if (!currentToast) return null
+
+  // While the Peek_Carousel (Bottom_Sheet) is open it occupies the lower part
+  // of the viewport, so anchoring the toast to the bottom would occlude the
+  // active Venue_Card and the check-in CTA. In that case we anchor the toast to
+  // the top of the viewport instead so it stays clear of the sheet
+  // (Requirement 16.4). Otherwise it sits above the nav bar as before.
+  const anchorStyle: React.CSSProperties = isBottomSheetOpen
+    ? { top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }
+    : { bottom: 'calc(var(--nav-height, 56px) + env(safe-area-inset-bottom, 0px) + 8px)' }
 
   return (
     <div
       className="fixed left-4 right-4"
       style={{
-        bottom: 'calc(var(--nav-height, 56px) + env(safe-area-inset-bottom, 0px) + 8px)',
+        ...anchorStyle,
         zIndex: isBottomSheetOpen ? 10000 : 9998,
         transform: `translateX(${translateX}px)`,
         opacity: Math.max(0, 1 - Math.abs(translateX) / 120),

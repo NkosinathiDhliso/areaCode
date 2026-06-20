@@ -394,7 +394,17 @@ export interface NotificationPreferences {
 
 // MapInstance , generic interface abstracting Mapbox GL JS / @rnmapbox/maps
 export interface MapInstance {
-  flyTo(options: { center: [number, number]; zoom?: number }): void
+  flyTo(options: {
+    center: [number, number]
+    zoom?: number
+    /**
+     * Screen-space offset of the target center, in pixels [x, y]. Negative y
+     * lifts the point above the container centre — used so a focused node is
+     * not hidden behind the bottom sheet when it opens.
+     */
+    offset?: [number, number]
+    duration?: number
+  }): void
   setFeatureState(feature: { source: string; id: string }, state: Record<string, unknown>): void
   getZoom(): number
   getBounds(): { toArray(): [[number, number], [number, number]] }

@@ -31,6 +31,13 @@ export interface ArchetypeGlyphProps {
   category: NodeCategory
   /** Pixel diameter; clamped to an 8px floor for legibility (R8.9). */
   size?: number
+  /**
+   * Optional override for the glyph's fill (silhouette) colour. Defaults to the
+   * venue's category colour (`getCategoryColour`). The Venue_Card passes the
+   * venue's Pulse_State colour here so the browse-strip glyph reads in the live
+   * state colour (R1.2) while the map marker keeps the category colour.
+   */
+  silhouetteColour?: string
 }
 
 const MIN_GLYPH_SIZE_PX = 8
@@ -78,10 +85,16 @@ function resolveIcon(archetypeId: string): { Component: Icon; spec: ArchetypeIco
   return { Component, spec }
 }
 
-export function ArchetypeGlyph({ archetypeId, pulseState, category, size }: ArchetypeGlyphProps): ReactElement {
+export function ArchetypeGlyph({
+  archetypeId,
+  pulseState,
+  category,
+  size,
+  silhouetteColour,
+}: ArchetypeGlyphProps): ReactElement {
   const renderSize = Math.max(MIN_GLYPH_SIZE_PX, size ?? DEFAULT_GLYPH_SIZE_PX)
 
-  const silhouette = getCategoryColour(category)
+  const silhouette = silhouetteColour ?? getCategoryColour(category)
   const outline = dynamicContrastForCategory(category)
   const stateOpacity = pulseState === 'dormant' ? DORMANT_OPACITY : ACTIVE_OPACITY
 

@@ -7,7 +7,24 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 
 const MAPBOX_TOKEN = import.meta.env['VITE_MAPBOX_TOKEN'] as string | undefined
 
-const DEFAULT_CENTER: [number, number] = [28.0473, -26.2041]
+/**
+ * Default camera: a full South-Africa overview. The map opens showing the
+ * whole country and only zooms to the user's surroundings when they tap the
+ * Recenter (locate) button — see `recenterUser` and `USER_VIEW_ZOOM`.
+ */
+const COUNTRY_CENTER: [number, number] = [25.0, -29.0]
+const COUNTRY_ZOOM = 5
+
+/**
+ * Zoom the Recenter button flies to: roughly a 20 km radius around the user on
+ * a typical phone viewport. (At ~zoom 10 and mid-SA latitude one screen width
+ * spans ~40–50 km, i.e. a ~20–25 km radius.) Kept as a zoom level rather than
+ * a `fitBounds` so the existing R1 recenter tests — which assert a `flyTo`
+ * with a center + duration — keep passing.
+ */
+const USER_VIEW_ZOOM = 10
+
+/** Fallback zoom for `getZoom()` if the live map read throws. */
 const DEFAULT_ZOOM = 13
 const PITCH_3D = 55
 const PITCH_FLAT = 0
@@ -76,11 +93,6 @@ const ATMOSPHERE: Record<ThemeMode, AtmosphereConfig> = {
 const TERRAIN_SOURCE_ID = 'mapbox-dem'
 const SKY_LAYER_ID = 'sky-atmosphere'
 const BUILDING_LAYER_ID = '3d-buildings'
-
-let singletonMap: mapboxgl.Map | null = null
-let singletonContainer: HTMLDivElement | null = null
-let singletonLoaded = false
-let singletonStyleTheme: ThemeMode | null = null
 
 function prefersReducedMotion(): boolean {
   if (typeof window === 'undefined' || !window.matchMedia) return false
@@ -204,6 +216,8 @@ function buildMapInstance(map: mapboxgl.Map): MapInstance {
       try {
         const flyOpts: Record<string, unknown> = { center: opts.center }
         if (opts.zoom !== undefined) flyOpts['zoom'] = opts.zoom
+        if (opts.offset !== undefined) flyOpts['offset'] = opts.offset
+        if (opts.duration !== undefined) flyOpts['duration'] = opts.duration
         map.flyTo(flyOpts as Parameters<typeof map.flyTo>[0])
       } catch {
         // Map may have been removed, ignore
@@ -242,30 +256,39 @@ function buildMapInstance(map: mapboxgl.Map): MapInstance {
 }
 
 /**
- * Initialises Mapbox GL JS once and persists across navigation.
- * mapRef is only set AFTER the map fires 'load', ensuring markers
- * added via useMapMarkers are properly geo-anchored.
+ * Initialises Mapbox GL JS for the lifetime of the MapScreen mount.
  *
- * Theme-aware: watches `data-theme` on <html> and swaps the basemap style,
- * sky tint, fog palette, and 3D building colour to match light or dark mode.
+ * The MapScreen is conditionally rendered in App.tsx (`activeRoute === 'map'`),
+ * so it unmounts when the user switches tabs and mounts fresh on return. This
+ * hook therefore owns a **per-mount** map: it creates the map on mount and
+ * fully removes it on unmount. (A previous module-level singleton tried to
+ * persist the map across navigation, but because each remount gets a brand-new
+ * container DOM node the singleton could be left detached and the map would
+ * "refuse to reopen". A clean create/destroy per mount is deterministic.)
  *
- * Includes graceful error handling — if the map fails to load,
- * mapError is set so the UI can show a fallback instead of crashing.
+ * mapRef is only set AFTER the map fires 'load', ensuring markers added via
+ * useMapMarkers are properly geo-anchored.
+ *
+ * Theme-aware: watches the resolved theme and swaps the basemap style, sky
+ * tint, fog palette, and 3D building colour to match light or dark mode.
+ *
+ * Includes graceful error handling — if the map fails to load, mapError is set
+ * so the UI can show a fallback instead of crashing.
  */
 export function useMapInit() {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
+  // Tracks the map's loaded() readiness without depending on mapbox internals.
+  const loadedRef = useRef(false)
+  // The basemap theme currently applied to mapRef.current. Lets the theme-sync
+  // effect avoid redundant setStyle() calls.
+  const themeRef = useRef<ThemeMode | null>(null)
   const setMapInstance = useMapStore((s) => s.setMapInstance)
-  // Subscribe to the resolved theme directly. Using useTheme() (rather than
-  // reading data-theme off the DOM) is important because:
-  //   1. data-theme isn't applied until useTheme()'s effect runs, which
-  //      may be AFTER this hook's init effect on first paint, leaving the
-  //      map locked to the dark default.
-  //   2. A reactive value lets us key the style-swap effect on it directly,
-  //      no MutationObserver gymnastics.
+  // Subscribe to the resolved theme directly so the init effect seeds the
+  // correct initial style and the theme-sync effect can react to flips.
   const { resolved } = useTheme()
-  // Increment counter when map becomes ready. This is more reliable than a
-  // boolean that can flip false→true→false during React strict-mode remounts.
+  // Increment counter when map becomes ready. More reliable than a boolean
+  // that can flip during React strict-mode remounts.
   const [mapReadyKey, setMapReadyKey] = useState(0)
   const [mapError, setMapError] = useState<string | null>(null)
   const [is3D, setIs3D] = useState(true)
@@ -298,7 +321,7 @@ export function useMapInit() {
 
   const setPitch3D = useCallback((on: boolean) => {
     setIs3D(on)
-    const map = singletonMap
+    const map = mapRef.current
     if (!map) return
     try {
       map.easeTo({
@@ -314,9 +337,8 @@ export function useMapInit() {
   /**
    * Snap the bearing back to north when the user taps Compass_Button.
    *
-   * Reads through `mapRef.current` (not the module-level `singletonMap`) so a
-   * teardown-recreate cycle via `retryMap` wires the latest map instance
-   * (Live Vibe on Map R1.1, design "Frontend: R1 sidebar correctness").
+   * Reads through `mapRef.current` so a teardown-recreate cycle via `retryMap`
+   * wires the latest map instance (Live Vibe on Map R1.1).
    *
    * Early-out branches:
    *   - Map ref absent or not yet `loaded()`: silent debug log, no throw (R1.6).
@@ -347,7 +369,7 @@ export function useMapInit() {
 
   /**
    * Fly the map to the consumer's Last_Known_Position when the user taps
-   * Recenter_Button.
+   * Recenter_Button, zooming to roughly a 20 km radius (`USER_VIEW_ZOOM`).
    *
    * Reads through `mapRef.current` (R1.1) and gates on the position's
    * freshness via `Date.now() - capturedAt <= 60000` (R1.3) so a stale fix
@@ -356,8 +378,7 @@ export function useMapInit() {
    * Early-out branches:
    *   - Map ref absent or not yet `loaded()`: silent debug log, no throw (R1.6).
    *   - No `lastKnownPosition` or `capturedAt`: silent no-op.
-   *   - Position older than 60s: silent no-op (the button itself renders
-   *     disabled in this state per R1.4, but the callback also enforces).
+   *   - Position older than 60s: silent no-op (R1.4).
    */
   const recenterUser = useCallback(() => {
     const map = mapRef.current
@@ -371,26 +392,24 @@ export function useMapInit() {
     if (!pos || !capturedAt) return
     if (Date.now() - capturedAt > 60_000) return
     try {
-      map.flyTo({ center: [pos.lng, pos.lat], zoom: DEFAULT_ZOOM, duration: 1000 })
+      map.flyTo({ center: [pos.lng, pos.lat], zoom: USER_VIEW_ZOOM, duration: 1000 })
     } catch {
       /* ignore */
     }
   }, [])
 
   const retryMap = useCallback(() => {
-    // Force cleanup and re-init
-    if (singletonMap) {
+    // Force cleanup and re-init. The init effect re-runs when mapError flips
+    // back to null and recreates the map against the live container.
+    if (mapRef.current) {
       try {
-        singletonMap.remove()
+        mapRef.current.remove()
       } catch {
         /* already removed */
       }
-      singletonMap = null
-      singletonContainer = null
-      singletonLoaded = false
-      singletonStyleTheme = null
+      mapRef.current = null
     }
-    mapRef.current = null
+    loadedRef.current = false
     setMapError(null)
     setMapReadyKey(0)
   }, [])
@@ -399,35 +418,12 @@ export function useMapInit() {
     const container = containerRef.current
     if (!container) return
 
-    // If there's an error state, don't try to init (wait for retry)
+    // If there's an error state, don't try to init (wait for retry).
     if (mapError) return
 
-    // Singleton already loaded and attached to same container
-    if (singletonMap && singletonContainer === container && singletonLoaded) {
-      mapRef.current = singletonMap
-      setMapInstance(buildMapInstance(singletonMap))
-      setMapReadyKey((k) => k + 1)
-      requestAnimationFrame(() => {
-        try {
-          singletonMap?.resize()
-        } catch {
-          /* ignore */
-        }
-      })
-      return
-    }
-
-    if (singletonMap) {
-      try {
-        singletonMap.remove()
-      } catch {
-        /* already removed */
-      }
-      singletonMap = null
-      singletonContainer = null
-      singletonLoaded = false
-      singletonStyleTheme = null
-    }
+    // A live map already exists for this mount (e.g. an unexpected effect
+    // re-run that isn't an error transition) — nothing to do.
+    if (mapRef.current) return
 
     if (!MAPBOX_TOKEN) {
       setMapError('Map configuration missing. Please try again later.')
@@ -435,15 +431,18 @@ export function useMapInit() {
     }
 
     const initialTheme: ThemeMode = resolved
+    themeRef.current = initialTheme
 
+    let map: mapboxgl.Map
     try {
       mapboxgl.accessToken = MAPBOX_TOKEN
 
-      const map = new mapboxgl.Map({
+      map = new mapboxgl.Map({
         container,
         style: STYLE_URL[initialTheme],
-        center: DEFAULT_CENTER,
-        zoom: DEFAULT_ZOOM,
+        // Open on a full-country overview; the user zooms in via Recenter.
+        center: COUNTRY_CENTER,
+        zoom: COUNTRY_ZOOM,
         pitch: PITCH_3D,
         bearing: BEARING_3D,
         antialias: true,
@@ -453,77 +452,9 @@ export function useMapInit() {
         // low zoom + high pitch produces incorrect screen positions, causing
         // markers to detach from the globe surface (mapbox-gl issue #12592).
         projection: 'globe' as unknown as mapboxgl.ProjectionSpecification,
-        // Prevent zooming out past a meaningful regional overview. Below
-        // zoom 4 the positioning math degrades even in globe mode and
-        // individual venue markers are meaningless at continent/world scale.
+        // Prevent zooming out past a meaningful regional overview.
         minZoom: 4,
       })
-
-      singletonMap = map
-      singletonContainer = container
-      singletonStyleTheme = initialTheme
-
-      // Track bearing changes so the compass UI reflects reality.
-      map.on('rotate', () => {
-        try {
-          setBearing(map.getBearing())
-        } catch {
-          /* ignore */
-        }
-      })
-
-      // Handle map errors gracefully
-      map.on('error', (e) => {
-        const msg = e.error?.message ?? ''
-        if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-          return
-        }
-        if (import.meta.env?.DEV) {
-          console.warn('[useMapInit] Map error:', e.error)
-        }
-      })
-
-      // style.load fires both on initial style load AND every time
-      // setStyle() swaps the basemap (e.g. dark↔light theme switch).
-      // We re-apply terrain, sky, fog, and 3D buildings every time.
-      map.on('style.load', () => {
-        const theme = singletonStyleTheme ?? 'dark'
-        applyCustomLayers(map, theme)
-      })
-
-      // Only expose the map ref AFTER it's fully loaded
-      map.on('load', () => {
-        singletonLoaded = true
-        mapRef.current = map
-        setMapInstance(buildMapInstance(map))
-        setMapReadyKey((k) => k + 1)
-      })
-
-      map.scrollZoom.enable()
-      map.dragPan.enable()
-      map.touchZoomRotate.enableRotation()
-
-      const ro = new ResizeObserver(() => {
-        try {
-          map.resize()
-        } catch {
-          /* ignore */
-        }
-      })
-      ro.observe(container)
-
-      // Timeout: if map doesn't load within 15s, show error
-      const loadTimeout = setTimeout(() => {
-        if (!singletonLoaded) {
-          setMapError('Map is taking too long to load. Check your connection and try again.')
-        }
-      }, 15000)
-
-      return () => {
-        clearTimeout(loadTimeout)
-        ro.disconnect()
-        mapRef.current = null
-      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       if (import.meta.env?.DEV) {
@@ -532,28 +463,95 @@ export function useMapInit() {
       setMapError('Could not load the map. Please try again.')
       return
     }
-    // `resolved` is intentionally omitted from deps. The init effect reads
-    // it to seed the initial style URL, but theme changes after init are
-    // handled by the dedicated theme-sync effect below via setStyle().
-    // Including it here would re-create the entire map on every theme flip.
+
+    // Track bearing changes so the compass UI reflects reality.
+    map.on('rotate', () => {
+      try {
+        setBearing(map.getBearing())
+      } catch {
+        /* ignore */
+      }
+    })
+
+    // Handle map errors gracefully
+    map.on('error', (e) => {
+      const msg = e.error?.message ?? ''
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+        return
+      }
+      if (import.meta.env?.DEV) {
+        console.warn('[useMapInit] Map error:', e.error)
+      }
+    })
+
+    // style.load fires both on initial style load AND every time setStyle()
+    // swaps the basemap (e.g. dark↔light theme switch). Re-apply terrain,
+    // sky, fog, and 3D buildings every time.
+    map.on('style.load', () => {
+      applyCustomLayers(map, themeRef.current ?? 'dark')
+    })
+
+    // Only expose the map ref AFTER it's fully loaded.
+    map.on('load', () => {
+      loadedRef.current = true
+      mapRef.current = map
+      setMapInstance(buildMapInstance(map))
+      setMapReadyKey((k) => k + 1)
+    })
+
+    map.scrollZoom.enable()
+    map.dragPan.enable()
+    map.touchZoomRotate.enableRotation()
+
+    const ro = new ResizeObserver(() => {
+      try {
+        map.resize()
+      } catch {
+        /* ignore */
+      }
+    })
+    ro.observe(container)
+
+    // Timeout: if map doesn't load within 15s, show error.
+    const loadTimeout = setTimeout(() => {
+      if (!loadedRef.current) {
+        setMapError('Map is taking too long to load. Check your connection and try again.')
+      }
+    }, 15000)
+
+    return () => {
+      clearTimeout(loadTimeout)
+      ro.disconnect()
+      // Fully tear down the map on unmount so a stale, detached instance can
+      // never block re-initialisation when the Map tab is reopened.
+      try {
+        map.remove()
+      } catch {
+        /* already removed */
+      }
+      if (mapRef.current === map) mapRef.current = null
+      loadedRef.current = false
+      themeRef.current = null
+    }
+    // `resolved` is intentionally omitted from deps. The init effect reads it
+    // to seed the initial style URL, but theme changes after init are handled
+    // by the dedicated theme-sync effect below via setStyle(). Including it
+    // here would re-create the entire map on every theme flip.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setMapInstance, mapError])
 
   // ── Reactive theme sync ──
-  // Whenever the resolved theme flips (e.g. SAST 06:00 transition,
-  // user toggles mode in profile, or the auto path re-evaluates),
-  // swap the basemap style. The `style.load` listener installed above
-  // re-applies terrain, sky, fog, and 3D buildings on every swap.
+  // Whenever the resolved theme flips (SAST 06:00 transition, user toggle, or
+  // the auto path re-evaluating), swap the basemap style. The `style.load`
+  // listener re-applies terrain, sky, fog, and 3D buildings on every swap.
   // Markers are HTML elements anchored to lng/lat, so they survive untouched.
   useEffect(() => {
-    const map = singletonMap
+    const map = mapRef.current
     if (!map) return
-    if (singletonStyleTheme === resolved) return
-    singletonStyleTheme = resolved
+    if (themeRef.current === resolved) return
+    themeRef.current = resolved
     try {
       // diff: false forces a clean reload so terrain re-binds reliably.
-      // Cast because mapbox-gl's declared SetStyleOptions marks fields
-      // as required even though the runtime accepts a partial object.
       map.setStyle(STYLE_URL[resolved], { diff: false } as Parameters<typeof map.setStyle>[1])
     } catch {
       /* ignore — style.load handler will re-apply layers next time */
@@ -569,14 +567,12 @@ export function useMapInit() {
   // `driftPausedUntilRef`, so a Compass/Recenter tap can extend the pause
   // independently of the mousedown/touchstart/wheel handlers below.
   useEffect(() => {
-    if (!singletonLoaded || !is3D) return
+    const map = mapRef.current
+    if (!map || !loadedRef.current || !is3D) return
     if (prefersReducedMotion()) return
 
     let lastTime = performance.now()
     let interactionTimer: ReturnType<typeof setTimeout> | null = null
-
-    const map = singletonMap
-    if (!map) return
 
     const markInteraction = () => {
       // Resume drift 4s after the last interaction.
@@ -597,7 +593,7 @@ export function useMapInit() {
       lastTime = now
 
       const paused = Date.now() < driftPausedUntilRef.current
-      if (!paused && singletonMap === map) {
+      if (!paused && mapRef.current === map) {
         try {
           const current = map.getBearing()
           // 0.3 degrees per second, wraps cleanly through 360
