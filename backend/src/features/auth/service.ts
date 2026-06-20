@@ -176,29 +176,39 @@ export async function consumerOAuthSync(opts: { cognitoSub: string; email?: stri
       throw AppError.conflict('This email is already registered. Sign in with the method you used before.')
     }
 
-    const city = await repo.getCityBySlug('johannesburg')
-    if (!city) throw AppError.internal('Default city missing')
+    if (dupEmail) {
+      // An account already exists for this email but isn't linked to this
+      // Cognito identity (e.g. its cognitoSub was cleared during the pool
+      // migration, or the user signed up by email then returned via Google).
+      // Re-link to the existing record instead of creating a duplicate, so
+      // check-ins / tier / rewards are preserved.
+      user = (await repo.setUserCognitoSub(dupEmail.userId, cognitoSub)) ?? dupEmail
+      isNewUser = false
+    } else {
+      const city = await repo.getCityBySlug('johannesburg')
+      if (!city) throw AppError.internal('Default city missing')
 
-    let username = suggestedUsernameFromEmail(email)
-    let n = 0
-    while (await repo.findUserByUsername(username)) {
-      n += 1
-      username = `${suggestedUsernameFromEmail(email).slice(0, 18)}_${n}`
+      let username = suggestedUsernameFromEmail(email)
+      let n = 0
+      while (await repo.findUserByUsername(username)) {
+        n += 1
+        username = `${suggestedUsernameFromEmail(email).slice(0, 18)}_${n}`
+      }
+
+      const emailLocal = email.split('@')[0] ?? 'Friend'
+      const displayName = emailLocal.length > 0 ? emailLocal.charAt(0).toUpperCase() + emailLocal.slice(1) : 'Explorer'
+
+      user = await repo.createUser({
+        email,
+        username,
+        displayName,
+        cityId: city.id,
+        cognitoSub,
+      })
+
+      const consentVersion = currentConsentVersion()
+      await repo.insertConsentRecord(user.userId, consentVersion, false)
     }
-
-    const emailLocal = email.split('@')[0] ?? 'Friend'
-    const displayName = emailLocal.length > 0 ? emailLocal.charAt(0).toUpperCase() + emailLocal.slice(1) : 'Explorer'
-
-    user = await repo.createUser({
-      email,
-      username,
-      displayName,
-      cityId: city.id,
-      cognitoSub,
-    })
-
-    const consentVersion = currentConsentVersion()
-    await repo.insertConsentRecord(user.userId, consentVersion, false)
   }
 
   await cognito.updateUserAttributesByCognitoSub('consumer', cognitoSub, {

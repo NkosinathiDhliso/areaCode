@@ -49,6 +49,45 @@ variable "verify_auth_challenge_arn" {
   default = ""
 }
 
+# ─── Hosted UI / federated (Google) sign-in ──────────────────────────────────
+variable "enable_hosted_ui" {
+  description = "Provision a Hosted UI domain, Google IdP, and OAuth client settings for this pool."
+  type        = bool
+  default     = false
+}
+
+variable "hosted_ui_domain" {
+  description = "Cognito Hosted UI domain prefix. Defaults to area-code-<env>-<pool_name>."
+  type        = string
+  default     = ""
+}
+
+variable "callback_urls" {
+  type    = list(string)
+  default = []
+}
+
+variable "logout_urls" {
+  type    = list(string)
+  default = []
+}
+
+variable "oauth_scopes" {
+  type    = list(string)
+  default = ["aws.cognito.signin.user.admin", "email", "openid", "profile"]
+}
+
+variable "google_client_id" {
+  type    = string
+  default = ""
+}
+
+variable "google_client_secret" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
+
 resource "aws_iam_role" "cognito_sns" {
   name = "area-code-${var.env}-${var.pool_name}-cognito-sns"
 
@@ -148,6 +187,64 @@ resource "aws_cognito_user_pool_client" "this" {
   }
 
   prevent_user_existence_errors = "ENABLED"
+
+  # Hosted UI / OAuth (federated Google + Cognito). Inert when disabled.
+  supported_identity_providers         = var.enable_hosted_ui ? ["COGNITO", "Google"] : null
+  allowed_oauth_flows                  = var.enable_hosted_ui ? ["code"] : null
+  allowed_oauth_scopes                 = var.enable_hosted_ui ? var.oauth_scopes : null
+  allowed_oauth_flows_user_pool_client = var.enable_hosted_ui
+  callback_urls                        = var.callback_urls
+  logout_urls                          = var.logout_urls
+
+  # The client references the "Google" provider name, so the IdP must exist first.
+  depends_on = [aws_cognito_identity_provider.google]
+
+  lifecycle {
+    # Guardrail: a pool that signs in with email must enable the admin
+    # password auth flow, otherwise native email/password signup/login
+    # (createEmailPasswordUser + passwordAuth) fails at runtime. This stops a
+    # phone-only pool config from silently shipping for an email product.
+    precondition {
+      condition     = !contains(var.username_attributes, "email") || contains(var.explicit_auth_flows, "ALLOW_ADMIN_USER_PASSWORD_AUTH")
+      error_message = "Cognito pool '${var.pool_name}' uses email sign-in but is missing ALLOW_ADMIN_USER_PASSWORD_AUTH in explicit_auth_flows."
+    }
+  }
+}
+
+# ─── Hosted UI domain + Google identity provider ─────────────────────────────
+resource "aws_cognito_user_pool_domain" "this" {
+  count        = var.enable_hosted_ui ? 1 : 0
+  domain       = var.hosted_ui_domain != "" ? var.hosted_ui_domain : "area-code-${var.env}-${var.pool_name}"
+  user_pool_id = aws_cognito_user_pool.this.id
+}
+
+resource "aws_cognito_identity_provider" "google" {
+  count         = var.enable_hosted_ui ? 1 : 0
+  user_pool_id  = aws_cognito_user_pool.this.id
+  provider_name = "Google"
+  provider_type = "Google"
+
+  provider_details = {
+    client_id        = var.google_client_id
+    client_secret    = var.google_client_secret
+    authorize_scopes = "openid email profile"
+  }
+
+  attribute_mapping = {
+    email       = "email"
+    family_name = "family_name"
+    given_name  = "given_name"
+    name        = "name"
+    username    = "sub"
+  }
+
+  # Cognito auto-populates endpoint URLs (authorize_url, token_url, oidc_issuer,
+  # attributes_url, ...) for the "Google" social provider type. They can't be
+  # set in config and would otherwise show as a perpetual diff. Only client_id /
+  # client_secret / authorize_scopes are managed here.
+  lifecycle {
+    ignore_changes = [provider_details]
+  }
 }
 
 output "user_pool_id" {

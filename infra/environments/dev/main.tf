@@ -45,18 +45,37 @@ module "vpc" {
 # =============================================================================
 
 module "cognito_consumer" {
-  source                    = "../../modules/cognito"
-  env                       = local.env
-  pool_name                 = "consumer"
+  source              = "../../modules/cognito"
+  env                 = local.env
+  pool_name           = "consumer"
+  username_attributes = ["email"]
+  explicit_auth_flows = [
+    "ALLOW_ADMIN_USER_PASSWORD_AUTH",
+    "ALLOW_CUSTOM_AUTH",
+    "ALLOW_REFRESH_TOKEN_AUTH",
+  ]
+  custom_attributes = [
+    { name = "userId", type = "String" },
+    { name = "citySlug", type = "String" },
+  ]
   define_auth_challenge_arn = module.cognito_triggers_consumer.define_auth_arn
   create_auth_challenge_arn = module.cognito_triggers_consumer.create_auth_arn
   verify_auth_challenge_arn = module.cognito_triggers_consumer.verify_auth_arn
 }
 
 module "cognito_business" {
-  source                    = "../../modules/cognito"
-  env                       = local.env
-  pool_name                 = "business"
+  source              = "../../modules/cognito"
+  env                 = local.env
+  pool_name           = "business"
+  username_attributes = ["email"]
+  explicit_auth_flows = [
+    "ALLOW_ADMIN_USER_PASSWORD_AUTH",
+    "ALLOW_CUSTOM_AUTH",
+    "ALLOW_REFRESH_TOKEN_AUTH",
+  ]
+  custom_attributes = [
+    { name = "businessId", type = "String" },
+  ]
   define_auth_challenge_arn = module.cognito_triggers_business.define_auth_arn
   create_auth_challenge_arn = module.cognito_triggers_business.create_auth_arn
   verify_auth_challenge_arn = module.cognito_triggers_business.verify_auth_arn
@@ -433,6 +452,48 @@ resource "aws_dynamodb_table" "music_schedules" {
   tags = { Environment = local.env }
 }
 
+# Presence_Integrity: durable Presence_Record per (userId, nodeId).
+#   PK = userId
+#   SK = nodeId   (at most one open record per consumer per venue)
+# GSI NodeIndex (hash nodeId / range expiresAt) powers both the honest read
+# model (expiresAt > now) and the presence-expiry sweep (expiresAt <= now)
+# without scans. TTL on `ttl` is physical cleanup only — never authoritative
+# for the live count (the present/expired decision compares expiresAt to now).
+resource "aws_dynamodb_table" "presence" {
+  name         = "area-code-${local.env}-presence"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "userId"
+  range_key    = "nodeId"
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+  attribute {
+    name = "nodeId"
+    type = "S"
+  }
+  attribute {
+    name = "expiresAt"
+    type = "N"
+  }
+
+  global_secondary_index {
+    name            = "NodeIndex"
+    hash_key        = "nodeId"
+    range_key       = "expiresAt"
+    projection_type = "ALL"
+  }
+
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+
+  point_in_time_recovery { enabled = true }
+  tags = { Environment = local.env }
+}
+
 # =============================================================================
 # Lambda functions
 # =============================================================================
@@ -456,6 +517,7 @@ module "lambda_api" {
     REWARDS_TABLE                           = aws_dynamodb_table.rewards.name
     BUSINESSES_TABLE                        = aws_dynamodb_table.businesses.name
     APP_DATA_TABLE                          = aws_dynamodb_table.app_data.name
+    PRESENCE_TABLE                          = aws_dynamodb_table.presence.name
     AREA_CODE_REWARD_QUEUE_URL              = module.sqs_reward_eval.queue_url
     AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID = module.cognito_consumer.user_pool_id
     AREA_CODE_COGNITO_CONSUMER_CLIENT_ID    = module.cognito_consumer.client_id
@@ -499,6 +561,27 @@ module "lambda_pulse_decay" {
   environment_variables = {
     AREA_CODE_ENV = local.env
     USERS_TABLE   = aws_dynamodb_table.users.name
+  }
+}
+
+# Presence_Integrity: serverless presence-expiry worker (mirrors pulse-decay).
+# arm64 Lambda on an EventBridge rate(5 minutes) schedule. Iterates active
+# nodes, transitions stale `present` Presence_Records to `expired`, decrements
+# the live count, and records expiry-terminated dwell. No always-on resource.
+module "lambda_presence_expiry" {
+  source                 = "../../modules/lambda"
+  env                    = local.env
+  function_name          = "presence-expiry"
+  timeout                = 120
+  memory_size            = 256
+  lambda_in_vpc          = true
+  vpc_subnet_ids         = module.vpc.private_subnet_ids
+  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  environment_variables = {
+    AREA_CODE_ENV  = local.env
+    PRESENCE_TABLE = aws_dynamodb_table.presence.name
+    NODES_TABLE    = aws_dynamodb_table.nodes.name
+    APP_DATA_TABLE = aws_dynamodb_table.app_data.name
   }
 }
 
@@ -718,6 +801,7 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
   for_each = {
     api               = module.lambda_api.role_name
     pulse_decay       = module.lambda_pulse_decay.role_name
+    presence_expiry   = module.lambda_presence_expiry.role_name
     yoco_webhook      = module.lambda_yoco_webhook.role_name
     reward_evaluator  = module.lambda_reward_evaluator.role_name
     leaderboard_reset = module.lambda_leaderboard_reset.role_name
@@ -747,12 +831,14 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
         aws_dynamodb_table.rewards.arn,
         aws_dynamodb_table.businesses.arn,
         aws_dynamodb_table.app_data.arn,
+        aws_dynamodb_table.presence.arn,
         "${aws_dynamodb_table.users.arn}/index/*",
         "${aws_dynamodb_table.nodes.arn}/index/*",
         "${aws_dynamodb_table.checkins.arn}/index/*",
         "${aws_dynamodb_table.rewards.arn}/index/*",
         "${aws_dynamodb_table.businesses.arn}/index/*",
-        "${aws_dynamodb_table.app_data.arn}/index/*"
+        "${aws_dynamodb_table.app_data.arn}/index/*",
+        "${aws_dynamodb_table.presence.arn}/index/*"
       ]
     }]
   })
@@ -1015,6 +1101,12 @@ module "eventbridge_schedules" {
       lambda_arn           = module.lambda_pulse_decay.function_arn
       lambda_function_name = module.lambda_pulse_decay.function_name
     }
+    presence-expiry = {
+      description          = "Presence expiry sweep every 5 minutes (aligned with pulse-decay cadence)"
+      schedule_expression  = "rate(5 minutes)"
+      lambda_arn           = module.lambda_presence_expiry.function_arn
+      lambda_function_name = module.lambda_presence_expiry.function_name
+    }
     leaderboard-reset = {
       description          = "Weekly leaderboard reset Monday 00:00 SAST (Sunday 22:00 UTC)"
       schedule_expression  = "cron(0 22 ? * SUN *)"
@@ -1159,6 +1251,7 @@ output "dynamodb_tables" {
     rewards    = aws_dynamodb_table.rewards.name
     businesses = aws_dynamodb_table.businesses.name
     app_data   = aws_dynamodb_table.app_data.name
+    presence   = aws_dynamodb_table.presence.name
   }
 }
 

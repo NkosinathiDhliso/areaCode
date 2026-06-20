@@ -31,6 +31,15 @@ export async function updateUserProfile(
   return updateUser(userId, data)
 }
 
+/**
+ * Re-link a user record to a (new) Cognito identity. Used after the Cognito
+ * pool migration, where existing records' cognitoSub points at a destroyed
+ * identity and must be re-attached on the user's next federated sign-in.
+ */
+export async function setUserCognitoSub(userId: string, cognitoSub: string) {
+  return updateUser(userId, { cognitoSub })
+}
+
 export async function getUserCheckInHistory(userId: string, cursor: string | undefined, limit: number) {
   // Query check-ins by userId from GSI
   const result = await documentClient.send(
