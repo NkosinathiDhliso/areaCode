@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 
 import { canRecenter, moveCameraToActive } from '../lib/cameraControl'
 import { toVenueCardVM, type VenueCardVM } from '../lib/carouselConstants'
-import { proximityBiasedRank, scopeToViewport, type ViewportBounds } from '../lib/carouselRanking'
+import { vibeRank, scopeToViewport, type ViewportBounds } from '../lib/carouselRanking'
 
 /**
  * `useCarouselSelection` — the selection orchestration hook that binds every
@@ -19,7 +19,7 @@ import { proximityBiasedRank, scopeToViewport, type ViewportBounds } from '../li
  * coherent.
  *
  * It is deliberately thin over the pure cores it composes:
- *   - `proximityBiasedRank` ∘ `scopeToViewport` produce the `Carousel_Order`
+ *   - `vibeRank` ∘ `scopeToViewport` produce the `Carousel_Order`
  *     (recomputed, debounced, on `moveend`/`zoom` and store changes; recomputed
  *     synchronously on a `Category_Filter` change).
  *   - `moveCameraToActive` issues exactly one camera move per Active_Venue
@@ -27,7 +27,7 @@ import { proximityBiasedRank, scopeToViewport, type ViewportBounds } from '../li
  *   - `toVenueCardVM` derives the Venue_Card view models the render shells need.
  *
  * Responsibilities (design § "Selection orchestration hook"):
- *   - Recompute `carouselOrder` via `scopeToViewport ∘ proximityBiasedRank` on
+ *   - Recompute `carouselOrder` via `scopeToViewport ∘ vibeRank` on
  *     debounced viewport changes and on store/filter changes (R6.1, R6.2,
  *     R13.1, R13.2).
  *   - Fly the camera to the Active_Venue whenever it changes (R3.6, R6.4,
@@ -181,7 +181,7 @@ export function useCarouselSelection({
   //
   // Reads live snapshots via `getState()` so the computation always sees the
   // latest store values regardless of render timing. Pure composition of
-  // `proximityBiasedRank` then `scopeToViewport`; the active id passed to
+  // `vibeRank` then `scopeToViewport`; the active id passed to
   // `scopeToViewport` guarantees the Active_Venue is never silently dropped
   // (R6.5) — except when it no longer matches the filter, in which case it is
   // intentionally excluded so the filter-reassignment effect can take over.
@@ -191,7 +191,7 @@ export function useCarouselSelection({
     const filtered = categoryFilter ? allNodes.filter((n) => n.category === categoryFilter) : allNodes
 
     const positionFresh = canRecenter(useLocationStore.getState().capturedAt, Date.now())
-    const ranked = proximityBiasedRank({
+    const ranked = vibeRank({
       venues: filtered,
       pulseScores: mapState.pulseScores,
       checkInCounts: mapState.checkInCounts,

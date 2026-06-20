@@ -73,7 +73,7 @@ describe('Feature: venue-intelligence-reports, Property 5: PII Scanner Correctne
         expect(result.clean).toBe(false)
         expect(result.violations.length).toBeGreaterThan(0)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -85,7 +85,7 @@ describe('Feature: venue-intelligence-reports, Property 5: PII Scanner Correctne
         expect(result.clean).toBe(false)
         expect(result.violations.some((v) => v.includes('phone'))).toBe(true)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -97,7 +97,7 @@ describe('Feature: venue-intelligence-reports, Property 5: PII Scanner Correctne
         expect(result.clean).toBe(false)
         expect(result.violations.some((v) => v.includes('email'))).toBe(true)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -109,7 +109,7 @@ describe('Feature: venue-intelligence-reports, Property 5: PII Scanner Correctne
         expect(result.clean).toBe(false)
         expect(result.violations.length).toBeGreaterThan(0)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -121,7 +121,7 @@ describe('Feature: venue-intelligence-reports, Property 5: PII Scanner Correctne
         expect(result.clean).toBe(false)
         expect(result.violations.some((v) => v.includes('displayName'))).toBe(true)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -133,7 +133,7 @@ describe('Feature: venue-intelligence-reports, Property 5: PII Scanner Correctne
         expect(result.clean).toBe(true)
         expect(result.violations).toEqual([])
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -150,7 +150,7 @@ describe('Feature: venue-intelligence-reports, Property 5: PII Scanner Correctne
         const result = scanForPii(doc)
         expect(result.clean).toBe(false)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

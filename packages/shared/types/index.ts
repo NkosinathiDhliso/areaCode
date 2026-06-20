@@ -431,6 +431,18 @@ export interface BusinessRewardClaimedPayload {
 // Socket event types
 export interface ServerToClientEvents {
   'node:pulse_update': (payload: { nodeId: string; pulseScore: number; checkInCount: number; state: NodeState }) => void
+  /**
+   * Honest live-presence count for a venue. Dedicated event (NOT a repurpose of
+   * `node:pulse_update.checkInCount`) so no existing consumer silently keeps
+   * reading the old cumulative tally as if it were presence (founder decision
+   * 13.4 / Requirement 8.4). Carries only `nodeId`, the new count, and the cause
+   * — no consumer identity (Requirements 7.4, 10.4).
+   */
+  'node:presence_update': (payload: {
+    nodeId: string
+    livePresenceCount: number
+    cause: 'check_in' | 'check_out' | 'expiry'
+  }) => void
   'node:state_surge': (payload: { nodeId: string; fromState: NodeState; toState: NodeState }) => void
   'node:state_change': (payload: { nodeId: string; state: NodeState }) => void
   'node:created': (payload: {

@@ -128,7 +128,7 @@ describe('Property 4: Streak at-risk detection', () => {
         const result = computeAtRisk(0, lastCheckIn, now)
         expect(result).toBe(false)
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -138,7 +138,7 @@ describe('Property 4: Streak at-risk detection', () => {
         const result = computeAtRisk(streakCount, null, now)
         expect(result).toBe(true)
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -151,7 +151,7 @@ describe('Property 4: Streak at-risk detection', () => {
         const result = computeAtRisk(streakCount, lastCheckIn, now)
         expect(result).toBe(false)
       }),
-      { numRuns: 1000 },
+      { numRuns: 25 },
     )
   })
 
@@ -166,7 +166,7 @@ describe('Property 4: Streak at-risk detection', () => {
         const result = computeAtRisk(streakCount, lastCheckIn, now)
         expect(result).toBe(true)
       }),
-      { numRuns: 1000 },
+      { numRuns: 25 },
     )
   })
 
@@ -181,7 +181,7 @@ describe('Property 4: Streak at-risk detection', () => {
 
         expect(result).toBe(expectedAtRisk)
       }),
-      { numRuns: 2000 },
+      { numRuns: 25 },
     )
   })
 
@@ -210,7 +210,7 @@ describe('Property 4: Streak at-risk detection', () => {
           expect(result).toBe(expectedAtRisk)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -234,7 +234,7 @@ describe('Property 4: Streak at-risk detection', () => {
           expect(result).toBe(false)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 })

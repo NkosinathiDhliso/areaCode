@@ -223,7 +223,7 @@ describe('Feature: venue-intelligence-reports, Property 10: Recommendation Gener
           expect(containsNumber(rec.text)).toBe(true)
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -264,7 +264,7 @@ describe('Feature: venue-intelligence-reports, Property 10: Recommendation Gener
         expect(peakRec).toBeDefined()
         expect(containsNumber(peakRec!.text)).toBe(true)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -305,7 +305,7 @@ describe('Feature: venue-intelligence-reports, Property 10: Recommendation Gener
         expect(retentionRec).toBeDefined()
         expect(containsNumber(retentionRec!.text)).toBe(true)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

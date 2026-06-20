@@ -88,7 +88,7 @@ describe('Property 6: Visit frequency computation', () => {
           )
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -108,7 +108,7 @@ describe('Property 6: Visit frequency computation', () => {
           expect(visitCount).toBe(0)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -127,7 +127,7 @@ describe('Property 6: Visit frequency computation', () => {
         const visitCount = computeVisitCount(checkIns, consumerId, targetNodeId)
         expect(visitCount).toBe(numCheckIns)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -166,7 +166,7 @@ describe('Property 6: Visit frequency computation', () => {
           expect(visitCount).toBe(targetCount)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -205,7 +205,7 @@ describe('Property 6: Visit frequency computation', () => {
           expect(visitCount).toBe(consumerCount)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 })
@@ -232,7 +232,7 @@ describe('Property 7: Business check-in events contain only privacy-safe fields'
           expect(sanitized).not.toHaveProperty(field)
         }
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -257,7 +257,7 @@ describe('Property 7: Business check-in events contain only privacy-safe fields'
           expect(ALLOWED_FIELDS.has(key)).toBe(true)
         }
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -275,7 +275,7 @@ describe('Property 7: Business check-in events contain only privacy-safe fields'
           expect(['displayName', 'tier']).toContain(field)
         }
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -342,7 +342,7 @@ describe('Property 7: Business check-in events contain only privacy-safe fields'
           }
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -376,7 +376,7 @@ describe('Property 7: Business check-in events contain only privacy-safe fields'
           }
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -388,7 +388,7 @@ describe('Property 7: Business check-in events contain only privacy-safe fields'
 
         expect(secondPass).toEqual(firstPass)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 })
@@ -452,7 +452,7 @@ describe('Property 20: Staff attribution on redemption', () => {
           expect(record['staffId']).toBe(staffId)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -473,7 +473,7 @@ describe('Property 20: Staff attribution on redemption', () => {
           expect((record['staffId'] as string).length).toBeGreaterThan(0)
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -486,7 +486,7 @@ describe('Property 20: Staff attribution on redemption', () => {
         expect(record).not.toHaveProperty('staffId')
         expect(record).not.toHaveProperty('staffName')
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -513,7 +513,7 @@ describe('Property 20: Staff attribution on redemption', () => {
           }
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 })

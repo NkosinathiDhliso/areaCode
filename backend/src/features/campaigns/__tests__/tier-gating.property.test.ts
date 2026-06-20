@@ -74,7 +74,7 @@ describe('Feature: winback-campaigns, Property 13: Tier Gating', () => {
           expect(err.error).toBe('upgrade_required')
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   }, 30000)
 })

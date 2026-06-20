@@ -3,6 +3,7 @@ import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet, kvSet, kvIncr, kvTtl } from '../../shared/kv/dynamodb-kv.js'
 import {
   emitPulseUpdate,
+  emitPresenceUpdate,
   emitToast,
   emitBusinessCheckin,
   emitBusinessCheckinDetail,
@@ -14,6 +15,8 @@ import { getUserById } from '../auth/repository.js'
 import { canEmitIdentity, sanitizeForBusiness } from '../../shared/privacy/privacy-guard.js'
 import { runAbuseChecks } from './abuse.js'
 import * as repo from './repository.js'
+import { createOrRefreshPresence, getLivePresenceCount } from '../presence/repository.js'
+import { expiryWindowSeconds } from '../presence/window.js'
 import { getUserCheckInCountAtNode } from './dynamodb-repository.js'
 import { PutCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
@@ -139,6 +142,35 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
     console.warn(`[check-in] threshold-lock advance failed: ${String(err)}`)
   }
 
+  // Tracks whether this check-in newly opened presence (count changed) so we
+  // only broadcast node:presence_update when the honest count actually moved
+  // (Requirement 7.2); presenceNowSeconds is the timestamp used to recompute the
+  // authoritative count for the event payload (Requirement 7.6).
+  let presenceOpened = false
+  let presenceNowSeconds = 0
+
+  // 4c. Open or refresh the consumer's Presence_Record for this venue so the
+  // honest live-presence count reflects that they are here now (Requirement 4).
+  // Applies to BOTH type='presence' and type='reward' (Requirement 4.3). The
+  // repository increments the venue counter itself only on a new/reopened
+  // presence ({ opened: true }) — a consumer counts at most once per venue
+  // (Requirements 4.1, 4.2). Wrapped in try/catch: a presence-write failure is
+  // logged and still returns a successful check-in; the orphan is reconciled by
+  // the expiry sweep rather than leaving a permanent over-count (Requirement 4.5).
+  try {
+    const presenceNow = Math.floor(Date.now() / 1000)
+    const { opened } = await createOrRefreshPresence({
+      userId,
+      nodeId: input.nodeId,
+      now: presenceNow,
+      windowSeconds: expiryWindowSeconds(presenceNow),
+    })
+    presenceOpened = opened
+    presenceNowSeconds = presenceNow
+  } catch (err) {
+    console.warn(`[check-in] presence open/refresh failed: ${String(err)}`)
+  }
+
   // Detect tier change and notify
   if (oldTier !== newTier) {
     const TIER_BENEFITS: Record<string, string[]> = {
@@ -200,6 +232,21 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
         checkInCount: dailyCount,
         state: getNodeState(pulseScore),
       })
+
+      // Best-effort honest live-count broadcast (Requirements 7.2, 7.5, 7.6).
+      // Only emit when this check-in NEWLY opened presence (count changed) — a
+      // refresh of an already-live record leaves the count unchanged. Recompute
+      // the AUTHORITATIVE read-model count so the payload carries the honest
+      // value rather than the cumulative `checkInCount`. A failure here is
+      // caught by the surrounding best-effort block and never fails the check-in.
+      if (presenceOpened) {
+        const livePresenceCount = await getLivePresenceCount(input.nodeId, presenceNowSeconds)
+        emitPresenceUpdate(citySlug, {
+          nodeId: input.nodeId,
+          livePresenceCount,
+          cause: 'check_in',
+        })
+      }
 
       // Always emit anonymous city toast , no identity fields
       emitToast(citySlug, {

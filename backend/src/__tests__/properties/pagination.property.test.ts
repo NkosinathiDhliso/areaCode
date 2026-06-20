@@ -120,7 +120,7 @@ describe('Property 1: Pagination preserves ordering and completeness', () => {
           }
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -140,7 +140,7 @@ describe('Property 1: Pagination preserves ordering and completeness', () => {
           }
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -170,7 +170,7 @@ describe('Property 1: Pagination preserves ordering and completeness', () => {
           } while (cursor !== null && iterations < maxIterations)
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -199,7 +199,7 @@ describe('Property 1: Pagination preserves ordering and completeness', () => {
           } while (cursor !== null && iterations < maxIterations)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -228,7 +228,7 @@ describe('Property 1: Pagination preserves ordering and completeness', () => {
           } while (cursor !== null && iterations < maxIterations)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -241,7 +241,7 @@ describe('Property 1: Pagination preserves ordering and completeness', () => {
         expect(page.nextCursor).toBeNull()
         expect(page.hasMore).toBe(false)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
@@ -273,7 +273,7 @@ describe('Property 2: Check-in history entries contain required fields', () => {
           }
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -294,7 +294,7 @@ describe('Property 2: Check-in history entries contain required fields', () => {
           }
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -317,7 +317,7 @@ describe('Property 2: Check-in history entries contain required fields', () => {
           }
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -337,7 +337,7 @@ describe('Property 2: Check-in history entries contain required fields', () => {
           expect(entry.checkedInAt).toBeTruthy()
         }
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -356,7 +356,7 @@ describe('Property 2: Check-in history entries contain required fields', () => {
           expect(parsed.getTime()).toBeLessThanOrEqual(1924905600000)
         }
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 })

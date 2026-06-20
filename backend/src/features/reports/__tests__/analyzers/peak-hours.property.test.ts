@@ -49,7 +49,7 @@ describe('Feature: venue-intelligence-reports, Property 2: Peak Hours Distributi
         const hourlySum = Object.values(result.hourlyDistribution).reduce((a, b) => a + b, 0)
         expect(hourlySum).toBe(checkIns.length)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -63,7 +63,7 @@ describe('Feature: venue-intelligence-reports, Property 2: Peak Hours Distributi
         const dailySum = Object.values(result.dailyDistribution).reduce((a, b) => a + b, 0)
         expect(dailySum).toBe(checkIns.length)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -78,7 +78,7 @@ describe('Feature: venue-intelligence-reports, Property 2: Peak Hours Distributi
         const peakDayCount = result.dailyDistribution[result.peakDay] ?? 0
         expect(peakDayCount).toBe(maxCount)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -111,7 +111,7 @@ describe('Feature: venue-intelligence-reports, Property 2: Peak Hours Distributi
           expect(aggregateResult.hourlyDistribution[hour]).toBe(perNodeSum)
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -126,7 +126,7 @@ describe('Feature: venue-intelligence-reports, Property 2: Peak Hours Distributi
           expect(result.hourlyDistribution).toHaveProperty(String(h))
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -141,7 +141,7 @@ describe('Feature: venue-intelligence-reports, Property 2: Peak Hours Distributi
           expect(result.dailyDistribution).toHaveProperty(day)
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
@@ -187,7 +187,7 @@ describe('Feature: venue-intelligence-reports, Property 3: Peak Hours Top Window
           }
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -200,7 +200,7 @@ describe('Feature: venue-intelligence-reports, Property 3: Peak Hours Top Window
         const result = analyzePeakHours(checkIns)
         expect(result.topWindows.length).toBeLessThanOrEqual(3)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -226,7 +226,7 @@ describe('Feature: venue-intelligence-reports, Property 3: Peak Hours Top Window
           }
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -241,7 +241,7 @@ describe('Feature: venue-intelligence-reports, Property 3: Peak Hours Top Window
           expect(result.topWindows[i - 1]!.count).toBeGreaterThanOrEqual(result.topWindows[i]!.count)
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 

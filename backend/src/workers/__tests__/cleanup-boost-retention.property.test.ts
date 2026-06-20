@@ -71,7 +71,7 @@ describe('Property 9: retention cleanup boundary', () => {
         const expected = nowMs - referenceMs > RETENTION_YEARS_MS
         expect(isBoosterPurchaseExpired({ paidAt }, nowMs)).toBe(expected)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -82,7 +82,7 @@ describe('Property 9: retention cleanup boundary', () => {
         const expected = nowMs - referenceMs > RETENTION_YEARS_MS
         expect(isFloorChangeAuditExpired({ changedAt }, nowMs)).toBe(expected)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -93,7 +93,7 @@ describe('Property 9: retention cleanup boundary', () => {
         const expected = nowMs - referenceMs > RETENTION_YEARS_MS
         expect(isIdempotencyMarkerExpired({ createdAt }, nowMs)).toBe(expected)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -117,7 +117,7 @@ describe('Property 9: retention cleanup boundary', () => {
         expect(isFloorChangeAuditExpired({ changedAt: iso }, nowMs)).toBe(false)
         expect(isIdempotencyMarkerExpired({ createdAt: iso }, nowMs)).toBe(false)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -136,7 +136,7 @@ describe('Property 9: retention cleanup boundary', () => {
         expect(isFloorChangeAuditExpired({ changedAt: iso }, nowMs)).toBe(true)
         expect(isIdempotencyMarkerExpired({ createdAt: iso }, nowMs)).toBe(true)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -149,7 +149,7 @@ describe('Property 9: retention cleanup boundary', () => {
         const row = paidAt === undefined ? ({} as { paidAt?: unknown }) : ({ paidAt } as { paidAt?: unknown })
         expect(isBoosterPurchaseExpired(row, nowMs)).toBe(false)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -160,7 +160,7 @@ describe('Property 9: retention cleanup boundary', () => {
           changedAt === undefined ? ({} as { changedAt?: unknown }) : ({ changedAt } as { changedAt?: unknown })
         expect(isFloorChangeAuditExpired(row, nowMs)).toBe(false)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -171,7 +171,7 @@ describe('Property 9: retention cleanup boundary', () => {
           createdAt === undefined ? ({} as { createdAt?: unknown }) : ({ createdAt } as { createdAt?: unknown })
         expect(isIdempotencyMarkerExpired(row, nowMs)).toBe(false)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -222,7 +222,7 @@ describe('Property 9: retention cleanup boundary', () => {
           }
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

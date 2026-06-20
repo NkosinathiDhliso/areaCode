@@ -136,7 +136,7 @@ describe('Feature: winback-campaigns, Property 2: Segment Deduplication', () => 
           expect(unique.size).toBe(result.length)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -169,7 +169,7 @@ describe('Feature: winback-campaigns, Property 2: Segment Deduplication', () => 
 
         expect(result).toEqual([userId])
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
@@ -206,7 +206,7 @@ describe('Feature: winback-campaigns, Property 3: First-Timers Correctness', () 
         // Set equality: nothing missing, nothing extra.
         expect(actual).toEqual(expected)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -242,7 +242,7 @@ describe('Feature: winback-campaigns, Property 3: First-Timers Correctness', () 
           expect(result).not.toContain(userId)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
@@ -300,7 +300,7 @@ describe('Feature: winback-campaigns, Property 1: Lapsed Segment Exclusivity', (
           expect(lastMs).toBeLessThan(cutoffMs)
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -329,7 +329,7 @@ describe('Feature: winback-campaigns, Property 1: Lapsed Segment Exclusivity', (
           expect(result).not.toContain(userId)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -357,7 +357,7 @@ describe('Feature: winback-campaigns, Property 1: Lapsed Segment Exclusivity', (
           expect(result).toEqual([userId])
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

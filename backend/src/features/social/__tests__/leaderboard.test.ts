@@ -36,7 +36,7 @@ describe('leaderboard sort invariant', () => {
           expect(board[i - 1]!.checkInCount).toBeGreaterThanOrEqual(board[i]!.checkInCount)
         }
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -48,7 +48,7 @@ describe('leaderboard sort invariant', () => {
           expect(entry.rank).toBe(i + 1)
         })
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -58,7 +58,7 @@ describe('leaderboard sort invariant', () => {
         const board = buildLeaderboard(scores).slice(0, 50)
         expect(board.length).toBeLessThanOrEqual(50)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

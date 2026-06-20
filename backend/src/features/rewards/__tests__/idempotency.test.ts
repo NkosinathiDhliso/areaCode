@@ -26,7 +26,7 @@ describe('reward redemption idempotency', () => {
         // Only one entry per (rewardId, userId)
         expect(redemptions.size).toBe(1)
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 })

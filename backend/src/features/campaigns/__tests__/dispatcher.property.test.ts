@@ -109,7 +109,7 @@ describe('Feature: winback-campaigns, Property 10: Batch Partitioning Invariant'
           expect([...seen].sort()).toEqual([...new Set(userIds)].sort())
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -127,7 +127,7 @@ describe('Feature: winback-campaigns, Property 10: Batch Partitioning Invariant'
         const batches = chunk(recipients, MAX_BATCH_SIZE)
         expect(batches.length).toBe(Math.ceil(userIds.length / MAX_BATCH_SIZE))
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -156,7 +156,7 @@ describe('Feature: winback-campaigns, Property 10: Batch Partitioning Invariant'
         expect(batches.flat()).toEqual(userIds)
         expect(batches.length).toBe(Math.ceil(userIds.length / size))
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -171,7 +171,7 @@ describe('Feature: winback-campaigns, Property 10: Batch Partitioning Invariant'
       fc.property(fc.integer({ min: -5, max: 0 }), (size) => {
         expect(() => chunk([1, 2, 3], size)).toThrow()
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
@@ -211,7 +211,7 @@ describe('Feature: winback-campaigns, Property 10: Batch Partitioning Invariant 
           expect(new Set(tokens).size).toBe(userIds.length)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 })

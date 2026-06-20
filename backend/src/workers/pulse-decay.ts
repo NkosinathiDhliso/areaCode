@@ -27,8 +27,12 @@ function getNodeState(score: number): string {
   return 'dormant'
 }
 
-function isPeakHour(): boolean {
-  const now = new Date()
+/**
+ * Single source of truth for the SAST (UTC+2) peak-hour boundary: 18:00–23:59.
+ * Used by pulse decay (decay factor) and by presence expiry (Expiry_Window).
+ * @param now - the moment to evaluate; defaults to the current time.
+ */
+export function isPeakHour(now: Date = new Date()): boolean {
   const sast = new Date(now.getTime() + 2 * 60 * 60 * 1000) // UTC+2
   const hour = sast.getUTCHours()
   return hour >= 18 && hour <= 23

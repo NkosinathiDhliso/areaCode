@@ -22,12 +22,6 @@ import { getNodeState } from './mapHelpers'
  */
 export const DRAG_AXIS_THRESHOLD = 8
 
-/** Weight applied to a venue's buzz term in Proximity_Biased_Ranking. */
-export const BUZZ_WEIGHT = 1.0
-
-/** Weight applied to a venue's proximity term in Proximity_Biased_Ranking. */
-export const PROX_WEIGHT = 0.5
-
 /**
  * Window (in ms) within which a Last_Known_Position is considered fresh enough
  * to recenter the map or bias the ranking. Mirrors the existing freshness gate

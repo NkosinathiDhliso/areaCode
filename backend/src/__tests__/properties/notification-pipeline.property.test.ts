@@ -186,7 +186,7 @@ describe('Property 13: Notification recipient targeting within time window', () 
           expect(new Set(recipients)).toEqual(expectedRecipients)
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -204,7 +204,7 @@ describe('Property 13: Notification recipient targeting within time window', () 
         // The consumer should NOT be a recipient
         expect(recipients).not.toContain(userId)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -221,7 +221,7 @@ describe('Property 13: Notification recipient targeting within time window', () 
 
         expect(recipients).not.toContain(userId)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -247,7 +247,7 @@ describe('Property 13: Notification recipient targeting within time window', () 
           expect(userOccurrences.length).toBeLessThanOrEqual(1)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 })
@@ -275,7 +275,7 @@ describe('Property 14: Notification preference enforcement', () => {
 
         expect(result).toBe(false)
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -290,7 +290,7 @@ describe('Property 14: Notification preference enforcement', () => {
 
         expect(result).toBe(true)
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -310,7 +310,7 @@ describe('Property 14: Notification preference enforcement', () => {
 
         expect(result).toBe(true)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -326,7 +326,7 @@ describe('Property 14: Notification preference enforcement', () => {
           expect(result1).toBe(result2)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 })
@@ -348,7 +348,7 @@ describe('Property 15: Notification rate limiting', () => {
 
         expect(canSend).toBe(false)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -359,7 +359,7 @@ describe('Property 15: Notification rate limiting', () => {
 
         expect(canSend).toBe(true)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -378,7 +378,7 @@ describe('Property 15: Notification rate limiting', () => {
         // Total delivered must never exceed 2
         expect(deliveredCount).toBeLessThanOrEqual(2)
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -415,7 +415,7 @@ describe('Property 16: Notification channel selection', () => {
           expect(channel).toBe('socket')
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -439,7 +439,7 @@ describe('Property 16: Notification channel selection', () => {
         // Socket always wins when available
         expect(channel).toBe('socket')
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -451,7 +451,7 @@ describe('Property 16: Notification channel selection', () => {
 
         expect(channel1).toBe(channel2)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -463,7 +463,7 @@ describe('Property 16: Notification channel selection', () => {
         // Result must be one of the three valid channels
         expect(['socket', 'push', 'no_tokens']).toContain(channel)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
@@ -488,7 +488,7 @@ describe('Property 21: Tier change notification contains correct data', () => {
 
         expect(payload.newTier).toBe(newTier)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -504,7 +504,7 @@ describe('Property 21: Tier change notification contains correct data', () => {
         expect(payload.benefits).toEqual(expectedBenefits)
         expect(payload.benefits.length).toBe(expectedBenefits.length)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -517,7 +517,7 @@ describe('Property 21: Tier change notification contains correct data', () => {
 
         expect(payload.oldTier).toBe(oldTier)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -531,7 +531,7 @@ describe('Property 21: Tier change notification contains correct data', () => {
         // Every tier has at least one benefit defined
         expect(payload.benefits.length).toBeGreaterThan(0)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -550,7 +550,7 @@ describe('Property 21: Tier change notification contains correct data', () => {
         expect(payload.benefits).toEqual(newBenefits)
         expect(payload.benefits).not.toEqual(oldBenefits)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 })

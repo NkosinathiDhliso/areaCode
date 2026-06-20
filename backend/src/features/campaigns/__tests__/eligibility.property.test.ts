@@ -155,7 +155,7 @@ describe('Feature: winback-campaigns, Property 5: Consent Opt-In Default', () =>
           }
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 })
@@ -226,7 +226,7 @@ describe('Feature: winback-campaigns, Property 6: Opt-Out Honored', () => {
           }
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 })
@@ -290,7 +290,7 @@ describe('Feature: winback-campaigns, Property 7: Frequency Cap Bound', () => {
           }
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 })

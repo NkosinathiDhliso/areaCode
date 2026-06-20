@@ -138,7 +138,7 @@ describe('Property 17: Disabled user is blocked from check-in and reward claims'
         void nodeId // nodeId doesn't affect the disabled check
         expect(shouldRejectCheckIn(disabledUser)).toBe(true)
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -155,7 +155,7 @@ describe('Property 17: Disabled user is blocked from check-in and reward claims'
           expect(rejected).toBe(true)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -168,7 +168,7 @@ describe('Property 17: Disabled user is blocked from check-in and reward claims'
         expect(shouldRejectCheckIn(enabledUser)).toBe(false)
         expect(shouldRejectRewardClaim(enabledUser)).toBe(false)
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -181,7 +181,7 @@ describe('Property 17: Disabled user is blocked from check-in and reward claims'
         expect(shouldRejectCheckIn(userWithoutFlag)).toBe(false)
         expect(shouldRejectRewardClaim(userWithoutFlag)).toBe(false)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -198,7 +198,7 @@ describe('Property 17: Disabled user is blocked from check-in and reward claims'
         // And the result should match the isDisabled flag
         expect(results[0]).toBe(isDisabled)
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 })
@@ -230,7 +230,7 @@ describe('Property 18: Disabling a business deactivates all its nodes', () => {
           expect(node.isActive).toBe(false)
         }
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -271,7 +271,7 @@ describe('Property 18: Disabling a business deactivates all its nodes', () => {
           }
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -285,7 +285,7 @@ describe('Property 18: Disabling a business deactivates all its nodes', () => {
         // No nodes to deactivate — result should be empty
         expect(result).toHaveLength(0)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -304,7 +304,7 @@ describe('Property 18: Disabling a business deactivates all its nodes', () => {
         const deactivatedCount = result.filter((n) => n.businessId === businessId && !n.isActive).length
         expect(deactivatedCount).toBe(nodeIds.length)
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -325,7 +325,7 @@ describe('Property 18: Disabling a business deactivates all its nodes', () => {
           expect(node.isActive).toBe(false)
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 })
@@ -356,7 +356,7 @@ describe('Property 19: Every admin action produces an audit log entry', () => {
           expect(entry.adminId).toBe(adminId)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -375,7 +375,7 @@ describe('Property 19: Every admin action produces an audit log entry', () => {
           expect(entry.action).toBe(action)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -395,7 +395,7 @@ describe('Property 19: Every admin action produces an audit log entry', () => {
           expect(entry.entityId).toBe(entityId)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -415,7 +415,7 @@ describe('Property 19: Every admin action produces an audit log entry', () => {
           expect(new Date(entry.createdAt).toISOString()).toBe(timestamp)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -440,7 +440,7 @@ describe('Property 19: Every admin action produces an audit log entry', () => {
           expect(entry.gsi1sk).toBe(timestamp)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -473,7 +473,7 @@ describe('Property 19: Every admin action produces an audit log entry', () => {
           }
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 })

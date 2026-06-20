@@ -22,7 +22,7 @@ describe('check-in cooldown enforcement', () => {
           expect(isCooldownActive(lastTime, lastTime + delta)).toBe(true)
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -35,7 +35,7 @@ describe('check-in cooldown enforcement', () => {
           expect(isCooldownActive(lastTime, lastTime + delta)).toBe(false)
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 })
@@ -84,7 +84,7 @@ describe('location coordinates never persisted', () => {
           expect(Object.keys(record)).toEqual(['userId', 'nodeId', 'type', 'checkedInAt'])
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 })

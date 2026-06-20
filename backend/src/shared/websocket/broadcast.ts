@@ -118,6 +118,33 @@ export async function broadcastPulseUpdate(
 }
 
 /**
+ * Broadcast the honest live-presence count for a venue to all users in a city
+ * over the existing API Gateway WebSocket transport (no new transport).
+ *
+ * Dedicated `node:presence_update` event carrying only `{ nodeId,
+ * livePresenceCount, cause }` — no consumer identity (Requirements 7.4, 10.4).
+ * Does NOT repurpose `node:pulse_update.checkInCount` (founder decision 13.4 /
+ * Requirement 8.4). Best-effort fan-out: callers wrap this so a failure is
+ * logged and never rolls back the committed check-in / check-out / expiry
+ * (Requirement 7.5).
+ */
+export async function broadcastPresenceUpdate(
+  citySlug: string,
+  nodeId: string,
+  livePresenceCount: number,
+  cause: 'check_in' | 'check_out' | 'expiry',
+): Promise<void> {
+  await broadcastToRoom(`city:${citySlug}`, {
+    type: 'node:presence_update',
+    payload: {
+      nodeId,
+      livePresenceCount,
+      cause,
+    },
+  })
+}
+
+/**
  * Broadcast a state surge (e.g., quiet -> active)
  */
 export async function broadcastStateSurge(

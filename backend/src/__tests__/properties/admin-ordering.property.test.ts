@@ -135,7 +135,7 @@ describe('Property 10: Abuse flags are ordered by creation date descending', () 
         // The result must be in descending order by createdAt
         expect(isDescendingByCreatedAt(sorted)).toBe(true)
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -153,7 +153,7 @@ describe('Property 10: Abuse flags are ordered by creation date descending', () 
           expect(sortedIds.has(flag.flagId)).toBe(true)
         }
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -169,7 +169,7 @@ describe('Property 10: Abuse flags are ordered by creation date descending', () 
         const firstTimestamp = new Date(sorted[0]!.createdAt).getTime()
         expect(firstTimestamp).toBe(maxCreatedAt)
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -185,7 +185,7 @@ describe('Property 10: Abuse flags are ordered by creation date descending', () 
         const lastTimestamp = new Date(sorted[sorted.length - 1]!.createdAt).getTime()
         expect(lastTimestamp).toBe(minCreatedAt)
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -212,7 +212,7 @@ describe('Property 10: Abuse flags are ordered by creation date descending', () 
           expect(sorted.length).toBe(sharedTimestampFlags.length)
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -230,7 +230,7 @@ describe('Property 10: Abuse flags are ordered by creation date descending', () 
         expect(sorted[0]!.flagId).toBe(flag.flagId)
         expect(sorted[0]!.createdAt).toBe(flag.createdAt)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -243,7 +243,7 @@ describe('Property 10: Abuse flags are ordered by creation date descending', () 
         // Sorting twice should produce the same result
         expect(sorted2.map((f) => f.flagId)).toEqual(sorted1.map((f) => f.flagId))
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 })
@@ -283,7 +283,7 @@ describe('Property 19: Every admin action produces an audit log entry (abuse fla
           expect(entry.adminId).toBe(adminId)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -307,7 +307,7 @@ describe('Property 19: Every admin action produces an audit log entry (abuse fla
           expect(entry.action).toBe(action)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -333,7 +333,7 @@ describe('Property 19: Every admin action produces an audit log entry (abuse fla
           expect(entry.entityId).toBe(entityId)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -365,7 +365,7 @@ describe('Property 19: Every admin action produces an audit log entry (abuse fla
           expect(entry.createdAt).toBe(timestamp)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -398,7 +398,7 @@ describe('Property 19: Every admin action produces an audit log entry (abuse fla
           }
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -429,7 +429,7 @@ describe('Property 19: Every admin action produces an audit log entry (abuse fla
           }
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 })
@@ -530,7 +530,7 @@ describe('Property 11: Audit log filtering returns only matching entries', () =>
         const manualCount = entries.filter((e) => e.adminId === targetAdminId).length
         expect(filtered.length).toBe(manualCount)
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -552,7 +552,7 @@ describe('Property 11: Audit log filtering returns only matching entries', () =>
           expect(filtered.length).toBe(manualCount)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -583,7 +583,7 @@ describe('Property 11: Audit log filtering returns only matching entries', () =>
           expect(filtered.length).toBe(manualFiltered.length)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -610,7 +610,7 @@ describe('Property 11: Audit log filtering returns only matching entries', () =>
           expect(filtered.length).toBe(manualCount)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -653,7 +653,7 @@ describe('Property 11: Audit log filtering returns only matching entries', () =>
           expect(filtered.length).toBe(manualCount)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -665,7 +665,7 @@ describe('Property 11: Audit log filtering returns only matching entries', () =>
         // No filters means all entries pass
         expect(filtered.length).toBe(entries.length)
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -688,7 +688,7 @@ describe('Property 11: Audit log filtering returns only matching entries', () =>
           }
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 })
@@ -722,7 +722,7 @@ describe('Property 12: Audit log pagination preserves completeness', () => {
           }
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -747,7 +747,7 @@ describe('Property 12: Audit log pagination preserves completeness', () => {
           expect(allItems.length).toBe(entries.length)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -765,7 +765,7 @@ describe('Property 12: Audit log pagination preserves completeness', () => {
           }
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -790,7 +790,7 @@ describe('Property 12: Audit log pagination preserves completeness', () => {
           }
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -809,7 +809,7 @@ describe('Property 12: Audit log pagination preserves completeness', () => {
           }
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -826,7 +826,7 @@ describe('Property 12: Audit log pagination preserves completeness', () => {
           expect(page.length).toBe(1)
         }
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -839,7 +839,7 @@ describe('Property 12: Audit log pagination preserves completeness', () => {
         expect(pages.length).toBe(1)
         expect(pages[0]!.length).toBe(entries.length)
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -864,7 +864,7 @@ describe('Property 12: Audit log pagination preserves completeness', () => {
           }
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 })

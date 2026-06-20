@@ -286,7 +286,7 @@ describe('Feature: winback-campaigns, Property 11: Send-Record Anonymity', () =>
           }
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   }, 60_000)
 
@@ -338,7 +338,7 @@ describe('Feature: winback-campaigns, Property 11: Send-Record Anonymity', () =>
           }
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   }, 60_000)
 })

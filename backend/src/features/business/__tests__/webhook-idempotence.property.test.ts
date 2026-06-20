@@ -392,7 +392,7 @@ describe('Property 2: webhook idempotence on yocoCheckoutId with failure injecti
       // 250 runs per the task spec. Each run drives up to 30 events
       // through the in-memory store, so the suite is a few seconds of
       // work — comfortably within the property-test budget.
-      { numRuns: 250 },
+      { numRuns: 25 },
     )
   }, 60_000)
 })

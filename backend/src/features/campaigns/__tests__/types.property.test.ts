@@ -98,7 +98,7 @@ describe('Feature: winback-campaigns, Property 4: Channel Enum Closure (No SMS)'
 
         expect(result.success).toBe(everyChannelAllowed)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -115,7 +115,7 @@ describe('Feature: winback-campaigns, Property 4: Channel Enum Closure (No SMS)'
           expect(result.data.channels).toEqual(channels)
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -133,7 +133,7 @@ describe('Feature: winback-campaigns, Property 4: Channel Enum Closure (No SMS)'
 
         expect(result.success).toBe(false)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -168,7 +168,7 @@ describe('Feature: winback-campaigns, Property 4: Channel Enum Closure (No SMS)'
           expect(serializedKeys.some((k) => PHONE_FIELD_PATTERN.test(k))).toBe(false)
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 })

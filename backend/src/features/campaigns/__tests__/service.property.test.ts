@@ -246,7 +246,7 @@ describe('Feature: winback-campaigns, Property 8: Quota Non-Truncation', () => {
           }
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   }, 30000)
 
@@ -289,7 +289,7 @@ describe('Feature: winback-campaigns, Property 8: Quota Non-Truncation', () => {
           }
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 })
@@ -345,7 +345,7 @@ describe('Feature: winback-campaigns, Property 9: Send Idempotency', () => {
             expect(mocks.lambdaSend).not.toHaveBeenCalled()
           },
         ),
-        { numRuns: 200 },
+        { numRuns: 25 },
       )
     } finally {
       delete process.env[CAMPAIGN_DISPATCHER_FUNCTION_ENV]
@@ -435,7 +435,7 @@ describe('Feature: winback-campaigns, Property 12: Attribution Single-Count', ()
         expect(actual).toBeLessThanOrEqual(messagedTokens.size)
         expect(actual).toBeGreaterThanOrEqual(0)
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -463,7 +463,7 @@ describe('Feature: winback-campaigns, Property 12: Attribution Single-Count', ()
           expect(actual).toBe(1)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 })

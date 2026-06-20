@@ -30,6 +30,14 @@ interface MapStore {
   setNodes: (nodes: Node[]) => void
   addNode: (node: Node) => void
   updateNodePulse: (nodeId: string, score: number, checkInCount?: number) => void
+  /**
+   * Honest live-presence count per node, populated by the `node:presence_update`
+   * socket event (see `useNodePulse`). Writes only `checkInCounts` and leaves
+   * `pulseScores` untouched, because the presence event carries no pulse score.
+   * The presence value drives the map's "people here now" surface and takes
+   * precedence over the cumulative `node:pulse_update.checkInCount` (R7.1, R8.3).
+   */
+  setLivePresenceCount: (nodeId: string, livePresenceCount: number) => void
   setArchetypeId: (nodeId: string, id: string) => void
   /**
    * Drop the cached Live_Archetype id for a node. Called by
@@ -66,6 +74,10 @@ export const useMapStore = create<MapStore>()(
         if (checkInCount !== undefined) {
           state.checkInCounts[nodeId] = checkInCount
         }
+      }),
+    setLivePresenceCount: (nodeId, livePresenceCount) =>
+      set((state) => {
+        state.checkInCounts[nodeId] = livePresenceCount
       }),
     setArchetypeId: (nodeId, id) =>
       set((state) => {

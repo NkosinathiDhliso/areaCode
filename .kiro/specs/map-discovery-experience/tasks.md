@@ -22,19 +22,19 @@ All test sub-tasks are marked optional with `*` and may be skipped for a faster 
     - Score = `buzz * BUZZ_WEIGHT + proximity * PROX_WEIGHT`; sort desc; total tie-break by venue id ascending; proximity term is zero when `positionFresh` is false; `scopeToViewport` always re-inserts the Active_Venue and returns it for `null` bounds
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.5_
 
-  - [ ]\* 2.2 Write property test for ranking determinism and tie-break
+  - [x]\* 2.2 Write property test for ranking determinism and tie-break
     - **Property 8: Proximity_Biased_Ranking is deterministic with a total tie-break**
     - **Validates: Requirements 5.1, 5.3, 5.5**
 
-  - [ ]\* 2.3 Write property test for buzz-only fallback
+  - [x]\* 2.3 Write property test for buzz-only fallback
     - **Property 9: Ranking falls back to buzz without a fresh position**
     - **Validates: Requirements 5.2**
 
-  - [ ]\* 2.4 Write property test for filter and viewport scope
+  - [x]\* 2.4 Write property test for filter and viewport scope
     - **Property 10: Carousel_Order respects category filter and viewport scope**
     - **Validates: Requirements 5.4, 6.1, 6.2, 13.1, 13.2**
 
-  - [ ]\* 2.5 Write property test for Active_Venue retention on recompute
+  - [x]\* 2.5 Write property test for Active_Venue retention on recompute
     - **Property 11: Active_Venue is never dropped on recompute**
     - **Validates: Requirements 6.5**
 
@@ -43,7 +43,7 @@ All test sub-tasks are marked optional with `*` and may be skipped for a faster 
     - Create `apps/web/src/lib/gestureClassifier.ts` with `classifyDrag(dx, dy, threshold)` returning `'horizontal' | 'vertical' | 'indeterminate'` and `stepIndex(current, dir, length)` that wraps via `(index + dir + length) mod length` and returns the input for length ≤ 1
     - _Requirements: 7.1, 7.2, 7.4, 7.5, 3.2, 3.3_
 
-  - [ ]\* 3.2 Write property test for dominant-axis classification
+  - [x]\* 3.2 Write property test for dominant-axis classification
     - **Property 13: Gesture dominant-axis classification**
     - **Validates: Requirements 7.1, 7.2, 7.4, 7.5**
 
@@ -52,7 +52,7 @@ All test sub-tasks are marked optional with `*` and may be skipped for a faster 
     - Create `apps/web/src/lib/checkInCta.ts` with `getCtaInfo({ geoStatus, qrFallback, pending })` returning deterministic `{ label, disabled }` per the CTA contract (pending → checking/disabled; QR fallback → scan/enabled; `requesting` → locating/disabled; `denied` → disabled; `poorAccuracy` → weak-signal/enabled; `timeout` → unavailable/enabled; acquired → ready/enabled)
     - _Requirements: 10.6, 10.7, 14.1_
 
-  - [ ]\* 4.2 Write property test for CTA label/disabled derivation
+  - [x]\* 4.2 Write property test for CTA label/disabled derivation
     - **Property 15: Check-in CTA label is a function of Geo_Status**
     - **Validates: Requirements 10.6, 10.7, 14.1**
 
@@ -60,11 +60,11 @@ All test sub-tasks are marked optional with `*` and may be skipped for a faster 
     - Create `apps/web/src/lib/qrParser.ts` with `parseVenueQr(input)` that extracts `{ nodeId, token }` from strings matching `…/qr/{nodeId}/{token}` (non-empty segments) and returns null/invalid for non-matching strings
     - _Requirements: 14.5, 14.6_
 
-  - [ ]\* 4.4 Write property test for valid QR round-trip
+  - [x]\* 4.4 Write property test for valid QR round-trip
     - **Property 20: Valid venue QR round-trips to a check-in**
     - **Validates: Requirements 14.5**
 
-  - [ ]\* 4.5 Write property test for invalid QR rejection
+  - [x]\* 4.5 Write property test for invalid QR rejection
     - **Property 21: Invalid QR is rejected without check-in**
     - **Validates: Requirements 14.6**
 
@@ -73,11 +73,11 @@ All test sub-tasks are marked optional with `*` and may be skipped for a faster 
     - Create `apps/web/src/lib/toastAdmission.ts` with `admitToQueue(queue, toast)` (priority-sorted by the existing `TOAST_PRIORITY` map, capped at 3) and `shouldEnqueueCheckInToast(venueId, lastSeenAt, now, interval)` for per-venue dedup within the auto-dismiss interval
     - _Requirements: 16.1, 16.5, 16.6_
 
-  - [ ]\* 5.2 Write property test for priority ordering and cap
+  - [x]\* 5.2 Write property test for priority ordering and cap
     - **Property 24: Toast queue is priority-ordered and capped**
     - **Validates: Requirements 16.1, 16.5**
 
-  - [ ]\* 5.3 Write property test for check-in toast dedup
+  - [x]\* 5.3 Write property test for check-in toast dedup
     - **Property 25: Check_In_Toast deduplication within the auto-dismiss interval**
     - **Validates: Requirements 16.6**
 
@@ -91,15 +91,15 @@ All test sub-tasks are marked optional with `*` and may be skipped for a faster 
     - `step` uses `stepIndex` over `carouselOrder`; `dismiss` clears `activeVenueId` and sets `mode='closed'`; commit/browse transitions preserve `activeVenueId`
     - _Requirements: 1.3, 2.4, 2.6, 3.1, 3.2, 3.3_
 
-  - [ ]\* 6.2 Write property test for the single Active_Venue invariant
+  - [x]\* 6.2 Write property test for the single Active_Venue invariant
     - **Property 3: Single Active_Venue invariant**
     - **Validates: Requirements 1.3, 2.6**
 
-  - [ ]\* 6.3 Write property test for Commit↔Browse preservation
+  - [x]\* 6.3 Write property test for Commit↔Browse preservation
     - **Property 4: Commit↔Browse preserves Active_Venue**
     - **Validates: Requirements 2.4**
 
-  - [ ]\* 6.4 Write property test for flick stepping wrap
+  - [x]\* 6.4 Write property test for flick stepping wrap
     - **Property 5: Flick stepping wraps deterministically**
     - **Validates: Requirements 3.2, 3.3**
 
@@ -111,7 +111,7 @@ All test sub-tasks are marked optional with `*` and may be skipped for a faster 
     - Create `apps/web/src/lib/cameraControl.ts` with `moveCameraToActive(map, node, { reducedMotion })` issuing exactly one `flyTo` with `sheetFocusOffset()`, using zero-duration (non-animated) movement when `reducedMotion` is set
     - _Requirements: 1.4, 1.5, 8.5_
 
-  - [ ]\* 8.2 Write property test for camera move honouring Reduced_Motion
+  - [x]\* 8.2 Write property test for camera move honouring Reduced_Motion
     - **Property 7: Camera move on Active_Venue change honours Reduced_Motion**
     - **Validates: Requirements 1.4, 1.5, 8.5**
 
@@ -119,7 +119,7 @@ All test sub-tasks are marked optional with `*` and may be skipped for a faster 
     - Add `canRecenter(capturedAt, now, freshnessWindow)` to `cameraControl.ts` and a `recenterIfFresh` wrapper that flies to Last_Known_Position only when a position exists within the Position_Freshness_Window and the map reports loaded; otherwise no-op
     - _Requirements: 11.1, 11.2, 11.3_
 
-  - [ ]\* 8.4 Write property test for recenter gating on freshness
+  - [x]\* 8.4 Write property test for recenter gating on freshness
     - **Property 16: Recenter is gated on position freshness**
     - **Validates: Requirements 11.1, 11.2**
 

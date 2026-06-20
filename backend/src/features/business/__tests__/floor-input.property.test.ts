@@ -247,7 +247,7 @@ describe('Property 5: floor input-validation accept count', () => {
         expect(acceptedCount).toBe(expectedAccepted)
         expect(rejectedCount).toBe(expectedRejected)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

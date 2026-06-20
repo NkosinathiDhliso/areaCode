@@ -1,24 +1,20 @@
 import type { Node } from '@area-code/shared/types'
 
 /**
- * Pure proximity-biased ranking and viewport scoping for the Peek-Carousel.
+ * Pure vibe-first ranking and viewport scoping for the Peek-Carousel.
  *
  * This module is the deterministic logic core behind `Carousel_Order`. It is
  * intentionally free of React and Mapbox so it can be exhaustively property
  * tested. All functions are total: they never throw on valid-shaped input.
  *
+ * Ranking is vibe-first with proximity as a pure tiebreaker, per the discovery
+ * DNA (`.kiro/steering/discovery-dna-vibe-over-convenience.md`).
+ *
  * Design: .kiro/specs/map-discovery-experience/design.md
  *   - Components and Interfaces → "Key interfaces"
- *   - "proximityBiasedRank algorithm"
+ *   - "proximityBiasedRank algorithm" (now `vibeRank`)
  * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.5
  */
-
-// Ranking weights. These mirror the documented values in design.md
-// (Data Models → Constants) and will be re-exported by
-// `apps/web/src/lib/carouselConstants.ts` once task 1.1 lands. Defined
-// locally here so this pure core stays self-contained and buildable.
-const BUZZ_WEIGHT = 1.0
-const PROX_WEIGHT = 0.5
 
 /** Mean Earth radius in metres (spherical approximation). */
 const EARTH_RADIUS_M = 6_371_000
@@ -59,36 +55,52 @@ export function haversineMeters(a: { lat: number; lng: number }, b: { lat: numbe
 }
 
 /**
- * Order venues by a deterministic proximity-biased score, descending.
+ * Order venues vibe-first: the most alive venues lead, and proximity is only a
+ * tiebreaker between venues of equal vibe — it can never pull a closer-but-deader
+ * venue above a more-alive one. This structurally enforces the discovery DNA
+ * (`.kiro/steering/discovery-dna-vibe-over-convenience.md`): we pull people
+ * toward what is alive and their kind of crowd, never toward whatever is merely
+ * closest.
  *
- *   buzz(v)      = (pulseScores[v.id] ?? 0) + (checkInCounts[v.id] ?? 0)
- *   proximity(v) = positionFresh ? 1 / (1 + km(v)) : 0
- *   score(v)     = buzz(v) * BUZZ_WEIGHT + proximity(v) * PROX_WEIGHT
+ * The order is lexicographic, strongest signal first:
+ *   1. Vibe (aliveness): buzz = (pulseScores[id] ?? 0) + (checkInCounts[id] ?? 0),
+ *      higher first. When taste-match lands it joins THIS primary comparison,
+ *      ahead of proximity — never below it.
+ *   2. Proximity: a pure tiebreaker, nearer first, applied only when two venues
+ *      have equal vibe and a fresh position exists. Structurally incapable of
+ *      outranking a more-alive venue (vibe is compared first and short-circuits).
+ *   3. Venue id ascending: a final deterministic tiebreak so the order is total
+ *      and two consecutive computations on identical input agree (R5.3, R5.5).
  *
- * Ties (equal score) are broken by venue id ascending so the ordering is a
- * total, stable order — two consecutive computations on identical inputs
- * yield identical arrays (R5.3, R5.5). When `positionFresh` is false (or no
- * `lastKnownPosition` exists) the proximity term is zero for every venue, so
- * ranking falls back to buzz alone without raising an error (R5.2).
+ * When `positionFresh` is false (or no `lastKnownPosition` exists) the proximity
+ * tiebreaker is skipped, so ranking falls back to vibe-then-id without raising
+ * an error (R5.2).
+ *
+ * NOTE: an earlier version blended an additive `buzz + 0.5·proximity` score.
+ * That only stayed vibe-first by the accident of integer buzz; it would let
+ * proximity sway order the moment a fractional signal (e.g. taste-match) was
+ * added. The lexicographic form makes "proximity never outranks vibe" a
+ * structural guarantee, per the DNA rule.
  */
-export function proximityBiasedRank(input: RankInput): Node[] {
+export function vibeRank(input: RankInput): Node[] {
   const { venues, pulseScores, checkInCounts, lastKnownPosition, positionFresh } = input
 
   const useProximity = positionFresh && lastKnownPosition !== null
 
-  const scoreOf = (v: Node): number => {
-    const buzz = (pulseScores[v.id] ?? 0) + (checkInCounts[v.id] ?? 0)
-    const proximity = useProximity
-      ? 1 / (1 + haversineMeters(lastKnownPosition as { lat: number; lng: number }, { lat: v.lat, lng: v.lng }) / 1000)
+  const vibeOf = (v: Node): number => (pulseScores[v.id] ?? 0) + (checkInCounts[v.id] ?? 0)
+  const distanceOf = (v: Node): number =>
+    useProximity
+      ? haversineMeters(lastKnownPosition as { lat: number; lng: number }, { lat: v.lat, lng: v.lng })
       : 0
-    return buzz * BUZZ_WEIGHT + proximity * PROX_WEIGHT
-  }
 
   return [...venues].sort((a, b) => {
-    const sa = scoreOf(a)
-    const sb = scoreOf(b)
-    if (sb !== sa) return sb - sa
-    // Total, deterministic tie-break by venue id ascending (R5.5).
+    // 1) Vibe / aliveness — the hero signal. Higher buzz always wins outright.
+    const vibeDelta = vibeOf(b) - vibeOf(a)
+    if (vibeDelta !== 0) return vibeDelta
+    // 2) Proximity — pure tiebreaker only (nearer first), never able to outrank vibe.
+    const distDelta = distanceOf(a) - distanceOf(b)
+    if (distDelta !== 0) return distDelta
+    // 3) Deterministic id tie-break by venue id ascending (R5.5).
     if (a.id < b.id) return -1
     if (a.id > b.id) return 1
     return 0

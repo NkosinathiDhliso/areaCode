@@ -4,6 +4,7 @@ import Fastify from 'fastify'
 import { adminRoutes } from './features/admin/handler.js'
 import { getUserById } from './features/auth/dynamodb-repository.js'
 import { checkInRoutes } from './features/check-in/handler.js'
+import { checkOutRoutes } from './features/check-out/handler.js'
 import { authRoutes } from './features/auth/handler.js'
 import { sessionRoutes } from './features/auth/session-handler.js'
 import { profileRoutes } from './features/auth/profile-handler.js'
@@ -155,6 +156,7 @@ export async function buildApp() {
   await app.register(nodeImageRoutes)
   await app.register(instagramRoutes)
   await app.register(checkInRoutes)
+  await app.register(checkOutRoutes)
   await app.register(rewardRoutes)
   await app.register(businessRoutes)
   await app.register(socialRoutes)

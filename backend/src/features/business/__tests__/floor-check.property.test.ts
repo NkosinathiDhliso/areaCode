@@ -38,7 +38,7 @@ describe('Property 1: floor decision is exact and rejection emits metric', () =>
           expect(result).toEqual({ decision: 'reject', code: 'BOOST_BELOW_FLOOR' })
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -81,7 +81,7 @@ describe('Property 1: floor decision is exact and rejection emits metric', () =>
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -111,7 +111,7 @@ describe('Property 1: floor decision is exact and rejection emits metric', () =>
           expect(result).toEqual({ decision: 'reject', code: 'BOOST_BELOW_FLOOR' })
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

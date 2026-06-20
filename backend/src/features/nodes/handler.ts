@@ -193,4 +193,14 @@ export async function nodeRoutes(app: FastifyInstance) {
     const params = request.params as z.infer<typeof nodeIdParamsSchema>
     return service.getNodeRewards(params.nodeId)
   })
+
+  // GET /v1/nodes/:nodeId/presence — honest Live_Presence_Count (public read)
+  app.get(
+    '/v1/nodes/:nodeId/presence',
+    { preHandler: [validate({ params: nodeIdParamsSchema })] },
+    async (request) => {
+      const params = request.params as z.infer<typeof nodeIdParamsSchema>
+      return service.getNodePresence(params.nodeId)
+    },
+  )
 }

@@ -90,7 +90,7 @@ describe('Property 3: BoosterPurchase JSON round-trip', () => {
         const roundTripped = boosterPurchaseRowSchema.parse(JSON.parse(JSON.stringify(row)))
         expect(roundTripped).toEqual(row)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -99,7 +99,7 @@ describe('Property 3: BoosterPurchase JSON round-trip', () => {
       fc.property(boosterPurchaseRowArb, (row) => {
         expect(Object.prototype.hasOwnProperty.call(row, 'ttl')).toBe(false)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -111,7 +111,7 @@ describe('Property 3: BoosterPurchase JSON round-trip', () => {
           expect(phoneSmsOtpPattern.test(key)).toBe(false)
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 })

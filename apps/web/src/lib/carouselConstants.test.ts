@@ -2,13 +2,11 @@ import type { Node } from '@area-code/shared/types'
 import { describe, expect, it } from 'vitest'
 
 import {
-  BUZZ_WEIGHT,
   DEFAULT_ARCHETYPE_ID,
   DRAG_AXIS_THRESHOLD,
   GLYPH_ZOOM_THRESHOLD,
   MIN_MARKER_ZOOM,
   POSITION_FRESHNESS_WINDOW,
-  PROX_WEIGHT,
   SHEET_FOCUS_OFFSET_RATIO,
   toVenueCardVM,
 } from './carouselConstants'
@@ -39,8 +37,6 @@ function makeNode(overrides: Partial<Node> = {}): Node {
 describe('carousel constants', () => {
   it('expose the documented values', () => {
     expect(DRAG_AXIS_THRESHOLD).toBe(8)
-    expect(BUZZ_WEIGHT).toBe(1.0)
-    expect(PROX_WEIGHT).toBe(0.5)
     expect(POSITION_FRESHNESS_WINDOW).toBe(60_000)
     expect(GLYPH_ZOOM_THRESHOLD).toBe(12.5)
     expect(MIN_MARKER_ZOOM).toBe(8)

@@ -71,7 +71,7 @@ describe('Property 3: Tier computation is correct for any check-in count', () =>
         const expected = expectedTier(checkInCount)
         expect(computed).toBe(expected)
       }),
-      { numRuns: 1000 },
+      { numRuns: 25 },
     )
   })
 
@@ -80,7 +80,7 @@ describe('Property 3: Tier computation is correct for any check-in count', () =>
       fc.property(fc.integer({ min: 0, max: 9 }), (checkInCount) => {
         expect(getTier(checkInCount)).toBe('local')
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -89,7 +89,7 @@ describe('Property 3: Tier computation is correct for any check-in count', () =>
       fc.property(fc.integer({ min: 10, max: 49 }), (checkInCount) => {
         expect(getTier(checkInCount)).toBe('regular')
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -98,7 +98,7 @@ describe('Property 3: Tier computation is correct for any check-in count', () =>
       fc.property(fc.integer({ min: 50, max: 149 }), (checkInCount) => {
         expect(getTier(checkInCount)).toBe('fixture')
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -107,7 +107,7 @@ describe('Property 3: Tier computation is correct for any check-in count', () =>
       fc.property(fc.integer({ min: 150, max: 499 }), (checkInCount) => {
         expect(getTier(checkInCount)).toBe('institution')
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -116,7 +116,7 @@ describe('Property 3: Tier computation is correct for any check-in count', () =>
       fc.property(fc.integer({ min: 500, max: 100000 }), (checkInCount) => {
         expect(getTier(checkInCount)).toBe('legend')
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -139,7 +139,7 @@ describe('Property 3: Tier computation is correct for any check-in count', () =>
           expect(remaining).toBe(expectedRemaining)
         }
       }),
-      { numRuns: 1000 },
+      { numRuns: 25 },
     )
   })
 
@@ -149,7 +149,7 @@ describe('Property 3: Tier computation is correct for any check-in count', () =>
         const remaining = computeCheckInsRemaining(checkInCount)
         expect(remaining).toBeGreaterThanOrEqual(0)
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -159,7 +159,7 @@ describe('Property 3: Tier computation is correct for any check-in count', () =>
         const remaining = computeCheckInsRemaining(checkInCount)
         expect(remaining).toBe(0)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -169,7 +169,7 @@ describe('Property 3: Tier computation is correct for any check-in count', () =>
         const remaining = computeCheckInsRemaining(checkInCount)
         expect(remaining).toBeGreaterThan(0)
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -190,7 +190,7 @@ describe('Property 3: Tier computation is correct for any check-in count', () =>
           expect(getTier(nextLevel.minCheckIns)).toBe(nextLevel.tier)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

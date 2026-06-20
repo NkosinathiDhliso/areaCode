@@ -45,6 +45,6 @@ frontend:
           value: 'nosniff'
 
 customRules:
-  - source: '</^[^.]+$|\.(?!(css|gif|ico|jpg|jpeg|js|png|txt|svg|woff|woff2|ttf|map|json|webp|avif)$)([^.]+$)/>'
+  - source: '</^[^.]+$|\.(?!(css|gif|ico|jpg|jpeg|js|png|txt|svg|woff|woff2|ttf|map|json|webmanifest|webp|avif)$)([^.]+$)/>'
     target: /index.html
     status: '200'

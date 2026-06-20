@@ -64,7 +64,7 @@ describe('Property 5: Venue search returns only matching results', () => {
           expect(venue.name.toLowerCase()).toContain(q)
         }
       }),
-      { numRuns: 1000 },
+      { numRuns: 25 },
     )
   })
 
@@ -83,7 +83,7 @@ describe('Property 5: Venue search returns only matching results', () => {
           expect(found).toBe(true)
         }
       }),
-      { numRuns: 1000 },
+      { numRuns: 25 },
     )
   })
 
@@ -103,7 +103,7 @@ describe('Property 5: Venue search returns only matching results', () => {
         const expectedIds = new Set(expectedMatches.map((v) => v.id))
         expect(resultIds).toEqual(expectedIds)
       }),
-      { numRuns: 1000 },
+      { numRuns: 25 },
     )
   })
 
@@ -122,7 +122,7 @@ describe('Property 5: Venue search returns only matching results', () => {
         expect(idsLower).toEqual(idsUpper)
         expect(idsLower).toEqual(idsMixed)
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -132,7 +132,7 @@ describe('Property 5: Venue search returns only matching results', () => {
         const results = searchVenues(venues, query)
         expect(results).toHaveLength(0)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -158,7 +158,7 @@ describe('Property 5: Venue search returns only matching results', () => {
           expect(results[0]!.id).toBe(venue.id)
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 })

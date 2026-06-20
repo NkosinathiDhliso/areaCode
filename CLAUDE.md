@@ -39,7 +39,21 @@ pnpm typecheck                        # TypeScript check
 pnpm test                             # vitest run
 pnpm --filter backend build:lambda    # esbuild Lambda bundles
 pnpm --filter @area-code/web build    # vite build (web)
+
+# End-to-end suite is a standalone package (not in the pnpm workspace):
+cd tests/e2e && pnpm test             # Playwright across all four portals
 ```
+
+## Testing
+
+- Unit and logic tests: Vitest (`pnpm test`). Pure logic cores (ranking,
+  gestures, check-in CTA, QR, toast admission, selection, camera) get fast-check
+  property tests, tagged `Feature: <name>, Property N: <desc>`, min 100 runs.
+- Default Vitest environment is node. Component tests opt into jsdom per file.
+- Mapbox GL, WebSockets, and check-in calls are mocked. No network or WebGL.
+- End-to-end: Playwright in `tests/e2e/`, sweeping consumer, business, staff,
+  and admin. Structural checks (no horizontal scroll, CTA reachable, axe
+  criticals); visual fidelity is verified manually.
 
 ## Platform Focus
 

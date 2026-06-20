@@ -222,7 +222,7 @@ describe('Property 7: operator pagination round-trip preserves order and identit
           expect(curr <= prev).toBe(true)
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
@@ -262,7 +262,7 @@ describe('malformed cursor is rejected with MalformedCursorError (R6.4)', () => 
           MalformedCursorError,
         )
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 

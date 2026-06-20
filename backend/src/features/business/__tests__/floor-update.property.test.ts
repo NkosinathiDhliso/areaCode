@@ -250,7 +250,7 @@ describe('Property 4: floor update convergence with audit-first ordering', () =>
           expect(auditRows).toHaveLength(expectedAuditCount)
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

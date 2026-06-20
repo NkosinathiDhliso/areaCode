@@ -28,6 +28,23 @@ export function emitPulseUpdate(
   getIO()?.to(cityRoom(citySlug)).emit('node:pulse_update', payload)
 }
 
+/**
+ * Emit the honest live-presence count for a venue over Socket.io.
+ *
+ * Dedicated event carrying only `{ nodeId, livePresenceCount, cause }` — no
+ * consumer identity (Requirements 7.4, 10.4). Does NOT repurpose
+ * `node:pulse_update.checkInCount` (founder decision 13.4 / Requirement 8.4).
+ * Best-effort like every emitter here: no-ops when no Socket.io server is
+ * attached (Lambda), and a fan-out failure never rolls back the committed
+ * check-in / check-out / expiry (Requirement 7.5).
+ */
+export function emitPresenceUpdate(
+  citySlug: string,
+  payload: { nodeId: string; livePresenceCount: number; cause: 'check_in' | 'check_out' | 'expiry' },
+) {
+  getIO()?.to(cityRoom(citySlug)).emit('node:presence_update', payload)
+}
+
 export function emitStateSurge(
   citySlug: string,
   payload: { nodeId: string; fromState: NodeState; toState: NodeState },

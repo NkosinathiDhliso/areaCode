@@ -1,0 +1,168 @@
+// @vitest-environment jsdom
+import { useLocationStore, useMapStore, useSelectionStore } from '@area-code/shared/stores'
+import type { Node, NodeCategory } from '@area-code/shared/types'
+import { act, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { useCarouselSelection, type UseCarouselSelectionParams } from '../useCarouselSelection'
+
+/**
+ * Map Discovery — selection orchestration tests (deferred tasks 9.2-9.5).
+ *
+ *   - Property 6:  Selection coherence across all input sources
+ *   - Property 12: Filter change reassigns the Active_Venue deterministically
+ *   - Property 23: Consumed Focus_Signal is cleared
+ *   - Property 29: Browse_Mode order is stable during an in-progress swipe
+ *
+ * The hook reads the live map only through the abstracted `MapInstance`
+ * (`getBounds().toArray()`), so an in-memory stub drives it with no Mapbox/WebGL.
+ *
+ * Validates: Requirements 3.6, 13.3, 15.2, 15.4, 18.3
+ */
+
+function node(id: string, category: NodeCategory, lat = -26.2, lng = 28.04): Node {
+  return { id, name: `Venue ${id}`, category, lat, lng } as Node
+}
+
+// Bounds covering the whole globe so every seeded venue is in-viewport.
+const fakeMap = {
+  getBounds: () => ({ toArray: () => [[-180, -85], [180, 85]] }),
+  flyTo: vi.fn(),
+}
+
+function seed(nodes: Node[]): void {
+  const byId: Record<string, Node> = {}
+  for (const n of nodes) byId[n.id] = n
+  useMapStore.setState({
+    nodes: byId,
+    pulseScores: {},
+    checkInCounts: {},
+    archetypeIds: {},
+    focusNodeId: null,
+    mapInstance: fakeMap as never,
+  })
+  useLocationStore.setState({ lastKnownPosition: null, capturedAt: null })
+  useSelectionStore.setState({
+    activeVenueId: null,
+    mode: 'closed',
+    carouselOrder: [],
+    openedFromFocus: false,
+    lastVenueId: null,
+  })
+}
+
+const baseParams: UseCarouselSelectionParams = { categoryFilter: null, mapReady: true, reducedMotion: true }
+
+afterEach(() => {
+  vi.clearAllMocks()
+})
+
+describe('Feature: map-discovery-experience, Property 6: Selection coherence across all input sources', () => {
+  beforeEach(() => seed([node('a', 'nightlife'), node('b', 'nightlife'), node('c', 'nightlife')]))
+
+  it('every input source writes the same single Active_Venue', () => {
+    const { result } = renderHook(() => useCarouselSelection(baseParams))
+
+    act(() => result.current.selectVenue('a', 'search'))
+    expect(result.current.activeVenueId).toBe('a')
+
+    act(() => result.current.onMarkerTap('b'))
+    expect(result.current.activeVenueId).toBe('b')
+
+    act(() => result.current.onSearchSelect('c'))
+    expect(result.current.activeVenueId).toBe('c')
+
+    // The store holds exactly one Active_Venue id — the single source of truth.
+    expect(useSelectionStore.getState().activeVenueId).toBe('c')
+  })
+
+  it('stepping moves the Active_Venue within the Carousel_Order and never outside it', () => {
+    const { result } = renderHook(() => useCarouselSelection(baseParams))
+    act(() => result.current.onMarkerTap('a'))
+
+    const order = result.current.carouselOrder
+    expect(order).toEqual(['a', 'b', 'c'])
+
+    act(() => result.current.onSwipe(1))
+    expect(order).toContain(result.current.activeVenueId)
+
+    act(() => result.current.onSwipe(-1))
+    expect(result.current.activeVenueId).toBe('a')
+  })
+})
+
+describe('Feature: map-discovery-experience, Property 23: Consumed Focus_Signal is cleared', () => {
+  beforeEach(() => seed([node('a', 'nightlife'), node('b', 'nightlife')]))
+
+  it('selects the focused venue and clears the signal so it is not re-applied', () => {
+    useMapStore.setState({ focusNodeId: 'b' })
+    const { result } = renderHook(() => useCarouselSelection(baseParams))
+
+    expect(useMapStore.getState().focusNodeId).toBeNull()
+    expect(result.current.activeVenueId).toBe('b')
+    expect(result.current.openedFromFocus).toBe(true)
+  })
+
+  it('clears a Focus_Signal for an unknown venue without selecting (R15.5)', () => {
+    useMapStore.setState({ focusNodeId: 'zzz' })
+    const { result } = renderHook(() => useCarouselSelection(baseParams))
+
+    expect(useMapStore.getState().focusNodeId).toBeNull()
+    expect(result.current.activeVenueId).toBeNull()
+  })
+})
+
+describe('Feature: map-discovery-experience, Property 12: Filter change reassigns the Active_Venue deterministically', () => {
+  it('reassigns to the first matching venue when the Active_Venue no longer matches', () => {
+    seed([node('a', 'nightlife'), node('b', 'food'), node('c', 'nightlife')])
+    const { result, rerender } = renderHook((props: UseCarouselSelectionParams) => useCarouselSelection(props), {
+      initialProps: baseParams,
+    })
+
+    act(() => result.current.selectVenue('b', 'marker'))
+    expect(result.current.activeVenueId).toBe('b')
+
+    act(() => rerender({ ...baseParams, categoryFilter: 'nightlife' }))
+    const active = result.current.activeVenueId
+    expect(active).not.toBe('b')
+    expect(useMapStore.getState().nodes[active!]?.category).toBe('nightlife')
+  })
+
+  it('dismisses the carousel when the filter leaves no venues', () => {
+    seed([node('a', 'nightlife'), node('c', 'nightlife')])
+    const { result, rerender } = renderHook((props: UseCarouselSelectionParams) => useCarouselSelection(props), {
+      initialProps: baseParams,
+    })
+
+    act(() => result.current.selectVenue('a', 'marker'))
+    expect(result.current.activeVenueId).toBe('a')
+
+    act(() => rerender({ ...baseParams, categoryFilter: 'food' as NodeCategory }))
+    expect(result.current.activeVenueId).toBeNull()
+    expect(result.current.mode).toBe('closed')
+  })
+})
+
+describe('Feature: map-discovery-experience, Property 29: Browse_Mode order is stable during an in-progress swipe', () => {
+  beforeEach(() => seed([node('a', 'nightlife'), node('b', 'nightlife'), node('c', 'nightlife')]))
+
+  it('ignores recomputes while a swipe is locked, then applies them on settle', () => {
+    const { result } = renderHook(() => useCarouselSelection({ ...baseParams, recomputeDebounceMs: 100_000 }))
+    act(() => result.current.onMarkerTap('a'))
+
+    const locked = result.current.carouselOrder
+    expect(locked).toEqual(['a', 'b', 'c'])
+
+    act(() => result.current.setSwipeInProgress(true))
+    act(() => {
+      // Shrink the node set and force a recompute — locked, so order must hold.
+      useMapStore.setState({ nodes: { a: node('a', 'nightlife') } })
+      result.current.recomputeOrder()
+    })
+    expect(result.current.carouselOrder).toEqual(locked)
+
+    // Settle the swipe — the deferred recompute now applies.
+    act(() => result.current.setSwipeInProgress(false))
+    expect(result.current.carouselOrder).toEqual(['a'])
+  })
+})

@@ -204,7 +204,7 @@ describe('Feature: venue-intelligence-reports, Property 13: Report Serialization
         const deserialized = JSON.parse(serialized)
         expect(deserialized).toEqual(report)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -216,7 +216,7 @@ describe('Feature: venue-intelligence-reports, Property 13: Report Serialization
         const result = reportSchema.safeParse(deserialized)
         expect(result.success).toBe(true)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

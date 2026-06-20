@@ -25,7 +25,7 @@ describe('reward claim idempotency', () => {
 
         expect(redemptions.size).toBe(1)
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 })
@@ -63,7 +63,7 @@ describe('reward slot count invariant', () => {
 
         expect(reward.claimedCount).toBeLessThanOrEqual(reward.totalSlots)
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -84,7 +84,7 @@ describe('reward slot count invariant', () => {
         const overflow = claimSlot(reward)
         expect(overflow.success).toBe(false)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

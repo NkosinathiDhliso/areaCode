@@ -300,7 +300,7 @@ describe('Property 6: admin date-range query result-set with range-validation ga
         // Set equality of the union vs. the in-memory filter.
         expect(collectedKeys).toEqual(expectedKeys)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })

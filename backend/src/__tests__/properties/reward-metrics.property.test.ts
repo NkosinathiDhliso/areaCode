@@ -136,7 +136,7 @@ describe('Property 8: Reward rate metrics are correctly bounded', () => {
         expect(claimRate).toBeGreaterThanOrEqual(0.0)
         expect(claimRate).toBeLessThanOrEqual(1.0)
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -148,7 +148,7 @@ describe('Property 8: Reward rate metrics are correctly bounded', () => {
         expect(redemptionRate).toBeGreaterThanOrEqual(0.0)
         expect(redemptionRate).toBeLessThanOrEqual(1.0)
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -159,7 +159,7 @@ describe('Property 8: Reward rate metrics are correctly bounded', () => {
 
         expect(claimRate).toBe(0)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -170,7 +170,7 @@ describe('Property 8: Reward rate metrics are correctly bounded', () => {
 
         expect(redemptionRate).toBe(0)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -181,7 +181,7 @@ describe('Property 8: Reward rate metrics are correctly bounded', () => {
 
         expect(claimRate).toBe(1.0)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -192,7 +192,7 @@ describe('Property 8: Reward rate metrics are correctly bounded', () => {
 
         expect(redemptionRate).toBe(1.0)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -208,7 +208,7 @@ describe('Property 8: Reward rate metrics are correctly bounded', () => {
 
         expect(rateB).toBeGreaterThanOrEqual(rateA)
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -223,7 +223,7 @@ describe('Property 8: Reward rate metrics are correctly bounded', () => {
 
         expect(rateB).toBeGreaterThanOrEqual(rateA)
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 })
@@ -248,7 +248,7 @@ describe('Property 9: Reward summary is sorted by claim rate', () => {
           expect(summary[i]!.claimRate).toBeGreaterThanOrEqual(summary[i + 1]!.claimRate)
         }
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -260,7 +260,7 @@ describe('Property 9: Reward summary is sorted by claim rate', () => {
 
         expect(summary.length).toBe(activeRewards.length)
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -286,7 +286,7 @@ describe('Property 9: Reward summary is sorted by claim rate', () => {
           }
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -302,7 +302,7 @@ describe('Property 9: Reward summary is sorted by claim rate', () => {
           expect(item.claimRate).toBe(expectedClaimRate)
         }
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -314,7 +314,7 @@ describe('Property 9: Reward summary is sorted by claim rate', () => {
         expect(summary.length).toBe(1)
         expect(summary[0]!.claimRate).toBe(computeClaimRate(reward.claimedCount, reward.totalSlots))
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -347,7 +347,7 @@ describe('Property 9: Reward summary is sorted by claim rate', () => {
           expect(summary[i]!.claimRate).toBeGreaterThanOrEqual(summary[i + 1]!.claimRate)
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 })

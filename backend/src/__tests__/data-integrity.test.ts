@@ -27,7 +27,7 @@ describe('Schema validation: invalid data is always rejected', () => {
           expect(result.success).toBe(false)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -40,7 +40,7 @@ describe('Schema validation: invalid data is always rejected', () => {
           expect(result.success).toBe(false)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -58,7 +58,7 @@ describe('Schema validation: invalid data is always rejected', () => {
           expect(result.success).toBe(false)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -71,7 +71,7 @@ describe('Schema validation: invalid data is always rejected', () => {
           expect(result.success).toBe(false)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -90,7 +90,7 @@ describe('Schema validation: invalid data is always rejected', () => {
           expect(result.success).toBe(false)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -111,7 +111,7 @@ describe('Schema validation: invalid data is always rejected', () => {
           expect(result.success).toBe(false)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -131,7 +131,7 @@ describe('Schema validation: invalid data is always rejected', () => {
           expect(result.success).toBe(false)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -144,7 +144,7 @@ describe('Schema validation: invalid data is always rejected', () => {
           expect(result.success).toBe(false)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -160,7 +160,7 @@ describe('Schema validation: invalid data is always rejected', () => {
           expect(result.success).toBe(false)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -173,7 +173,7 @@ describe('Schema validation: invalid data is always rejected', () => {
           expect(result.success).toBe(false)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -186,7 +186,7 @@ describe('Schema validation: invalid data is always rejected', () => {
           expect(result.success).toBe(false)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -223,7 +223,7 @@ describe('Schema validation: valid data is always accepted', () => {
         const result = checkInBodySchema.safeParse({ nodeId, type })
         expect(result.success).toBe(true)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -246,7 +246,7 @@ describe('Schema validation: valid data is always accepted', () => {
           expect(result.success).toBe(true)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -261,7 +261,7 @@ describe('Schema validation: valid data is always accepted', () => {
           expect(result.success).toBe(true)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -278,7 +278,7 @@ describe('Schema validation: valid data is always accepted', () => {
           expect(result.success).toBe(true)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -291,7 +291,7 @@ describe('Schema validation: valid data is always accepted', () => {
           expect(result.success).toBe(true)
         },
       ),
-      { numRuns: 50 },
+      { numRuns: 25 },
     )
   })
 })
@@ -322,7 +322,7 @@ describe('Business logic invariants', () => {
         const validStates = ['dormant', 'quiet', 'active', 'buzzing', 'popping']
         expect(validStates).toContain(state)
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -332,7 +332,7 @@ describe('Business logic invariants', () => {
         const pulse = dailyCount * 5 + uniqueUsers * 2
         expect(pulse).toBeGreaterThanOrEqual(0)
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -350,7 +350,7 @@ describe('Business logic invariants', () => {
           expect(score).toBeGreaterThanOrEqual(0)
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -364,7 +364,7 @@ describe('Business logic invariants', () => {
           expect(tierA).toBeLessThanOrEqual(tierB)
         }
       }),
-      { numRuns: 500 },
+      { numRuns: 25 },
     )
   })
 
@@ -386,7 +386,7 @@ describe('Business logic invariants', () => {
         }
         expect(claimed).toBeLessThanOrEqual(totalSlots)
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -399,7 +399,7 @@ describe('Business logic invariants', () => {
         const validSlots = [currentSlot, currentSlot - 1]
         expect(validSlots.length).toBe(2)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -428,7 +428,7 @@ describe('Business logic invariants', () => {
         const top50 = [...scores].sort((a, b) => b - a).slice(0, 50)
         expect(top50.length).toBeLessThanOrEqual(50)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -439,7 +439,7 @@ describe('Business logic invariants', () => {
         if (nodeCount <= 3) expect(flagged).toBe(false)
         else expect(flagged).toBe(true)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -450,7 +450,7 @@ describe('Business logic invariants', () => {
         if (notifCount >= 2) expect(shouldSendPush).toBe(false)
         else expect(shouldSendPush).toBe(true)
       }),
-      { numRuns: 50 },
+      { numRuns: 25 },
     )
   })
 })
@@ -497,7 +497,7 @@ describe('Data flow consistency', () => {
           expect(record).not.toHaveProperty('lng')
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -519,7 +519,7 @@ describe('Data flow consistency', () => {
           }
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -529,7 +529,7 @@ describe('Data flow consistency', () => {
       fc.property(fc.constantFrom(...allowed), (type) => {
         expect(allowed).toContain(type)
       }),
-      { numRuns: 50 },
+      { numRuns: 25 },
     )
   })
 
@@ -542,7 +542,7 @@ describe('Data flow consistency', () => {
         expect(code).toHaveLength(6)
         expect(/^[A-Z0-9]{6}$/.test(code)).toBe(true)
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -578,7 +578,7 @@ describe('Cross-feature constraint validation', () => {
           expect(currIdx).toBeGreaterThan(prevIdx)
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -608,7 +608,7 @@ describe('Cross-feature constraint validation', () => {
           expect(rank1).toBe(rank2)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 

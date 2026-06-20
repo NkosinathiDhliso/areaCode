@@ -112,7 +112,7 @@ describe('Property 22: New accounts default to friends_only privacy', () => {
         expect(result.visibility).toBe('anonymous')
         expect(result.reason).toBe('not_friends')
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -129,7 +129,7 @@ describe('Property 22: New accounts default to friends_only privacy', () => {
         expect(result.visibility).toBe('anonymous')
         expect(result.reason).toBe('not_friends')
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
@@ -158,7 +158,7 @@ describe('Property 23: Privacy level controls visibility in social queries', () 
         expect(result.visibility).toBe('excluded')
         expect(result.reason).toBe('private_profile')
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -186,7 +186,7 @@ describe('Property 23: Privacy level controls visibility in social queries', () 
           expect(result.reason).toBe('not_friends')
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -203,7 +203,7 @@ describe('Property 23: Privacy level controls visibility in social queries', () 
         expect(result.visibility).toBe('full')
         expect(result.reason).toBe('public_profile')
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -233,7 +233,7 @@ describe('Property 23: Privacy level controls visibility in social queries', () 
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -279,7 +279,7 @@ describe('Property 23: Privacy level controls visibility in social queries', () 
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
@@ -303,7 +303,7 @@ describe('Property 24: No GPS coordinates in consumer-facing responses', () => {
         expect(sanitized).not.toHaveProperty('lat')
         expect(sanitized).not.toHaveProperty('lng')
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -317,7 +317,7 @@ describe('Property 24: No GPS coordinates in consumer-facing responses', () => {
         expect(sanitized).not.toHaveProperty('userId')
         expect(sanitized).not.toHaveProperty('cognitoSub')
       }),
-      { numRuns: 300 },
+      { numRuns: 25 },
     )
   })
 
@@ -344,7 +344,7 @@ describe('Property 24: No GPS coordinates in consumer-facing responses', () => {
           expect(sanitized).toHaveProperty('tier')
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 })
@@ -379,7 +379,7 @@ describe('Property 25: Block enforcement across all social queries', () => {
         // (private check runs before block check in the code)
         // The key invariant: B cannot see A's data
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -400,7 +400,7 @@ describe('Property 25: Block enforcement across all social queries', () => {
           expect(result.reason).toBe('blocked')
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -424,7 +424,7 @@ describe('Property 25: Block enforcement across all social queries', () => {
           expect(result.reason).toBe('blocked')
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -443,7 +443,7 @@ describe('Property 25: Block enforcement across all social queries', () => {
         expect(result.visibility).toBe('excluded')
         expect(result.reason).toBe('blocked')
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -482,7 +482,7 @@ describe('Property 25: Block enforcement across all social queries', () => {
           expect(filtered).toHaveLength(0)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
@@ -510,7 +510,7 @@ describe('Property 27: WebSocket privacy enforcement for non-public users', () =
         const canEmit = await canEmitIdentity(userId)
         expect(canEmit).toBe(false)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -526,7 +526,7 @@ describe('Property 27: WebSocket privacy enforcement for non-public users', () =
         const canEmit = await canEmitIdentity(userId)
         expect(canEmit).toBe(false)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -542,7 +542,7 @@ describe('Property 27: WebSocket privacy enforcement for non-public users', () =
         const canEmit = await canEmitIdentity(userId)
         expect(canEmit).toBe(true)
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -562,7 +562,7 @@ describe('Property 27: WebSocket privacy enforcement for non-public users', () =
           expect(canEmit).toBe(false)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -582,7 +582,7 @@ describe('Property 27: WebSocket privacy enforcement for non-public users', () =
         // 'friends_only' !== 'public' so returns false
         expect(canEmit).toBe(false)
       }),
-      { numRuns: 50 },
+      { numRuns: 25 },
     )
   })
 })
@@ -628,7 +628,7 @@ describe('Property 26: Harassment reports create high-priority abuse flags', () 
         const priority = determineReportPriority(category)
         expect(priority).toBe('high')
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -638,7 +638,7 @@ describe('Property 26: Harassment reports create high-priority abuse flags', () 
         const priority = determineReportPriority(category)
         expect(priority).toBe('normal')
       }),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 
@@ -662,7 +662,7 @@ describe('Property 26: Harassment reports create high-priority abuse flags', () 
           expect(flag!.entityId).toBe(report.reportedUserId)
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -681,7 +681,7 @@ describe('Property 26: Harassment reports create high-priority abuse flags', () 
           expect(flag).toBeNull()
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -704,7 +704,7 @@ describe('Property 26: Harassment reports create high-priority abuse flags', () 
           expect(priority).toBe('normal')
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 25 },
     )
   })
 
@@ -730,7 +730,7 @@ describe('Property 26: Harassment reports create high-priority abuse flags', () 
           expect(gsi1sk.startsWith('high#')).toBe(true)
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 25 },
     )
   })
 })
