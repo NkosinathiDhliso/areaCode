@@ -370,7 +370,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       {mode === 'closed' && lastVenueId !== null && nodes[lastVenueId] && (
         <div
           className="absolute left-1/2 -translate-x-1/2 z-20 pointer-events-none [&>*]:pointer-events-auto"
-          style={{ bottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
+          style={{ bottom: 'calc(6rem + var(--safe-area-bottom, 0px))' }}
         >
           <button
             onClick={reopenLast}
