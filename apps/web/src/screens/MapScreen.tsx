@@ -11,7 +11,7 @@ import {
 } from '@area-code/shared/stores'
 import type { Node, NodeCategory, Reward } from '@area-code/shared/types'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { MapPinOff, Search, Undo2 } from 'lucide-react'
+import { MapPinOff, Search } from 'lucide-react'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -91,7 +91,6 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
   const setNodes = useMapStore((s) => s.setNodes)
   const addNode = useMapStore((s) => s.addNode)
-  const nodes = useMapStore((s) => s.nodes)
   const pulseScores = useMapStore((s) => s.pulseScores)
   const focusNodeId = useMapStore((s) => s.focusNodeId)
   const accessToken = useConsumerAuthStore((s) => s.accessToken)
@@ -116,18 +115,8 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   // Drives the Peek_Carousel, the camera, and the marker layer. Replaces the
   // legacy ad-hoc selectedNode/sheetOpen/handleFlick state.
   const selection = useCarouselSelection({ categoryFilter, mapReady })
-  const {
-    activeVenueId,
-    notifyViewportChanged,
-    carouselOrder,
-    selectVenue,
-    onMarkerTap,
-    onSearchSelect,
-    dismiss,
-    mode,
-    lastVenueId,
-    reopenLast,
-  } = selection
+  const { activeVenueId, notifyViewportChanged, carouselOrder, selectVenue, onMarkerTap, onSearchSelect, dismiss } =
+    selection
 
   // Socket subscriptions, citySlug passed for anonymous room join
   useMapSockets(citySlug, accessToken ?? undefined, userId)
@@ -363,33 +352,6 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
       {liveVibeOnMap && <LiveArchetypeSubscriber token={accessToken ?? undefined} citySlug={citySlug} />}
       <CityPulseToastMount mapReady={mapReady} />
-
-      {/* Reopen-last affordance - surfaced only while the carousel is closed
-          and a previously-viewed venue is retained. Tapping it re-opens the
-          Peek_Carousel (Browse_Mode) on that venue without a marker hunt. */}
-      {mode === 'closed' && lastVenueId !== null && nodes[lastVenueId] && (
-        <div
-          className="absolute left-1/2 -translate-x-1/2 z-20 pointer-events-none [&>*]:pointer-events-auto"
-          style={{ bottom: 'calc(6rem + var(--safe-area-bottom, 0px))' }}
-        >
-          <button
-            onClick={reopenLast}
-            className="glass-raised rounded-full pl-3 pr-4 py-2 flex items-center gap-2 text-[var(--text-primary)] text-sm font-semibold shadow-lg transition-all active:scale-95"
-            aria-label={t('map.reopenLast', {
-              name: nodes[lastVenueId]!.name,
-              defaultValue: `Reopen ${nodes[lastVenueId]!.name}`,
-            })}
-          >
-            <Undo2 size={16} strokeWidth={2} className="text-[var(--accent)]" />
-            <span className="max-w-[180px] truncate">
-              {t('map.reopenLast', {
-                name: nodes[lastVenueId]!.name,
-                defaultValue: `Reopen ${nodes[lastVenueId]!.name}`,
-              })}
-            </span>
-          </button>
-        </div>
-      )}
 
       {/* Peek_Carousel - the two-state browse-and-compare surface (R1.1, R2.x).
           Browse_Mode (swipeable Venue_Card strip + FlickControls) and
