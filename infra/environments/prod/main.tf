@@ -962,6 +962,29 @@ resource "aws_iam_role_policy" "api_sqs_send" {
   })
 }
 
+# --- Lambda IAM: API -> S3 media bucket (node header images) ---
+# The API Lambda mints presigned PUT URLs for venue header-image uploads and
+# post-processes/deletes those objects. A presigned URL only carries the
+# permissions of the signing principal, so without this the browser PUT is
+# denied with 403 (AccessDenied) even though the signature is valid.
+resource "aws_iam_role_policy" "api_s3_media" {
+  name = "s3-media-access"
+  role = module.lambda_api.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject"
+      ]
+      Resource = "${module.s3_media.bucket_arn}/*"
+    }]
+  })
+}
+
 # --- Lambda IAM: reward-evaluator -> SQS ---
 resource "aws_iam_role_policy" "reward_eval_sqs" {
   name = "sqs-access"
