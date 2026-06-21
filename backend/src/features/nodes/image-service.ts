@@ -1,7 +1,13 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
-const s3 = new S3Client({})
+const s3 = new S3Client({
+  region: process.env['AWS_REGION'] ?? 'us-east-1',
+  // Avoid SDK v3 default of injecting x-amz-checksum-crc32 + x-amz-sdk-checksum-algorithm
+  // into presigned PUT URLs — the browser cannot reproduce those headers, causing 403s.
+  requestChecksumCalculation: 'WHEN_REQUIRED',
+  responseChecksumValidation: 'WHEN_REQUIRED',
+})
 // Prefer AREA_CODE_S3_MEDIA_BUCKET (set by Terraform) and fall back to
 // MEDIA_BUCKET for local dev / legacy callers.
 const BUCKET = process.env['AREA_CODE_S3_MEDIA_BUCKET'] ?? process.env['MEDIA_BUCKET'] ?? 'area-code-media'
@@ -89,11 +95,14 @@ export async function generateUploadUrl(
   const ext = contentType === 'image/png' ? 'png' : 'jpg'
   const objectKey = `nodes/${nodeId}/header-${Date.now()}.${ext}`
 
+  // NOTE: Do not set ContentLength here. Signing it forces `content-length` into
+  // X-Amz-SignedHeaders, and the browser sends the file's actual size (not 2MB),
+  // which fails signature verification with a 403. The 2MB cap is enforced
+  // client-side and by downstream processing.
   const command = new PutObjectCommand({
     Bucket: BUCKET,
     Key: objectKey,
     ContentType: contentType,
-    ContentLength: 2 * 1024 * 1024, // Max 2MB
   })
 
   const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 300 })
