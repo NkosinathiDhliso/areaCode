@@ -1,6 +1,8 @@
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
+import { recordEvent } from '@area-code/shared/lib/rum'
 import {
   Flame,
   Zap,
@@ -98,6 +100,13 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
     onNavigate(route)
   }
 
+  // Funnel: landing view. Read alongside the CTA events below to measure whether
+  // the clearer hero lifts comprehension (Path A: measure before/after, not a
+  // split test, until traffic supports one). No-op when RUM is not configured.
+  useEffect(() => {
+    recordEvent('landing_view')
+  }, [])
+
   return (
     <div className="relative h-full overflow-y-auto bg-[var(--bg-base)] text-[var(--text-primary)]">
       {/* Glow */}
@@ -150,13 +159,19 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
         {/* CTAs */}
         <div className="mt-6 flex gap-3">
           <button
-            onClick={() => go('signup', '/signup')}
+            onClick={() => {
+              recordEvent('landing_cta_signup')
+              go('signup', '/signup')
+            }}
             className="flex-1 rounded-xl bg-[var(--accent)] py-3.5 text-sm font-semibold text-[var(--on-accent)] transition-all active:scale-95 hover:bg-[var(--accent-bright)]"
           >
             {t('landing.signUp', 'Sign Up')}
           </button>
           <button
-            onClick={() => go('map', '/map')}
+            onClick={() => {
+              recordEvent('landing_cta_explore', { source: 'hero' })
+              go('map', '/map')
+            }}
             className="flex-1 rounded-xl border border-[var(--border-strong)] bg-[var(--bg-surface)] py-3.5 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--accent)]"
           >
             {t('landing.exploreMap', 'Explore Map')}
@@ -211,7 +226,10 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
               return (
                 <button
                   key={spot.nodeId ?? spot.name}
-                  onClick={() => go('map', '/map')}
+                  onClick={() => {
+                    recordEvent('landing_cta_explore', { source: 'trending', nodeId: spot.nodeId })
+                    go('map', '/map')
+                  }}
                   className="w-full flex items-center justify-between rounded-xl bg-[var(--bg-raised)] px-3 py-2.5 mb-2 last:mb-0 text-left transition-all hover:border-[var(--accent)] border border-transparent group cursor-pointer"
                 >
                   <div className="flex items-center gap-2.5">
