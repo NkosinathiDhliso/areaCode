@@ -895,11 +895,12 @@ resource "aws_iam_role_policy" "api_cognito" {
 
 # --- SQS Queues ---
 module "sqs_reward_eval" {
-  source              = "../../modules/sqs"
-  env                 = local.env
-  queue_name          = "reward-eval"
-  visibility_timeout  = 60
-  lambda_function_arn = module.lambda_reward_evaluator.function_arn
+  source                = "../../modules/sqs"
+  env                   = local.env
+  queue_name            = "reward-eval"
+  visibility_timeout    = 60
+  lambda_function_arn   = module.lambda_reward_evaluator.function_arn
+  enable_lambda_mapping = true
 }
 
 module "sqs_push_sender" {
@@ -910,12 +911,13 @@ module "sqs_push_sender" {
 }
 
 module "sqs_report_generation" {
-  source              = "../../modules/sqs"
-  env                 = local.env
-  queue_name          = "report-generation"
-  visibility_timeout  = 150
-  max_receive_count   = 2
-  lambda_function_arn = module.lambda_report_generator.function_arn
+  source                = "../../modules/sqs"
+  env                   = local.env
+  queue_name            = "report-generation"
+  visibility_timeout    = 150
+  max_receive_count     = 2
+  lambda_function_arn   = module.lambda_report_generator.function_arn
+  enable_lambda_mapping = true
 }
 
 # --- Lambda IAM: API + check-in -> SQS send ---

@@ -1,8 +1,6 @@
-import { useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
 import { recordEvent } from '@area-code/shared/lib/rum'
+import { useQuery } from '@tanstack/react-query'
 import {
   Flame,
   Zap,
@@ -17,6 +15,9 @@ import {
   MapPin,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import type { AppRoute } from '../types'
 
 interface AuthLandingProps {

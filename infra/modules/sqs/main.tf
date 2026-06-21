@@ -26,6 +26,17 @@ variable "lambda_function_arn" {
   default = ""
 }
 
+# Whether to create the SQS -> Lambda event source mapping. This must be a
+# plan-time-known boolean: deriving `count` from `lambda_function_arn` breaks
+# `terraform plan` whenever that ARN belongs to a Lambda created in the same
+# apply (the ARN is "known after apply", so Terraform cannot resolve `count`).
+# Callers that wire a Lambda pass `enable_lambda_mapping = true` alongside the
+# ARN; queues with no consumer leave it at the default `false`.
+variable "enable_lambda_mapping" {
+  type    = bool
+  default = false
+}
+
 # --- Dead letter queue ---
 resource "aws_sqs_queue" "dlq" {
   name                      = "area-code-${var.env}-${var.queue_name}-dlq"
@@ -54,7 +65,7 @@ resource "aws_sqs_queue" "this" {
 
 # --- Lambda event source mapping (if lambda_function_arn provided) ---
 resource "aws_lambda_event_source_mapping" "this" {
-  count            = var.lambda_function_arn != "" ? 1 : 0
+  count            = var.enable_lambda_mapping ? 1 : 0
   event_source_arn = aws_sqs_queue.this.arn
   function_name    = var.lambda_function_arn
   batch_size       = 1
