@@ -263,7 +263,7 @@ function AppContent() {
   const showAuthGate = !isAuthenticated && GATED.includes(activeRoute)
 
   return (
-    <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
+    <div className="flex flex-col h-full bg-[var(--bg-base)]">
       <ConnectivityBanner />
       <div ref={contentRef} className="flex-1 relative overflow-x-hidden overflow-y-auto overscroll-y-contain">
         {showAuthGate ? (

@@ -10,18 +10,31 @@
 /* ── Base styles ──────────────────────────────────────────────────────── */
 @layer base {
   html,
-  body,
-  #root {
-    height: 100dvh;
+  body {
+    height: 100%;
     margin: 0;
     padding: 0;
+    /* Solid backstop so the home-indicator strip can never flash the
+       standalone webview's black backing if a hairline of viewport shows. */
+    background-color: var(--bg-base);
+  }
+
+  /* Pin the app shell to the physical viewport. In an iOS standalone PWA
+     (viewport-fit=cover, black-translucent status bar) `position: fixed;
+     inset: 0` ties all four edges to the real screen, unlike `100dvh` whose
+     bottom can land above the home indicator and leave a black gap below the
+     nav. With the shell reaching the true bottom edge, env(safe-area-inset-
+     bottom) resolves to the indicator height and pads the nav as intended. */
+  #root {
+    position: fixed;
+    inset: 0;
   }
 
   /* Bottom safe-area inset for the home indicator. The bottom nav lives in the
-     flex flow at the base of the 100dvh app shell (not position:fixed), so it
-     tracks the visual-viewport bottom in every iOS Safari state. This inset
-     just pads the nav clear of the home indicator: env() resolves to 0 when
-     Safari's bottom toolbar is present and to the indicator height otherwise. */
+     flex flow at the base of the fixed, inset:0 app shell, so its bottom edge
+     reaches the true screen bottom in every iOS state. This inset pads the nav
+     clear of the home indicator: env() resolves to 0 when Safari's bottom
+     toolbar is present and to the indicator height otherwise. */
   :root {
     --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   }
