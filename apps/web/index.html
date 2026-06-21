@@ -95,6 +95,20 @@
     <!-- Default (before JS hydrates) -->
     <meta name="theme-color" content="#0c1018" />
 
+    <!-- Pre-hydration background. Matches the app's --bg-base per colour scheme
+         so the first paint (and any home-indicator safe-area strip before the
+         stylesheet loads) is the right theme colour instead of a black flash. -->
+    <style>
+      html {
+        background: #0c1018;
+      }
+      @media (prefers-color-scheme: light) {
+        html {
+          background: #f0ece6;
+        }
+      }
+    </style>
+
     <!-- Font preloading — prevent layout shift -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -126,7 +140,7 @@
       mounts. AuthLanding (in apps/web/src/screens/AuthLanding.tsx) carries
       the same content for end users.
     -->
-    <div id="root" style="background: #0c1018; min-height: 100dvh">
+    <div id="root" style="min-height: 100dvh">
       <noscript>
         <p style="background: #fffbe6; color: #5b4500; padding: 12px; text-align: center; margin: 0">
           Area Code requires JavaScript. Please enable it in your browser settings to use the app.

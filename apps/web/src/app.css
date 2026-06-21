@@ -10,8 +10,9 @@
 /* ── Base styles ──────────────────────────────────────────────────────── */
 @layer base {
   html,
-  body {
-    height: 100%;
+  body,
+  #root {
+    height: 100dvh;
     margin: 0;
     padding: 0;
     /* Solid backstop so the home-indicator strip can never flash the
@@ -19,22 +20,18 @@
     background-color: var(--bg-base);
   }
 
-  /* Pin the app shell to the physical viewport. In an iOS standalone PWA
-     (viewport-fit=cover, black-translucent status bar) `position: fixed;
-     inset: 0` ties all four edges to the real screen, unlike `100dvh` whose
-     bottom can land above the home indicator and leave a black gap below the
-     nav. With the shell reaching the true bottom edge, env(safe-area-inset-
-     bottom) resolves to the indicator height and pads the nav as intended. */
-  #root {
-    position: fixed;
-    inset: 0;
-  }
+  /* The app shell fills the dynamic viewport. With viewport-fit=cover, 100dvh
+     extends edge-to-edge INCLUDING under the home indicator, so the in-flow
+     bottom nav reaches the true screen bottom and its padding-bottom (the
+     safe-area inset) paints the nav's own background through the indicator
+     zone. (A position:fixed/inset:0 shell does the opposite — it clamps to the
+     safe area and leaves the home-indicator strip unpainted, i.e. a black gap.) */
 
   /* Bottom safe-area inset for the home indicator. The bottom nav lives in the
-     flex flow at the base of the fixed, inset:0 app shell, so its bottom edge
-     reaches the true screen bottom in every iOS state. This inset pads the nav
-     clear of the home indicator: env() resolves to 0 when Safari's bottom
-     toolbar is present and to the indicator height otherwise. */
+     flex flow at the base of the 100dvh app shell, so its bottom edge reaches
+     the true screen bottom. This inset pads the nav clear of the home
+     indicator: env() resolves to 0 when Safari's bottom toolbar is present and
+     to the indicator height otherwise. */
   :root {
     --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   }
