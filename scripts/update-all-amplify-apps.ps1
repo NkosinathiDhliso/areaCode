@@ -78,9 +78,10 @@ foreach ($app in $AmplifyApps) {
     # Update environment variables
     Write-Host "  Setting environment variables..." -ForegroundColor Gray
     
-    # Build environment variables — web app needs Mapbox token too
+    # Build environment variables — Web (basemap) and Business (address
+    # autocomplete via Mapbox Geocoding) both need the Mapbox token.
     $envVars = "VITE_API_URL=$ApiUrl,VITE_SOCKET_URL=$ApiUrl,VITE_WEBSOCKET_URL=$WebSocketUrl"
-    if ($app.Name -eq "Web (Main)" -and $MapboxToken) {
+    if (($app.Name -eq "Web (Main)" -or $app.Name -eq "Business") -and $MapboxToken) {
         $envVars += ",VITE_MAPBOX_TOKEN=$MapboxToken"
     }
     if ($app.RumMonitorId -and $app.RumIdentityPool) {

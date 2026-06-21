@@ -131,7 +131,7 @@ These prove the platform is alive end-to-end.
 
 - [ ] **Sign up** with email/password
 - [ ] **Google sign-in** completes and returns to dashboard
-- [ ] **Add Venue** flow — enter name, category, address (Google autocomplete works), claim status
+- [ ] **Add Venue** flow — enter name, category, address (Mapbox autocomplete works), claim status
 - [ ] **Address geocoding** — entering a real address pins the right map location
 - [ ] **Free trial banner** appears showing 14 days remaining; no card required
 - [ ] **Pre-trial restrictions** — venue is hidden from public map until the trial starts (or is paid)
