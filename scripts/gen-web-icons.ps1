@@ -26,6 +26,65 @@ $iconSizes = [ordered]@{
   'icon-512.png'         = 512  # PWA splash / install
 }
 
+# favicon.ico is rebuilt as a multi-resolution icon so browser tabs stay crisp
+# on high-DPI displays (the old file was a single blurry 32x32 frame).
+$icoSizes = @(16, 32, 48, 64, 128, 256)
+
+# Renders the logo flattened onto the brand background at $size px and returns
+# the PNG-encoded bytes.
+function Get-IconPngBytes([System.Drawing.Image]$logo, [int]$size, [System.Drawing.Color]$bg) {
+  $bmp = New-Object System.Drawing.Bitmap($size, $size)
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  try {
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $g.Clear($bg)
+    $g.DrawImage($logo, 0, 0, $size, $size)
+    $ms = New-Object System.IO.MemoryStream
+    $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+    return $ms.ToArray()
+  } finally {
+    $g.Dispose()
+    $bmp.Dispose()
+  }
+}
+
+# Writes a multi-resolution .ico containing PNG-encoded frames (Vista+ format).
+function Write-MultiResIco([string]$path, [hashtable]$frames, [int[]]$sizes) {
+  $fs = New-Object System.IO.FileStream($path, [System.IO.FileMode]::Create)
+  $bw = New-Object System.IO.BinaryWriter($fs)
+  try {
+    # ICONDIR
+    $bw.Write([uint16]0)            # reserved
+    $bw.Write([uint16]1)            # type = icon
+    $bw.Write([uint16]$sizes.Count) # image count
+
+    # Directory entries are 16 bytes each; image data starts after all of them.
+    $offset = 6 + (16 * $sizes.Count)
+    foreach ($s in $sizes) {
+      $data = $frames[$s]
+      $dim = if ($s -ge 256) { 0 } else { $s }  # 0 means 256
+      $bw.Write([byte]$dim)          # width
+      $bw.Write([byte]$dim)          # height
+      $bw.Write([byte]0)             # color palette
+      $bw.Write([byte]0)             # reserved
+      $bw.Write([uint16]1)           # color planes
+      $bw.Write([uint16]32)          # bits per pixel
+      $bw.Write([uint32]$data.Length)# bytes in resource
+      $bw.Write([uint32]$offset)     # offset to data
+      $offset += $data.Length
+    }
+    foreach ($s in $sizes) {
+      $data = $frames[$s]
+      $bw.Write($data, 0, $data.Length)
+    }
+  } finally {
+    $bw.Dispose()
+    $fs.Dispose()
+  }
+}
+
 $logo = [System.Drawing.Image]::FromFile($source)
 try {
   foreach ($app in $apps) {
@@ -34,23 +93,17 @@ try {
 
     foreach ($name in $iconSizes.Keys) {
       $size = $iconSizes[$name]
-      $bmp = New-Object System.Drawing.Bitmap($size, $size)
-      $g = [System.Drawing.Graphics]::FromImage($bmp)
-      try {
-        $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-        $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-        $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-        $g.Clear($bg)
-        $g.DrawImage($logo, 0, 0, $size, $size)
-
-        $out = Join-Path $publicDir $name
-        $bmp.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)
-        Write-Output "Wrote $out ($size x $size)"
-      } finally {
-        $g.Dispose()
-        $bmp.Dispose()
-      }
+      $out = Join-Path $publicDir $name
+      [System.IO.File]::WriteAllBytes($out, (Get-IconPngBytes $logo $size $bg))
+      Write-Output "Wrote $out ($size x $size)"
     }
+
+    # Multi-resolution favicon.ico
+    $frames = @{}
+    foreach ($s in $icoSizes) { $frames[$s] = Get-IconPngBytes $logo $s $bg }
+    $icoOut = Join-Path $publicDir 'favicon.ico'
+    Write-MultiResIco $icoOut $frames $icoSizes
+    Write-Output "Wrote $icoOut (multi-res: $($icoSizes -join ', '))"
   }
 } finally {
   $logo.Dispose()
