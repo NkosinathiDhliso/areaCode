@@ -83,9 +83,13 @@ export function MapboxAddressInput({
 
     const controller = new AbortController()
     const handle = setTimeout(() => {
+      // Note: `poi` is NOT a valid type for the Geocoding v6 API (it only exists
+      // in the Search Box API) and including it returns HTTP 422. Geocoding v6
+      // supports: country, region, postcode, district, place, locality,
+      // neighborhood, street, address.
       const url =
         `${ENDPOINT}?q=${encodeURIComponent(query)}` +
-        `&country=za&limit=5&types=address,street,place,poi&autocomplete=true` +
+        `&country=za&limit=5&types=address,street,place&autocomplete=true` +
         `&access_token=${MAPBOX_TOKEN}`
       fetch(url, { signal: controller.signal })
         .then((res) => {
