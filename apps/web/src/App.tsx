@@ -265,11 +265,7 @@ function AppContent() {
   return (
     <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
       <ConnectivityBanner />
-      <div
-        ref={contentRef}
-        className="flex-1 relative overflow-x-hidden overflow-y-auto overscroll-y-contain"
-        style={{ paddingBottom: 'calc(var(--nav-height) + var(--safe-area-bottom))' }}
-      >
+      <div ref={contentRef} className="flex-1 relative overflow-x-hidden overflow-y-auto overscroll-y-contain">
         {showAuthGate ? (
           <AuthLanding onNavigate={setRoute} />
         ) : (

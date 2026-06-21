@@ -17,20 +17,13 @@
     padding: 0;
   }
 
-  /* Bottom safe-area inset.
-     In a Safari browser tab (viewport-fit=cover) iOS reports a non-zero
-     safe-area-inset-bottom for the home indicator, but because we disable
-     document scroll (below) Safari's bottom toolbar never collapses — so that
-     inset would stack on top of the toolbar and render as an empty band under
-     the bottom nav. Only the standalone/fullscreen (Add-to-Home-Screen) launch
-     actually needs the inset, where the home indicator is genuinely present. */
+  /* Bottom safe-area inset for the home indicator. The bottom nav lives in the
+     flex flow at the base of the 100dvh app shell (not position:fixed), so it
+     tracks the visual-viewport bottom in every iOS Safari state. This inset
+     just pads the nav clear of the home indicator: env() resolves to 0 when
+     Safari's bottom toolbar is present and to the indicator height otherwise. */
   :root {
-    --safe-area-bottom: 0px;
-  }
-  @media (display-mode: standalone), (display-mode: fullscreen) {
-    :root {
-      --safe-area-bottom: env(safe-area-inset-bottom, 0px);
-    }
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   /* iOS standalone PWA: kill the document-level rubber-band / scroll-chaining
