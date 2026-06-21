@@ -1,0 +1,9 @@
+# Area Code - allow all crawlers, point them at the sitemap.
+User-agent: *
+Allow: /
+
+# Keep auth and account surfaces out of the index.
+Disallow: /login
+Disallow: /signup
+
+Sitemap: https://www.areacode.co.za/sitemap.xml

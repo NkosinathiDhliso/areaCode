@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-ZA">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -27,6 +27,7 @@
     <!-- Open Graph / social previews. Also helps Google's brand-verification
          crawler match the app name on the consent screen with the home page. -->
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_ZA" />
     <meta property="og:site_name" content="Area Code" />
     <meta property="og:title" content="Area Code" />
     <meta property="og:url" content="https://www.areacode.co.za/" />
@@ -37,20 +38,40 @@
     <meta name="application-name" content="Area Code" />
     <meta name="apple-mobile-web-app-title" content="Area Code" />
 
+    <!-- Twitter / X card. Falls back to the og:* tags above for image-less previews. -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Area Code" />
+    <meta
+      name="twitter:description"
+      content="A live map of which venues are buzzing right now in Johannesburg, Cape Town, and Durban. Check in, earn rewards."
+    />
+
+    <!-- Geo targeting for South Africa local search. -->
+    <meta name="geo.region" content="ZA" />
+    <meta name="geo.placename" content="Johannesburg, Cape Town, Durban" />
+
     <!-- Structured data for search engines and OAuth brand verification. -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "WebApplication",
         "name": "Area Code",
+        "alternateName": ["AreaCode", "Area Code SA", "areacode.co.za"],
         "url": "https://www.areacode.co.za/",
         "applicationCategory": "LifestyleApplication",
         "operatingSystem": "Any",
         "description": "Area Code is a real-time venue discovery and rewards platform for South Africa. Consumers check in at participating venues to earn rewards, climb local leaderboards, and discover spots that match their taste.",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "ZAR"
+        },
         "publisher": {
           "@type": "Organization",
           "name": "Area Code",
-          "url": "https://www.areacode.co.za/"
+          "alternateName": "AreaCode",
+          "url": "https://www.areacode.co.za/",
+          "areaServed": ["Johannesburg", "Cape Town", "Durban", "South Africa"]
         },
         "privacyPolicy": "https://www.areacode.co.za/legal/privacy",
         "termsOfService": "https://www.areacode.co.za/legal/terms"
