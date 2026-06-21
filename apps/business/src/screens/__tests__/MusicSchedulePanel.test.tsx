@@ -97,7 +97,7 @@ async function waitForLoad() {
 
 // ─── Tests ─────────────────────────────────────────────────────────────────
 
-describe('MusicSchedulePanel — access control (R4.11, R4.12)', () => {
+describe('MusicSchedulePanel - access control (R4.11, R4.12)', () => {
   it('renders the denial state and issues zero schedule API requests when the JWT businessId differs from the venue', async () => {
     mockJwtBusinessId = 'someone-else'
     mockBusinessNodes = [{ businessId: 'biz-1' }]
@@ -109,7 +109,7 @@ describe('MusicSchedulePanel — access control (R4.11, R4.12)', () => {
   })
 })
 
-describe('MusicSchedulePanel — empty state (R4.10)', () => {
+describe('MusicSchedulePanel - empty state (R4.10)', () => {
   it('shows the "Add first slot" CTA and opens the editor on tap', async () => {
     apiGet.mockResolvedValue({ schedule: null })
     render(<MusicSchedulePanel />)
@@ -120,7 +120,7 @@ describe('MusicSchedulePanel — empty state (R4.10)', () => {
   })
 })
 
-describe('MusicSchedulePanel — Cross_Midnight_Pair split on save (R3.12, R4.13)', () => {
+describe('MusicSchedulePanel - Cross_Midnight_Pair split on save (R3.12, R4.13)', () => {
   it('persists a cross-midnight blanket slot as two pair-a/-b halves', async () => {
     apiGet.mockResolvedValue({ schedule: makeSchedule() })
     apiPost.mockImplementation(async (_url: string, body: MusicSchedule) => body)
@@ -158,7 +158,7 @@ describe('MusicSchedulePanel — Cross_Midnight_Pair split on save (R3.12, R4.13
   })
 })
 
-describe('MusicSchedulePanel — pair edit-as-unit (R4.14)', () => {
+describe('MusicSchedulePanel - pair edit-as-unit (R4.14)', () => {
   it('opens both halves of a Cross_Midnight_Pair as a single merged slot', async () => {
     // Seed a schedule that already contains a pair (FRI 22:00→23:59 + SAT 00:00→02:00).
     apiGet.mockResolvedValue({
@@ -190,7 +190,7 @@ describe('MusicSchedulePanel — pair edit-as-unit (R4.14)', () => {
     render(<MusicSchedulePanel />)
     await waitForLoad()
 
-    // Click EITHER half — both must open the merged virtual slot.
+    // Click EITHER half - both must open the merged virtual slot.
     fireEvent.click(screen.getByTestId('music-schedule-slot-pair-abc-b'))
     const start = screen.getByTestId('slot-editor-start-time') as HTMLInputElement
     const end = screen.getByTestId('slot-editor-end-time') as HTMLInputElement

@@ -2,7 +2,7 @@
  * Carousel constants and Venue_Card view-model derivation.
  *
  * Foundations for the Map Discovery / Peek-Carousel experience. This module is
- * intentionally **pure** — it imports no React, no Mapbox, and no stores — so it
+ * intentionally **pure** - it imports no React, no Mapbox, and no stores - so it
  * can be consumed by both the render shells and the fast-check property tests
  * against the pure logic cores (design § Testing Strategy).
  *
@@ -44,6 +44,17 @@ export const GLYPH_ZOOM_THRESHOLD = 12.5
 
 /** Zoom below which venue markers are hidden entirely (Globe_Zoom boundary). */
 export const MIN_MARKER_ZOOM = 8
+
+/**
+ * Zoom the camera flies to on the first cold-open move, when the map is still
+ * sitting on the country-wide overview (below {@link MIN_MARKER_ZOOM}, where
+ * markers are hidden). Landing here means the consumer opens straight onto a
+ * city where the alive, taste-matched venue is visible as a glyph — "the city
+ * is alive, now you can see it" — instead of an empty country map they have to
+ * pinch-zoom into. Chosen just above {@link GLYPH_ZOOM_THRESHOLD} so the hero
+ * venue and its neighbours render as detailed glyphs on arrival.
+ */
+export const MAP_ARRIVAL_ZOOM = 13
 
 /**
  * Fraction of the viewport height used as the vertical fly-to offset

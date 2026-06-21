@@ -1,5 +1,5 @@
 /**
- * Preservation Property Tests — Business Portal Panels
+ * Preservation Property Tests - Business Portal Panels
  *
  * These tests capture EXISTING correct behavior on UNFIXED code.
  * They must PASS on the current unfixed code to establish a baseline
@@ -210,7 +210,7 @@ describe('Preservation Property: Photo validation rejects invalid files', () => 
 
     // Set VITE_CDN_URL env
     vi.stubEnv('VITE_CDN_URL', 'https://cdn.areacode.co.za')
-    vi.stubEnv('VITE_GOOGLE_MAPS_API_KEY', '')
+    vi.stubEnv('VITE_MAPBOX_TOKEN', '')
   })
 
   afterEach(() => {

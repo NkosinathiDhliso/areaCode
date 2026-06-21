@@ -195,12 +195,8 @@ export async function nodeRoutes(app: FastifyInstance) {
   })
 
   // GET /v1/nodes/:nodeId/presence — honest Live_Presence_Count (public read)
-  app.get(
-    '/v1/nodes/:nodeId/presence',
-    { preHandler: [validate({ params: nodeIdParamsSchema })] },
-    async (request) => {
-      const params = request.params as z.infer<typeof nodeIdParamsSchema>
-      return service.getNodePresence(params.nodeId)
-    },
-  )
+  app.get('/v1/nodes/:nodeId/presence', { preHandler: [validate({ params: nodeIdParamsSchema })] }, async (request) => {
+    const params = request.params as z.infer<typeof nodeIdParamsSchema>
+    return service.getNodePresence(params.nodeId)
+  })
 }

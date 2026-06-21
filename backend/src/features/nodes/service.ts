@@ -427,22 +427,22 @@ export async function businessCreateNode(
 }
 
 async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
-  const googleApiKey = process.env['GOOGLE_MAPS_API_KEY']
+  const mapboxToken = process.env['MAPBOX_TOKEN'] ?? process.env['VITE_MAPBOX_TOKEN']
 
-  if (googleApiKey) {
+  if (mapboxToken) {
     try {
       const response = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${googleApiKey}&region=ZA&components=country:ZA`,
+        `https://api.mapbox.com/search/geocode/v6/forward?q=${encodeURIComponent(address)}` +
+          `&country=za&limit=1&access_token=${mapboxToken}`,
       )
       const data = (await response.json()) as {
-        status: string
-        results: Array<{ geometry: { location: { lat: number; lng: number } } }>
+        features?: Array<{ properties?: { coordinates?: { longitude?: number; latitude?: number } } }>
       }
-      if (data.status === 'OK' && data.results[0]) {
-        const { lat, lng } = data.results[0].geometry.location
-        return { lat, lng }
+      const coords = data.features?.[0]?.properties?.coordinates
+      if (coords?.latitude !== undefined && coords?.longitude !== undefined) {
+        return { lat: coords.latitude, lng: coords.longitude }
       }
-      // Fall through to OSM on ZERO_RESULTS / REQUEST_DENIED / other non-OK statuses
+      // Fall through to OSM if Mapbox returns no usable feature
     } catch {
       // Fall through to OSM on network error
     }

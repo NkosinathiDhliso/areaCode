@@ -13,17 +13,17 @@ import { getNodeState, getCategoryColour } from '../lib/mapHelpers'
  * The three legibility tiers the Marker_Layer renders, selected purely by
  * the live Map_Canvas zoom (design Property 17):
  *
- * - `glyph`  — zoom ≥ `GLYPH_ZOOM_THRESHOLD` (12.5): detailed archetype glyph.
- * - `dot`    — zoom in `[MIN_MARKER_ZOOM, GLYPH_ZOOM_THRESHOLD)` (8 → 12.5):
+ * - `glyph`  - zoom ≥ `GLYPH_ZOOM_THRESHOLD` (12.5): detailed archetype glyph.
+ * - `dot`    - zoom in `[MIN_MARKER_ZOOM, GLYPH_ZOOM_THRESHOLD)` (8 → 12.5):
  *              a simple category-coloured dot so a packed city-overview reads
  *              as clean density rather than a collage of tiny icons.
- * - `hidden` — zoom < `MIN_MARKER_ZOOM` (8): markers are hidden because at
+ * - `hidden` - zoom < `MIN_MARKER_ZOOM` (8): markers are hidden because at
  *              continent/globe zoom an individual venue marker covers a huge
  *              geographic area and visually detaches from the globe surface.
  *
  * `GLYPH_ZOOM_THRESHOLD` and `MIN_MARKER_ZOOM` are imported from
- * `carouselConstants` — the single shared home for the map-presentation
- * thresholds — so the carousel, camera, and marker layers all agree.
+ * `carouselConstants` - the single shared home for the map-presentation
+ * thresholds - so the carousel, camera, and marker layers all agree.
  */
 export type MarkerPresentationTier = 'glyph' | 'dot' | 'hidden'
 
@@ -52,20 +52,93 @@ export function isActiveMarker(nodeId: string, activeVenueId: string | null): bo
 }
 
 /**
- * Returns a 0–1 CSS scale factor for the given zoom level.
- * Mapbox owns the `transform` property on marker elements, so we use the
- * independent CSS `scale` property which composes with `transform` rather
- * than overriding it. Scale 0 = fully hidden, 1 = full size.
+ * Returns a 0–1 visibility factor for the given zoom level - the
+ * *presence* channel: should the marker be on screen at all, and how far
+ * through the fade-in from the hidden tier is it.
  *
  * Stays consistent with {@link presentationTierForZoom}: it is exactly 0 in the
  * `hidden` tier and 1 in the `glyph` tier, ramping linearly across the `dot`
  * tier so the transition across a threshold is smooth and never detaches the
  * marker from its coordinates (design Property 18).
+ *
+ * This is composed with {@link zoomSizeFactor} (the *size* channel) into the
+ * single transform scale applied to each marker's scale-layer in
+ * {@link applyZoomScale}.
  */
 export function scaleForZoom(zoom: number): number {
   if (zoom >= GLYPH_ZOOM_THRESHOLD) return 1
   if (zoom < MIN_MARKER_ZOOM) return 0
   return (zoom - MIN_MARKER_ZOOM) / (GLYPH_ZOOM_THRESHOLD - MIN_MARKER_ZOOM)
+}
+
+/**
+ * The zoom at which a marker renders at exactly its designed pixel size
+ * (`zoomSizeFactor === 1`). The `GLYPH_SIZE` table and the per-tier / per-state
+ * sizing were tuned for the detailed glyph tier, so we anchor the zoom-aware
+ * sizing at the glyph threshold: at and below it the factor stays ≤ 1, and as
+ * the user zooms past it the glyph grows gently so a venue the user has zoomed
+ * right up to reads as physically present on its block rather than staying a
+ * fixed screen-space pip. Keeping the anchor here also makes the new sizing a
+ * no-op at the threshold, so existing glyph-tier behaviour is unchanged.
+ */
+export const BASE_PRESENTATION_ZOOM = GLYPH_ZOOM_THRESHOLD
+
+/** How much the glyph grows/shrinks per zoom level away from the base zoom. */
+const ZOOM_SIZE_SLOPE = 0.12
+/** Hard floor/ceiling so the glyph never collapses to nothing or swallows the map. */
+const ZOOM_SIZE_MIN = 0.7
+const ZOOM_SIZE_MAX = 1.6
+
+/**
+ * Returns a continuous size multiplier for the given zoom level, anchored on
+ * {@link BASE_PRESENTATION_ZOOM} so the marker's pixel size *considers the map
+ * zoom* instead of being a flat screen-space constant.
+ *
+ * - At the base zoom the factor is exactly 1 (designed size).
+ * - Above the base zoom it grows by {@link ZOOM_SIZE_SLOPE} per level, capped
+ *   at {@link ZOOM_SIZE_MAX}, so zooming in makes a venue feel closer.
+ * - Below the base zoom it shrinks, floored at {@link ZOOM_SIZE_MIN}, so a
+ *   packed regional overview reads as tidy density rather than a collage of
+ *   full-size icons.
+ *
+ * Pure and total (clamped, never NaN for finite input) so it can be
+ * property-tested independently of the Mapbox wiring, the same way
+ * {@link scaleForZoom} is.
+ */
+export function zoomSizeFactor(zoom: number): number {
+  const factor = 1 + (zoom - BASE_PRESENTATION_ZOOM) * ZOOM_SIZE_SLOPE
+  return Math.min(ZOOM_SIZE_MAX, Math.max(ZOOM_SIZE_MIN, factor))
+}
+
+/** Data-layer tag for the inner element that owns the zoom transform. */
+const SCALE_LAYER = 'scale-layer'
+
+/**
+ * Apply the zoom-driven visual scale to a marker.
+ *
+ * The scale is applied to an inner **scale-layer** element via the `transform`
+ * property, NOT to the Mapbox-positioned root. This is load-bearing for keeping
+ * markers locked to their coordinates: Mapbox writes
+ * `transform: translate(screenX, screenY) …` onto the root element every frame.
+ * The CSS `scale` property (and any transform on the root) composes as
+ * `scale ∘ transform`, which scales that screen-position translate too -
+ * displacing the marker by `(1 − scale) · (center − screenPos)`. Because
+ * `screenPos` changes as the user pans, the marker visibly drifts off its
+ * lng/lat whenever `scale ≠ 1`. Scaling a child element instead leaves the
+ * root's translate untouched, so the marker stays geo-anchored at every zoom
+ * (design Property 18).
+ *
+ * The applied scale combines the visibility ramp ({@link scaleForZoom}) with
+ * the size response ({@link zoomSizeFactor}); the container's pointer-events are
+ * gated on visibility alone so a faded-out marker never blocks map gestures.
+ */
+function applyZoomScale(markerEl: HTMLElement, zoom: number): void {
+  const layer = markerEl.querySelector(`[data-layer="${SCALE_LAYER}"]`) as HTMLElement | null
+  const visibility = scaleForZoom(zoom)
+  if (layer) {
+    layer.style.transform = `scale(${visibility * zoomSizeFactor(zoom)})`
+  }
+  markerEl.style.pointerEvents = visibility < 0.05 ? 'none' : ''
 }
 
 /**
@@ -124,9 +197,12 @@ function buildMarkerElement(
 ): HTMLDivElement {
   void node
   const cfg = STATE_CONFIG[state]
-  // Container holds the halo, the optional ripple ring, the glyph mount,
-  // and the optional live-count badge. Sized off the glyph so the halo
-  // can extend past the silhouette on every Pulse_State.
+  // Container is the Mapbox-positioned root: Mapbox writes a per-frame
+  // `transform: translate(x,y) …` onto it to geo-anchor the marker. We must
+  // NOT put a scale on this element (see applyZoomScale) - instead all visual
+  // layers live inside `scaleLayer` and the zoom scale is applied there,
+  // leaving the root's positioning translate untouched so the marker stays
+  // locked to its lng/lat as the user pans and zooms.
   const totalSize = glyphSize * 3
   const container = document.createElement('div')
   container.className = 'node-marker'
@@ -135,18 +211,31 @@ function buildMarkerElement(
     height: `${totalSize}px`,
     // Must stay 'absolute' so Mapbox's per-frame `transform: translate(x,y)`
     // geo-anchors the marker to the map origin. Mapbox's `.mapboxgl-marker`
-    // class sets this, but an inline value here would override the class —
+    // class sets this, but an inline value here would override the class -
     // 'relative' drops the marker back into normal flow and it visibly
-    // drifts off its lng/lat as you pan/zoom. 'absolute' also still works as
-    // the containing block for the halo/ripple/badge children below.
+    // drifts off its lng/lat as you pan/zoom.
     position: 'absolute',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
     overflow: 'visible',
     pointerEvents: 'none',
   })
+
+  // ── Scale layer ──
+  // Owns the zoom transform (set by applyZoomScale) and is the containing
+  // block + flex centre for every visual child. Fills the container exactly,
+  // so its centre coincides with the geo-anchor and `transform: scale()`
+  // scales the marker around that anchor without moving it off-coordinate.
+  const scaleLayer = document.createElement('div')
+  scaleLayer.dataset.layer = SCALE_LAYER
+  Object.assign(scaleLayer.style, {
+    position: 'absolute',
+    inset: '0',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+    pointerEvents: 'none',
+  })
+  container.appendChild(scaleLayer)
 
   // ── Halo (Pulse_State channel) ──
   const haloSize = glyphSize * 2.2
@@ -164,7 +253,7 @@ function buildMarkerElement(
     pointerEvents: 'none',
   })
   halo.dataset.layer = 'halo'
-  container.appendChild(halo)
+  scaleLayer.appendChild(halo)
 
   // ── Popping ripple ──
   if (cfg.ripple) {
@@ -180,13 +269,13 @@ function buildMarkerElement(
       pointerEvents: 'none',
     })
     ripple.dataset.layer = 'ripple'
-    container.appendChild(ripple)
+    scaleLayer.appendChild(ripple)
   }
 
   // ── Glyph wrapper (the marker itself) ──
   // Owns the breathe / pulse animation that the old core dot used to
   // own, so the glyph's scale curve drives identity + alive-ness in one
-  // element. Tap target is here — the glyph silhouette is what the user
+  // element. Tap target is here - the glyph silhouette is what the user
   // is actually pointing at.
   const glyphWrapper = document.createElement('div')
   Object.assign(glyphWrapper.style, {
@@ -200,7 +289,7 @@ function buildMarkerElement(
     cursor: 'pointer',
     pointerEvents: 'auto',
     // Soft drop-shadow so the silhouette reads on light tiles. Not a
-    // glow per se — the halo handles glow. This is just edge separation.
+    // glow per se - the halo handles glow. This is just edge separation.
     filter: state === 'dormant' ? 'none' : `drop-shadow(0 0 ${glyphSize * 0.25}px ${colour}66)`,
     // Smooth size transition so a mid-session tier upgrade (e.g.
     // starter → growth) rescales the glyph over 400ms rather than
@@ -226,11 +315,11 @@ function buildMarkerElement(
   })
   glyphHost.dataset.layer = GLYPH_HOST_LAYER
   glyphWrapper.appendChild(glyphHost)
-  container.appendChild(glyphWrapper)
+  scaleLayer.appendChild(glyphWrapper)
 
   // ── Live count badge (buzzing / popping only) ──
   // The badge shows the venue's Live_Check_In_Count (`mapStore.checkInCounts`),
-  // the raw "how many people are here right now" headcount — distinct from the
+  // the raw "how many people are here right now" headcount - distinct from the
   // weighted Pulse_Score that drives glyph size and animation.
   if ((state === 'buzzing' || state === 'popping') && liveCount > 0) {
     const badge = document.createElement('div')
@@ -251,7 +340,7 @@ function buildMarkerElement(
     })
     badge.textContent = liveCount > 99 ? '99+' : String(liveCount)
     badge.dataset.layer = 'badge'
-    container.appendChild(badge)
+    scaleLayer.appendChild(badge)
   }
 
   applyActiveStyling(container, isActive, colour)
@@ -269,7 +358,10 @@ function buildMarkerElement(
  */
 function applyActiveStyling(el: HTMLElement, isActive: boolean, colour: string): void {
   el.dataset.active = isActive ? 'true' : 'false'
-  let ring = el.querySelector(`[data-layer="${ACTIVE_RING_LAYER}"]`) as HTMLElement | null
+  // The ring lives inside the scale-layer alongside the glyph so it scales with
+  // the marker; fall back to the root only if the layer is somehow absent.
+  const scaleLayer = (el.querySelector(`[data-layer="${SCALE_LAYER}"]`) as HTMLElement | null) ?? el
+  let ring = scaleLayer.querySelector(`[data-layer="${ACTIVE_RING_LAYER}"]`) as HTMLElement | null
 
   if (isActive) {
     if (!ring) {
@@ -285,15 +377,15 @@ function applyActiveStyling(el: HTMLElement, isActive: boolean, colour: string):
       ring.dataset.layer = ACTIVE_RING_LAYER
       // Behind the glyph wrapper so the ring frames the marker without
       // covering the tap target.
-      const glyphWrapper = el.querySelector('[data-layer="glyph-wrapper"]')
+      const glyphWrapper = scaleLayer.querySelector('[data-layer="glyph-wrapper"]')
       if (glyphWrapper) {
-        el.insertBefore(ring, glyphWrapper)
+        scaleLayer.insertBefore(ring, glyphWrapper)
       } else {
-        el.appendChild(ring)
+        scaleLayer.appendChild(ring)
       }
     }
     // Size the ring off the live glyph wrapper so it tracks tier/state sizing.
-    const glyphWrapper = el.querySelector('[data-layer="glyph-wrapper"]') as HTMLElement | null
+    const glyphWrapper = scaleLayer.querySelector('[data-layer="glyph-wrapper"]') as HTMLElement | null
     const glyphSize = glyphWrapper ? parseFloat(glyphWrapper.style.width) || 0 : 0
     const ringSize = glyphSize * 1.5
     Object.assign(ring.style, {
@@ -304,7 +396,8 @@ function applyActiveStyling(el: HTMLElement, isActive: boolean, colour: string):
       background: 'transparent',
     })
     // Keep the Active_Venue's marker (and its tap target) above overlapping
-    // neighbours at a packed zoom (Requirement 12.5).
+    // neighbours at a packed zoom (Requirement 12.5). z-index belongs on the
+    // Mapbox-positioned root so it orders this marker against its siblings.
     el.style.zIndex = '10'
   } else {
     if (ring) ring.remove()
@@ -324,6 +417,9 @@ function updateMarkerElement(
   const totalSize = glyphSize * 3
   el.style.width = `${totalSize}px`
   el.style.height = `${totalSize}px`
+  // The scale-layer mirrors the container box so its centre stays on the
+  // geo-anchor; new ripple/badge nodes are mounted here, not on the root.
+  const scaleLayer = (el.querySelector(`[data-layer="${SCALE_LAYER}"]`) as HTMLElement | null) ?? el
 
   // Halo
   const haloSize = glyphSize * 2.2
@@ -340,7 +436,7 @@ function updateMarkerElement(
     })
   }
 
-  // Ripple — add when entering popping, remove otherwise.
+  // Ripple - add when entering popping, remove otherwise.
   let ripple = el.querySelector('[data-layer="ripple"]') as HTMLElement | null
   if (cfg.ripple) {
     if (!ripple) {
@@ -357,11 +453,11 @@ function updateMarkerElement(
       })
       ripple.dataset.layer = 'ripple'
       // Insert before the glyph wrapper so it renders behind it.
-      const glyphWrapper = el.querySelector('[data-layer="glyph-wrapper"]')
+      const glyphWrapper = scaleLayer.querySelector('[data-layer="glyph-wrapper"]')
       if (glyphWrapper) {
-        el.insertBefore(ripple, glyphWrapper)
+        scaleLayer.insertBefore(ripple, glyphWrapper)
       } else {
-        el.appendChild(ripple)
+        scaleLayer.appendChild(ripple)
       }
     } else {
       Object.assign(ripple.style, {
@@ -385,7 +481,7 @@ function updateMarkerElement(
     })
   }
 
-  // Live count badge — reflects the venue's Live_Check_In_Count, updated in
+  // Live count badge - reflects the venue's Live_Check_In_Count, updated in
   // place on each `node:pulse_update` without detaching the marker (R18.1).
   let badge = el.querySelector('[data-layer="badge"]') as HTMLElement | null
   if ((state === 'buzzing' || state === 'popping') && liveCount > 0) {
@@ -407,7 +503,7 @@ function updateMarkerElement(
         pointerEvents: 'none',
       })
       badge.dataset.layer = 'badge'
-      el.appendChild(badge)
+      scaleLayer.appendChild(badge)
     }
     badge.textContent = liveCount > 99 ? '99+' : String(liveCount)
   } else if (badge) {
@@ -419,7 +515,7 @@ function updateMarkerElement(
 
 /**
  * Manages Mapbox markers for nodes. The marker is the Archetype_Glyph
- * itself — there is no longer a coloured core circle. Halo carries
+ * itself - there is no longer a coloured core circle. Halo carries
  * Pulse_State, ripple carries the popping signal, the glyph carries
  * identity (which archetype the venue is catering to right now) plus
  * category colour through `dynamicContrastForCategory` + the
@@ -465,16 +561,15 @@ export function useMapMarkers(
         /* map gone */
       }
 
-      // HTML markers don't scale with Mapbox's WebGL zoom. Apply CSS `scale`
-      // (independent from Mapbox's `transform`) so markers shrink at low zoom
-      // instead of covering half the globe. Crossing a threshold only changes
-      // the CSS scale and the glyph/dot render mode — the marker is never
-      // removed, so it stays geo-anchored to its lng/lat (R12.4, Property 18).
-      const scale = scaleForZoom(zoom)
+      // HTML markers don't scale with Mapbox's WebGL zoom. We apply our own
+      // zoom-aware scale (visibility ramp × size factor) to each marker's
+      // inner scale-layer - never to the Mapbox-positioned root - so markers
+      // shrink at low zoom and grow as you zoom in WITHOUT drifting off their
+      // lng/lat. Crossing a threshold only changes the scale and the glyph/dot
+      // render mode; the marker is never removed, so it stays geo-anchored
+      // (R12.4, Property 18).
       for (const [, marker] of markersRef.current) {
-        const el = marker.getElement()
-        el.style.scale = String(scale)
-        el.style.pointerEvents = scale < 0.05 ? 'none' : ''
+        applyZoomScale(marker.getElement(), zoom)
       }
 
       // glyph tier → detailed icon; dot/hidden tiers → category dot (the
@@ -569,16 +664,15 @@ export function useMapMarkers(
           .addTo(map)
 
         // Sync scale to current zoom immediately so newly added markers don't
-        // flash at full size before the next zoom event fires.
+        // flash at full size before the next zoom event fires. Applied to the
+        // scale-layer (inside applyZoomScale), never the positioned root.
         let curZoom = GLYPH_ZOOM_THRESHOLD
         try {
           curZoom = map.getZoom()
         } catch {
           /* ignore */
         }
-        const curScale = scaleForZoom(curZoom)
-        el.style.scale = String(curScale)
-        if (curScale < 0.05) el.style.pointerEvents = 'none'
+        applyZoomScale(el, curZoom)
 
         markersRef.current.set(node.id, marker)
         renderGlyph(glyphRootsRef.current, el, node.id, archetypeId, state, node.category, showIcon)
@@ -616,7 +710,7 @@ export function useMapMarkers(
  * When `showIcon` is true the full `ArchetypeGlyph` is rendered. Below the
  * zoom threshold (`showIcon` false) a simple category-coloured dot is rendered
  * instead, so a packed city-overview reads as clean density rather than a
- * collage of tiny detailed icons. The glyph is the marker either way — what
+ * collage of tiny detailed icons. The glyph is the marker either way - what
  * the `live_vibe_on_map` flag gates is the live `node:archetype_change`
  * subscription in `MapScreen`, not the rendering here.
  */

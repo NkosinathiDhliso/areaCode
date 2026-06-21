@@ -1,8 +1,8 @@
 /**
  * Pure toast admission logic for the Toast_System (Map Discovery / Peek-Carousel).
  *
- * This module is intentionally **pure** — it imports no React, no Mapbox, and
- * no stores' runtime state — so it is the single source of truth shared by:
+ * This module is intentionally **pure** - it imports no React, no Mapbox, and
+ * no stores' runtime state - so it is the single source of truth shared by:
  *   - the `toastStore` wiring (which delegates `addToast` to {@link admitToQueue}
  *     and gates Check_In_Toasts via {@link shouldEnqueueCheckInToast}), and
  *   - the web `apps/web/src/lib/toastAdmission.ts` re-export consumed by the

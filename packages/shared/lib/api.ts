@@ -16,7 +16,7 @@ function resolveApiBaseUrl(): string {
       if (env?.VITE_API_URL) return env.VITE_API_URL
     }
   } catch {
-    // `import.meta` access throws in some non-ESM/RN contexts — ignore.
+    // `import.meta` access throws in some non-ESM/RN contexts - ignore.
   }
   // React Native (Expo): reach for `process` via `globalThis` so this module
   // compiles under the web tsconfig, which omits `@types/node` and would
@@ -30,7 +30,7 @@ function resolveApiBaseUrl(): string {
 
 const API_BASE_URL = resolveApiBaseUrl()
 
-// Error toast handler — wired at app startup via setApiErrorHandler()
+// Error toast handler - wired at app startup via setApiErrorHandler()
 let _showError: ((msg: string) => void) | null = null
 function getShowError() {
   return _showError
@@ -68,7 +68,7 @@ function decodeJwtExp(token: string): number | null {
 function isTokenExpiringSoon(token: string | null, bufferSeconds = 60): boolean {
   if (!token) return true
   const exp = decodeJwtExp(token)
-  if (exp === null) return false // Can't determine — assume valid
+  if (exp === null) return false // Can't determine - assume valid
   return Date.now() / 1000 >= exp - bufferSeconds
 }
 
@@ -176,11 +176,11 @@ class ApiClient {
     const token = this.getToken?.() ?? null
     if (!isTokenExpiringSoon(token)) return token
 
-    // Token is expired or about to expire — refresh proactively
+    // Token is expired or about to expire - refresh proactively
     if (this.getRefreshToken) {
       const newToken = await this.tryRefreshToken()
       if (newToken) return newToken
-      // Refresh failed — session is dead
+      // Refresh failed - session is dead
       this.onAuthExpired?.()
       return null
     }
@@ -190,7 +190,7 @@ class ApiClient {
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const headers: Record<string, string> = {}
 
-    // Only set Content-Type when we actually have a body — otherwise Fastify
+    // Only set Content-Type when we actually have a body - otherwise Fastify
     // rejects body-less POST/PATCH with 400 'Body cannot be empty when content-type is application/json'.
     if (body !== undefined && body !== null) {
       headers['Content-Type'] = 'application/json'
@@ -204,7 +204,7 @@ class ApiClient {
       if (refreshed) {
         token = refreshed
       } else {
-        // Refresh failed — let the request go with the stale token so the
+        // Refresh failed - let the request go with the stale token so the
         // 401 path below can trigger onAuthExpired cleanly.
       }
     }

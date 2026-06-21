@@ -6,7 +6,7 @@ import type { RankInput, ViewportBounds } from './carouselRanking'
 import { haversineMeters, scopeToViewport, vibeRank } from './carouselRanking'
 
 /**
- * Map Discovery — proximity-biased ranking + viewport scoping property tests.
+ * Map Discovery - proximity-biased ranking + viewport scoping property tests.
  *
  * These were the design's deferred ranking properties (tasks 2.2-2.5):
  *   - Property 8:  Proximity_Biased_Ranking is deterministic with a total tie-break
@@ -45,10 +45,11 @@ const lngArb = fc.double({ min: -180, max: 180, noNaN: true })
 /** Unique-id venues so the id tie-break is unambiguous. */
 const venuesArb = (minLength: number) =>
   fc
-    .uniqueArray(
-      fc.record({ id: fc.string({ minLength: 1, maxLength: 5 }), lat: latArb, lng: lngArb }),
-      { minLength, maxLength: 8, selector: (v) => v.id },
-    )
+    .uniqueArray(fc.record({ id: fc.string({ minLength: 1, maxLength: 5 }), lat: latArb, lng: lngArb }), {
+      minLength,
+      maxLength: 8,
+      selector: (v) => v.id,
+    })
     .map((vs) => vs.map((v) => makeNode(v.id, v.lat, v.lng)))
 
 /** A full ranking scenario: venues, their score maps, a position, and freshness. */
@@ -104,7 +105,7 @@ describe('Feature: map-discovery-experience, Property 8: vibe-first ranking with
     )
   })
 
-  it('is deterministic — two computations on identical input agree exactly', () => {
+  it('is deterministic - two computations on identical input agree exactly', () => {
     fc.assert(
       fc.property(scenarioArb, ({ venues, pulse, checkin, position, positionFresh }) => {
         const { pulseScores, checkInCounts } = toMaps(venues, pulse, checkin)

@@ -56,7 +56,7 @@ describe('ArchetypeReveal', () => {
   it('falls back to the raw id when archetypeId is unknown (R9.10)', () => {
     render(<ArchetypeReveal archetypeId="archetype-not-real" />)
     expect(screen.getByText('archetype-not-real')).toBeTruthy()
-    // Unknown ids have no description or etymology — nothing else to
+    // Unknown ids have no description or etymology - nothing else to
     // assert beyond the name fallback.
   })
 })

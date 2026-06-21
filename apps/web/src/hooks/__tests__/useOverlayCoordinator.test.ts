@@ -5,7 +5,7 @@ import type { OverlayCoordinatorInput } from '../useOverlayCoordinator'
 import { decideOverlayVisibility, isPrimingEligible } from '../useOverlayCoordinator'
 
 /**
- * Map Discovery — overlay coordination property tests (deferred tasks 15.2, 15.3).
+ * Map Discovery - overlay coordination property tests (deferred tasks 15.2, 15.3).
  *
  *   - Property 27: Commit_Mode suppresses overlapping overlays
  *   - Property 28: Nudge and Location_Banner are mutually exclusive
@@ -59,7 +59,7 @@ describe('Feature: map-discovery-experience, Property 28: Nudge and Location_Ban
   })
 })
 
-describe('Map Discovery — overlay coordination contract', () => {
+describe('Map Discovery - overlay coordination contract', () => {
   it('shows the Location_Banner iff permission is denied and it was not dismissed', () => {
     fc.assert(
       fc.property(inputArb, (input) => {
@@ -73,7 +73,9 @@ describe('Map Discovery — overlay coordination contract', () => {
   it('shows the onboarding hint iff unseen and not in Commit_Mode', () => {
     fc.assert(
       fc.property(inputArb, (input) => {
-        expect(decideOverlayVisibility(input).showOnboardingHint).toBe(!input.onboardingHintSeen && input.mode !== 'commit')
+        expect(decideOverlayVisibility(input).showOnboardingHint).toBe(
+          !input.onboardingHintSeen && input.mode !== 'commit',
+        )
       }),
     )
   })

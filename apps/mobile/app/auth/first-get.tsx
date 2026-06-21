@@ -46,7 +46,7 @@ export default function FirstGetPrompt() {
         <Text style={styles.subtitle}>
           {t(
             'auth.firstGet.subtitle',
-            'If a venue gave you a one-time code at the till, enter it here. Otherwise, skip — you can still use the app normally.',
+            'If a venue gave you a one-time code at the till, enter it here. Otherwise, skip - you can still use the app normally.',
           )}
         </Text>
 
@@ -76,7 +76,7 @@ export default function FirstGetPrompt() {
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => router.replace('/')}>
-          <Text style={styles.skip}>{t('auth.firstGet.skip', "Skip — I don't have a code")}</Text>
+          <Text style={styles.skip}>{t('auth.firstGet.skip', "Skip - I don't have a code")}</Text>
         </TouchableOpacity>
 
         {error && <Text style={styles.error}>{error}</Text>}

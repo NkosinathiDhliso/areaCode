@@ -1,5 +1,5 @@
 /**
- * Property test — Admin-side render visibility (Property 8).
+ * Property test - Admin-side render visibility (Property 8).
  *
  * For any arbitrary `AdminBoosterPurchaseView` row, the cross-business
  * `BoostPurchaseReport` admin screen must render the operator-hidden
@@ -80,7 +80,7 @@ const adminRowArb = fc.record({
   floorAtPurchaseCents: fc.integer({ min: 1, max: 1_000_000 }),
 })
 
-// `R<X>.<YY>` — same formatter used by `BoostPurchaseReport` (R7.6).
+// `R<X>.<YY>` - same formatter used by `BoostPurchaseReport` (R7.6).
 function formatAmountCents(cents: number): string {
   const whole = Math.floor(cents / 100)
   const fraction = (cents % 100).toString().padStart(2, '0')

@@ -543,7 +543,7 @@ function FullReportView({ report }: { report: FullReport }) {
         </div>
       )}
 
-      {/* Charts — conditionally rendered based on data availability */}
+      {/* Charts - conditionally rendered based on data availability */}
       {report.peakHours && <PeakHoursChart data={report.peakHours} />}
       {report.crowdComposition && <CrowdCompositionChart data={report.crowdComposition} />}
       {report.musicProfile && !report.musicProfile.hasInsufficientData && (

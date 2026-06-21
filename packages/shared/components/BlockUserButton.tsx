@@ -22,7 +22,7 @@ export function BlockUserButton({ targetUserId, isBlocked, onToggle }: BlockUser
       setBlocked(true)
       onToggle?.(true)
     } catch {
-      // Silently fail — user sees no state change
+      // Silently fail - user sees no state change
     } finally {
       setLoading(false)
     }

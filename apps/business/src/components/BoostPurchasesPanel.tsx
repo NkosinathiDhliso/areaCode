@@ -5,7 +5,7 @@ import { api } from '@area-code/shared/lib/api'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 
-// Operator-facing recent BoosterPurchase view (R6.6 — server already strips
+// Operator-facing recent BoosterPurchase view (R6.6 - server already strips
 // `tierSnapshot`, `neighbourhoodIdSnapshot`, `floorAtPurchaseCents`). We do
 // not import the backend Zod schema here to avoid a backend → frontend
 // dependency; the shape is mirrored from the server response contract.
@@ -108,7 +108,7 @@ export function BoostPurchasesPanel() {
         <div className="text-[var(--text-muted)] text-sm">{t('common.loading', 'Loading...')}</div>
       )}
 
-      {/* R6.8 — empty-state copy when the response has zero items. */}
+      {/* R6.8 - empty-state copy when the response has zero items. */}
       {loaded && !error && items.length === 0 && (
         <div className="text-[var(--text-muted)] text-sm">
           {t('biz.boost.purchases.empty', 'No booster purchases yet.')}

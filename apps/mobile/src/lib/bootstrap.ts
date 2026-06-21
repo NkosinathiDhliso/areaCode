@@ -48,7 +48,7 @@ function resolveMapboxToken(): string | undefined {
 
 /** Wire the shared layer for React Native. Idempotent. */
 export async function bootstrapNative(): Promise<void> {
-  // 1. Persistence — hydrate the synchronous cache from AsyncStorage so the
+  // 1. Persistence - hydrate the synchronous cache from AsyncStorage so the
   //    zustand stores (created at import time) can read persisted values.
   await storage.configureAsyncBackend(AsyncStorage)
 
@@ -93,7 +93,7 @@ export async function bootstrapNative(): Promise<void> {
             accuracy: pos.coords.accuracy ?? 9999,
           })
         } catch {
-          // Non-permission failure (e.g. location services off) — map to a
+          // Non-permission failure (e.g. location services off) - map to a
           // generic error so the hook falls back to last-known/timeout.
           onError({ code: 2, PERMISSION_DENIED: 1 })
         }

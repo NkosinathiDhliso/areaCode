@@ -92,7 +92,7 @@ Showing what is alive is necessary but not sufficient. Every discovery surface
 must answer the question that actually gets someone off the couch: not "what is
 around me" but **"why should I go THERE, right now?"** Convenience wins by
 default because people over-weight the easy, near option, so the surface must
-make the alive, taste-matched place feel like the bigger reward *now*.
+make the alive, taste-matched place feel like the bigger reward _now_.
 
 ### Magnet hierarchy (strongest pull first)
 
@@ -107,9 +107,9 @@ make the alive, taste-matched place feel like the bigger reward *now*.
 
 ### Two flavours of taste-match
 
-- **Taste-on-intent** — viewer's taste vs the venue's *declared / scheduled*
+- **Taste-on-intent** — viewer's taste vs the venue's _declared / scheduled_
   vibe. Works on an empty map. Use it to create pull before there is a crowd.
-- **Taste-on-presence** — viewer's taste vs the people *actually there now*. The
+- **Taste-on-presence** — viewer's taste vs the people _actually there now_. The
   literal "glyph full of people like you." Requires honest presence.
 
 ### Build-order implication

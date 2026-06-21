@@ -56,7 +56,7 @@ export function haversineMeters(a: { lat: number; lng: number }, b: { lat: numbe
 
 /**
  * Order venues vibe-first: the most alive venues lead, and proximity is only a
- * tiebreaker between venues of equal vibe — it can never pull a closer-but-deader
+ * tiebreaker between venues of equal vibe - it can never pull a closer-but-deader
  * venue above a more-alive one. This structurally enforces the discovery DNA
  * (`.kiro/steering/discovery-dna-vibe-over-convenience.md`): we pull people
  * toward what is alive and their kind of crowd, never toward whatever is merely
@@ -65,7 +65,7 @@ export function haversineMeters(a: { lat: number; lng: number }, b: { lat: numbe
  * The order is lexicographic, strongest signal first:
  *   1. Vibe (aliveness): buzz = (pulseScores[id] ?? 0) + (checkInCounts[id] ?? 0),
  *      higher first. When taste-match lands it joins THIS primary comparison,
- *      ahead of proximity — never below it.
+ *      ahead of proximity - never below it.
  *   2. Proximity: a pure tiebreaker, nearer first, applied only when two venues
  *      have equal vibe and a fresh position exists. Structurally incapable of
  *      outranking a more-alive venue (vibe is compared first and short-circuits).
@@ -89,15 +89,13 @@ export function vibeRank(input: RankInput): Node[] {
 
   const vibeOf = (v: Node): number => (pulseScores[v.id] ?? 0) + (checkInCounts[v.id] ?? 0)
   const distanceOf = (v: Node): number =>
-    useProximity
-      ? haversineMeters(lastKnownPosition as { lat: number; lng: number }, { lat: v.lat, lng: v.lng })
-      : 0
+    useProximity ? haversineMeters(lastKnownPosition as { lat: number; lng: number }, { lat: v.lat, lng: v.lng }) : 0
 
   return [...venues].sort((a, b) => {
-    // 1) Vibe / aliveness — the hero signal. Higher buzz always wins outright.
+    // 1) Vibe / aliveness - the hero signal. Higher buzz always wins outright.
     const vibeDelta = vibeOf(b) - vibeOf(a)
     if (vibeDelta !== 0) return vibeDelta
-    // 2) Proximity — pure tiebreaker only (nearer first), never able to outrank vibe.
+    // 2) Proximity - pure tiebreaker only (nearer first), never able to outrank vibe.
     const distDelta = distanceOf(a) - distanceOf(b)
     if (distDelta !== 0) return distDelta
     // 3) Deterministic id tie-break by venue id ascending (R5.5).

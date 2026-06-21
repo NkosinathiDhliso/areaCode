@@ -24,7 +24,7 @@ export function ConsumerSignup({ onNavigate }: ConsumerSignupProps) {
 
   /**
    * After a successful signup, redeem any First-Get token the user
-   * entered. Failure is non-fatal — they still get an account.
+   * entered. Failure is non-fatal - they still get an account.
    * Churn-defences spec, Requirement 6.
    */
   async function maybeRedeemFirstGetToken() {

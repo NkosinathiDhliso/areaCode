@@ -10,7 +10,7 @@ import { resolveActiveSlot, ScheduleResolverInternalError } from './scheduleReso
 /**
  * Minimal shape of a check-in entry consumed by the Live_Archetype resolver.
  *
- * The shared `CheckIn` type does not currently carry an `archetypeId` field —
+ * The shared `CheckIn` type does not currently carry an `archetypeId` field -
  * the live-archetype-evaluator Lambda joins check-ins to the User table to
  * fetch each check-in user's archetype before invoking the resolver. We
  * therefore accept the structurally-narrow shape here so callers can pass
@@ -21,13 +21,13 @@ export interface LiveArchetypeCheckIn {
 }
 
 export interface LiveArchetypeInputs {
-  /** The venue Node. Used for `defaultArchetypeId` (R7.7) only — never for I/O. */
+  /** The venue Node. Used for `defaultArchetypeId` (R7.7) only - never for I/O. */
   node: Pick<Node, 'id' | 'defaultArchetypeId'> | { id: string; defaultArchetypeId?: string | null }
   /** Optional Music_Schedule. When absent the resolver skips the schedule branches. */
   schedule?: MusicSchedule
   /**
    * Check-ins already filtered to the 90-minute Lookback_Window (R7.1, R7.6).
-   * The resolver does no time-window filtering of its own — that's the
+   * The resolver does no time-window filtering of its own - that's the
    * Lambda's job, since the cutoff requires `Date.now()` and the resolver
    * stays observably pure.
    */
@@ -172,7 +172,7 @@ function pickCheckInMode(recentCheckIns: LiveArchetypeCheckIn[]): PersonalityArc
  *
  * The function is observably pure (R7.9): same inputs → same output, no
  * `Date.now()`, no globals, no I/O. The `recentCheckIns` array is expected
- * to already be filtered to the 90-minute Lookback_Window — that filtering
+ * to already be filtered to the 90-minute Lookback_Window - that filtering
  * is the Lambda's responsibility because it requires `Date.now()`.
  *
  * Per R7.4 the resolver does NOT throw on the unreachable lineup branch:

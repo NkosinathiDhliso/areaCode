@@ -90,7 +90,7 @@ export function SettingsPanel() {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      // Clipboard blocked — select the link in the URL bar so the user can copy manually
+      // Clipboard blocked - select the link in the URL bar so the user can copy manually
       setInviteError(`Copy failed. Here is the link: ${url}`)
     }
   }
@@ -208,7 +208,7 @@ export function SettingsPanel() {
                   : 'bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-secondary)]'
               }`}
             >
-              Staff — scan codes only
+              Staff - scan codes only
             </button>
             <button
               onClick={() => setInviteRole('manager')}
@@ -218,7 +218,7 @@ export function SettingsPanel() {
                   : 'bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-secondary)]'
               }`}
             >
-              Manager — full access
+              Manager - full access
             </button>
           </div>
         </div>

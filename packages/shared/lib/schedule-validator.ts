@@ -88,7 +88,7 @@ function isValidIanaTimezone(tz: string): boolean {
     return true
   } catch (e) {
     if (e instanceof RangeError) return false
-    // Unexpected error class — treat conservatively as invalid.
+    // Unexpected error class - treat conservatively as invalid.
     return false
   }
 }
@@ -111,7 +111,7 @@ const MusicGenreSchema: z.ZodType<MusicGenre> = z.enum(MUSIC_GENRES as [MusicGen
  * supplied by the caller is overwritten and cannot drift (R3.7, design
  * "Property 6: Music_Schedule round-trip").
  *
- * `startTimeMin` is intentionally NOT validated on input — it is derived,
+ * `startTimeMin` is intentionally NOT validated on input - it is derived,
  * not declared. Callers may pass it (zod's default strip behaviour silently
  * discards unknown keys) but its value is never read.
  */
@@ -141,7 +141,7 @@ export const LineupEntrySchema = z
  * shape is enforced in `validateMusicSchedule` so the editor + Lambda
  * surface field-level errors with stable codes.
  *
- * `startTimeMin` and `endTimeMin` are intentionally NOT validated on input —
+ * `startTimeMin` and `endTimeMin` are intentionally NOT validated on input -
  * they are derived, not declared, so any drifted caller-supplied values are
  * silently overwritten on parse.
  */
@@ -171,7 +171,7 @@ export const ScheduleSlotSchema = z
   })
 
 /**
- * MusicSchedule schema. Shape only — per-slot, cross-slot, and timezone
+ * MusicSchedule schema. Shape only - per-slot, cross-slot, and timezone
  * validation runs in `validateMusicSchedule` so errors surface with the stable
  * tagged codes the editor and Lambda need. Schema-shape errors raised here
  * are translated to `ScheduleValidationError` with `code: 'schema_shape'`.
@@ -206,11 +206,11 @@ export type ValidationResult = { ok: true; value: MusicSchedule } | { ok: false;
  * `ScheduleValidationError`.
  *
  * The validation order matches the design ("Backend: R3-R4 Schedule routes"):
- *   1. Schema shape (Zod) — R3.x
- *   2. Per-slot field validity (regex, enum, IANA timezone) — R3.4, R3.5, R3.11
- *   3. Per-slot internal consistency — R3.5, R3.6, R3.7, R5.10
- *   4. Cross-slot consistency (overlap detection) — R3.9
- *   5. Cross_Midnight_Pair pairing — R3.12 (accepts the two same-day slots
+ *   1. Schema shape (Zod) - R3.x
+ *   2. Per-slot field validity (regex, enum, IANA timezone) - R3.4, R3.5, R3.11
+ *   3. Per-slot internal consistency - R3.5, R3.6, R3.7, R5.10
+ *   4. Cross-slot consistency (overlap detection) - R3.9
+ *   5. Cross_Midnight_Pair pairing - R3.12 (accepts the two same-day slots
  *      the editor produced; same-day overlap is already enforced in step 4)
  *
  * Caller-supplied `startTimeMin` / `endTimeMin` (and `LineupEntry.startTimeMin`)
@@ -252,7 +252,7 @@ export function validateMusicSchedule(input: unknown): ValidationResult {
     const fieldBase = `slots[${i}]`
 
     // R3.5 / R5.10: startTimeMin < endTimeMin. Cross-midnight slots are
-    // explicitly forbidden — they are modelled as a Cross_Midnight_Pair
+    // explicitly forbidden - they are modelled as a Cross_Midnight_Pair
     // (R3.12) of two same-day slots ending at 23:59 and starting at 00:00.
     if (slot.startTimeMin >= slot.endTimeMin) {
       return {
@@ -417,7 +417,7 @@ export function validateMusicSchedule(input: unknown): ValidationResult {
   // the data. We accept any valid pair without further constraints because
   // the per-slot and overlap checks above already guarantee both halves are
   // individually valid and non-overlapping. No extra pairing rule rejects a
-  // schedule here — Cross_Midnight_Pair is a read-side concept (R3.12).
+  // schedule here - Cross_Midnight_Pair is a read-side concept (R3.12).
 
   return { ok: true, value: schedule }
 }

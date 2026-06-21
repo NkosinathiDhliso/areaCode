@@ -102,7 +102,7 @@ export function NodeDetailSheet({ node, pulseScore, isOpen, onClose, onCheckIn }
               <Text style={styles.gatedText}>{t('auth.signupSheet.title')}</Text>
             )}
 
-            {/* Get Directions — always available */}
+            {/* Get Directions - always available */}
             <TouchableOpacity
               style={styles.directionsButton}
               onPress={() => openDirections(node.lat, node.lng, node.name)}

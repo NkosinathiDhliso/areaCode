@@ -14,7 +14,7 @@ export interface RedemptionCodeCardProps {
  * to venue staff. The code is rendered large and high-contrast so it can be
  * read across a counter; staff key it into the Staff portal (or scan it).
  *
- * This card is the consumer-facing half of the redemption loop — without it
+ * This card is the consumer-facing half of the redemption loop - without it
  * an earned code never surfaces and the reward can't be redeemed.
  */
 export function RedemptionCodeCard({

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { parseVenueQr } from './qrParser'
 
 /**
- * Map Discovery — venue QR parsing property tests (deferred tasks 4.4, 4.5).
+ * Map Discovery - venue QR parsing property tests (deferred tasks 4.4, 4.5).
  *
  *   - Property 20: Valid venue QR round-trips to a check-in
  *   - Property 21: Invalid QR is rejected without check-in
@@ -13,7 +13,7 @@ import { parseVenueQr } from './qrParser'
  */
 
 // A path segment that never contains a separator (/), query (?), or fragment (#)
-// marker, nor whitespace — so the round-trip is unambiguous.
+// marker, nor whitespace - so the round-trip is unambiguous.
 const SAFE_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.~'.split('')
 const segArb = fc.array(fc.constantFrom(...SAFE_CHARS), { minLength: 1, maxLength: 12 }).map((a) => a.join(''))
 const hostArb = fc.constantFrom('https://areacode.co.za', 'http://localhost:3000', 'https://www.areacode.co.za', '')

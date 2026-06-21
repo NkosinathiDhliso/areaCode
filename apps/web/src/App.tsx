@@ -178,7 +178,7 @@ function AppContent() {
           setShowOnboarding(true)
         }
       } catch {
-        // Silently skip — the API's setRefreshHandler handles real token
+        // Silently skip - the API's setRefreshHandler handles real token
         // expiry. Forcing logout here breaks the Google OAuth flow because
         // /v1/users/me can transiently 401 before Cognito propagates the session.
       } finally {
@@ -216,7 +216,7 @@ function AppContent() {
     return <ConsumerOAuthCallback onNavigate={setRoute} />
   }
 
-  // Public legal pages — must be reachable without login (Google OAuth
+  // Public legal pages - must be reachable without login (Google OAuth
   // verification fetches these URLs) and without the bottom nav.
   if (window.location.pathname === '/legal/privacy') {
     return <PrivacyPolicyScreen onNavigate={setRoute} />
@@ -236,7 +236,7 @@ function AppContent() {
     }
   }
 
-  // Onboarding takes the entire screen until completed — never overlay it on top
+  // Onboarding takes the entire screen until completed - never overlay it on top
   // of other screens (stacking-context bugs caused content bleed-through).
   if (showOnboarding) {
     return <OnboardingFlow onComplete={() => setShowOnboarding(false)} />

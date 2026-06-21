@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { admitToQueue, shouldEnqueueCheckInToast, TOAST_PRIORITY, TOAST_QUEUE_CAP } from './toastAdmission'
 
 /**
- * Map Discovery — toast admission property tests (deferred tasks 5.2, 5.3).
+ * Map Discovery - toast admission property tests (deferred tasks 5.2, 5.3).
  *
  *   - Property 24: Toast queue is priority-ordered and capped
  *   - Property 25: Check_In_Toast deduplication within the auto-dismiss interval
@@ -13,7 +13,15 @@ import { admitToQueue, shouldEnqueueCheckInToast, TOAST_PRIORITY, TOAST_QUEUE_CA
  * Validates: Requirements 16.1, 16.5, 16.6
  */
 
-const TOAST_TYPES: ToastType[] = ['surge', 'city_pulse', 'reward_pressure', 'checkin', 'reward_new', 'streak', 'leaderboard']
+const TOAST_TYPES: ToastType[] = [
+  'surge',
+  'city_pulse',
+  'reward_pressure',
+  'checkin',
+  'reward_new',
+  'streak',
+  'leaderboard',
+]
 
 const priorityOf = (t: Toast): number => TOAST_PRIORITY[t.type] ?? 5
 
@@ -40,7 +48,7 @@ describe('Feature: map-discovery-experience, Property 24: Toast queue is priorit
     )
   })
 
-  it('keeps the highest-priority toasts — equivalent to a stable global top-N', () => {
+  it('keeps the highest-priority toasts - equivalent to a stable global top-N', () => {
     fc.assert(
       fc.property(seqArb, (types) => {
         const all: Toast[] = types.map((t, i) => makeToast(t, `t-${i}`))

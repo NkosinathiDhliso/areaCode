@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCheckInFlow } from '../useCheckInFlow'
 
 /**
- * Map Discovery — Commit_Mode check-in flow tests (deferred tasks 16.2-16.4).
+ * Map Discovery - Commit_Mode check-in flow tests (deferred tasks 16.2-16.4).
  *
  *   - Property 22: In-progress check-in prevents duplicate submissions
  *   - Property 30: Offline check-in fails safe
@@ -123,7 +123,7 @@ describe('Feature: map-discovery-experience, Property 31: No phone/SMS input on 
   })
 })
 
-describe('Map Discovery — scanned QR routing (R14.5, R14.6)', () => {
+describe('Map Discovery - scanned QR routing (R14.5, R14.6)', () => {
   it('rejects an invalid QR with an error and no check-in', async () => {
     const { result } = renderHook(() => useCheckInFlow())
 

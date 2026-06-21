@@ -13,7 +13,7 @@
  *   and the silhouette carries the category channel.
  *
  *   The relevant contrast pairing is therefore **silhouette vs
- *   outline** — those two colours determine whether the silhouette
+ *   outline** - those two colours determine whether the silhouette
  *   reads on top of its own outline. Both colours render at 1.0
  *   opacity inside the SVG; the wrapper's CSS `opacity` (R8.3 / R8.4)
  *   scales them together against the basemap, so the silhouette /
@@ -133,7 +133,7 @@ describe('Property 10: Archetype_Glyph silhouette ≥ 3:1 against its outline', 
    * ≥ 3:1 against its outline colour (the WCAG-safe contrast colour
    * from `dynamicContrastForCategory`). Pulse_State does not appear in
    * the formula because both colours render at 1.0 opacity inside the
-   * SVG and the wrapper's CSS opacity scales them together — pulse
+   * SVG and the wrapper's CSS opacity scales them together - pulse
    * state only affects the marker's overall presence against the
    * basemap, not the silhouette/outline pairing.
    */

@@ -19,7 +19,7 @@ export type DragAxis = 'horizontal' | 'vertical' | 'indeterminate'
  * `threshold` (`|dy| - |dx| > threshold`), and `'indeterminate'` otherwise
  * (when neither axis dominates by more than the threshold).
  *
- * The classification is symmetric in sign — only magnitudes matter — so the
+ * The classification is symmetric in sign - only magnitudes matter - so the
  * same gesture always yields the same interpretation. An `'indeterminate'`
  * result means the caller should take no selection or state-change action.
  *

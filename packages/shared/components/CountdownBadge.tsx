@@ -10,13 +10,13 @@ import { useEffect, useState } from 'react'
  *   - "Missed":  expiresAt is in the past
  *
  * Re-renders once a minute so a "1h" doesn't sit on the screen for
- * 60 minutes. We intentionally don't tick every second — that's noisy.
+ * 60 minutes. We intentionally don't tick every second - that's noisy.
  */
 
 export interface CountdownBadgeProps {
   expiresAt: string | null | undefined
   className?: string
-  /** Optional override for "now" — used in tests */
+  /** Optional override for "now" - used in tests */
   nowMs?: number
 }
 

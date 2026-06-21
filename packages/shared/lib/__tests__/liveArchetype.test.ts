@@ -1,17 +1,17 @@
 /**
  * Property tests for the Live_Archetype resolver.
  *
- *  - Property 7: Live_Archetype returns exactly one catalog Archetype — for
+ *  - Property 7: Live_Archetype returns exactly one catalog Archetype - for
  *    any valid `LiveArchetypeInputs`, the returned `result.archetype.id`
  *    is always one of the ids in `ARCHETYPE_CATALOG`. Each of the five
  *    resolver branches (`schedule_lineup`, `schedule_blanket`,
  *    `checkin_mode`, `default`, `eclectic_fallback`) is generated as a
  *    distinct branch arbitrary so the property exercises the full decision
  *    tree.
- *  - Property 8: Live_Archetype idempotence — two consecutive calls with
+ *  - Property 8: Live_Archetype idempotence - two consecutive calls with
  *    the same inputs return the same `archetype.id` AND the same `branch`.
  *    The resolver is observably pure (R7.9): no `Date.now()`, no globals,
- *    no I/O — same inputs → same output.
+ *    no I/O - same inputs → same output.
  *
  * Validates: Requirements 7.1, 7.9, 10.6, 10.7
  */
@@ -126,7 +126,7 @@ const localizedTimestampArb = fc.integer({ min: EPOCH_MIN_MS, max: EPOCH_MAX_MS 
   const d = new Date(minuteMs)
   let localMin = d.getUTCHours() * 60 + d.getUTCMinutes()
   if (localMin >= 1438) {
-    // Re-base to noon — keeps the dayOfWeek stable since 12:00 UTC is
+    // Re-base to noon - keeps the dayOfWeek stable since 12:00 UTC is
     // always on the same calendar day in UTC.
     d.setUTCHours(12, 0, 0, 0)
     localMin = 12 * 60
@@ -229,7 +229,7 @@ describe('Property 7: Live_Archetype returns exactly one catalog Archetype', () 
    * Across all five branches, the returned archetype `id` is present in
    * `ARCHETYPE_CATALOG` and the resolver returns a single result (not null,
    * not an array). The branch label on the result also matches the branch
-   * the input was constructed to exercise — this is the "exactly one"
+   * the input was constructed to exercise - this is the "exactly one"
    * half: a single deterministic branch fires per input.
    *
    * Validates: Requirements 7.1, 10.6
@@ -291,7 +291,7 @@ describe('Property 8: Live_Archetype idempotence', () => {
    * (R7.9): no `Date.now()`, no globals, no I/O. We compare on `(id, branch)`
    * rather than the full archetype object so a future, additive change to
    * the catalog entry shape (e.g. extra metadata) does not flag a
-   * false-positive non-determinism — the id+branch tuple is what the
+   * false-positive non-determinism - the id+branch tuple is what the
    * caller actually emits over `node:archetype_change` (R11.2).
    *
    * Validates: Requirements 7.9, 10.7
@@ -310,7 +310,7 @@ describe('Property 8: Live_Archetype idempotence', () => {
 
   /**
    * Stronger form: the full result is structurally equal across calls.
-   * R7.9 mandates observable purity — same inputs → same output under
+   * R7.9 mandates observable purity - same inputs → same output under
    * deep equality. If a regression introduced a hidden mutable cache or
    * `Math.random()` tie-break, this would catch it where the
    * id+branch-only check could not.

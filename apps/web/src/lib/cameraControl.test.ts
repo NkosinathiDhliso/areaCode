@@ -6,7 +6,7 @@ import { POSITION_FRESHNESS_WINDOW } from './carouselConstants'
 import { canRecenter, moveCameraToActive, recenterIfFresh } from './cameraControl'
 
 /**
- * Map Discovery — camera coordination + recenter gating property tests
+ * Map Discovery - camera coordination + recenter gating property tests
  * (deferred tasks 8.2, 8.4).
  *
  *   - Property 7:  Camera move on Active_Venue change honours Reduced_Motion

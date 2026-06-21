@@ -76,7 +76,7 @@ export function BoostPanel() {
       )}
       {error && <p className="text-[var(--danger)] text-xs mt-2">{error}</p>}
 
-      {/* R6.1 — Recent purchases section beneath the existing buy-a-boost form. */}
+      {/* R6.1 - Recent purchases section beneath the existing buy-a-boost form. */}
       <BoostPurchasesPanel />
     </div>
   )

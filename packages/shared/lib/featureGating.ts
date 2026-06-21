@@ -11,7 +11,7 @@ const TIER_ORDER: Tier[] = ['local', 'regular', 'fixture', 'institution', 'legen
 //
 // Reads are safe on web, business, and backend. Every read is wrapped in a
 // try/catch so a malformed override or missing env subsystem can never
-// crash callers — the default value wins.
+// crash callers - the default value wins.
 
 export type FeatureFlagName = 'live_vibe_on_map'
 
@@ -60,7 +60,7 @@ function readFromEnv(name: FeatureFlagName): boolean | undefined {
       if (raw === 'false') return false
     }
   } catch {
-    // process is not available in this runtime — ignore.
+    // process is not available in this runtime - ignore.
   }
 
   // Web / business: import.meta.env (Vite). Read defensively so this module
@@ -74,7 +74,7 @@ function readFromEnv(name: FeatureFlagName): boolean | undefined {
       if (raw === 'false') return false
     }
   } catch {
-    // import.meta unavailable — ignore.
+    // import.meta unavailable - ignore.
   }
 
   return undefined
@@ -102,7 +102,7 @@ export function getFeatureFlag(name: FeatureFlagName): boolean {
  *
  * Returns `false` by default and whenever the flag store is unreachable.
  * Safe to call from web, business, and backend contexts. Despite the `use*`
- * naming convention, this is a plain function — it does not subscribe to
+ * naming convention, this is a plain function - it does not subscribe to
  * React state and may be called outside a component.
  */
 export function useLiveVibeOnMap(): boolean {

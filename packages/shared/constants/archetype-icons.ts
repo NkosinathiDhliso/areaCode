@@ -4,7 +4,7 @@
  * This module is **pure data**: it maps each catalog `iconId` to a Phosphor
  * icon component name plus a render weight. It deliberately contains no JSX so
  * it can be imported by both the web app (`@phosphor-icons/react`) and the
- * React Native app (`phosphor-react-native`) — the two packages expose the
+ * React Native app (`phosphor-react-native`) - the two packages expose the
  * exact same component names, so a single name string drives both platforms.
  *
  * Why representational icons: the archetypes are music personalities, so the
@@ -45,35 +45,35 @@ export interface ArchetypeIconSpec {
  * build-time assertion at the bottom of this file enforces that.
  */
 export const ARCHETYPE_ICONS: Readonly<Record<string, ArchetypeIconSpec>> = Object.freeze({
-  // Blaze — lives for the packed-crowd energy.
+  // Blaze - lives for the packed-crowd energy.
   'festival-spirit': { name: 'Flame', weight: 'fill' },
-  // Lumen — soulful creative light.
+  // Lumen - soulful creative light.
   'conscious-creative': { name: 'Sparkle', weight: 'fill' },
-  // Kasi — township royalty, pride.
+  // Kasi - township royalty, pride.
   'township-royal': { name: 'Crown', weight: 'fill' },
-  // Hymn — spiritual conviction with an edge.
+  // Hymn - spiritual conviction with an edge.
   'sacred-rebel': { name: 'HandsPraying', weight: 'fill' },
-  // Spark — pure high-octane energy.
+  // Spark - pure high-octane energy.
   firecracker: { name: 'Lightning', weight: 'fill' },
-  // Drum — high-energy beats rooted in tradition.
+  // Drum - high-energy beats rooted in tradition.
   'heritage-groover': { name: 'MusicNotes', weight: 'fill' },
-  // Noir — refined late-night thinker.
+  // Noir - refined late-night thinker.
   'midnight-philosopher': { name: 'MoonStars', weight: 'fill' },
-  // Verse — spoken word, storytelling, the mic.
+  // Verse - spoken word, storytelling, the mic.
   'street-poet': { name: 'MicrophoneStage', weight: 'fill' },
-  // Drift — wanders between depth and sophistication.
+  // Drift - wanders between depth and sophistication.
   'soul-wanderer': { name: 'Spiral', weight: 'fill' },
-  // Cipher — architects the room's sound.
+  // Cipher - architects the room's sound.
   'vibe-architect': { name: 'Equalizer', weight: 'fill' },
-  // Velvet — smooth, effortless, laid-back.
+  // Velvet - smooth, effortless, laid-back.
   'smooth-operator': { name: 'Waveform', weight: 'fill' },
-  // Bounce — chases the beat, never stops moving.
+  // Bounce - chases the beat, never stops moving.
   'groove-seeker': { name: 'SneakerMove', weight: 'fill' },
-  // Root — guardian of cultural heritage.
+  // Root - guardian of cultural heritage.
   'culture-curator': { name: 'Tree', weight: 'fill' },
-  // Prism — versatile, plays everything.
+  // Prism - versatile, plays everything.
   eclectic: { name: 'VinylRecord', weight: 'fill' },
-  // Compass — personality waiting to be discovered.
+  // Compass - personality waiting to be discovered.
   uncharted: { name: 'Compass', weight: 'fill' },
 })
 

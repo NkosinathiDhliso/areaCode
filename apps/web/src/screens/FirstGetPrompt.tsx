@@ -63,7 +63,7 @@ export function FirstGetPrompt({ onNavigate }: FirstGetPromptProps) {
         <p className="text-[var(--text-secondary)] text-sm text-center">
           {t(
             'auth.firstGet.subtitle',
-            'If a venue gave you a one-time code at the till, enter it here. Otherwise, skip — you can still use the app normally.',
+            'If a venue gave you a one-time code at the till, enter it here. Otherwise, skip - you can still use the app normally.',
           )}
         </p>
 
@@ -91,7 +91,7 @@ export function FirstGetPrompt({ onNavigate }: FirstGetPromptProps) {
         </button>
 
         <button onClick={() => onNavigate('map')} className="text-[var(--text-muted)] text-sm py-2">
-          {t('auth.firstGet.skip', "Skip — I don't have a code")}
+          {t('auth.firstGet.skip', "Skip - I don't have a code")}
         </button>
 
         {error && <p className="text-[var(--danger)] text-xs text-center">{error}</p>}

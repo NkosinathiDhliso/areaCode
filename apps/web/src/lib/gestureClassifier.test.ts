@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { classifyDrag, stepIndex } from './gestureClassifier'
 
 /**
- * Map Discovery — gesture classification + index stepping property tests
+ * Map Discovery - gesture classification + index stepping property tests
  * (deferred task 3.2).
  *
  *   - Property 13: Gesture dominant-axis classification
@@ -31,7 +31,7 @@ describe('Feature: map-discovery-experience, Property 13: Gesture dominant-axis 
     )
   })
 
-  it('is sign-symmetric — only magnitudes matter', () => {
+  it('is sign-symmetric - only magnitudes matter', () => {
     fc.assert(
       fc.property(pxArb, pxArb, thresholdArb, (dx, dy, threshold) => {
         const base = classifyDrag(dx, dy, threshold)
@@ -59,7 +59,7 @@ describe('Feature: map-discovery-experience, Property 5 (stepping core): stepInd
         const next = stepIndex(c, dir, length)
         expect(next).toBeGreaterThanOrEqual(0)
         expect(next).toBeLessThan(length)
-        expect(next).toBe(((c + dir) % length + length) % length)
+        expect(next).toBe((((c + dir) % length) + length) % length)
       }),
     )
   })

@@ -1,16 +1,16 @@
 /**
  * Property tests for the Schedule_Resolver.
  *
- *  - Property 1: Schedule resolver returns at most one Active_Slot — for any
+ *  - Property 1: Schedule resolver returns at most one Active_Slot - for any
  *    valid Music_Schedule and any RFC 3339 timestamp, the resolver returns
  *    either `null` or a single `ResolvedSlot`.
- *  - Property 2: Active_Slot interval contains the timestamp — when a slot is
+ *  - Property 2: Active_Slot interval contains the timestamp - when a slot is
  *    returned, the timestamp's local minutes-since-midnight (computed in the
  *    schedule's IANA timezone the same way the resolver does) lies inside
  *    the half-open interval `[slot.startTimeMin, slot.endTimeMin)`.
- *  - Property 3: Schedule resolver idempotence — two consecutive calls with
+ *  - Property 3: Schedule resolver idempotence - two consecutive calls with
  *    the same inputs return deeply equal results.
- *  - Property 4: Lineup-active slot always returns exactly one LineupEntry —
+ *  - Property 4: Lineup-active slot always returns exactly one LineupEntry -
  *    when a lineup-mode slot is the Active_Slot, the resolver returns a
  *    `lineupEntry` whose `startTimeMin <= localMin` and is the maximum such
  *    value among the slot's lineup entries.
@@ -118,7 +118,7 @@ const dayRngArb = fc.record({
 })
 
 // `dayRngArb` is an `fc.Arbitrary<T>` and fast-check v4 no longer exposes a
-// public `IndexableType` helper. Declare the shape explicitly — it stays in
+// public `IndexableType` helper. Declare the shape explicitly - it stays in
 // lockstep with `dayRngArb` because the runtime always satisfies it.
 interface DayRng {
   boundaries: number[]
@@ -297,7 +297,7 @@ describe('Property 3: Schedule resolver idempotence', () => {
   /**
    * Two consecutive calls with the same valid Music_Schedule and timestamp
    * return deeply equal results. The resolver is observably pure (R5.9):
-   * no `Date.now()`, no globals, no I/O — same inputs → same output under
+   * no `Date.now()`, no globals, no I/O - same inputs → same output under
    * deep structural comparison.
    *
    * Validates: Requirements 5.9, 10.3

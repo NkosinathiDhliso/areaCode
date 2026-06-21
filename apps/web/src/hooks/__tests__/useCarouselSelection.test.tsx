@@ -4,10 +4,11 @@ import type { Node, NodeCategory } from '@area-code/shared/types'
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { MAP_ARRIVAL_ZOOM } from '../../lib/carouselConstants'
 import { useCarouselSelection, type UseCarouselSelectionParams } from '../useCarouselSelection'
 
 /**
- * Map Discovery — selection orchestration tests (deferred tasks 9.2-9.5).
+ * Map Discovery - selection orchestration tests (deferred tasks 9.2-9.5).
  *
  *   - Property 6:  Selection coherence across all input sources
  *   - Property 12: Filter change reassigns the Active_Venue deterministically
@@ -26,7 +27,12 @@ function node(id: string, category: NodeCategory, lat = -26.2, lng = 28.04): Nod
 
 // Bounds covering the whole globe so every seeded venue is in-viewport.
 const fakeMap = {
-  getBounds: () => ({ toArray: () => [[-180, -85], [180, 85]] }),
+  getBounds: () => ({
+    toArray: () => [
+      [-180, -85],
+      [180, 85],
+    ],
+  }),
   flyTo: vi.fn(),
 }
 
@@ -72,7 +78,7 @@ describe('Feature: map-discovery-experience, Property 6: Selection coherence acr
     act(() => result.current.onSearchSelect('c'))
     expect(result.current.activeVenueId).toBe('c')
 
-    // The store holds exactly one Active_Venue id — the single source of truth.
+    // The store holds exactly one Active_Venue id - the single source of truth.
     expect(useSelectionStore.getState().activeVenueId).toBe('c')
   })
 
@@ -155,14 +161,94 @@ describe('Feature: map-discovery-experience, Property 29: Browse_Mode order is s
 
     act(() => result.current.setSwipeInProgress(true))
     act(() => {
-      // Shrink the node set and force a recompute — locked, so order must hold.
+      // Shrink the node set and force a recompute - locked, so order must hold.
       useMapStore.setState({ nodes: { a: node('a', 'nightlife') } })
       result.current.recomputeOrder()
     })
     expect(result.current.carouselOrder).toEqual(locked)
 
-    // Settle the swipe — the deferred recompute now applies.
+    // Settle the swipe - the deferred recompute now applies.
     act(() => result.current.setSwipeInProgress(false))
     expect(result.current.carouselOrder).toEqual(['a'])
+  })
+})
+
+describe('Feature: live-vibe-on-map, cold-open arrival zoom', () => {
+  // A map stub that reports a country-overview zoom so the first camera move
+  // is treated as a cold open. Globe-spanning bounds keep every venue
+  // in-viewport so the order is populated.
+  function coldOpenMap(zoom: number) {
+    return {
+      getBounds: () => ({
+        toArray: () => [
+          [-180, -85],
+          [180, 85],
+        ],
+      }),
+      getZoom: () => zoom,
+      flyTo: vi.fn(),
+    }
+  }
+
+  function seedWithMap(map: { flyTo: ReturnType<typeof vi.fn> }) {
+    useMapStore.setState({
+      nodes: { a: node('a', 'nightlife'), b: node('b', 'nightlife', -26.1, 28.05) },
+      pulseScores: {},
+      checkInCounts: {},
+      archetypeIds: {},
+      focusNodeId: null,
+      mapInstance: map as never,
+    })
+    useLocationStore.setState({ lastKnownPosition: null, capturedAt: null })
+    useSelectionStore.setState({
+      activeVenueId: null,
+      mode: 'closed',
+      carouselOrder: [],
+      openedFromFocus: false,
+      lastVenueId: null,
+    })
+  }
+
+  it('zooms to MAP_ARRIVAL_ZOOM on the first move when the map is still on the country overview', () => {
+    const map = coldOpenMap(5)
+    seedWithMap(map)
+    const { result } = renderHook(() => useCarouselSelection({ ...baseParams, recomputeDebounceMs: 100_000 }))
+    map.flyTo.mockClear()
+
+    act(() => result.current.selectVenue('a', 'marker'))
+
+    // The first cold-open camera move carries the arrival zoom.
+    expect(map.flyTo.mock.calls.some((c) => c[0]?.zoom === MAP_ARRIVAL_ZOOM)).toBe(true)
+  })
+
+  it('does NOT force a zoom on the first move when the map is already zoomed in (warm open)', () => {
+    const map = coldOpenMap(14)
+    seedWithMap(map)
+    const { result } = renderHook(() => useCarouselSelection({ ...baseParams, recomputeDebounceMs: 100_000 }))
+    map.flyTo.mockClear()
+
+    act(() => result.current.selectVenue('a', 'marker'))
+
+    // No camera move forces a zoom when the user is already zoomed in.
+    expect(map.flyTo).toHaveBeenCalled()
+    expect(map.flyTo.mock.calls.every((c) => c[0]?.zoom === undefined)).toBe(true)
+  })
+
+  it('preserves zoom on subsequent browse moves after the cold-open arrival', () => {
+    const map = coldOpenMap(5)
+    seedWithMap(map)
+    const { result } = renderHook(() => useCarouselSelection({ ...baseParams, recomputeDebounceMs: 100_000 }))
+    map.flyTo.mockClear()
+
+    act(() => result.current.selectVenue('a', 'marker'))
+    expect(map.flyTo.mock.calls.some((c) => c[0]?.zoom === MAP_ARRIVAL_ZOOM)).toBe(true)
+
+    const callsAfterArrival = map.flyTo.mock.calls.length
+    act(() => result.current.selectVenue('b', 'marker'))
+
+    // Every browse move after arrival omits zoom (preserves the user's zoom).
+    const browseCalls = map.flyTo.mock.calls.slice(callsAfterArrival)
+    expect(browseCalls.length).toBeGreaterThan(0)
+    expect(browseCalls.every((c) => c[0]?.zoom === undefined)).toBe(true)
   })
 })

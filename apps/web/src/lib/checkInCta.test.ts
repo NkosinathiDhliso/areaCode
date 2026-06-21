@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { CTA_LABEL, getCtaInfo } from './checkInCta'
 
 /**
- * Map Discovery — check-in CTA contract property test (deferred task 4.2).
+ * Map Discovery - check-in CTA contract property test (deferred task 4.2).
  *
  *   - Property 15: Check-in CTA label is a function of Geo_Status
  *
@@ -21,7 +21,7 @@ const inputArb = fc.record({
 })
 
 describe('Feature: map-discovery-experience, Property 15: Check-in CTA label is a function of Geo_Status', () => {
-  it('is deterministic — identical inputs yield identical output', () => {
+  it('is deterministic - identical inputs yield identical output', () => {
     fc.assert(
       fc.property(inputArb, (input) => {
         expect(getCtaInfo(input)).toEqual(getCtaInfo(input))

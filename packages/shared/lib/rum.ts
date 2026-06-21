@@ -62,7 +62,7 @@ export async function initRum(): Promise<void> {
 
   const env = readEnv()
   if (!env.appMonitorId || !env.identityPoolId || !env.region) {
-    // Not configured for this build — silently disabled.
+    // Not configured for this build - silently disabled.
     return
   }
 
@@ -86,7 +86,7 @@ export async function initRum(): Promise<void> {
     })
     initialized = true
   } catch {
-    // aws-rum-web not installed or runtime init failed — app runs fine.
+    // aws-rum-web not installed or runtime init failed - app runs fine.
   }
 }
 
@@ -104,7 +104,7 @@ export function recordEvent(name: string, attributes: Record<string, unknown> = 
   try {
     awsRum.recordEvent?.(name, attributes)
   } catch {
-    // Swallow — monitoring is best-effort.
+    // Swallow - monitoring is best-effort.
   }
 }
 

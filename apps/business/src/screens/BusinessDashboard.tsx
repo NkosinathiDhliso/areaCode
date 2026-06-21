@@ -107,7 +107,7 @@ export function BusinessDashboard() {
 
   // Filter panels based on user's permissions.
   // If permissions haven't loaded yet (empty array = role endpoint failed or not deployed),
-  // show ALL panels. Never hide the nav — that's a worse UX than showing too much.
+  // show ALL panels. Never hide the nav - that's a worse UX than showing too much.
   const visiblePanels =
     permissions.length > 0 ? PANELS.filter((panel) => hasPermission(PANEL_PERMISSIONS[panel])) : PANELS
   const currentIdx = visiblePanels.indexOf(currentPanel)
@@ -190,7 +190,7 @@ export function BusinessDashboard() {
         </button>
       </header>
 
-      {/* Scrollable tab nav (Issue #3 — replaces 10 dots with scrollable pills) */}
+      {/* Scrollable tab nav (Issue #3 - replaces 10 dots with scrollable pills) */}
       <nav
         ref={navRef}
         className="flex flex-row items-center gap-1 px-4 py-2.5 border-b border-[var(--border)] overflow-x-auto no-scrollbar"
@@ -211,7 +211,7 @@ export function BusinessDashboard() {
         ))}
       </nav>
 
-      {/* Single active panel (Issue #27 — only active panel mounts) */}
+      {/* Single active panel (Issue #27 - only active panel mounts) */}
       <div
         ref={containerRef}
         className="flex-1 overflow-y-auto"

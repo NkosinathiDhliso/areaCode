@@ -203,7 +203,7 @@ export interface Node {
    * Cache of the previously emitted Live_Archetype id, written by the
    * `live-archetype-evaluator` Lambda so subsequent Evaluation_Ticks
    * can dedupe `node:archetype_change` events (design § R11). Not used
-   * by the pure resolver — kept here so the Node row is the single
+   * by the pure resolver - kept here so the Node row is the single
    * source of truth for the cache.
    */
   lastArchetypeId?: string | null
@@ -212,7 +212,7 @@ export interface Node {
    * Populated by the backend on the read path (initial REST fetch and
    * post-reconnect replays) so the consumer client can prime
    * `useMapStore.archetypeIds` without waiting for a `node:archetype_change`
-   * event. Stub field — the backend wire surface that fills it ships in a
+   * event. Stub field - the backend wire surface that fills it ships in a
    * later task; the consumer hook (`useNodeArchetype`) tolerates it being
    * absent.
    */
@@ -399,7 +399,7 @@ export interface MapInstance {
     zoom?: number
     /**
      * Screen-space offset of the target center, in pixels [x, y]. Negative y
-     * lifts the point above the container centre — used so a focused node is
+     * lifts the point above the container centre - used so a focused node is
      * not hidden behind the bottom sheet when it opens.
      */
     offset?: [number, number]
@@ -436,7 +436,7 @@ export interface ServerToClientEvents {
    * `node:pulse_update.checkInCount`) so no existing consumer silently keeps
    * reading the old cumulative tally as if it were presence (founder decision
    * 13.4 / Requirement 8.4). Carries only `nodeId`, the new count, and the cause
-   * — no consumer identity (Requirements 7.4, 10.4).
+   * - no consumer identity (Requirements 7.4, 10.4).
    */
   'node:presence_update': (payload: {
     nodeId: string
@@ -506,6 +506,8 @@ export interface CheckInRequest {
   nodeId: string
   lat?: number
   lng?: number
+  /** Device-reported GPS accuracy in metres, when a position was acquired. */
+  accuracy?: number
   qrToken?: string
   type: CheckInType
 }

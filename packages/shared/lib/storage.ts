@@ -47,7 +47,7 @@ export const storage = {
       try {
         window.localStorage.setItem(key, value)
       } catch {
-        // Storage full or unavailable — fail silently
+        // Storage full or unavailable - fail silently
       }
       return
     }
@@ -106,7 +106,7 @@ export const storage = {
         if (v != null) memoryCache.set(k, v)
       }
     } catch {
-      // If hydration fails the cache simply starts empty — the user re-auths.
+      // If hydration fails the cache simply starts empty - the user re-auths.
     }
   },
 }

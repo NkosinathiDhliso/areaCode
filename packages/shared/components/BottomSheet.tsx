@@ -116,7 +116,7 @@ export function BottomSheet({ isOpen, onClose, children, transparentBackdrop = f
           position: 'relative',
           // The nav bar's real height is nav-height + the bottom safe-area
           // inset (home indicator). Matching that here keeps the sheet's
-          // bottom content — primary CTAs especially — clear of the nav on
+          // bottom content - primary CTAs especially - clear of the nav on
           // notched devices and iOS Safari PWAs. Without the inset, the last
           // ~34px of the sheet was hidden behind the nav.
           marginBottom: 'calc(var(--nav-height, 56px) + env(safe-area-inset-bottom, 0px))',

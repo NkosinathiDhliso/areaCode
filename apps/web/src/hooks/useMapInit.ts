@@ -10,7 +10,7 @@ const MAPBOX_TOKEN = import.meta.env['VITE_MAPBOX_TOKEN'] as string | undefined
 /**
  * Default camera: a full South-Africa overview. The map opens showing the
  * whole country and only zooms to the user's surroundings when they tap the
- * Recenter (locate) button — see `recenterUser` and `USER_VIEW_ZOOM`.
+ * Recenter (locate) button - see `recenterUser` and `USER_VIEW_ZOOM`.
  */
 const COUNTRY_CENTER: [number, number] = [25.0, -29.0]
 const COUNTRY_ZOOM = 5
@@ -19,8 +19,8 @@ const COUNTRY_ZOOM = 5
  * Zoom the Recenter button flies to: roughly a 20 km radius around the user on
  * a typical phone viewport. (At ~zoom 10 and mid-SA latitude one screen width
  * spans ~40–50 km, i.e. a ~20–25 km radius.) Kept as a zoom level rather than
- * a `fitBounds` so the existing R1 recenter tests — which assert a `flyTo`
- * with a center + duration — keep passing.
+ * a `fitBounds` so the existing R1 recenter tests - which assert a `flyTo`
+ * with a center + duration - keep passing.
  */
 const USER_VIEW_ZOOM = 10
 
@@ -119,7 +119,7 @@ function applyCustomLayers(map: mapboxgl.Map, theme: ThemeMode): void {
     }
     map.setTerrain({ source: TERRAIN_SOURCE_ID, exaggeration: 1.4 })
   } catch {
-    /* terrain is cosmetic — fail open */
+    /* terrain is cosmetic - fail open */
   }
 
   // ── Sky atmosphere layer ──
@@ -272,7 +272,7 @@ function buildMapInstance(map: mapboxgl.Map): MapInstance {
  * Theme-aware: watches the resolved theme and swaps the basemap style, sky
  * tint, fog palette, and 3D building colour to match light or dark mode.
  *
- * Includes graceful error handling — if the map fails to load, mapError is set
+ * Includes graceful error handling - if the map fails to load, mapError is set
  * so the UI can show a fallback instead of crashing.
  */
 export function useMapInit() {
@@ -422,7 +422,7 @@ export function useMapInit() {
     if (mapError) return
 
     // A live map already exists for this mount (e.g. an unexpected effect
-    // re-run that isn't an error transition) — nothing to do.
+    // re-run that isn't an error transition) - nothing to do.
     if (mapRef.current) return
 
     if (!MAPBOX_TOKEN) {
@@ -554,7 +554,7 @@ export function useMapInit() {
       // diff: false forces a clean reload so terrain re-binds reliably.
       map.setStyle(STYLE_URL[resolved], { diff: false } as Parameters<typeof map.setStyle>[1])
     } catch {
-      /* ignore — style.load handler will re-apply layers next time */
+      /* ignore - style.load handler will re-apply layers next time */
     }
   }, [resolved, mapReadyKey])
 

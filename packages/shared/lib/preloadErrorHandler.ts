@@ -20,7 +20,7 @@ export function installPreloadErrorHandler(): void {
   const reloadOnce = (reason: string) => {
     try {
       if (sessionStorage.getItem(SESSION_KEY) === '1') {
-        // Already reloaded once this session — don't loop. The new build
+        // Already reloaded once this session - don't loop. The new build
         // is genuinely missing this chunk; let the error surface.
         // eslint-disable-next-line no-console
         console.error('[preloadErrorHandler] reload already attempted, not retrying:', reason)

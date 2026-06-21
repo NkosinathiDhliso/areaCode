@@ -31,7 +31,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       const meta = (import.meta as unknown as { env?: { DEV?: boolean } })?.env
       isDev = meta?.DEV === true
     } catch {
-      // import.meta unavailable — assume prod.
+      // import.meta unavailable - assume prod.
     }
     if (isDev) {
       console.error('[ErrorBoundary] Unhandled error:', error, errorInfo)
@@ -102,7 +102,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           >
             {showReloadOnly
               ? "Let's start fresh. This won't affect your account or data."
-              : "No worries — this happens sometimes. Let's get you back on the map."}
+              : "No worries - this happens sometimes. Let's get you back on the map."}
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '280px' }}>
             {!showReloadOnly && (

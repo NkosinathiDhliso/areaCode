@@ -47,7 +47,7 @@ export function RewardsScreen({ onNavigate }: RewardsScreenProps) {
    * (previously only MapScreen) calls requestLocation. The query falls back
    * to the JHB downtown default coords, and any users elsewhere see "no
    * gets nearby". Refresh-on-/gets is the exact path the bug report calls
-   * out — re-trigger the GPS request here so the screen is self-sufficient.
+   * out - re-trigger the GPS request here so the screen is self-sufficient.
    */
   useEffect(() => {
     if (!isAuthenticated || pos) return

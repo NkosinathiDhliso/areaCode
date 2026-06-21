@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { FlickControls } from '../FlickControls'
 
 /**
- * Map Discovery — Flick_Controls keyboard/operability tests (part of task 11.3).
+ * Map Discovery - Flick_Controls keyboard/operability tests (part of task 11.3).
  *
  * The previous/next controls are native buttons with accessible labels and step
  * the single Selection_Model via `selectionStore.step`, wrapping at the ends.

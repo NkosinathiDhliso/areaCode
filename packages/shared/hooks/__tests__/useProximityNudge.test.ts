@@ -20,9 +20,9 @@ describe('shouldFireNudge', () => {
   it('blocks for 6h after a fire', () => {
     let s = baseState()
     s = recordFired(s, 'v1', Date.parse('2026-05-16T12:00:00Z'))
-    // 5h59 later — still blocked
+    // 5h59 later - still blocked
     expect(shouldFireNudge('v1', s, Date.parse('2026-05-16T12:00:00Z') + 5 * HOUR + 59 * 60_000)).toBe(false)
-    // 6h01 later — clear
+    // 6h01 later - clear
     expect(shouldFireNudge('v1', s, Date.parse('2026-05-16T12:00:00Z') + 6 * HOUR + 60_000)).toBe(true)
   })
 
@@ -71,7 +71,7 @@ describe('shouldFireNudge', () => {
     let s = baseState()
     s = recordFired(s, 'v1', Date.parse('2026-05-16T12:00:00Z'))
     s = recordDismissed(s, 'v1', Date.parse('2026-05-16T12:00:00Z'))
-    // 7h after — fire cooldown over (6h) but dismiss is not (24h)
+    // 7h after - fire cooldown over (6h) but dismiss is not (24h)
     expect(shouldFireNudge('v1', s, Date.parse('2026-05-16T12:00:00Z') + 7 * HOUR)).toBe(false)
     expect(shouldFireNudge('v1', s, Date.parse('2026-05-16T12:00:00Z') + DAY + HOUR)).toBe(true)
   })

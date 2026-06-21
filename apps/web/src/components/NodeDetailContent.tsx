@@ -29,12 +29,12 @@ const DEFAULT_ARCHETYPE_ID = 'archetype-eclectic'
 //
 // Directions are presented in a custom picker (`DirectionsSheet`) rather
 // than launched directly. iOS doesn't expose a system "default navigation
-// app" picker — `maps://` always opens Apple Maps and ignores the user's
+// app" picker - `maps://` always opens Apple Maps and ignores the user's
 // preference for Google Maps or Waze. The sheet gives users an explicit
 // choice and falls back to the HTTPS URL if the chosen app isn't installed.
 
 /**
- * `NodeDetailContent` — the full venue detail body (rewards, archetype glyph +
+ * `NodeDetailContent` - the full venue detail body (rewards, archetype glyph +
  * display name, crowd-vibe section, directions, and the check-in CTA) for a
  * single venue, **without** the surrounding `BottomSheet`.
  *
@@ -63,8 +63,8 @@ export interface NodeDetailContentProps {
   /**
    * Optional node-flick handlers. When provided, a prev/next control row is
    * shown at the top of the content so the user can cycle through nearby
-   * venues. The Peek_Carousel does NOT pass these — it provides Browse_Mode
-   * `FlickControls` instead (R1.6) — they remain for the legacy standalone
+   * venues. The Peek_Carousel does NOT pass these - it provides Browse_Mode
+   * `FlickControls` instead (R1.6) - they remain for the legacy standalone
    * `NodeDetailSheet`.
    */
   onPrev?: () => void
@@ -86,7 +86,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
   const isBusinessAuthenticated = useBusinessAuthStore((s) => s.isAuthenticated)
   const geoStatus = useLocationStore((s) => s.geoStatus)
-  // Live_Archetype id for this node — same resolution order as the map
+  // Live_Archetype id for this node - same resolution order as the map
   // marker (`useMapMarkers.ts`): cached live id from the
   // `node:archetype_change` stream, then the node's configured default,
   // then the eclectic fallback per R7.8. Drives the R8.10 / R9.6 glyph
@@ -110,7 +110,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
   const [reportSuccess, setReportSuccess] = useState(false)
   const [qrSheetOpen, setQrSheetOpen] = useState(false)
   const [directionsSheetOpen, setDirectionsSheetOpen] = useState(false)
-  // Currently expanded reward — tapping a chip toggles it open to show the
+  // Currently expanded reward - tapping a chip toggles it open to show the
   // description, expiry, and slots-remaining details. Customers complained
   // the chips looked tappable but did nothing; this gives the tap a payoff.
   const [expandedRewardId, setExpandedRewardId] = useState<string | null>(null)
@@ -128,7 +128,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
       return
     }
     if (qrFallback) {
-      // Out of GPS range — open the in-app scanner so the user can scan
+      // Out of GPS range - open the in-app scanner so the user can scan
       // the venue's printed QR to prove presence.
       setQrSheetOpen(true)
       return
@@ -149,7 +149,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
         return
       }
     }
-    // Unknown QR format — tell the user this isn't a valid Area Code QR
+    // Unknown QR format - tell the user this isn't a valid Area Code QR
     useErrorStore
       .getState()
       .showError(
@@ -234,7 +234,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
             onClick={onPrev}
             disabled={!onPrev}
             aria-label={t('map.flickPrev', 'Previous venue')}
-            className="glass-raised rounded-full w-9 h-9 flex items-center justify-center text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] disabled:opacity-40"
+            className="glass-raised rounded-full w-11 h-11 flex items-center justify-center text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] disabled:opacity-40"
           >
             <ChevronLeft size={18} strokeWidth={1.75} />
           </button>
@@ -243,7 +243,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
             onClick={onNext}
             disabled={!onNext}
             aria-label={t('map.flickNext', 'Next venue')}
-            className="glass-raised rounded-full w-9 h-9 flex items-center justify-center text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] disabled:opacity-40"
+            className="glass-raised rounded-full w-11 h-11 flex items-center justify-center text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] disabled:opacity-40"
           >
             <ChevronRight size={18} strokeWidth={1.75} />
           </button>
@@ -304,7 +304,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
         />
       )}
 
-      {/* Dormant empty state — "be the first in" (R2.7). */}
+      {/* Dormant empty state - "be the first in" (R2.7). */}
       {isDormant ? (
         <p className="text-[var(--text-secondary)] text-sm mb-6">{t('map.beFirst')}</p>
       ) : (
@@ -414,7 +414,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
         </>
       )}
 
-      {/* Get Directions — always visible */}
+      {/* Get Directions - always visible */}
       <button
         onClick={handleDirections}
         className="w-full flex items-center justify-center gap-2 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] font-medium rounded-xl py-3 text-sm mb-3 transition-all duration-150 active:scale-95"
@@ -434,7 +434,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
         {t('node.directions', 'Get directions')}
       </button>
 
-      {/* Claim this venue — for unclaimed nodes when business authenticated */}
+      {/* Claim this venue - for unclaimed nodes when business authenticated */}
       {isBusinessAuthenticated && node.claimStatus === 'unclaimed' && (
         <button
           onClick={() => setClaimModalOpen(true)}
@@ -466,7 +466,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
             </h3>
             {reportSuccess ? (
               <p className="text-[var(--success)] text-sm">
-                {t('node.reportSuccess', 'Thanks — our team will review this.')}
+                {t('node.reportSuccess', 'Thanks - our team will review this.')}
               </p>
             ) : (
               <>

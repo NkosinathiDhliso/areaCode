@@ -35,7 +35,7 @@ interface BoostPurchasesResponse {
 
 const PAGE_LIMIT = 25
 
-// Format `cents` as `R<X>.<YY>` — same convention used in BoostFloorEditor and
+// Format `cents` as `R<X>.<YY>` - same convention used in BoostFloorEditor and
 // the operator BoostPurchasesPanel so admins read amounts consistently across
 // the platform (R7.6).
 function formatAmountCents(cents: number): string {
@@ -86,7 +86,7 @@ function dateInputToIsoEndOfDay(date: string): string {
 
 function todayDateInput(): string {
   // YYYY-MM-DD in local time. The exact local-vs-UTC offset doesn't matter
-  // here — the admin is picking a calendar day and we widen to the full UTC
+  // here - the admin is picking a calendar day and we widen to the full UTC
   // day on submit anyway.
   const now = new Date()
   const y = now.getFullYear()
@@ -223,7 +223,7 @@ export function BoostPurchaseReport() {
       }, 1500)
     } catch {
       // Clipboard API can fail in non-secure contexts (e.g. a self-hosted
-      // staging build over HTTP). Fall back to a no-op — the admin can
+      // staging build over HTTP). Fall back to a no-op - the admin can
       // still triple-click the cell to select the id manually.
     }
   }
@@ -351,7 +351,7 @@ export function BoostPurchaseReport() {
                   <td className="px-3 py-2 font-mono">{row.duration}</td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">{formatAmountCents(row.amountCents)}</td>
                   <td className="px-3 py-2">{row.tierSnapshot}</td>
-                  <td className="px-3 py-2 font-mono">{row.neighbourhoodIdSnapshot ?? '—'}</td>
+                  <td className="px-3 py-2 font-mono">{row.neighbourhoodIdSnapshot ?? '-'}</td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">
                     {formatAmountCents(row.floorAtPurchaseCents)}
                   </td>

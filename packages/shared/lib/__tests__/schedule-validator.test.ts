@@ -1,10 +1,10 @@
 /**
  * Property tests for the Music_Schedule validator.
  *
- *  - Property 6: Music_Schedule serialize/parse round-trip — `parse(serialize(schedule))`
+ *  - Property 6: Music_Schedule serialize/parse round-trip - `parse(serialize(schedule))`
  *    is deeply equal to the canonical value returned by the first parse.
  *  - Property 9: Schedule validator rejects bad intervals and preserves prior
- *    state — the validator rejects (a) `startTimeMin >= endTimeMin`,
+ *    state - the validator rejects (a) `startTimeMin >= endTimeMin`,
  *    (b) overlapping slots on the same `dayOfWeek`, (c) lineup-mode slots whose
  *    first entry's `startTime` ≠ slot start, and (d) duplicate LineupEntry
  *    `startTime` values within a slot, and never mutates the input on rejection.
@@ -66,7 +66,7 @@ const dayRngArb = fc.record({
 })
 
 // `dayRngArb` is an `fc.Arbitrary<T>` and fast-check v4 no longer exposes a
-// public `IndexableType` helper. Declare the shape explicitly — it stays in
+// public `IndexableType` helper. Declare the shape explicitly - it stays in
 // lockstep with `dayRngArb` because `fc.assert(fc.property(dayRngArb, ...))`
 // will fail-fast if the runtime shape drifts.
 interface DayRng {
@@ -159,7 +159,7 @@ const validScheduleArb: fc.Arbitrary<MusicSchedule> = fc
 
 /**
  * Wrap a single slot into a minimal one-slot Music_Schedule. The schema
- * accepts plain objects (no need to populate `startTimeMin`/`endTimeMin` —
+ * accepts plain objects (no need to populate `startTimeMin`/`endTimeMin` -
  * the validator derives them from `HH:mm`).
  */
 const wrapSingleSlot = (slot: Record<string, unknown>): Record<string, unknown> => ({
@@ -343,7 +343,7 @@ describe('Property 9: Schedule validator rejects bad intervals and preserves pri
    * For any slot with `startTimeMin >= endTimeMin` (including the
    * `startTime === endTime` corner), the validator rejects with
    * `invalid_slot_interval` and does not mutate the input object.
-   * Cross-midnight intervals are explicitly forbidden (R5.10) — they are
+   * Cross-midnight intervals are explicitly forbidden (R5.10) - they are
    * modelled as a Cross_Midnight_Pair (R3.12) instead.
    *
    * Validates: Requirements 3.5

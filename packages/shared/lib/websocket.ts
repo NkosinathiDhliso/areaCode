@@ -38,7 +38,7 @@ class WebSocketManager {
     if (this._url === newUrl) return
     this._url = newUrl
     this.reconnectAttempts = 0
-    // Close existing connection — onclose will NOT auto-reconnect because
+    // Close existing connection - onclose will NOT auto-reconnect because
     // we call connect() explicitly below.
     if (this.ws) {
       this.ws.onclose = null // prevent double-reconnect
@@ -177,7 +177,7 @@ class WebSocketManager {
     }
   }
 
-  // Emit client events — queued if not yet connected, sent immediately if open
+  // Emit client events - queued if not yet connected, sent immediately if open
   emit<K extends keyof ClientToServerEvents>(event: K, payload: Parameters<ClientToServerEvents[K]>[0]): void {
     const message = { action: event, payload }
 
@@ -217,7 +217,7 @@ type SocketLike = {
   connected: boolean
 }
 
-// Socket override for dev mocks — when set, getSocket/getWebSocket return this instead
+// Socket override for dev mocks - when set, getSocket/getWebSocket return this instead
 let socketOverrideInstance: SocketLike | null = null
 
 function isDevMock(): boolean {
@@ -245,7 +245,7 @@ function normaliseWsUrl(raw: string | null | undefined): string | null {
 }
 
 function getWebSocketUrl(): string | null {
-  // In dev mock mode, don't resolve a real WebSocket URL — the mock layer handles events
+  // In dev mock mode, don't resolve a real WebSocket URL - the mock layer handles events
   if (isDevMock()) return null
 
   // ── Web (Vite) ──
@@ -336,7 +336,7 @@ export function getWebSocket(
     wsManager = new WebSocketManager(url)
 
     // Subscribe to token refreshes so the socket reconnects with the new token
-    // automatically — no more disconnect/reconnect loops after a 401 refresh.
+    // automatically - no more disconnect/reconnect loops after a 401 refresh.
     const stableOpts = opts
     wsManager.subscribeToTokenRefresh((newToken: string) => {
       const freshParams = new URLSearchParams()

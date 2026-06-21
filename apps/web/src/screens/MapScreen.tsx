@@ -154,7 +154,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
   // Geolocation acquisition via the GPS state machine hook. We acquire the
   // position (for check-in proximity and to enable the Recenter button) but
-  // deliberately do NOT move the camera — the map opens on the full-country
+  // deliberately do NOT move the camera - the map opens on the full-country
   // overview and only flies to the user when they tap Recenter (USER_VIEW_ZOOM).
   useEffect(() => {
     void requestLocation()
@@ -297,12 +297,15 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
         </div>
       )}
 
-      <div className="absolute top-4 left-0 right-0 z-10 pointer-events-none [&>*]:pointer-events-auto">
+      <div
+        className="absolute left-0 right-0 z-10 pointer-events-none [&>*]:pointer-events-auto"
+        style={{ top: 'max(1.5rem, env(safe-area-inset-top, 0px))' }}
+      >
         <div className="flex items-center gap-2 pl-3 pr-1">
           <button
             onClick={() => setSearchOpen(true)}
             aria-label={t('search.open', 'Search venues')}
-            className="shrink-0 glass-raised rounded-full w-9 h-9 flex items-center justify-center text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
+            className="shrink-0 glass-raised rounded-full w-11 h-11 flex items-center justify-center text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
           >
             <Search size={18} strokeWidth={1.75} />
           </button>
@@ -326,7 +329,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
       {/* Location banner, non-blocking */}
       {overlay.showLocationBanner && (
-        <div className="absolute top-16 left-4 right-4 z-20">
+        <div className="absolute left-4 right-4 z-20" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 4.5rem)' }}>
           <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl px-4 py-3 flex items-center justify-between">
             <div className="flex-1 mr-3">
               <p className="text-[var(--text-primary)] text-xs font-medium">{t('location.permissionTitle')}</p>
@@ -357,7 +360,10 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       )}
 
       {overlay.showOnboardingHint && (
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 pointer-events-none [&>*]:pointer-events-auto">
+        <div
+          className="absolute left-1/2 -translate-x-1/2 z-20 pointer-events-none [&>*]:pointer-events-auto"
+          style={{ bottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
+        >
           <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-2xl px-4 py-3 flex items-center gap-2 shadow-lg">
             <span className="text-[var(--text-secondary)] text-sm">{t('map.tapHint')}</span>
             <button
@@ -389,11 +395,14 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       {liveVibeOnMap && <LiveArchetypeSubscriber token={accessToken ?? undefined} citySlug={citySlug} />}
       <CityPulseToastMount mapReady={mapReady} />
 
-      {/* Reopen-last affordance — surfaced only while the carousel is closed
+      {/* Reopen-last affordance - surfaced only while the carousel is closed
           and a previously-viewed venue is retained. Tapping it re-opens the
           Peek_Carousel (Browse_Mode) on that venue without a marker hunt. */}
       {mode === 'closed' && lastVenueId !== null && nodes[lastVenueId] && (
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 pointer-events-none [&>*]:pointer-events-auto">
+        <div
+          className="absolute left-1/2 -translate-x-1/2 z-20 pointer-events-none [&>*]:pointer-events-auto"
+          style={{ bottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
+        >
           <button
             onClick={reopenLast}
             className="glass-raised rounded-full pl-3 pr-4 py-2 flex items-center gap-2 text-[var(--text-primary)] text-sm font-semibold shadow-lg transition-all active:scale-95"
@@ -413,7 +422,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
         </div>
       )}
 
-      {/* Peek_Carousel — the two-state browse-and-compare surface (R1.1, R2.x).
+      {/* Peek_Carousel - the two-state browse-and-compare surface (R1.1, R2.x).
           Browse_Mode (swipeable Venue_Card strip + FlickControls) and
           Commit_Mode (full detail body) over a single shared BottomSheet. */}
       <PeekCarousel
@@ -429,7 +438,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
       {/* Auth + QR surfaces owned by the check-in flow. The only auth entry
           reachable from the map is the email/password + Google OAuth
-          SignupSheet — no phone-number or SMS surface (R20.1). */}
+          SignupSheet - no phone-number or SMS surface (R20.1). */}
       <SignupSheet isOpen={checkInFlow.signupOpen} onClose={checkInFlow.closeSignup} onNavigate={onNavigate} />
       <QrScannerSheet
         isOpen={checkInFlow.qrScannerOpen}

@@ -7,10 +7,16 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('mapbox-gl', () => ({ default: { Marker: class {} } }))
 
 import { GLYPH_ZOOM_THRESHOLD, MIN_MARKER_ZOOM } from '../../lib/carouselConstants'
-import { isActiveMarker, presentationTierForZoom, scaleForZoom } from '../useMapMarkers'
+import {
+  BASE_PRESENTATION_ZOOM,
+  isActiveMarker,
+  presentationTierForZoom,
+  scaleForZoom,
+  zoomSizeFactor,
+} from '../useMapMarkers'
 
 /**
- * Map Discovery — Marker_Layer presentation property tests (deferred tasks
+ * Map Discovery - Marker_Layer presentation property tests (deferred tasks
  * 13.2-13.4). Targets the real exported pure helpers.
  *
  *   - Property 17: Marker presentation tier is a function of zoom
@@ -34,7 +40,7 @@ describe('Feature: map-discovery-experience, Property 17: Marker presentation ti
     )
   })
 
-  it('is pure — the same zoom always yields the same tier', () => {
+  it('is pure - the same zoom always yields the same tier', () => {
     fc.assert(
       fc.property(zoomArb, (z) => {
         expect(presentationTierForZoom(z)).toBe(presentationTierForZoom(z))
@@ -78,6 +84,59 @@ describe('Feature: map-discovery-experience, Property 18: Markers stay geo-ancho
   it('is continuous at both tier thresholds', () => {
     expect(scaleForZoom(MIN_MARKER_ZOOM)).toBe(0)
     expect(scaleForZoom(GLYPH_ZOOM_THRESHOLD)).toBe(1)
+  })
+})
+
+describe('Feature: live-vibe-on-map, zoom-aware sizing considers the map zoom', () => {
+  it('renders the designed size (factor 1) at the base presentation zoom', () => {
+    expect(zoomSizeFactor(BASE_PRESENTATION_ZOOM)).toBe(1)
+  })
+
+  it('stays within the [0.7, 1.6] clamp for any zoom', () => {
+    fc.assert(
+      fc.property(zoomArb, (zoom) => {
+        const f = zoomSizeFactor(zoom)
+        expect(f).toBeGreaterThanOrEqual(0.7)
+        expect(f).toBeLessThanOrEqual(1.6)
+      }),
+    )
+  })
+
+  it('is monotonic non-decreasing in zoom (closer ⇒ never smaller)', () => {
+    fc.assert(
+      fc.property(zoomArb, zoomArb, (z1, z2) => {
+        const lo = Math.min(z1, z2)
+        const hi = Math.max(z1, z2)
+        expect(zoomSizeFactor(lo)).toBeLessThanOrEqual(zoomSizeFactor(hi))
+      }),
+    )
+  })
+
+  it('grows above the base zoom and shrinks below it', () => {
+    expect(zoomSizeFactor(BASE_PRESENTATION_ZOOM + 2)).toBeGreaterThan(1)
+    expect(zoomSizeFactor(BASE_PRESENTATION_ZOOM - 2)).toBeLessThan(1)
+  })
+
+  it('is pure — the same zoom always yields the same factor', () => {
+    fc.assert(
+      fc.property(zoomArb, (z) => {
+        expect(zoomSizeFactor(z)).toBe(zoomSizeFactor(z))
+      }),
+    )
+  })
+
+  // The combined transform scale (visibility ramp × size factor) is what is
+  // actually applied to a marker's scale-layer. It must never be negative and
+  // must collapse to exactly 0 in the hidden tier so a faded marker truly
+  // disappears (and its pointer-events are gated off).
+  it('combined visibility×size scale is 0 in the hidden tier and ≥ 0 everywhere', () => {
+    fc.assert(
+      fc.property(zoomArb, (zoom) => {
+        const combined = scaleForZoom(zoom) * zoomSizeFactor(zoom)
+        expect(combined).toBeGreaterThanOrEqual(0)
+        if (presentationTierForZoom(zoom) === 'hidden') expect(combined).toBe(0)
+      }),
+    )
   })
 })
 

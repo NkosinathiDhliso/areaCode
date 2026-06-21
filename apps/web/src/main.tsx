@@ -33,7 +33,7 @@ async function bootstrap() {
     const { initRum } = await import('@area-code/shared/lib/rum')
     await initRum()
   } catch {
-    // RUM init failed — app continues without monitoring
+    // RUM init failed - app continues without monitoring
   }
 
   if (import.meta.env.VITE_DEV_MOCK === 'true') {
@@ -63,13 +63,13 @@ async function bootstrap() {
   // Register service worker for Web Push
   if ('serviceWorker' in navigator && import.meta.env.PROD) {
     void navigator.serviceWorker.register('/sw.js').catch(() => {
-      // SW registration failed — push notifications won't work but app is fine
+      // SW registration failed - push notifications won't work but app is fine
     })
   }
 }
 
 void bootstrap().catch(() => {
-  // Last resort — if bootstrap itself fails, show a minimal error
+  // Last resort - if bootstrap itself fails, show a minimal error
   const root = document.getElementById('root')
   if (root) {
     root.innerHTML =

@@ -8,9 +8,9 @@
  * `apps/web/src/lib/toastAdmission`.
  *
  * It holds the two decidable rules of the Toast_System:
- *   - {@link admitToQueue} — keeps the queue priority-ordered and capped, using
+ *   - {@link admitToQueue} - keeps the queue priority-ordered and capped, using
  *     the shared `TOAST_PRIORITY` map the store sorts by.
- *   - {@link shouldEnqueueCheckInToast} — per-venue Check_In_Toast dedup within
+ *   - {@link shouldEnqueueCheckInToast} - per-venue Check_In_Toast dedup within
  *     a single auto-dismiss interval.
  *
  * Feature: map-discovery-experience

@@ -2,6 +2,7 @@ import { api } from '@area-code/shared/lib/api'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 import type { Node } from '@area-code/shared/types'
 import { useEffect, useRef, useState } from 'react'
+import { MapboxAddressInput } from '../../components/MapboxAddressInput'
 
 export function NodeEditorPanel() {
   const { nodes, setNodes } = useBusinessStore()
@@ -46,61 +47,6 @@ export function NodeEditorPanel() {
   // Instagram handle state
   const [instagramHandle, setInstagramHandle] = useState('')
   const [instagramSaving, setInstagramSaving] = useState(false)
-
-  useEffect(() => {
-    if (!addVenueOpen) return
-    const apiKey = import.meta.env['VITE_GOOGLE_MAPS_API_KEY'] as string | undefined
-    if (!apiKey) {
-      setMapsUnavailable(true)
-      return
-    }
-    setMapsUnavailable(false)
-
-    function attachAutocomplete() {
-      if (!addressInputRef.current) return
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const autocomplete = new (window as any).google.maps.places.Autocomplete(addressInputRef.current, {
-        componentRestrictions: { country: 'za' },
-      })
-      autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace() as {
-          formatted_address?: string
-          geometry?: { location: { lat: () => number; lng: () => number } }
-        }
-        if (place.formatted_address) setAddVenueAddress(place.formatted_address)
-        if (place.geometry?.location) {
-          setAddVenueLat(place.geometry.location.lat())
-          setAddVenueLng(place.geometry.location.lng())
-        }
-      })
-    }
-
-    // Poll until google.maps.places is ready (handles both fresh load and cached script)
-    function waitForGoogle(attempts = 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if ((window as any).google?.maps?.places) {
-        attachAutocomplete()
-        return
-      }
-      if (attempts < 50) setTimeout(() => waitForGoogle(attempts + 1), 100)
-    }
-
-    if (!document.getElementById('gmaps-places-script')) {
-      const script = document.createElement('script')
-      script.id = 'gmaps-places-script'
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`
-      script.async = true
-      script.defer = true
-      script.onload = () => waitForGoogle()
-      script.onerror = () => {
-        console.error('[AreaCode] Google Maps failed to load')
-        setMapsUnavailable(true)
-      }
-      document.head.appendChild(script)
-    } else {
-      waitForGoogle()
-    }
-  }, [addVenueOpen])
 
   useEffect(() => {
     async function fetchNodes() {
@@ -161,55 +107,6 @@ export function NodeEditorPanel() {
 
     // Seed Instagram handle
     setInstagramHandle(selected.instagramHandle ?? '')
-  }, [selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Attach Google Places autocomplete to the edit address input once selected exists and script is ready
-  useEffect(() => {
-    if (!selected) return
-    const apiKey = import.meta.env['VITE_GOOGLE_MAPS_API_KEY'] as string | undefined
-    if (!apiKey) return
-
-    function attach() {
-      if (!editAddressInputRef.current) return
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const g = (window as any).google
-      if (!g?.maps?.places) return
-      const ac = new g.maps.places.Autocomplete(editAddressInputRef.current, {
-        componentRestrictions: { country: 'za' },
-      })
-      ac.addListener('place_changed', () => {
-        const place = ac.getPlace() as {
-          formatted_address?: string
-          geometry?: { location: { lat: () => number; lng: () => number } }
-        }
-        if (place.formatted_address) setEditAddress(place.formatted_address)
-        if (place.geometry?.location) {
-          setEditLat(place.geometry.location.lat())
-          setEditLng(place.geometry.location.lng())
-        }
-      })
-    }
-
-    function wait(attempts = 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if ((window as any).google?.maps?.places) {
-        attach()
-        return
-      }
-      if (attempts < 50) setTimeout(() => wait(attempts + 1), 100)
-    }
-
-    if (!document.getElementById('gmaps-places-script')) {
-      const script = document.createElement('script')
-      script.id = 'gmaps-places-script'
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`
-      script.async = true
-      script.defer = true
-      script.onload = () => wait()
-      document.head.appendChild(script)
-    } else {
-      wait()
-    }
   }, [selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleAddVenue() {
@@ -414,17 +311,21 @@ export function NodeEditorPanel() {
                 <label className="text-[var(--text-secondary)] text-xs font-medium">
                   Address <span className="text-[var(--text-muted)]">(leave blank to keep current)</span>
                 </label>
-                <input
-                  ref={editAddressInputRef}
-                  type="text"
+                <MapboxAddressInput
+                  inputRef={editAddressInputRef}
                   value={editAddress}
-                  onChange={(e) => {
-                    setEditAddress(e.target.value)
+                  onTextChange={(text) => {
+                    setEditAddress(text)
                     setEditLat(undefined)
                     setEditLng(undefined)
                   }}
+                  onSelect={({ address, lat, lng }) => {
+                    setEditAddress(address)
+                    setEditLat(lat)
+                    setEditLng(lng)
+                  }}
                   placeholder="Type new address to change location"
-                  className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+                  className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
                 />
                 <span className="text-[var(--text-muted)] text-xs">
                   Current location: {selected.lat.toFixed(4)}, {selected.lng.toFixed(4)}
@@ -569,13 +470,23 @@ export function NodeEditorPanel() {
               <label className="text-[var(--text-primary)] text-xs font-medium">Address</label>
               {mapsUnavailable && (
                 <p className="text-[var(--text-muted)] text-xs -mt-1">
-                  Autocomplete unavailable — enter address manually.
+                  Autocomplete unavailable - enter address manually.
                 </p>
               )}
-              <input
-                ref={addressInputRef}
-                type="text"
-                onChange={(e) => setAddVenueAddress(e.target.value)}
+              <MapboxAddressInput
+                inputRef={addressInputRef}
+                value={addVenueAddress}
+                onTextChange={(text) => {
+                  setAddVenueAddress(text)
+                  setAddVenueLat(undefined)
+                  setAddVenueLng(undefined)
+                }}
+                onSelect={({ address, lat, lng }) => {
+                  setAddVenueAddress(address)
+                  setAddVenueLat(lat)
+                  setAddVenueLng(lng)
+                }}
+                onUnavailable={() => setMapsUnavailable(true)}
                 placeholder="e.g. 73 Juta Street, Braamfontein, Johannesburg"
                 className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
               />

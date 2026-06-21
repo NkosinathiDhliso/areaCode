@@ -149,7 +149,7 @@ function pairColour(base: string): { bg: string; border: string } {
  */
 function mergePairForEditing(pair: CrossMidnightPair): ScheduleSlot {
   const merged: ScheduleSlot = {
-    slotId: pair.a.slotId, // pair-<base>-a — preserved so save can re-pair
+    slotId: pair.a.slotId, // pair-<base>-a - preserved so save can re-pair
     dayOfWeek: pair.a.dayOfWeek,
     startTime: pair.a.startTime,
     endTime: pair.b.endTime,
@@ -408,7 +408,7 @@ export function MusicSchedulePanel() {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// Week timeline — 7 day rows with a 24-hour timeline drawn beneath each row.
+// Week timeline - 7 day rows with a 24-hour timeline drawn beneath each row.
 // Slots are positioned by (startTimeMin, endTimeMin) as % of the day.
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -521,7 +521,7 @@ function groupSlotsByDay(slots: ScheduleSlot[]): Record<ScheduleDayOfWeek, Sched
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SlotEditorSheet — full-screen modal for creating or editing one ScheduleSlot.
+// SlotEditorSheet - full-screen modal for creating or editing one ScheduleSlot.
 //
 // Validation runs on every change by composing the proposed full schedule
 // (existing slots minus the one being edited + the candidate slot) and
@@ -529,7 +529,7 @@ function groupSlotsByDay(slots: ScheduleSlot[]): Record<ScheduleDayOfWeek, Sched
 // surfaced inline against the offending field. Save is disabled while any
 // error is present (R4.5, R4.9).
 //
-// Cross_Midnight_Pair handling (`endTime < startTime`) is task 13.3 — for
+// Cross_Midnight_Pair handling (`endTime < startTime`) is task 13.3 - for
 // now the editor surfaces a friendly inline message and blocks save.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -732,8 +732,8 @@ function splitCrossMidnightDraft(draft: SlotDraft, baseId: string): [ScheduleSlo
  *
  * When the draft is cross-midnight we pass both halves of the pair as
  * `candidates`; we also strip any pre-existing slots whose slotId belongs
- * to the same `pair-<base>-{a,b}` so re-editing a pair replaces — never
- * duplicates — the on-disk halves.
+ * to the same `pair-<base>-{a,b}` so re-editing a pair replaces - never
+ * duplicates - the on-disk halves.
  */
 function buildProposedSchedule(schedule: MusicSchedule, candidates: ScheduleSlot[]): MusicSchedule {
   const candidateIds = new Set(candidates.map((c) => c.slotId))
@@ -755,7 +755,7 @@ function buildProposedSchedule(schedule: MusicSchedule, candidates: ScheduleSlot
  * into an `InlineErrors` map keyed by the editor's logical field names.
  *
  * The validator emits dotted-path field names (`slots[3].lineup[1].genres`).
- * We map the slot index back to the candidate slot via slotId equality —
+ * We map the slot index back to the candidate slot via slotId equality -
  * if the error belongs to a different slot, we still show it so the operator
  * sees the full picture (e.g. "your new slot overlaps an existing slot").
  */
@@ -874,7 +874,7 @@ function SlotEditorSheet({ schedule, slot, onSaved, onClose }: SlotEditorSheetPr
   const inlineErrors = useMemo<InlineErrors>(() => {
     const errors: InlineErrors = {}
 
-    // Local field-format checks — give crisp messages before the validator
+    // Local field-format checks - give crisp messages before the validator
     // has to repeat them with longer prose.
     if (!isHhMm(draft.startTime)) errors['startTime'] = 'Start time must be HH:mm (00:00–23:59).'
     if (!isHhMm(draft.endTime)) errors['endTime'] = 'End time must be HH:mm (00:00–23:59).'
@@ -934,7 +934,7 @@ function SlotEditorSheet({ schedule, slot, onSaved, onClose }: SlotEditorSheetPr
 
   function patchDraft(patch: Partial<SlotDraft>) {
     setDraft((prev) => ({ ...prev, ...patch }))
-    // R4.5 — keep dirty state, but clear stale server-side errors as soon as
+    // R4.5 - keep dirty state, but clear stale server-side errors as soon as
     // the operator modifies any field. The next save will surface fresh
     // errors against the new shape.
     setServerError(null)
@@ -1061,7 +1061,7 @@ function SlotEditorSheet({ schedule, slot, onSaved, onClose }: SlotEditorSheetPr
       // The schedule-crud Lambda returns 400 with `{ code, field, message,
       // slotId? }` on validator failure (R4.5). Surface those inline so the
       // editor renders against the offending field. We keep the dirty state
-      // — the form is NOT closed.
+      // - the form is NOT closed.
       if (apiErr.statusCode === 400 && typeof apiErr.code === 'string' && typeof apiErr.field === 'string') {
         const mapped = mapValidationError(
           {

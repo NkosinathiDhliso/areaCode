@@ -131,7 +131,7 @@ describe('validateMusicSchedule', () => {
   })
 
   it('allows abutting slots on the same dayOfWeek (half-open intervals, R3.9)', () => {
-    // a ends at 22:00, b starts at 22:00 — half-open intervals so no overlap.
+    // a ends at 22:00, b starts at 22:00 - half-open intervals so no overlap.
     const ok = {
       ...baseSchedule,
       slots: [

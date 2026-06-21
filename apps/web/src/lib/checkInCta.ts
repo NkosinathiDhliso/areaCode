@@ -4,7 +4,7 @@
  * `getCtaInfo` is a deterministic, total function: for any combination of
  * Geo_Status, QR-fallback flag, and pending flag it returns a fixed
  * `{ label, disabled }` pair. It never throws and has no dependency on i18n,
- * the DOM, or any store — the label is a stable translation *key* that the
+ * the DOM, or any store - the label is a stable translation *key* that the
  * rendering layer resolves through `t()`. Keeping the decision pure is what
  * makes the CTA contract property-testable (design Property 15).
  *

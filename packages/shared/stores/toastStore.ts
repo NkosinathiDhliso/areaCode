@@ -44,7 +44,7 @@ export const useToastStore = create<ToastStore>()(
         }
 
         // Delegate priority ordering + cap to the pure admission core
-        // (Requirements 16.1, 16.5) — single source of truth shared with the
+        // (Requirements 16.1, 16.5) - single source of truth shared with the
         // web property tests.
         state.queue = admitToQueue(state.queue, toast)
       }),

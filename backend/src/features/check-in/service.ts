@@ -21,12 +21,36 @@ import { getUserCheckInCountAtNode } from './dynamodb-repository.js'
 import { PutCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import type { CheckInInput, CheckInResponse } from './types.js'
+import { decideProximity, haversineMetres, type ProximityConfig, type ProximityMode } from './proximity.js'
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
 const REWARD_COOLDOWN = 14400 // 4 hours
 const PRESENCE_COOLDOWN = 3600 // 1 hour
-const PROXIMITY_RADIUS = 500 // metres (generous to accommodate poor GPS on low-end devices)
+const PROXIMITY_RADIUS = 500 // metres; legacy flat radius and the adaptive upper bound
+
+// ── Accuracy-aware proximity rollout (see ./proximity.ts) ───────────────────
+// Read per request so the mode can be flipped via Lambda env without a redeploy:
+// 'legacy' (default, unchanged) -> 'shadow' (log divergence only) -> 'adaptive'
+// (enforce). Missing or invalid env values keep the safe default.
+function readProximityMode(): ProximityMode {
+  const m = process.env['CHECKIN_PROXIMITY_MODE']
+  return m === 'adaptive' || m === 'shadow' ? m : 'legacy'
+}
+
+function readRadiusEnv(key: string, fallback: number): number {
+  const v = Number(process.env[key])
+  return Number.isFinite(v) && v >= 0 ? v : fallback
+}
+
+function readProximityConfig(): ProximityConfig {
+  return {
+    maxRadiusM: readRadiusEnv('CHECKIN_MAX_RADIUS_M', PROXIMITY_RADIUS),
+    baseRadiusM: readRadiusEnv('CHECKIN_BASE_RADIUS_M', 150),
+    minRadiusM: readRadiusEnv('CHECKIN_MIN_RADIUS_M', 150),
+    accuracySlopCapM: readRadiusEnv('CHECKIN_ACCURACY_SLOP_CAP_M', 250),
+  }
+}
 
 // ─── QR Token Validation ────────────────────────────────────────────────────
 
@@ -87,8 +111,34 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
     if (input.lat === undefined || input.lng === undefined) {
       throw new AppError(422, 'accuracy_insufficient', 'Location required for GPS check-in')
     }
-    const within = await repo.checkProximity(input.nodeId, input.lat, input.lng, PROXIMITY_RADIUS)
-    if (!within) {
+    // Distance to the already-fetched node (no extra DynamoDB read).
+    const distanceM = haversineMetres(input.lat, input.lng, node.lat, node.lng)
+    const mode = readProximityMode()
+    const decision = decideProximity({
+      distanceM,
+      accuracyM: input.accuracy,
+      mode,
+      config: readProximityConfig(),
+    })
+
+    // Shadow mode keeps the legacy outcome but records where the accuracy-aware
+    // rule would differ, so the impact can be measured on live traffic before it
+    // is enforced. This never changes the user-visible result.
+    if (mode === 'shadow' && decision.adaptiveAccepted !== decision.legacyAccepted) {
+      console.warn(
+        '[checkin.proximity.shadow]',
+        JSON.stringify({
+          nodeId: input.nodeId,
+          distanceM: Math.round(distanceM),
+          accuracyM: input.accuracy ?? null,
+          adaptiveRadiusM: decision.adaptiveRadiusM,
+          legacyAccepted: decision.legacyAccepted,
+          adaptiveAccepted: decision.adaptiveAccepted,
+        }),
+      )
+    }
+
+    if (!decision.accepted) {
       // Client uses error='accuracy_insufficient' to offer the QR-at-venue fallback
       // instead of showing a hard failure toast.
       throw new AppError(422, 'accuracy_insufficient', 'You are too far from this venue')

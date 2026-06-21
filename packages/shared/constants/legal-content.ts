@@ -45,7 +45,7 @@ export const PRIVACY_POLICY: LegalDocument = {
       body: [
         'When you sign up and use the app, we collect:',
         '• Account data: email address, display name, profile picture, and a unique account identifier issued by Amazon Cognito. If you sign in with Google, we receive your name, email, and profile picture from Google.',
-        '• Check-in metadata: the venue you checked in at, the timestamp, and (briefly, in memory) a GPS reading used to verify you are near the venue. The GPS reading is discarded immediately after verification — we do not store your coordinates or build a location history.',
+        '• Check-in metadata: the venue you checked in at, the timestamp, and (briefly, in memory) a GPS reading used to verify you are near the venue. The GPS reading is discarded immediately after verification - we do not store your coordinates or build a location history.',
         '• Music taste data (optional): if you connect Spotify or Apple Music, we read your top genres and aggregated taste profile. We do not store your individual listening history.',
         '• Reward and tier data: the rewards you have claimed, your loyalty tier, your streak, and your leaderboard position.',
         '• Device and connection data: IP address, user agent, and approximate device capabilities, used for security and performance.',
@@ -59,7 +59,7 @@ export const PRIVACY_POLICY: LegalDocument = {
         '• To verify that check-ins are genuine (proximity check at the moment of check-in only).',
         '• To award rewards, tiers, and leaderboard positions.',
         '• To produce the live venue pulse score and features such as the music taste profile.',
-        '• To produce anonymized, aggregated intelligence reports for participating businesses. These never contain your identity — only group-level counts and percentages.',
+        '• To produce anonymized, aggregated intelligence reports for participating businesses. These never contain your identity - only group-level counts and percentages.',
         '• To detect abuse, fraud, and platform misuse, and to respond to your support questions.',
       ],
     },

@@ -27,7 +27,7 @@ import { ArchetypeGlyph } from './ArchetypeGlyph'
  */
 export interface VenueCardProps {
   vm: VenueCardVM
-  /** Venue category — drives the glyph's contrast outline. */
+  /** Venue category - drives the glyph's contrast outline. */
   category: NodeCategory
   /** Marks this card as the Active_Venue's card for distinct styling. */
   isActive?: boolean
@@ -64,7 +64,7 @@ export const VenueCard = memo(function VenueCard({ vm, category, isActive = fals
       <div className="flex flex-row items-center gap-2 w-full min-w-0">
         {/* Archetype glyph in the venue's Pulse_State colour (R1.2). The glyph
             positions itself absolutely against its parent, so it is wrapped in a
-            relative-sized box. It is aria-hidden — the colour/state is conveyed
+            relative-sized box. It is aria-hidden - the colour/state is conveyed
             textually through the count label and the parent aria-label. */}
         <div className="relative shrink-0" style={{ width: GLYPH_SIZE_PX, height: GLYPH_SIZE_PX }}>
           <ArchetypeGlyph

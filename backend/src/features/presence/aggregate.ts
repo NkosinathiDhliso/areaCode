@@ -153,10 +153,7 @@ function statsOf(durations: readonly number[]): DwellStats {
  * @returns a numeric aggregate when `rows.length >= minSample`, otherwise a
  *   suppressed insufficient-data indicator.
  */
-export function computeDwellAggregate(
-  rows: readonly DwellRow[],
-  opts: DwellAggregateOptions = {},
-): DwellAggregate {
+export function computeDwellAggregate(rows: readonly DwellRow[], opts: DwellAggregateOptions = {}): DwellAggregate {
   const minSample = opts.minSample ?? MIN_DWELL_SAMPLE
   const sampleSize = rows.length
 

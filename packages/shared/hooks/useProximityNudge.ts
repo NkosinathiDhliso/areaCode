@@ -1,5 +1,5 @@
 /**
- * GPS-Proximity Check-In Nudge — Churn-defences spec, Requirement 4.
+ * GPS-Proximity Check-In Nudge - Churn-defences spec, Requirement 4.
  *
  * Pure client-side detection. The user's coordinates never leave the
  * device for this feature (POPIA constraint). We compare the user's
@@ -11,7 +11,7 @@
  *   - 24 hours after a dismiss for the same venue
  *   - daily cap of 5 nudges across all venues
  *
- * The hook itself fires nothing visible — it returns the next venue to
+ * The hook itself fires nothing visible - it returns the next venue to
  * surface. The caller wires it to a banner / push notification.
  */
 

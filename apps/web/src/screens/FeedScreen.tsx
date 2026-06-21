@@ -115,7 +115,7 @@ export function FeedScreen() {
         <div className="flex flex-col items-center justify-center py-12 gap-3">
           <Users size={32} strokeWidth={1.5} className="text-[var(--text-muted)] opacity-40" />
           <p className="text-[var(--text-muted)] text-sm text-center max-w-xs">
-            {t('feed.emptyState', 'No activity yet — follow friends to fill this up.')}
+            {t('feed.emptyState', 'No activity yet - follow friends to fill this up.')}
           </p>
         </div>
       )}

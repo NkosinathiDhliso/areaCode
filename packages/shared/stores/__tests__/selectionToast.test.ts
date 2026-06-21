@@ -4,13 +4,13 @@ import { useSelectionStore } from '../selectionStore'
 import { useToastStore } from '../toastStore'
 
 /**
- * Map Discovery — Selection_Model / Toast_System decoupling (deferred task 5.4).
+ * Map Discovery - Selection_Model / Toast_System decoupling (deferred task 5.4).
  *
  *   - Property 26: Selection changes never enqueue a Check_In_Toast
  *
  * The Selection_Model and the Toast_System are independent stores. Browsing,
  * stepping, committing, and dismissing the Active_Venue must never produce a
- * toast — a Check_In_Toast is only ever admitted through an explicit
+ * toast - a Check_In_Toast is only ever admitted through an explicit
  * `addToast({ type: 'checkin' })`. This guards the decoupling against a future
  * regression that wires selection into the toast queue.
  *

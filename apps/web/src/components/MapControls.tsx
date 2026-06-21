@@ -17,7 +17,7 @@ const SIDEBAR_TAP_DEBOUNCE_MS = 250
 const LAST_KNOWN_POSITION_FRESHNESS_MS = 60_000
 
 /**
- * R1.5 — minimum idle-drift pause after a sidebar tap so the city does not
+ * R1.5 - minimum idle-drift pause after a sidebar tap so the city does not
  * counter-rotate against the user's intent.
  */
 const SIDEBAR_DRIFT_PAUSE_MS = 4000
@@ -70,7 +70,7 @@ export function MapControls({
   // double-tap within 250ms is collapsed to a single intent (R1.7).
   const lastTapAtRef = useRef<number>(0)
 
-  // R1.3 — freshness is derived at render time from the captured timestamp
+  // R1.3 - freshness is derived at render time from the captured timestamp
   // so the affordance flips back to disabled the moment the fix ages out,
   // without requiring an extra timer to re-render the button.
   const hasFreshUserLocation =
@@ -107,7 +107,7 @@ export function MapControls({
       {/* Control stack */}
       <div className="glass-raised rounded-2xl p-1 flex flex-col gap-1 pointer-events-auto">
         {/*
-          3D toggle — a clear two-state pill. We render it as a wider
+          3D toggle - a clear two-state pill. We render it as a wider
           button with both an icon and a "3D" / "2D" label so the active
           state is obvious. Earlier the active icon swap (Box↔Square)
           was easy to misread as broken once flattened.
@@ -152,7 +152,7 @@ export function MapControls({
         </ControlButton>
       </div>
 
-      {/* Live signal indicator — mission cue: "this is real-time" */}
+      {/* Live signal indicator - mission cue: "this is real-time" */}
       {totalPulse > 0 && (
         <div
           className="glass rounded-full px-2.5 py-1 flex items-center gap-1.5 pointer-events-auto"

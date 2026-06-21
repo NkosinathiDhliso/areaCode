@@ -85,27 +85,27 @@ flowchart TD
 
 ### Where the code lives
 
-| Concern | Location | New / Changed |
-| --- | --- | --- |
-| Check-out HTTP route | `backend/src/features/check-out/handler.ts` | New |
-| Check-out service | `backend/src/features/check-out/service.ts` | New |
-| Check-out body schema / types | `backend/src/features/check-out/types.ts` | New |
-| Presence repository (records + counter + read model) | `backend/src/features/presence/repository.ts` | New |
-| Pure presence reducer (state machine) | `backend/src/features/presence/reducer.ts` | New |
-| Expiry-window helper (peak/off-peak) | `backend/src/features/presence/window.ts` | New |
-| Presence increment on check-in | `backend/src/features/check-in/service.ts` | Changed |
-| Expiry worker | `backend/src/workers/presence-expiry.ts` | New |
-| Presence read API | `backend/src/features/nodes/...` (existing nodes feature) | Changed |
-| Realtime event (`node:presence_update`) | `backend/src/shared/socket/events.ts`, `types.ts`, `shared/websocket/broadcast.ts` | Changed |
-| Client consumption | `packages/shared/hooks/useNodePulse.ts`, `mapStore` | Changed |
-| Presence DynamoDB table + expiry schedule | `infra/environments/{dev,prod}/main.tf` | New |
+| Concern                                              | Location                                                                           | New / Changed |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------- |
+| Check-out HTTP route                                 | `backend/src/features/check-out/handler.ts`                                        | New           |
+| Check-out service                                    | `backend/src/features/check-out/service.ts`                                        | New           |
+| Check-out body schema / types                        | `backend/src/features/check-out/types.ts`                                          | New           |
+| Presence repository (records + counter + read model) | `backend/src/features/presence/repository.ts`                                      | New           |
+| Pure presence reducer (state machine)                | `backend/src/features/presence/reducer.ts`                                         | New           |
+| Expiry-window helper (peak/off-peak)                 | `backend/src/features/presence/window.ts`                                          | New           |
+| Presence increment on check-in                       | `backend/src/features/check-in/service.ts`                                         | Changed       |
+| Expiry worker                                        | `backend/src/workers/presence-expiry.ts`                                           | New           |
+| Presence read API                                    | `backend/src/features/nodes/...` (existing nodes feature)                          | Changed       |
+| Realtime event (`node:presence_update`)              | `backend/src/shared/socket/events.ts`, `types.ts`, `shared/websocket/broadcast.ts` | Changed       |
+| Client consumption                                   | `packages/shared/hooks/useNodePulse.ts`, `mapStore`                                | Changed       |
+| Presence DynamoDB table + expiry schedule            | `infra/environments/{dev,prod}/main.tf`                                            | New           |
 
 ### Two layers, one honest number
 
 The design separates the **fast cache** from the **authoritative truth** so that honesty
 never depends on a background job running on time:
 
-1. **Authoritative read model (records).** A venue's Live_Presence_Count is *defined* as
+1. **Authoritative read model (records).** A venue's Live*Presence_Count is \_defined* as
    the count of Presence_Records for that `nodeId` with `presenceState = 'present'` **and**
    `expiresAt > now`. The read API computes this directly, so it is correct even if the
    expiry worker has not yet run (Requirement 6.4). This is the number that wins on any
@@ -159,7 +159,7 @@ Success response (Requirement 1.4, 3.1):
 interface CheckOutResponse {
   nodeId: string
   presenceState: 'checked_out' | 'no_active_presence'
-  dwellSeconds: number | null   // whole seconds when an active record was ended; null on no-op
+  dwellSeconds: number | null // whole seconds when an active record was ended; null on no-op
 }
 ```
 
@@ -288,7 +288,7 @@ Returns the honest count for one venue (Requirements 7.1, 7.6, 7.7):
 ```ts
 interface PresenceReadResponse {
   nodeId: string
-  livePresenceCount: number   // count of present records with expiresAt > now; 0 reads as 0
+  livePresenceCount: number // count of present records with expiresAt > now; 0 reads as 0
 }
 ```
 
@@ -412,8 +412,8 @@ Attributes:
 
 ```ts
 // Founder-flagged candidate values (Requirement 13.1) — single source of truth.
-const OFF_PEAK_WINDOW_SECONDS = 90 * 60   // 5400
-const PEAK_WINDOW_SECONDS     = 180 * 60  // 10800  (SAST 18:00–23:59)
+const OFF_PEAK_WINDOW_SECONDS = 90 * 60 // 5400
+const PEAK_WINDOW_SECONDS = 180 * 60 // 10800  (SAST 18:00–23:59)
 
 // isPeakHour() reuses the exact SAST boundary from pulse-decay.ts.
 export function expiryWindowSeconds(nowEpoch: number): number {
@@ -430,7 +430,12 @@ update; the reducer is the executable specification of correctness.
 
 ```ts
 type PState = 'present' | 'checked_out' | 'expired' | 'absent'
-interface Record { state: PState; checkedInAt: number; expiresAt: number; dwellSeconds: number | null }
+interface Record {
+  state: PState
+  checkedInAt: number
+  expiresAt: number
+  dwellSeconds: number | null
+}
 type Op =
   | { kind: 'check_in'; now: number; window: number }
   | { kind: 'check_out'; now: number }
@@ -450,10 +455,10 @@ properties below pin down.
 
 ## Correctness Properties
 
-*A property is a characteristic or behavior that should hold true across all valid
+_A property is a characteristic or behavior that should hold true across all valid
 executions of a system — essentially, a formal statement about what the system should do.
 Properties serve as the bridge between human-readable specifications and machine-verifiable
-correctness guarantees.*
+correctness guarantees._
 
 These properties are expressed against the pure presence reducer (`reducer.ts`) and the
 pure read-model / window / aggregate functions, which are exact specifications of what the
@@ -465,7 +470,7 @@ presence" criteria.
 
 ### Property 1: Count conservation and at-most-once transitions over any operation sequence
 
-*For any* sequence of operations — each a `check_in` (type `presence` or `reward`, with any
+_For any_ sequence of operations — each a `check_in` (type `presence` or `reward`, with any
 non-negative timestamp and applicable window), `check_out`, or `expire`, applied in any
 order to a set of `(userId, nodeId)` keys — the venue's Live_Presence_Count obtained by
 summing the reducer's count deltas (a) never goes below 0, (b) equals the number of records
@@ -479,7 +484,7 @@ check-outs, or an expiry followed by a check-out, together produce a net delta o
 
 ### Property 2: Record end records dwell exactly once, correctly valued and flagged
 
-*For any* `present` record that ends — by `check_out` at any `now >= checkedInAt`, or by
+_For any_ `present` record that ends — by `check_out` at any `now >= checkedInAt`, or by
 `expire` — exactly one Dwell_Time is recorded for that record regardless of how many
 duplicate end operations are applied; the recorded `dwellSeconds` is a non-negative integer;
 for a check-out it equals `floor(now - checkedInAt)` and is flagged `checkout_terminated`;
@@ -490,7 +495,7 @@ bounded above by the applicable Expiry_Window.
 
 ### Property 3: Honest read model reflects only current presence
 
-*For any* set of presence records and any `now`, the read-model count for a venue equals the
+_For any_ set of presence records and any `now`, the read-model count for a venue equals the
 number of its records with state `present` **and** `expiresAt > now`; it excludes records
 whose `expiresAt` has passed even if they are still physically in state `present` (not yet
 swept and not yet TTL-deleted); and it is exactly 0 when no record is live-present, with no
@@ -500,7 +505,7 @@ decayed or historical value substituted.
 
 ### Property 4: Presence_Event count agrees with the authoritative read model
 
-*For any* operation that changes a venue's count, the Presence_Event emitted for that venue
+_For any_ operation that changes a venue's count, the Presence_Event emitted for that venue
 carries a `livePresenceCount` equal to the authoritative read-model count (Property 3)
 recomputed immediately after the operation, and a `cause` of `check_in`, `check_out`, or
 `expiry` matching the operation that triggered it.
@@ -509,7 +514,7 @@ recomputed immediately after the operation, and a `cause` of `check_in`, `check_
 
 ### Property 5: Presence_Event payload carries no consumer identity
 
-*For any* generated Presence_Event, the serialized payload contains exactly the keys
+_For any_ generated Presence_Event, the serialized payload contains exactly the keys
 `nodeId`, `livePresenceCount`, and `cause`, and contains none of `userId`, `cognitoSub`,
 `displayName`, `email`, `phone`, `avatarUrl`, or any latitude/longitude field.
 
@@ -517,7 +522,7 @@ recomputed immediately after the operation, and a `cause` of `check_in`, `check_
 
 ### Property 6: Expiry_Window selection follows the SAST peak boundary
 
-*For any* timestamp, `expiryWindowSeconds` returns the peak window value if and only if the
+_For any_ timestamp, `expiryWindowSeconds` returns the peak window value if and only if the
 SAST (UTC+2) hour is in the range 18:00–23:59 (the exact boundary used by the pulse-decay
 worker), and otherwise returns the off-peak window value.
 
@@ -525,7 +530,7 @@ worker), and otherwise returns the off-peak window value.
 
 ### Property 7: Live_Presence_Count is independent of pulse decay
 
-*For any* presence state, applying a pulse-decay tick (the multiplicative decay of
+_For any_ presence state, applying a pulse-decay tick (the multiplicative decay of
 `Pulse_Score`) leaves the Live_Presence_Count unchanged; the count is moved only by
 `check_in`, `check_out`, and `expire`.
 
@@ -533,7 +538,7 @@ worker), and otherwise returns the off-peak window value.
 
 ### Property 8: No coordinates and at most one record per consumer-venue
 
-*For any* sequence of check-in / check-out / expiry operations (each carrying arbitrary
+_For any_ sequence of check-in / check-out / expiry operations (each carrying arbitrary
 supplied latitude/longitude on check-in), the persisted presence storage holds at most one
 record per `(userId, nodeId)`, and no presence record or dwell record contains any
 latitude, longitude, or location-trail field.
@@ -542,7 +547,7 @@ latitude, longitude, or location-trail field.
 
 ### Property 9: Anonymised aggregate output contains no identity or coordinates
 
-*For any* set of dwell records, the business/analytics aggregate computed from them contains
+_For any_ set of dwell records, the business/analytics aggregate computed from them contains
 none of `userId`, `cognitoSub`, `displayName`, `email`, `phone`, `avatarUrl`, or any
 latitude/longitude field.
 
@@ -550,7 +555,7 @@ latitude/longitude field.
 
 ### Property 10: Dwell aggregate statistics match a reference computation
 
-*For any* non-empty set of dwell records for a venue and period, the computed average and
+_For any_ non-empty set of dwell records for a venue and period, the computed average and
 median dwell equal an independent reference implementation over the same `durationSeconds`
 values.
 
@@ -558,7 +563,7 @@ values.
 
 ### Property 11: Aggregates partition cleanly by termination type
 
-*For any* set of dwell records, the `checkout_terminated` and `expiry_terminated` buckets of
+_For any_ set of dwell records, the `checkout_terminated` and `expiry_terminated` buckets of
 the aggregate are disjoint and their counts sum to the total number of input records, so no
 record is double-counted or dropped when splitting the business signal.
 
@@ -566,7 +571,7 @@ record is double-counted or dropped when splitting the business signal.
 
 ### Property 12: Minimum-sample suppression
 
-*For any* venue and period, when the number of dwell records is below `MIN_DWELL_SAMPLE` the
+_For any_ venue and period, when the number of dwell records is below `MIN_DWELL_SAMPLE` the
 aggregate is suppressed and reports insufficient data; when it is at or above the threshold a
 numeric aggregate is returned.
 
@@ -574,20 +579,20 @@ numeric aggregate is returned.
 
 ## Error Handling
 
-| Condition | Handling | Requirement |
-| --- | --- | --- |
-| Missing/invalid consumer JWT on check-out | Reject `401` before any state change | 2.2 |
-| Disabled account on check-out | Reject `403 account_disabled` before any state change | 2.3 |
-| Body fails schema (`nodeId` length not 1–128) | Reject `422` validation error before service processing | 2.4 |
-| Rate limit exceeded (>10 / 60s) | Reject `429 too_many_requests`, no state change | 2.6 |
-| Check-out with no live presence (absent / already checked-out / expired / expired-but-unswept) | Conditional update fails → **successful no-op** response, no counter change, no dwell row | 3.1, 3.3 |
-| Concurrent check-outs | One conditional update wins; the loser gets `ConditionalCheckFailedException` and no-ops | 3.2, 3.5 |
-| Presence open/increment throws after check-in committed | Log and still return successful check-in; orphan reconciled by the expiry sweep, never a permanent over-count | 4.5 |
-| Counter decrement would go below 0 | Guarded `value > 0` decrement; read model clamps and recomputes from records | 3.4 |
-| Expiry worker races a manual check-out on the same record | Conditional `presenceState = 'present'` ensures only one transition; no double decrement | 3.3, 5.6 |
-| Presence_Event emission failure (Socket.io or API GW WebSocket) | Caught and logged; underlying check-in / check-out / expiry is **not** rolled back | 7.5 |
-| Stale background sweep has not run yet | Read model excludes `expiresAt <= now` records, so the count is honest regardless | 6.4 |
-| Dwell aggregate below minimum sample | Suppress figure, return insufficient-data indicator | 12.3 |
+| Condition                                                                                      | Handling                                                                                                      | Requirement |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------- |
+| Missing/invalid consumer JWT on check-out                                                      | Reject `401` before any state change                                                                          | 2.2         |
+| Disabled account on check-out                                                                  | Reject `403 account_disabled` before any state change                                                         | 2.3         |
+| Body fails schema (`nodeId` length not 1–128)                                                  | Reject `422` validation error before service processing                                                       | 2.4         |
+| Rate limit exceeded (>10 / 60s)                                                                | Reject `429 too_many_requests`, no state change                                                               | 2.6         |
+| Check-out with no live presence (absent / already checked-out / expired / expired-but-unswept) | Conditional update fails → **successful no-op** response, no counter change, no dwell row                     | 3.1, 3.3    |
+| Concurrent check-outs                                                                          | One conditional update wins; the loser gets `ConditionalCheckFailedException` and no-ops                      | 3.2, 3.5    |
+| Presence open/increment throws after check-in committed                                        | Log and still return successful check-in; orphan reconciled by the expiry sweep, never a permanent over-count | 4.5         |
+| Counter decrement would go below 0                                                             | Guarded `value > 0` decrement; read model clamps and recomputes from records                                  | 3.4         |
+| Expiry worker races a manual check-out on the same record                                      | Conditional `presenceState = 'present'` ensures only one transition; no double decrement                      | 3.3, 5.6    |
+| Presence_Event emission failure (Socket.io or API GW WebSocket)                                | Caught and logged; underlying check-in / check-out / expiry is **not** rolled back                            | 7.5         |
+| Stale background sweep has not run yet                                                         | Read model excludes `expiresAt <= now` records, so the count is honest regardless                             | 6.4         |
+| Dwell aggregate below minimum sample                                                           | Suppress figure, return insufficient-data indicator                                                           | 12.3        |
 
 All error responses reuse the existing `AppError` helpers and HTTP semantics already used by
 the check-in pipeline, so the new action behaves consistently with the rest of the platform.
@@ -653,12 +658,12 @@ These are surfaced for confirmation before the corresponding values are locked. 
 uses the candidate answers as defaults from a single source of truth so a change is a
 one-line edit.
 
-| # | Decision | Candidate (design default) | Where it lives |
-| --- | --- | --- | --- |
-| 13.1 | Expiry_Window durations | Off-peak **90 min** (5400s), peak (SAST 18:00–23:59) **180 min** (10800s), measured from most recent check-in | `presence/window.ts` constants |
-| 13.2 | Reward coupling for manual check-out | **No tangible reward** this release; eligible for a future trust/streak signal | Check_Out_Service exposes no reward path |
-| 13.3 | Dwell business surface timing | **Capture now** (Requirement 9), surface aggregate in a later reporting release | Capture built; business surface gated |
-| 13.4 | Realtime field decision | **Add a dedicated `node:presence_update` event with an explicit `livePresenceCount` field** rather than repurposing `checkInCount` | `shared/socket` + `shared/websocket` |
+| #    | Decision                             | Candidate (design default)                                                                                                         | Where it lives                           |
+| ---- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| 13.1 | Expiry_Window durations              | Off-peak **90 min** (5400s), peak (SAST 18:00–23:59) **180 min** (10800s), measured from most recent check-in                      | `presence/window.ts` constants           |
+| 13.2 | Reward coupling for manual check-out | **No tangible reward** this release; eligible for a future trust/streak signal                                                     | Check_Out_Service exposes no reward path |
+| 13.3 | Dwell business surface timing        | **Capture now** (Requirement 9), surface aggregate in a later reporting release                                                    | Capture built; business surface gated    |
+| 13.4 | Realtime field decision              | **Add a dedicated `node:presence_update` event with an explicit `livePresenceCount` field** rather than repurposing `checkInCount` | `shared/socket` + `shared/websocket`     |
 
 ## Deferred — Auto_Check_Out (Requirement 11, FUTURE)
 

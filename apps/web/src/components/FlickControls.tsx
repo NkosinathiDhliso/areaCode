@@ -15,7 +15,7 @@ interface FlickControlsProps {
 }
 
 /**
- * Flick_Controls — the keyboard- and screen-reader-operable previous/next
+ * Flick_Controls - the keyboard- and screen-reader-operable previous/next
  * fallback for Carousel_Swipe.
  *
  * Both controls are native `<button>` elements, so they are reachable and
@@ -42,7 +42,7 @@ function FlickControlsComponent({ disabled = false, className = '' }: FlickContr
         aria-label={t('map.flickPrev', 'Previous venue')}
         aria-disabled={disabled ? true : undefined}
         title={t('map.flickPrev', 'Previous venue')}
-        className="glass-raised rounded-full w-9 h-9 flex items-center justify-center text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] disabled:opacity-40"
+        className="glass-raised rounded-full w-11 h-11 flex items-center justify-center text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] disabled:opacity-40"
       >
         <ChevronLeft size={18} strokeWidth={1.75} />
       </button>
@@ -54,7 +54,7 @@ function FlickControlsComponent({ disabled = false, className = '' }: FlickContr
         aria-label={t('map.flickNext', 'Next venue')}
         aria-disabled={disabled ? true : undefined}
         title={t('map.flickNext', 'Next venue')}
-        className="glass-raised rounded-full w-9 h-9 flex items-center justify-center text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] disabled:opacity-40"
+        className="glass-raised rounded-full w-11 h-11 flex items-center justify-center text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] disabled:opacity-40"
       >
         <ChevronRight size={18} strokeWidth={1.75} />
       </button>

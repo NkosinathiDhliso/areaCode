@@ -6,7 +6,7 @@ import type { ApiError } from '@area-code/shared/lib/api'
 
 // ─── Types (mirrored from backend response contract) ───────────────────────
 //
-// We deliberately do NOT import the backend Zod schemas here — the admin
+// We deliberately do NOT import the backend Zod schemas here - the admin
 // frontend has no `backend/` dependency. The shapes below mirror
 // `BoostFloorView` and `FloorChangeAuditView` from
 // `backend/src/features/business/types.ts`.
@@ -56,7 +56,7 @@ const FLOOR_MAX_CENTS = 1_000_000
 const CHANGE_REASON_MAX_LENGTH = 280
 const AUDIT_PAGE_LIMIT = 25
 
-// Format `cents` as `R<X>.<YY>` (R4.2 — same convention used elsewhere in the
+// Format `cents` as `R<X>.<YY>` (R4.2 - same convention used elsewhere in the
 // portals, e.g. operator BoostPurchasesPanel). Deliberately not using the
 // shared `formatZAR` helper because it strips decimals; admins need cent-level
 // precision visible.
@@ -87,7 +87,7 @@ function formatTimestamp(iso: string): string {
 // Cognito sub UUIDs are long; show only the first 8 chars in the UI so the
 // row stays readable. Hover/title shows the full id.
 function truncateSub(sub: string | null): string {
-  if (!sub) return '—'
+  if (!sub) return '-'
   return sub.length > 8 ? `${sub.slice(0, 8)}…` : sub
 }
 
@@ -247,10 +247,10 @@ function FloorCard({ floor, onUpdated }: FloorCardProps) {
       </div>
 
       {floor.isDefault ? (
-        <div className="text-[var(--text-muted)] text-xs italic">default — never edited</div>
+        <div className="text-[var(--text-muted)] text-xs italic">default - never edited</div>
       ) : (
         <div className="flex flex-col gap-0.5 text-[var(--text-muted)] text-xs">
-          <div>Updated {floor.updatedAt ? formatTimestamp(floor.updatedAt) : '—'}</div>
+          <div>Updated {floor.updatedAt ? formatTimestamp(floor.updatedAt) : '-'}</div>
           <div title={floor.updatedBy ?? undefined}>by {truncateSub(floor.updatedBy)}</div>
         </div>
       )}
@@ -364,7 +364,7 @@ function FloorAuditList({ duration }: FloorAuditListProps) {
             >
               <div className="flex flex-row items-baseline justify-between text-xs">
                 <span className="text-[var(--text-primary)] font-medium">
-                  {row.previousFloorCents !== null ? formatAmountCents(row.previousFloorCents) : '—'}
+                  {row.previousFloorCents !== null ? formatAmountCents(row.previousFloorCents) : '-'}
                   {' → '}
                   {formatAmountCents(row.newFloorCents)}
                 </span>

@@ -42,6 +42,20 @@ export const consumer = {
       .or(page.getByRole('tab', { name: /rewards?|gets?/i }))
       .first(),
   privacyToggle: (page: Page) => page.getByRole('radio', { name: /public|friends|private/i }).first(),
+
+  // ── Peek-Carousel (map-discovery-experience) ──
+  /** The two-state browse-and-compare host. `data-mode` is browse|commit. */
+  peekCarousel: (page: Page) => page.locator('[data-peek-carousel]').first(),
+  /** A Browse_Mode venue card; the active one carries aria-pressed="true". */
+  venueCard: (page: Page) => page.locator('[data-venue-card]').first(),
+  activeVenueCard: (page: Page) => page.locator('[data-venue-card][aria-pressed="true"]').first(),
+  /** Keyboard-operable Flick_Controls. */
+  flickNext: (page: Page) => page.getByRole('button', { name: /next venue/i }).first(),
+  flickPrev: (page: Page) => page.getByRole('button', { name: /previous venue/i }).first(),
+  /** Browse_Mode control that expands the sheet into Commit_Mode. */
+  viewDetails: (page: Page) => page.getByRole('button', { name: /view details/i }).first(),
+  /** Empty-viewport invite shown when no venue is in range. */
+  browseEmpty: (page: Page) => page.locator('[data-browse-empty]').first(),
 }
 
 export const business = {

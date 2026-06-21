@@ -43,7 +43,7 @@ function formatWeek(iso: string): string {
 
 /**
  * Heat-map style cell. Lower retention = warmer colour. The thresholds
- * are calibrated to South African early-stage loyalty norms — a Day-7
+ * are calibrated to South African early-stage loyalty norms - a Day-7
  * return rate above 35% is genuinely good, below 15% is a leak.
  */
 function HeatCell({ value }: { value: number }) {

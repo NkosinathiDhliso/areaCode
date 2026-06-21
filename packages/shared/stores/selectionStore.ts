@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 
 /**
- * Selection_Model store — the single source of truth for the Active_Venue
+ * Selection_Model store - the single source of truth for the Active_Venue
  * across all Peek_Carousel input methods (Carousel_Swipe, Flick_Controls,
  * marker tap, Search_Sheet, Focus_Signal). Every input writes here; every
  * renderer reads here, which guarantees the "exactly one Active_Venue while

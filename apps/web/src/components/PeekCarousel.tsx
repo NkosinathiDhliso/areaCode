@@ -14,7 +14,7 @@ import { NodeDetailContent } from './NodeDetailContent'
 import { VenueCard } from './VenueCard'
 
 /**
- * `PeekCarousel` — the two-state browse-and-compare host for the consumer map.
+ * `PeekCarousel` - the two-state browse-and-compare host for the consumer map.
  *
  * It layers exactly two states on a single shared {@link BottomSheet}
  * (Requirement 2.1, 2.5):
@@ -26,7 +26,7 @@ import { VenueCard } from './VenueCard'
  *     (rewards, archetype glyph + name, crowd vibe, directions, check-in CTA)
  *     for the Active_Venue.
  *
- * Switching between the two is a height/state change on the *same* sheet — the
+ * Switching between the two is a height/state change on the *same* sheet - the
  * detail body is rendered inline rather than as a separate detail surface
  * (Requirement 2.5).
  *
@@ -60,7 +60,7 @@ export interface PeekCarouselProps {
   onCheckIn: () => void
   /** Open the Signup_Surface (email/password + Google OAuth only). */
   onSignup: () => void
-  /** GPS-too-far flag — drives the CTA into its QR-fallback label. */
+  /** GPS-too-far flag - drives the CTA into its QR-fallback label. */
   qrFallback?: boolean
   /** Whether a check-in request is in flight (CTA pending state). */
   isCheckingIn?: boolean
@@ -133,13 +133,13 @@ export function PeekCarousel({
     const axis = classifyDrag(dx, dy, DRAG_AXIS_THRESHOLD)
 
     // R7.5: an indeterminate gesture (e.g. a tap, or a diagonal under the
-    // threshold) takes no selection or state-change action — the underlying
+    // threshold) takes no selection or state-change action - the underlying
     // button's click still fires for taps.
     if (axis === 'indeterminate') return
 
     if (mode === 'commit') {
       // R7.3: a horizontal drag that began on the rewards row is native scroll
-      // only — never a selection or state change.
+      // only - never a selection or state change.
       if (start.inRewards) return
       // A downward drag collapses Commit_Mode back to Browse_Mode, preserving
       // the Active_Venue (R2.4). There is no inter-venue swipe in Commit_Mode.
@@ -235,7 +235,7 @@ interface BrowseModeProps {
 function BrowseMode({ carouselOrderVMs, activeVenueId, nodeCategoryOf, onCardSelect, onEnterCommit }: BrowseModeProps) {
   const { t } = useTranslation()
   // Empty Browse_Mode invite when no venue falls within the current viewport
-  // (R6.3) — invite the consumer to zoom out or move the map.
+  // (R6.3) - invite the consumer to zoom out or move the map.
   if (carouselOrderVMs.length === 0) {
     return (
       <div data-browse-empty className="flex flex-col items-center gap-2 py-8 text-center">

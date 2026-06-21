@@ -213,7 +213,7 @@ export function resolveActiveSlot(schedule: MusicSchedule, timestampIso: string)
   // ── R5.7: lineup mode → find LineupEntry with greatest startTimeMin ≤ now
   // R3.7 guarantees `slot.lineup` is non-empty, the first entry's
   // `startTimeMin` equals `slot.startTimeMin`, and entries have unique
-  // `startTime`s — so exactly one entry always matches when the slot is
+  // `startTime`s - so exactly one entry always matches when the slot is
   // active. We do not assume sorted order; iterating once is O(n) for n ≤ 20.
   const lineup = slot.lineup
   if (!lineup || lineup.length === 0) {

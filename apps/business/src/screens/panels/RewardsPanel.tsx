@@ -35,13 +35,13 @@ function LifecycleBadge({ lifecycle }: { lifecycle: GetLifecycle }) {
  * Non-blocking prompt that links a `live`/`upcoming` event/offer get to the
  * existing boost purchase flow (R6.4). It only NAVIGATES the operator to the
  * boost panel via the same `useBusinessStore.setPanel` mechanism the dashboard
- * nav uses — it never POSTs to `/v1/business/boost` and never auto-purchases or
+ * nav uses - it never POSTs to `/v1/business/boost` and never auto-purchases or
  * auto-applies a boost (R5.5, R6.4). The copy points to the PAID boost and adds
  * no implication of free city-wide promotion (R6.5).
  *
  * NOTE: R6.4 says to suppress this prompt when the node already has an active
  * boost. No active-boost signal (e.g. `boostedUntil`/`activeBoost`/`isBoosted`)
- * is exposed to this surface today — the `Node` type carries no boost state and
+ * is exposed to this surface today - the `Node` type carries no boost state and
  * the only boost data reachable here is the historical `BoosterPurchase` list
  * (`GET /v1/business/{businessId}/boost-purchases`), which has no live-status
  * field. Inventing a new backend boost-status endpoint is out of scope for this
@@ -458,7 +458,7 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
         <span className="flex-1">
           <span className="block text-[var(--text-primary)] text-sm font-medium">Make this the venue's First-Get</span>
           <span className="block text-[var(--text-muted)] text-[11px] mt-0.5">
-            Walk-ins without an account get a one-time code to claim this. They enter it when they sign up — no phone
+            Walk-ins without an account get a one-time code to claim this. They enter it when they sign up - no phone
             number needed. Only one First-Get allowed per venue.
           </span>
         </span>

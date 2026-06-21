@@ -53,7 +53,7 @@ const mocks = vi.hoisted(() => {
       this.listeners.get(event)?.delete(handler)
     })
 
-    // Test helpers — not part of the mapbox-gl surface.
+    // Test helpers - not part of the mapbox-gl surface.
     fire(event: string, ...args: unknown[]) {
       for (const h of this.listeners.get(event) ?? []) h(...args)
     }
@@ -159,7 +159,7 @@ function setup(): { handle: HarnessHandle; map: InstanceType<typeof mocks.MockMa
     }),
   )
   // The hook's init effect runs synchronously after render, constructing
-  // exactly one MockMap. Grab the most recent instance — earlier tests in
+  // exactly one MockMap. Grab the most recent instance - earlier tests in
   // the file may have left their (now-removed) instances in the array.
   const map = mocks.MockMap.instances[mocks.MockMap.instances.length - 1]
   if (!map) throw new Error('expected useMapInit to construct a MockMap')

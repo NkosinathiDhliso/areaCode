@@ -2,7 +2,7 @@
  * Push notification registration and tap-routing for React Native (Expo).
  *
  * Flow:
- *  1. `setNotificationHandler` (module load) decides foreground behaviour —
+ *  1. `setNotificationHandler` (module load) decides foreground behaviour -
  *     show the banner, stay silent over an already-open app.
  *  2. `registerForPushNotifications()` requests OS permission, sets up the
  *     Android channel, acquires an Expo push token (needs the EAS projectId),
@@ -14,7 +14,7 @@
  *     launched the app from a killed state).
  *
  * Push is best-effort: every path is non-throwing and must never block startup
- * or sign-in. No SMS or phone identifiers are involved — this is the data-only
+ * or sign-in. No SMS or phone identifiers are involved - this is the data-only
  * Expo push channel, compatible with the email + Google OAuth identity model.
  */
 
@@ -28,7 +28,7 @@ const PUSH_TOKEN_KEY = 'push:expoToken'
 const DEVICE_ID_KEY = 'push:deviceId'
 const ANDROID_CHANNEL_ID = 'default'
 
-/** Minimal router contract — avoids a hard dependency on expo-router's types. */
+/** Minimal router contract - avoids a hard dependency on expo-router's types. */
 interface PushRouter {
   push: (href: string) => void
 }
@@ -91,7 +91,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
   try {
     await ensureAndroidChannel()
 
-    // 1. Permission — only prompt if not already decided.
+    // 1. Permission - only prompt if not already decided.
     const existing = await Notifications.getPermissionsAsync()
     let granted = existing.granted
     if (!granted && existing.canAskAgain) {
@@ -104,7 +104,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
     //    don't throw in bare Expo Go without EAS configured.
     const projectId = resolveProjectId()
     if (!projectId) {
-      if (__DEV__) console.warn('[push] no EAS projectId — skipping push registration')
+      if (__DEV__) console.warn('[push] no EAS projectId - skipping push registration')
       return null
     }
 

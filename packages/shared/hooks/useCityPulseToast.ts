@@ -29,11 +29,11 @@ function deriveNodeState(score: number): NodeState {
 const TOAST_ID = 'city-pulse'
 const GRACE_MS = 2000
 const AUTO_DISMISS_MS = 6000
-// R2.6 — lower bound of the 'buzzing' Pulse_State; the city has to be
+// R2.6 - lower bound of the 'buzzing' Pulse_State; the city has to be
 // materially livelier than the moment the user dismissed the toast before
 // it re-surfaces.
 const RESURFACE_THRESHOLD = 60
-// R2.2 — display value clamp matches the legacy City_Pulse glass card.
+// R2.2 - display value clamp matches the legacy City_Pulse glass card.
 const TOTAL_PULSE_DISPLAY_MAX = 9999
 
 interface UseCityPulseToastOptions {
@@ -62,7 +62,7 @@ interface UseCityPulseToastOptions {
  * - `prefers-reduced-motion` is honoured downstream by `LiveToast`; this
  *   hook does not animate.
  *
- * The hook is a no-op render — it only mutates the toast queue. Callers
+ * The hook is a no-op render - it only mutates the toast queue. Callers
  * mount it from the map screen so it is gated to the map tab (R2.5).
  */
 export function useCityPulseToast({ mapReady }: UseCityPulseToastOptions): void {
@@ -97,7 +97,7 @@ export function useCityPulseToast({ mapReady }: UseCityPulseToastOptions): void 
   const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autoDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // First paint after mapReady — 2000ms grace then evaluate exactly once.
+  // First paint after mapReady - 2000ms grace then evaluate exactly once.
   useEffect(() => {
     if (!mapReady) return
     if (hasShownInitiallyRef.current) return
@@ -111,7 +111,7 @@ export function useCityPulseToast({ mapReady }: UseCityPulseToastOptions): void 
       // is on screen 2000ms after `mapReady` flipped.
       const { nodes: liveNodes, pulseScores: liveScores } = useMapStore.getState()
       const ids = Object.keys(liveNodes)
-      if (ids.length === 0) return // R2.10 — retrieval failure / no data, no slot consumed
+      if (ids.length === 0) return // R2.10 - retrieval failure / no data, no slot consumed
       let total = 0
       let hottest = 0
       for (const id of ids) {
@@ -119,7 +119,7 @@ export function useCityPulseToast({ mapReady }: UseCityPulseToastOptions): void 
         total += score
         if (score > hottest) hottest = score
       }
-      if (total === 0) return // R2.9 — suppress without consuming the slot
+      if (total === 0) return // R2.9 - suppress without consuming the slot
       hasShownInitiallyRef.current = true
       lastTotalPulseRef.current = total
       enqueueCityPulseToast({
@@ -141,7 +141,7 @@ export function useCityPulseToast({ mapReady }: UseCityPulseToastOptions): void 
     }
   }, [mapReady, addToast, removeToast])
 
-  // R2.6 — re-surface exactly once when totalPulse crosses from < 60 → ≥ 60
+  // R2.6 - re-surface exactly once when totalPulse crosses from < 60 → ≥ 60
   // after the initial toast has been shown and is no longer in the queue
   // (i.e. the user dismissed it or the auto-dismiss fired).
   useEffect(() => {
@@ -188,7 +188,7 @@ function enqueueCityPulseToast({
   const toast: Toast = {
     id: TOAST_ID,
     type: 'city_pulse',
-    message: `City pulse ${display} — ${hottestState}`,
+    message: `City pulse ${display} - ${hottestState}`,
     priority: 2,
     timestamp: Date.now(),
   }

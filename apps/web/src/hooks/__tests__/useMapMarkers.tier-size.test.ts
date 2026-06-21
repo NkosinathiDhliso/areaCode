@@ -37,7 +37,7 @@ function getGlyphSize(state: NodeState, score: number): number {
 }
 
 /**
- * Compute the final glyph size for a given state, score, and tier — the same
+ * Compute the final glyph size for a given state, score, and tier - the same
  * formula used in `useMapMarkers.ts`.
  */
 function computeGlyphSize(state: NodeState, score: number, tier: BusinessTier): number {
@@ -88,7 +88,7 @@ describe('useMapMarkers tier-size property tests', () => {
    * must be <= the computed glyph size for tierB.
    *
    * This guarantees that paying for a higher tier never makes your marker
-   * smaller — the "size = paid lever" invariant.
+   * smaller - the "size = paid lever" invariant.
    *
    * **Validates: Requirements 8.1 (size driven by tier)**
    */
@@ -107,7 +107,7 @@ describe('useMapMarkers tier-size property tests', () => {
    * Property: halo animation speed is identical across all tiers for the
    * same Pulse_State.
    *
-   * The halo speed is indexed by NodeState only — tier does not appear in
+   * The halo speed is indexed by NodeState only - tier does not appear in
    * the STATE_CONFIG lookup. This test exhaustively verifies that the
    * config produces the same speed string regardless of tier, confirming
    * the "halo = honest lever" invariant (tier cannot buy brightness).
@@ -121,7 +121,7 @@ describe('useMapMarkers tier-size property tests', () => {
       const expectedHaloOpacity = STATE_CONFIG[state].haloOpacity
 
       for (const tier of ALL_TIERS) {
-        // STATE_CONFIG is keyed by NodeState only — tier is not a parameter.
+        // STATE_CONFIG is keyed by NodeState only - tier is not a parameter.
         // This assertion confirms the config structure enforces the invariant.
         const cfg = STATE_CONFIG[state]
         expect(cfg.speed).toBe(expectedSpeed)
@@ -162,7 +162,7 @@ describe('useMapMarkers tier-size property tests', () => {
   /**
    * Verify that TIER_SIZE_MULTIPLIER values are themselves non-decreasing
    * in tier rank order. This is the root cause of the monotonicity
-   * property — if the multipliers are non-decreasing, and the base glyph
+   * property - if the multipliers are non-decreasing, and the base glyph
    * size is positive, then the product is non-decreasing.
    */
   it('TIER_SIZE_MULTIPLIER values are non-decreasing in tier rank order', () => {

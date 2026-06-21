@@ -81,7 +81,7 @@ All test sub-tasks are marked optional with `*` and may be skipped for a faster 
     - **Property 25: Check_In_Toast deduplication within the auto-dismiss interval**
     - **Validates: Requirements 16.6**
 
-  - [ ]\* 5.4 Write property test for selection never enqueuing check-in toast
+  - [x]\* 5.4 Write property test for selection never enqueuing check-in toast
     - **Property 26: Selection changes never enqueue a Check_In_Toast**
     - **Validates: Requirements 4.4, 16.2, 16.7**
 
@@ -129,19 +129,19 @@ All test sub-tasks are marked optional with `*` and may be skipped for a faster 
     - On filter change where Active_Venue no longer matches: set Active_Venue to first of recomputed order, or dismiss when empty
     - _Requirements: 3.4, 3.5, 3.6, 6.4, 13.3, 13.4, 13.5, 15.1, 15.2, 15.4, 15.5_
 
-  - [ ]\* 9.2 Write property test for selection coherence across input sources
+  - [x]\* 9.2 Write property test for selection coherence across input sources
     - **Property 6: Selection coherence across all input sources**
     - **Validates: Requirements 3.6, 15.4**
 
-  - [ ]\* 9.3 Write property test for deterministic filter-change reassignment
+  - [x]\* 9.3 Write property test for deterministic filter-change reassignment
     - **Property 12: Filter change reassigns the Active_Venue deterministically**
     - **Validates: Requirements 13.3**
 
-  - [ ]\* 9.4 Write property test for consumed Focus_Signal clearing
+  - [x]\* 9.4 Write property test for consumed Focus_Signal clearing
     - **Property 23: Consumed Focus_Signal is cleared**
     - **Validates: Requirements 15.2**
 
-  - [ ]\* 9.5 Write property test for order stability during an in-progress swipe
+  - [x]\* 9.5 Write property test for order stability during an in-progress swipe
     - **Property 29: Browse_Mode order is stable during an in-progress swipe**
     - **Validates: Requirements 18.3**
 
@@ -150,11 +150,11 @@ All test sub-tasks are marked optional with `*` and may be skipped for a faster 
     - Create `apps/web/src/components/VenueCard.tsx` rendering venue name, Live_Check_In_Count from `checkInCounts`, archetype glyph in Pulse_State colour, and the "be the first in" affordance when count is zero
     - _Requirements: 1.2, 4.1, 4.6_
 
-  - [ ]\* 10.2 Write property test for Venue_Card content
+  - [x]\* 10.2 Write property test for Venue_Card content
     - **Property 1: Venue_Card content**
     - **Validates: Requirements 1.2, 4.1**
 
-  - [ ]\* 10.3 Write property test for zero-count affordance
+  - [x]\* 10.3 Write property test for zero-count affordance
     - **Property 2: Zero-count "be the first in" affordance**
     - **Validates: Requirements 4.6**
 
@@ -167,11 +167,11 @@ All test sub-tasks are marked optional with `*` and may be skipped for a faster 
     - Create `apps/web/src/components/PeekCarousel.tsx` hosting Browse_Mode (Venue_Card strip + `FlickControls`) and Commit_Mode (existing `NodeDetailSheet` content) over `BottomSheet`; route gestures via `classifyDrag` (horizontal → swipe, suppress dismiss; vertical → mode change/dismiss, suppress swipe; rewards-row horizontal in Commit_Mode → native scroll); render empty Browse_Mode invite when no in-viewport venue; render "be the first in" empty state in Commit_Mode; include an aria-live region announcing Active_Venue name + Live_Check_In_Count
     - _Requirements: 1.1, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 4.2, 4.3, 6.3, 7.1, 7.2, 7.3, 8.3, 8.4_
 
-  - [ ]\* 11.2 Write property test for aria-live announcement
+  - [x]\* 11.2 Write property test for aria-live announcement
     - **Property 14: Active_Venue change is announced to assistive technology**
     - **Validates: Requirements 8.3**
 
-  - [ ]\* 11.3 Write render tests for mode transitions and keyboard operation
+  - [x]\* 11.3 Write render tests for mode transitions and keyboard operation
     - Test Browse↔Commit transitions on the same Bottom_Sheet, FlickControls keyboard operation, and aria-labels
     - _Requirements: 2.1, 2.2, 2.4, 2.5, 8.1, 8.2, 8.4_
 
@@ -183,15 +183,15 @@ All test sub-tasks are marked optional with `*` and may be skipped for a faster 
     - Update `apps/web/src/hooks/useMapMarkers.ts` to apply glyph/dot/hidden tiers by zoom, distinguish the Active_Venue marker, keep markers geo-anchored across threshold crossings, and update live-count badge on `node:pulse_update` without detaching
     - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 18.1_
 
-  - [ ]\* 13.2 Write property test for presentation tier by zoom
+  - [x]\* 13.2 Write property test for presentation tier by zoom
     - **Property 17: Marker presentation tier is a function of zoom**
     - **Validates: Requirements 12.1, 12.2, 12.3**
 
-  - [ ]\* 13.3 Write property test for geo-anchoring across transitions/updates
+  - [x]\* 13.3 Write property test for geo-anchoring across transitions/updates
     - **Property 18: Markers stay geo-anchored across transitions and updates**
     - **Validates: Requirements 12.4, 18.1**
 
-  - [ ]\* 13.4 Write property test for active-marker distinction
+  - [x]\* 13.4 Write property test for active-marker distinction
     - **Property 19: Active_Venue marker is visually distinguished**
     - **Validates: Requirements 12.6**
 
@@ -205,11 +205,11 @@ All test sub-tasks are marked optional with `*` and may be skipped for a faster 
     - Create `apps/web/src/hooks/useOverlayCoordinator.ts` deciding visibility of Onboarding_Hint, Proximity_Nudge_Banner, Notification_Priming_Sheet, and Location_Banner: suppress all three overlapping overlays while Commit_Mode is open; enforce nudge/Location_Banner mutual exclusion by precedence; gate priming to after first successful check-in, once per session
     - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5_
 
-  - [ ]\* 15.2 Write property test for Commit_Mode overlay suppression
+  - [x]\* 15.2 Write property test for Commit_Mode overlay suppression
     - **Property 27: Commit_Mode suppresses overlapping overlays**
     - **Validates: Requirements 17.3**
 
-  - [ ]\* 15.3 Write property test for nudge/Location_Banner exclusion
+  - [x]\* 15.3 Write property test for nudge/Location_Banner exclusion
     - **Property 28: Nudge and Location_Banner are mutually exclusive**
     - **Validates: Requirements 17.4**
 
@@ -218,15 +218,15 @@ All test sub-tasks are marked optional with `*` and may be skipped for a faster 
     - Create `apps/web/src/hooks/useCheckInFlow.ts` driving the CTA via `getCtaInfo`, opening the existing `SignupSheet` (email/password + Google OAuth only — no phone/SMS) when unauthenticated, offering `QrScannerSheet` on GPS-too-far, routing valid QR via `parseVenueQr`, surfacing invalid-QR/offline failures, and preventing duplicate submissions while pending
     - _Requirements: 14.2, 14.3, 14.4, 14.5, 14.6, 14.8, 19.3, 20.1_
 
-  - [ ]\* 16.2 Write property test for duplicate-submission prevention
+  - [x]\* 16.2 Write property test for duplicate-submission prevention
     - **Property 22: In-progress check-in prevents duplicate submissions**
     - **Validates: Requirements 14.8**
 
-  - [ ]\* 16.3 Write property test for offline check-in failing safe
+  - [x]\* 16.3 Write property test for offline check-in failing safe
     - **Property 30: Offline check-in fails safe**
     - **Validates: Requirements 19.3**
 
-  - [ ]\* 16.4 Write property test for no phone/SMS on map auth entry
+  - [x]\* 16.4 Write property test for no phone/SMS on map auth entry
     - **Property 31: No phone-number or SMS input on any map auth entry**
     - **Validates: Requirements 20.1**
 
@@ -235,11 +235,11 @@ All test sub-tasks are marked optional with `*` and may be skipped for a faster 
     - Update `apps/web/src/screens/MapScreen.tsx` to mount `PeekCarousel` driven by `useCarouselSelection`, the updated marker layer, toast wiring, `useOverlayCoordinator`, `useCheckInFlow`, recenter gating, and Focus_Signal consumption; preserve existing first-paint/loading/error/empty/offline states and realtime reconnect handling
     - _Requirements: 1.1, 3.6, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 10.1, 10.2, 10.3, 10.4, 10.5, 10.8, 11.3, 15.1, 15.3, 18.2, 18.4, 18.5, 19.1, 19.2, 19.4, 20.2, 20.3, 20.4_
 
-  - [ ]\* 17.2 Write example/render tests for map states
+  - [x]\* 17.2 Write example/render tests for map states
     - Cover first-paint config, loading/error/empty overlays, Location_Banner interactions, search no-results, focus open + lighter backdrop, and onboarding/priming gating
     - _Requirements: 9.1, 9.2, 9.4, 9.7, 10.3, 10.8, 13.6, 15.1, 15.3, 17.1_
 
-  - [ ]\* 17.3 Write integration tests for realtime/offline coherence
+  - [x]\* 17.3 Write integration tests for realtime/offline coherence
     - Drive `node:pulse_update` payloads into `mapStore` and toggle connectivity to assert Commit/Browse updates without sheet re-open, disconnect retains last-known values, and reconnect reconciles without reload
     - _Requirements: 18.2, 18.4, 18.5, 19.2, 19.4_
 

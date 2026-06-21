@@ -179,7 +179,7 @@ function SummaryTile({ label, value, hint }: { label: string; value: string; hin
 
 function DeltaBadge({ delta }: { delta: number }) {
   if (delta === 0) {
-    return <span className="text-[var(--text-muted)] text-xs">—</span>
+    return <span className="text-[var(--text-muted)] text-xs">-</span>
   }
   const positive = delta > 0
   return (

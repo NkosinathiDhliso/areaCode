@@ -8,7 +8,7 @@
  * See design.md Properties 20 (valid round-trip) and 21 (invalid rejection).
  *
  * This feature is strictly client-side UI: no backend call is made here, and
- * the QR path carries no phone number or SMS — it only proves venue presence.
+ * the QR path carries no phone number or SMS - it only proves venue presence.
  */
 
 export interface VenueQr {

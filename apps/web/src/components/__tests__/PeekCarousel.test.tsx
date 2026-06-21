@@ -10,7 +10,7 @@ import type { VenueCardVM } from '../../lib/carouselConstants'
 import { PeekCarousel } from '../PeekCarousel'
 
 /**
- * Map Discovery — PeekCarousel render + mode-transition tests (tasks 11.2, 11.3).
+ * Map Discovery - PeekCarousel render + mode-transition tests (tasks 11.2, 11.3).
  *
  *   - Property 14: Active_Venue change is announced to assistive technology
  *   - Browse <-> Commit transitions on the same Bottom_Sheet, keyboard controls

@@ -43,7 +43,7 @@ export function useRewardSocket(token?: string) {
       const toast: Toast = {
         id: `reward-${payload.rewardId}-${Date.now()}`,
         type: 'reward_new',
-        message: `You earned: ${payload.rewardTitle} — tap Rewards to view your code`,
+        message: `You earned: ${payload.rewardTitle} - tap Rewards to view your code`,
         priority: 3,
         timestamp: Date.now(),
       }

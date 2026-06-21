@@ -41,7 +41,7 @@ export function ProximityNudgeBanner({ onCheckIn }: ProximityNudgeBannerProps) {
           if (!cancelled) setVisited(res.items ?? [])
         })
         .catch(() => {
-          /* silent — proximity simply doesn't fire */
+          /* silent - proximity simply doesn't fire */
         })
     void fetchVisited()
     const id = setInterval(fetchVisited, 60 * 60 * 1000)

@@ -23,7 +23,7 @@ interface SignupSheetProps {
  *      we don't want consumers to think about.
  *
  * The legacy hard-fork is still documented in
- * `.kiro/specs/area-code-app/requirements.md` Req 2.4 — that spec needs to be
+ * `.kiro/specs/area-code-app/requirements.md` Req 2.4 - that spec needs to be
  * updated alongside this change.
  */
 export function SignupSheet({ isOpen, onClose, onNavigate }: SignupSheetProps) {

@@ -9,11 +9,11 @@ import type { MapInstance, Node, NodeCategory } from '@area-code/shared/types'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 
 import { canRecenter, moveCameraToActive } from '../lib/cameraControl'
-import { toVenueCardVM, type VenueCardVM } from '../lib/carouselConstants'
+import { MAP_ARRIVAL_ZOOM, MIN_MARKER_ZOOM, toVenueCardVM, type VenueCardVM } from '../lib/carouselConstants'
 import { vibeRank, scopeToViewport, type ViewportBounds } from '../lib/carouselRanking'
 
 /**
- * `useCarouselSelection` — the selection orchestration hook that binds every
+ * `useCarouselSelection` - the selection orchestration hook that binds every
  * Peek-Carousel input method and renderer to the single `selectionStore`
  * source of truth, and keeps the `Carousel_Order`, camera, and Active_Venue
  * coherent.
@@ -41,7 +41,7 @@ import { vibeRank, scopeToViewport, type ViewportBounds } from '../lib/carouselR
  *
  * The hook reads the live map only through the abstracted `MapInstance` held in
  * `mapStore.mapInstance` (`getBounds().toArray()`), so it stays driveable by the
- * in-memory map stub used in tests — no raw Mapbox or WebGL required.
+ * in-memory map stub used in tests - no raw Mapbox or WebGL required.
  *
  * Validates: Requirements 3.4, 3.5, 3.6, 6.4, 13.3, 13.4, 13.5, 15.1, 15.2, 15.4, 15.5
  */
@@ -106,7 +106,7 @@ export interface UseCarouselSelectionResult {
   setSwipeInProgress: (inProgress: boolean) => void
   /** Recompute the order immediately (bypasses the debounce; respects the swipe lock). */
   recomputeOrder: () => void
-  /** Notify the hook that the viewport changed (debounced recompute) — wire to map `moveend`/`zoom`. */
+  /** Notify the hook that the viewport changed (debounced recompute) - wire to map `moveend`/`zoom`. */
   notifyViewportChanged: () => void
 }
 
@@ -119,7 +119,7 @@ function detectReducedMotion(): boolean {
 /**
  * Read the current viewport as a {@link ViewportBounds} from the abstracted
  * map instance. Returns null when the map is absent, the read throws, or the
- * bounds are not finite — `scopeToViewport` treats null bounds as "viewport
+ * bounds are not finite - `scopeToViewport` treats null bounds as "viewport
  * unknown" and keeps only the Active_Venue.
  *
  * `MapInstance.getBounds().toArray()` follows the Mapbox convention
@@ -183,7 +183,7 @@ export function useCarouselSelection({
   // latest store values regardless of render timing. Pure composition of
   // `vibeRank` then `scopeToViewport`; the active id passed to
   // `scopeToViewport` guarantees the Active_Venue is never silently dropped
-  // (R6.5) — except when it no longer matches the filter, in which case it is
+  // (R6.5) - except when it no longer matches the filter, in which case it is
   // intentionally excluded so the filter-reassignment effect can take over.
   const computeOrder = useCallback((): string[] => {
     const mapState = useMapStore.getState()
@@ -276,6 +276,10 @@ export function useCarouselSelection({
 
   // ── Camera: fly to the Active_Venue on change (exactly one move) ──────────
   const prevActiveRef = useRef<string | null>(null)
+  // Tracks whether we've made the first camera move of this map session, so a
+  // cold open (map still on the country overview) zooms in to MAP_ARRIVAL_ZOOM
+  // while every later browse move preserves the user's chosen zoom.
+  const hasArrivedRef = useRef(false)
   useEffect(() => {
     if (activeVenueId === null) {
       prevActiveRef.current = null
@@ -287,7 +291,28 @@ export function useCarouselSelection({
     const map = useMapStore.getState().mapInstance
     const node = useMapStore.getState().nodes[activeVenueId]
     if (!map || !node) return
-    moveCameraToActive(map, node, { reducedMotion: reducedMotionValue })
+
+    // First move of the session: if the map is still parked on the zoomed-out
+    // country overview (below MIN_MARKER_ZOOM, where markers are hidden), zoom
+    // in so the consumer opens straight onto the alive venue instead of an
+    // empty map. Leads with aliveness, not proximity (discovery-DNA rule).
+    // Subsequent moves omit zoom and preserve the user's zoom (browse flow).
+    let arrivalZoom: number | undefined
+    if (!hasArrivedRef.current) {
+      hasArrivedRef.current = true
+      let currentZoom = MAP_ARRIVAL_ZOOM
+      try {
+        currentZoom = map.getZoom?.() ?? MAP_ARRIVAL_ZOOM
+      } catch {
+        /* map read failed — treat as already-zoomed, don't force a zoom */
+      }
+      if (currentZoom < MIN_MARKER_ZOOM) arrivalZoom = MAP_ARRIVAL_ZOOM
+    }
+
+    moveCameraToActive(map, node, {
+      reducedMotion: reducedMotionValue,
+      ...(arrivalZoom !== undefined ? { zoom: arrivalZoom } : {}),
+    })
   }, [activeVenueId, reducedMotionValue])
 
   // ── Focus_Signal consumption ──────────────────────────────────────────────
@@ -348,7 +373,7 @@ export function useCarouselSelection({
     (inProgress: boolean) => {
       swipeInProgressRef.current = inProgress
       if (!inProgress) {
-        // Swipe settled — apply any updates that were deferred while locked.
+        // Swipe settled - apply any updates that were deferred while locked.
         recomputeOrder()
       }
     },

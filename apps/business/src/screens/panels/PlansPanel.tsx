@@ -25,7 +25,7 @@ interface PlansResponse {
 
 interface BusinessProfile {
   tier?: string
-  // Set (non-null) once a trial has ever been started — either active or expired.
+  // Set (non-null) once a trial has ever been started - either active or expired.
   // The backend enforces one trial per business, so we use this to hide
   // the "Start trial" CTA for businesses that have already used theirs.
   trialEndsAt?: string | null
@@ -51,7 +51,7 @@ export function PlansPanel() {
         ])
         setPlans(plansRes)
         const raw = profileRes.tier ?? 'starter'
-        // 'free' is a legacy value — treat it as starter for display
+        // 'free' is a legacy value - treat it as starter for display
         const mapped = raw === 'free' ? 'starter' : raw
         setCurrentTier(mapped as 'starter' | 'growth' | 'pro' | 'payg')
         setTrialEndsAt(profileRes.trialEndsAt ?? null)
@@ -217,13 +217,13 @@ export function PlansPanel() {
 
       {trialIsActive && trialEndsAt && (
         <div className="bg-[var(--success-subtle,#e7f7ee)] border border-[var(--success)] rounded-xl px-4 py-3 text-[var(--text-primary)] text-sm">
-          Free trial active — ends {new Date(trialEndsAt).toLocaleDateString()}. Add a payment method before then to
+          Free trial active - ends {new Date(trialEndsAt).toLocaleDateString()}. Add a payment method before then to
           keep your {currentTier} features.
         </div>
       )}
       {!trialIsActive && hasUsedTrial && (
         <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl px-4 py-3 text-[var(--text-secondary)] text-xs">
-          Your trial is over — pick a plan.
+          Your trial is over - pick a plan.
         </div>
       )}
       {checkoutError && (

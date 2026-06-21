@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { useSelectionStore } from '../selectionStore'
 
 /**
- * Map Discovery — Selection_Model store property tests (deferred tasks 6.2-6.4).
+ * Map Discovery - Selection_Model store property tests (deferred tasks 6.2-6.4).
  *
  *   - Property 3: Single Active_Venue invariant
  *   - Property 4: Commit<->Browse preserves the Active_Venue
@@ -99,20 +99,24 @@ describe('Feature: map-discovery-experience, Property 4: Commit<->Browse preserv
 describe('Feature: map-discovery-experience, Property 5: Flick stepping wraps deterministically', () => {
   it('a full forward loop returns to the start and +1 then -1 is the identity', () => {
     fc.assert(
-      fc.property(fc.uniqueArray(fc.string({ minLength: 1, maxLength: 6 }), { minLength: 1, maxLength: 8 }), fc.nat(), (order, start) => {
-        reset()
-        const idx = start % order.length
-        const store = useSelectionStore.getState()
-        store.setOrder(order)
-        store.selectVenue(order[idx]!, 'search')
+      fc.property(
+        fc.uniqueArray(fc.string({ minLength: 1, maxLength: 6 }), { minLength: 1, maxLength: 8 }),
+        fc.nat(),
+        (order, start) => {
+          reset()
+          const idx = start % order.length
+          const store = useSelectionStore.getState()
+          store.setOrder(order)
+          store.selectVenue(order[idx]!, 'search')
 
-        for (let i = 0; i < order.length; i++) useSelectionStore.getState().step(1)
-        expect(useSelectionStore.getState().activeVenueId).toBe(order[idx])
+          for (let i = 0; i < order.length; i++) useSelectionStore.getState().step(1)
+          expect(useSelectionStore.getState().activeVenueId).toBe(order[idx])
 
-        useSelectionStore.getState().step(1)
-        useSelectionStore.getState().step(-1)
-        expect(useSelectionStore.getState().activeVenueId).toBe(order[idx])
-      }),
+          useSelectionStore.getState().step(1)
+          useSelectionStore.getState().step(-1)
+          expect(useSelectionStore.getState().activeVenueId).toBe(order[idx])
+        },
+      ),
     )
   })
 

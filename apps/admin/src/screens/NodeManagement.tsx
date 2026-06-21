@@ -114,7 +114,7 @@ export function NodeManagement() {
                 </p>
               </div>
               <span
-                className={`text-xs px-2 py-0.5 rounded-full ${node.isActive !== false ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}
+                className={`text-xs px-2 py-0.5 rounded-full ${node.isActive !== false ? 'bg-[var(--success)]/10 text-[var(--success)]' : 'bg-[var(--danger)]/10 text-[var(--danger)]'}`}
               >
                 {node.isActive !== false ? 'Active' : 'Inactive'}
               </span>
@@ -135,7 +135,7 @@ export function NodeManagement() {
                 <button
                   onClick={() => handleAction(node.nodeId, 'activate')}
                   disabled={actionLoading}
-                  className="text-xs text-green-500 font-medium"
+                  className="text-xs text-[var(--success)] font-medium"
                 >
                   {t('admin.nodes.activate', 'Activate')}
                 </button>

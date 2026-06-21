@@ -14,7 +14,7 @@ interface DirectionsSheetProps {
 type Provider = {
   id: 'apple' | 'google' | 'waze'
   label: string
-  // Hex tone for the leading dot — keeps the picker visually aligned with
+  // Hex tone for the leading dot - keeps the picker visually aligned with
   // each app's brand without bundling logo assets.
   tone: string
   buildUrl: (lat: number, lng: number, name: string) => string
@@ -63,7 +63,7 @@ const FALLBACK_HTTPS: Record<Provider['id'], (lat: number, lng: number, name: st
  * falling back to the equivalent HTTPS URL if the app isn't installed.
  *
  * On Android, `geo:` already triggers the system app picker so we could
- * skip this sheet — but we show it anyway for consistency, and because
+ * skip this sheet - but we show it anyway for consistency, and because
  * an explicit choice is faster than the system chooser two-step.
  */
 export function DirectionsSheet({ isOpen, onClose, lat, lng, name }: DirectionsSheetProps) {
@@ -74,7 +74,7 @@ export function DirectionsSheet({ isOpen, onClose, lat, lng, name }: DirectionsS
     const fallbackUrl = FALLBACK_HTTPS[provider.id](lat, lng, name)
 
     // Try the deep link first. If the app isn't installed, the page
-    // navigation silently fails — schedule the HTTPS fallback so the
+    // navigation silently fails - schedule the HTTPS fallback so the
     // user lands somewhere useful instead of a blank tab.
     // 600ms is the sweet spot: short enough that the user doesn't see
     // a delay, long enough that the OS has handed off to the app.

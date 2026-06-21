@@ -13,7 +13,7 @@ import { MapControls } from '../MapControls'
 
 // `useMapStore` is loaded from the shared package. We don't need to mock
 // the store because the test queries are insensitive to the network's
-// pulse total — they look up the sidebar buttons by data-testid. The
+// pulse total - they look up the sidebar buttons by data-testid. The
 // legacy permanent City_Pulse glass card has been removed; the City_Pulse
 // readout now lives on a once-per-session toast (R2 / R2.7).
 beforeEach(() => {

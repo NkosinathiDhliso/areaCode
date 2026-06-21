@@ -53,6 +53,33 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   arts: Palette,
 }
 
+// The three-step "how it works" shown high on the landing page. Reuses icons
+// already imported for the category/state config so no new icon import is
+// needed. Copy lives behind i18n keys with inline English fallbacks.
+const HOW_IT_WORKS = [
+  {
+    Icon: MapPin,
+    titleKey: 'landing.step1Title',
+    titleFallback: 'Open the live map',
+    bodyKey: 'landing.step1Body',
+    bodyFallback: 'See which venues are busy right now near you.',
+  },
+  {
+    Icon: Zap,
+    titleKey: 'landing.step2Title',
+    titleFallback: 'Check in when you arrive',
+    bodyKey: 'landing.step2Body',
+    bodyFallback: "Tap in at the venue to prove you're there.",
+  },
+  {
+    Icon: Sparkles,
+    titleKey: 'landing.step3Title',
+    titleFallback: 'Earn rewards',
+    bodyKey: 'landing.step3Body',
+    bodyFallback: "Unlock perks from the spot and climb your city's leaderboard.",
+  },
+] as const
+
 export function AuthLanding({ onNavigate }: AuthLandingProps) {
   const { t } = useTranslation()
 
@@ -95,14 +122,30 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
 
         {/* Hero */}
         <h1 className="font-[Syne] text-3xl font-extrabold leading-tight tracking-[-0.02em]">
-          {t('landing.heroLine1', "See what's alive")}
+          {t('landing.heroLine1', 'Find the spots')}
           <span className="block bg-[linear-gradient(90deg,var(--accent-bright),var(--accent))] bg-clip-text text-transparent">
-            {t('landing.heroLine2', 'in your city.')}
+            {t('landing.heroLine2', 'buzzing right now.')}
           </span>
         </h1>
         <p className="mt-3 text-sm text-[var(--text-secondary)] leading-relaxed max-w-xs">
-          {t('landing.subtitle', 'Live map. Real check-ins. Rewards from local spots.')}
+          {t('landing.subtitle', "A live map of what's busy near you, updated as people check in.")}
         </p>
+
+        {/* How it works: the quick idea, before we ask for anything. The deeper
+            "About" and live "Trending" sections below are the drill-down. */}
+        <div className="mt-6 flex flex-col gap-3">
+          {HOW_IT_WORKS.map(({ Icon, titleKey, titleFallback, bodyKey, bodyFallback }) => (
+            <div key={titleKey} className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)]/15 ring-1 ring-[var(--border)]">
+                <Icon size={18} strokeWidth={1.75} className="text-[var(--accent-bright)]" aria-hidden="true" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-tight">{t(titleKey, titleFallback)}</p>
+                <p className="mt-0.5 text-xs text-[var(--text-secondary)] leading-snug">{t(bodyKey, bodyFallback)}</p>
+              </div>
+            </div>
+          ))}
+        </div>
 
         {/* CTAs */}
         <div className="mt-6 flex gap-3">
@@ -143,7 +186,7 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
           </p>
           <p className="text-sm text-[var(--text-secondary)] leading-relaxed mt-2">
             Customers check in when they arrive at a venue to earn rewards from that venue, climb local leaderboards,
-            and discover places that match their taste. Sign in with Google or with email and password — no phone number
+            and discover places that match their taste. Sign in with Google or with email and password - no phone number
             required.
           </p>
         </section>

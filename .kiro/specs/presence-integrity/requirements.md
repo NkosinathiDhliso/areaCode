@@ -170,9 +170,9 @@ All persistence stays on DynamoDB `PAY_PER_REQUEST`. Expiry is done serverlessly
 
 1. THE manual Check_Out_Service and Presence_Expiry SHALL be sufficient on their own to keep Live_Presence_Count honest on web/PWA, where background geolocation is unavailable and presence is a foreground-only concern.
 2. THE foundation delivered by this spec SHALL NOT depend on Auto_Check_Out; honest presence SHALL hold with manual check-out plus expiry even if Auto_Check_Out is never built.
-3. *(Deferred to a later spec — candidate criteria for founder review.)* WHERE Auto_Check_Out is later enabled, it SHALL be mobile-only and SHALL require explicit, revocable user consent to background ("Always") location before any automatic check-out occurs.
-4. *(Deferred to a later spec — candidate criteria for founder review.)* WHERE Auto_Check_Out is enabled and consented, it SHALL evaluate device-to-venue distance to trigger an automatic check-out and SHALL discard the evaluated location immediately, persisting no location trail.
-5. *(Deferred to a later spec — candidate criteria for founder review.)* WHERE a user has not consented to background location, THE platform SHALL rely solely on manual check-out and expiry for that user and SHALL NOT degrade their presence honesty relative to a consenting user.
+3. _(Deferred to a later spec — candidate criteria for founder review.)_ WHERE Auto_Check_Out is later enabled, it SHALL be mobile-only and SHALL require explicit, revocable user consent to background ("Always") location before any automatic check-out occurs.
+4. _(Deferred to a later spec — candidate criteria for founder review.)_ WHERE Auto_Check_Out is enabled and consented, it SHALL evaluate device-to-venue distance to trigger an automatic check-out and SHALL discard the evaluated location immediately, persisting no location trail.
+5. _(Deferred to a later spec — candidate criteria for founder review.)_ WHERE a user has not consented to background location, THE platform SHALL rely solely on manual check-out and expiry for that user and SHALL NOT degrade their presence honesty relative to a consenting user.
 
 ### Requirement 12: Business-intelligence surface for dwell time
 
@@ -184,7 +184,7 @@ All persistence stays on DynamoDB `PAY_PER_REQUEST`. Expiry is done serverlessly
 2. THE dwell-time aggregates SHALL distinguish `checkout_terminated` dwell from `expiry_terminated` dwell, so the business signal is not silently inflated or deflated by expiry estimates.
 3. WHEN fewer dwell records exist for a venue and period than a minimum sample threshold, THE platform SHALL suppress the dwell aggregate for that period and indicate insufficient data rather than expose a figure derived from too few people.
 4. THE dwell-time aggregate output SHALL contain no consumer identity fields and no raw coordinates.
-5. *(Founder decision per Requirement 13.)* WHETHER dwell-time aggregates appear in business reports in this release or are captured-now / surfaced-later SHALL be confirmed before the dwell business surface is built; the underlying Dwell_Time capture (Requirement 9) SHALL proceed regardless.
+5. _(Founder decision per Requirement 13.)_ WHETHER dwell-time aggregates appear in business reports in this release or are captured-now / surfaced-later SHALL be confirmed before the dwell business surface is built; the underlying Dwell_Time capture (Requirement 9) SHALL proceed regardless.
 
 ### Requirement 13: Founder-decision flags
 
@@ -192,7 +192,7 @@ All persistence stays on DynamoDB `PAY_PER_REQUEST`. Expiry is done serverlessly
 
 #### Acceptance Criteria
 
-1. THE spec SHALL treat the exact Expiry_Window durations as requiring founder confirmation. *Candidate:* off-peak Expiry_Window of 90 minutes and peak (SAST 18:00–23:59) Expiry_Window of 180 minutes, both measured from the most recent check-in for the venue. WHEN the founder confirms or amends these values, THE confirmed values SHALL govern Requirement 5.
-2. THE spec SHALL treat whether a manual check-out grants a reward or trust nudge as requiring founder confirmation. *Candidate:* manual check-out grants no tangible reward in this release but is eligible for a future trust/streak signal, so honest leaving is encouraged without creating a farmable incentive. WHEN the founder confirms or amends this, THE confirmed decision SHALL govern any reward coupling in Check_Out_Service.
-3. THE spec SHALL treat whether dwell-time aggregates surface in business reports now or later as requiring founder confirmation, as captured in Requirement 12.5. *Candidate:* capture Dwell_Time now (Requirement 9) and surface the business aggregate in a later reporting release. WHEN the founder confirms or amends this, THE confirmed decision SHALL govern Requirement 12.
-4. THE spec SHALL treat whether the `node:pulse_update` `checkInCount` field is repurposed for Live_Presence_Count versus adding a dedicated presence field/event as requiring a documented decision in design, as captured in Requirement 8.4. *Candidate:* add an explicit presence value to the realtime payload so no existing consumer silently misreads the change.
+1. THE spec SHALL treat the exact Expiry*Window durations as requiring founder confirmation. \_Candidate:* off-peak Expiry_Window of 90 minutes and peak (SAST 18:00–23:59) Expiry_Window of 180 minutes, both measured from the most recent check-in for the venue. WHEN the founder confirms or amends these values, THE confirmed values SHALL govern Requirement 5.
+2. THE spec SHALL treat whether a manual check-out grants a reward or trust nudge as requiring founder confirmation. _Candidate:_ manual check-out grants no tangible reward in this release but is eligible for a future trust/streak signal, so honest leaving is encouraged without creating a farmable incentive. WHEN the founder confirms or amends this, THE confirmed decision SHALL govern any reward coupling in Check_Out_Service.
+3. THE spec SHALL treat whether dwell-time aggregates surface in business reports now or later as requiring founder confirmation, as captured in Requirement 12.5. _Candidate:_ capture Dwell_Time now (Requirement 9) and surface the business aggregate in a later reporting release. WHEN the founder confirms or amends this, THE confirmed decision SHALL govern Requirement 12.
+4. THE spec SHALL treat whether the `node:pulse_update` `checkInCount` field is repurposed for Live*Presence_Count versus adding a dedicated presence field/event as requiring a documented decision in design, as captured in Requirement 8.4. \_Candidate:* add an explicit presence value to the realtime payload so no existing consumer silently misreads the change.

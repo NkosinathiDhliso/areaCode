@@ -12,22 +12,22 @@
  * (and its small helpers) so the fast-check property tests (tasks 15.2 / 15.3)
  * can target it directly with no React or store runtime. The
  * {@link useOverlayCoordinator} hook is a thin shell that gathers the live
- * signals — Peek_Carousel `mode` from `selectionStore`, `onboarding.hintSeen`
+ * signals - Peek_Carousel `mode` from `selectionStore`, `onboarding.hintSeen`
  * from `userStore`, `permissionState` from `locationStore`, plus the
- * component-local flags it cannot derive itself — and feeds them to the pure
+ * component-local flags it cannot derive itself - and feeds them to the pure
  * core.
  *
  * Coordination rules:
  *   1. Commit_Mode suppression (Requirement 17.3 / Property 27): while
  *      Commit_Mode is open, none of the Onboarding_Hint, Proximity_Nudge_Banner,
  *      or Notification_Priming_Sheet may render. The Location_Banner is *not*
- *      in this set — a denied-permission state is a fundamental blocker that
+ *      in this set - a denied-permission state is a fundamental blocker that
  *      stays visible regardless of sheet state (Requirement 10.3).
  *   2. Nudge / Location_Banner mutual exclusion (Requirement 17.4 /
  *      Property 28): at most one of the two renders at a time, resolved by
  *      {@link NUDGE_LOCATION_PRECEDENCE}. The Location_Banner wins, because a
  *      missing location permission is a more fundamental blocker than a
- *      proximity nudge — and the nudge depends on a last-known position that a
+ *      proximity nudge - and the nudge depends on a last-known position that a
  *      denied permission tends to starve anyway.
  *   3. Priming gating: the Notification_Priming_Sheet is eligible only after a
  *      successful first check-in, and only once per session (and not while
@@ -53,7 +53,7 @@ export const NUDGE_LOCATION_PRECEDENCE = 'location-banner' as const
 
 /**
  * Live inputs to the overlay decision. Every field is a plain, already-resolved
- * signal so {@link decideOverlayVisibility} stays pure and total — it derives
+ * signal so {@link decideOverlayVisibility} stays pure and total - it derives
  * nothing and reads nothing from outside this object.
  */
 export interface OverlayCoordinatorInput {
@@ -105,7 +105,7 @@ export function isPrimingEligible(input: OverlayCoordinatorInput): boolean {
  * argument, which is what makes Properties 27 and 28 decidable against it.
  *
  * - The Location_Banner shows whenever permission is denied and it has not been
- *   dismissed — it is intentionally *not* suppressed by Commit_Mode
+ *   dismissed - it is intentionally *not* suppressed by Commit_Mode
  *   (Requirement 10.3).
  * - The Onboarding_Hint, Proximity_Nudge_Banner, and Notification_Priming_Sheet
  *   are all suppressed while Commit_Mode is open (Requirement 17.3 / Property 27).
@@ -155,8 +155,8 @@ export interface UseOverlayCoordinatorParams {
  * {@link UseOverlayCoordinatorParams}, and returns the coordinated
  * {@link OverlayVisibility}.
  *
- * The hook holds no state of its own — it is a pure projection of store and
- * parameter state — so it re-derives on every relevant store change without
+ * The hook holds no state of its own - it is a pure projection of store and
+ * parameter state - so it re-derives on every relevant store change without
  * extra effects.
  */
 export function useOverlayCoordinator(params: UseOverlayCoordinatorParams): OverlayVisibility {

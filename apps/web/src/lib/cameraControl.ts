@@ -42,7 +42,7 @@ export interface MoveCameraOptions {
   reducedMotion: boolean
   /**
    * Optional target zoom. When omitted the map keeps its current zoom and only
-   * recentres — the carousel browse flow biases toward preserving the user's
+   * recentres - the carousel browse flow biases toward preserving the user's
    * chosen zoom while stepping between venues.
    */
   zoom?: number
@@ -80,7 +80,7 @@ export function moveCameraToActive(map: MapInstance, node: Node, { reducedMotion
 // so the gate itself can be property-tested without a map or a clock.
 
 /**
- * Zoom the recenter fly-to targets — roughly a 20 km radius around the user.
+ * Zoom the recenter fly-to targets - roughly a 20 km radius around the user.
  * Kept in sync with `USER_VIEW_ZOOM` in `useMapInit` so the carousel-driven
  * recenter and the map-control recenter land at the same zoom (Requirement 11.1).
  */
@@ -95,7 +95,7 @@ export const USER_VIEW_ZOOM = 10
  * non-finite input yields `false`. A capture timestamp in the future (negative
  * age) is treated as fresh, since it cannot be stale.
  *
- * Never throws — callers can pass raw store values directly.
+ * Never throws - callers can pass raw store values directly.
  *
  * Validates: Requirements 11.1, 11.2
  */

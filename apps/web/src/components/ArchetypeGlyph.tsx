@@ -220,7 +220,7 @@ function GlyphPair({
 
   return (
     <>
-      {/* Outline pass — stroked clone underneath. */}
+      {/* Outline pass - stroked clone underneath. */}
       <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Component
           size={renderSize}
@@ -235,7 +235,7 @@ function GlyphPair({
           }}
         />
       </div>
-      {/* Fill pass — silhouette in the category colour. */}
+      {/* Fill pass - silhouette in the category colour. */}
       <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Component size={renderSize} weight={spec.weight} color={silhouette} />
       </div>

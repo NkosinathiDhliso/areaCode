@@ -45,7 +45,7 @@ export function ProximityNudgeBanner({ onNavigate }: ProximityNudgeBannerProps) 
           if (!cancelled) setVisited(res.items ?? [])
         })
         .catch(() => {
-          // Failure is silent — the proximity feature simply doesn't fire.
+          // Failure is silent - the proximity feature simply doesn't fire.
         })
     void fetchVisited()
     const id = setInterval(fetchVisited, 60 * 60 * 1000)

@@ -32,7 +32,7 @@ interface NodeDetailSheetProps {
 }
 
 /**
- * `NodeDetailSheet` — the standalone venue detail surface: the full
+ * `NodeDetailSheet` - the standalone venue detail surface: the full
  * {@link NodeDetailContent} body hosted in its own {@link BottomSheet}.
  *
  * The detail body was extracted into {@link NodeDetailContent} so the same

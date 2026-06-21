@@ -24,7 +24,7 @@ function friendlyMessage(err: ApiError): string {
         return `You can check in here again in ${mins}m.`
       }
     }
-    return err.message ?? 'Easy there — too many check-ins. Try again in a moment.'
+    return err.message ?? 'Easy there - too many check-ins. Try again in a moment.'
   }
 
   if (err.statusCode === 401) return 'Please sign in to check in.'

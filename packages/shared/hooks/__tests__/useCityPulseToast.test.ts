@@ -97,7 +97,7 @@ describe('useCityPulseToast', () => {
     })
     expect(useToastStore.getState().queue.find((t) => t.id === TOAST_ID)).toBeUndefined()
 
-    // Now bump totalPulse above 0 — the once-per-session slot is still
+    // Now bump totalPulse above 0 - the once-per-session slot is still
     // available so the next grace window enqueues. We simulate "first
     // paint" by re-toggling mapReady so the grace effect re-runs.
     act(() => {
@@ -112,7 +112,7 @@ describe('useCityPulseToast', () => {
   })
 
   it('suppresses without consuming the slot when there is no node data (R2.10)', () => {
-    // pulseScores present, but nodes empty — mirrors a transient retrieval failure.
+    // pulseScores present, but nodes empty - mirrors a transient retrieval failure.
     useMapStore.setState({ nodes: {}, pulseScores: {} })
     const { rerender } = renderHook(({ ready }: { ready: boolean }) => useCityPulseToast({ mapReady: ready }), {
       initialProps: { ready: true },

@@ -30,11 +30,7 @@ import { ScanCommand } from '@aws-sdk/lib-dynamodb'
 
 import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 import { writeDwellRow } from '../features/presence/dwell-sink.js'
-import {
-  endPresenceByExpiry,
-  queryDuePresenceRecords,
-  reconcileCounter,
-} from '../features/presence/repository.js'
+import { endPresenceByExpiry, queryDuePresenceRecords, reconcileCounter } from '../features/presence/repository.js'
 import { broadcastPresenceUpdate } from '../shared/websocket/broadcast.js'
 
 /** Cities are stored in `app-data` as `CITY#<id>` rows where `sk = pk`. */

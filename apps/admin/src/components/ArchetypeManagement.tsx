@@ -146,7 +146,7 @@ export function ArchetypeManagement() {
             </div>
             <button
               onClick={() => void toggleActive(a)}
-              className={`text-xs px-2 py-1 rounded-lg ${a.isActive ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}
+              className={`text-xs px-2 py-1 rounded-lg ${a.isActive ? 'bg-[var(--success)]/15 text-[var(--success)]' : 'bg-[var(--danger)]/15 text-[var(--danger)]'}`}
             >
               {a.isActive ? t('admin.archetypes.active') : 'Inactive'}
             </button>

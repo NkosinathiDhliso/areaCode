@@ -9,7 +9,7 @@ import type { Toast, ToastType } from '../types'
 const TOAST_DISPLAY_MS = 4000
 const MAX_DISTANCE_KM = 2
 
-// Mirror of TOAST_PRIORITY in stores/toastStore.ts — kept in sync because
+// Mirror of TOAST_PRIORITY in stores/toastStore.ts - kept in sync because
 // the priority value is stamped onto the Toast at enqueue time.
 const PRIORITY_MAP: Record<ToastType, number> = {
   surge: 1,

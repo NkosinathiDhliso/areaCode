@@ -14,7 +14,7 @@ import { BusinessDashboard } from './screens/BusinessDashboard'
 
 const queryClient = new QueryClient()
 
-// Wire once at module load — before any component renders
+// Wire once at module load - before any component renders
 api.setTokenProvider(() => useBusinessAuthStore.getState().accessToken)
 // Managers use staff Cognito pool for refresh; owners use business pool.
 // Check stored role to set the correct path immediately on page load.
@@ -58,7 +58,7 @@ function AppContent() {
     api.ensureValidToken().then((validToken) => {
       if (cancelled) return
       if (!validToken) {
-        // Token refresh failed — session is dead, store will have logged out
+        // Token refresh failed - session is dead, store will have logged out
         setTokenReady(false)
         return
       }
@@ -69,21 +69,21 @@ function AppContent() {
     }
   }, [isAuthenticated])
 
-  // Initialize socket with businessId for room authorization — only after token is valid
+  // Initialize socket with businessId for room authorization - only after token is valid
   useEffect(() => {
     if (accessToken && businessId && tokenReady) {
       getSocket(accessToken, { businessId })
     }
   }, [accessToken, businessId, tokenReady])
 
-  // Fetch role and permissions on auth — only after token is valid
+  // Fetch role and permissions on auth - only after token is valid
   useEffect(() => {
     if (!isAuthenticated || !tokenReady) return
     api
       .get<{ role: 'owner' | 'manager' | 'staff'; permissions: string[] }>('/v1/business/me/role')
       .then((res) => {
         setRole(res.role, res.permissions)
-        // Managers authenticate via staff Cognito pool — use staff refresh path
+        // Managers authenticate via staff Cognito pool - use staff refresh path
         if (res.role === 'manager') {
           api.setRefreshPath('/v1/auth/staff/refresh')
         }

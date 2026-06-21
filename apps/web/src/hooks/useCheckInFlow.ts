@@ -13,7 +13,7 @@
  *     GPS-too-far QR fallback flag, and the in-flight pending flag (R14.1,
  *     R10.6, R10.7);
  *   - opening the existing email/password + Google OAuth `SignupSheet` when the
- *     consumer is unauthenticated — there is NO phone-number or SMS surface
+ *     consumer is unauthenticated - there is NO phone-number or SMS surface
  *     anywhere in this flow (R14.3, R20.1, and the no-SMS steering rule);
  *   - offering the in-app `QrScannerSheet` when GPS places the consumer too far
  *     to check in (R14.4);
@@ -21,7 +21,7 @@
  *     QR runs the check-in for the scanned venue (R14.5); anything else surfaces
  *     an invalid-QR message via the error store and performs no check-in
  *     (R14.6);
- *   - failing safe when offline — a check-in attempted with no connectivity
+ *   - failing safe when offline - a check-in attempted with no connectivity
  *     surfaces a failure and never reports a false success (R19.3);
  *   - preventing duplicate submissions while a request is in flight (R14.8).
  *
@@ -179,7 +179,7 @@ export function useCheckInFlow(params: UseCheckInFlowParams = {}): CheckInFlow {
       await submitCheckIn({
         nodeId: activeNode.id,
         type: 'reward',
-        ...(pos ? { lat: pos.lat, lng: pos.lng } : {}),
+        ...(pos ? { lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy } : {}),
       })
     })()
   }, [activeNode, isAuthenticated, qrFallback, requestLocation, geoStatus, submitCheckIn])

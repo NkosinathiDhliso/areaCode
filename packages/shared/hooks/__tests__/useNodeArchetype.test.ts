@@ -105,10 +105,10 @@ describe('useNodeArchetype', () => {
       branch: 'default',
     })
     expect(useMapStore.getState().archetypeIds['n1']).toBe('archetype-festival-spirit')
-    // Just before TTL — still cached.
+    // Just before TTL - still cached.
     vi.advanceTimersByTime(RETENTION_MS - 1)
     expect(useMapStore.getState().archetypeIds['n1']).toBe('archetype-festival-spirit')
-    // Past TTL — cleared.
+    // Past TTL - cleared.
     vi.advanceTimersByTime(2)
     expect(useMapStore.getState().archetypeIds['n1']).toBeUndefined()
   })
