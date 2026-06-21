@@ -26,10 +26,14 @@
     --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   }
 
-  /* The bottom nav must read as one solid bar all the way through the
-     home-indicator safe-area strip in standalone (home-screen) mode. Paint a
-     solid base under the translucent glass surface so the page gradient can
-     never show through that inset and look like a gap below the nav. */
+  /* The bottom nav reads as one solid bar through the home-indicator safe-area
+     strip in standalone mode: paint a solid base under the translucent glass so
+     the page can't show through the inset and look like a gap. Slim the content
+     row to native iOS tab-bar proportions (~50px) so the solid bar plus the
+     safe-area strip doesn't read as an oversized block. */
+  :root {
+    --nav-height: 50px;
+  }
   .app-bottom-nav {
     background-color: var(--bg-base);
     background-image: linear-gradient(var(--bg-surface), var(--bg-surface));
