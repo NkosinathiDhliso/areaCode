@@ -33,3 +33,7 @@ push-env.ps1
 # Windows reserved-name redirection accidents (e.g. > nul.txt)
 nul.txt
 
+# Local deploy/scan artifacts (not for the repo)
+emdash-report.txt
+infra/environments/**/apply-resume.log
+

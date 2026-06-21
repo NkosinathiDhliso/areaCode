@@ -14,7 +14,7 @@ $BackendDir = Join-Path $RootDir "backend"
 $InfraDir = Join-Path $RootDir "infra" "environments" $Environment
 
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "  Area Code — Serverless Deployment" -ForegroundColor Cyan
+Write-Host "  Area Code - Serverless Deployment" -ForegroundColor Cyan
 Write-Host "  Environment: $Environment" -ForegroundColor Cyan
 Write-Host "  Region: $Region" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
@@ -25,28 +25,37 @@ if (-not $SkipBuild -and -not $TerraformOnly) {
     Write-Host "[1/5] Building Lambda bundles..." -ForegroundColor Yellow
     Push-Location $RootDir
     pnpm --filter backend build:lambda
-    if ($LASTEXITCODE -ne 0) { throw "Build failed" }
+    if ($LASTEXITCODE -ne 0) { Pop-Location; throw "Build failed" }
     Pop-Location
-    Write-Host "  ✓ Build complete" -ForegroundColor Green
+    Write-Host "  [OK] Build complete" -ForegroundColor Green
 } else {
     Write-Host ""
     Write-Host "[1/5] Skipping build" -ForegroundColor DarkGray
 }
 
 # ── Step 2: Terraform apply ──────────────────────────────────────────────────
+$ApiEndpoint = ""
+$WsEndpoint = ""
 if (-not $SkipTerraform) {
     Write-Host ""
     Write-Host "[2/5] Running Terraform apply..." -ForegroundColor Yellow
+
+    # Resolve the short git SHA in PowerShell (the bash `cmd || echo` idiom is
+    # not valid PowerShell, so compute it here and pass it as a plain value).
+    $GitSha = (git rev-parse --short HEAD 2>$null)
+    if (-not $GitSha) { $GitSha = "unknown" }
+
     Push-Location $InfraDir
     terraform init -input=false
-    terraform apply -auto-approve -var="git_sha=$(git rev-parse --short HEAD 2>$null || echo 'unknown')"
-    if ($LASTEXITCODE -ne 0) { throw "Terraform apply failed" }
+    if ($LASTEXITCODE -ne 0) { Pop-Location; throw "Terraform init failed" }
+    terraform apply -auto-approve -var="git_sha=$GitSha"
+    if ($LASTEXITCODE -ne 0) { Pop-Location; throw "Terraform apply failed" }
 
     # Capture outputs
     $ApiEndpoint = terraform output -raw api_endpoint
     $WsEndpoint = terraform output -raw websocket_api_endpoint 2>$null
     Pop-Location
-    Write-Host "  ✓ Infrastructure deployed" -ForegroundColor Green
+    Write-Host "  [OK] Infrastructure deployed" -ForegroundColor Green
 } else {
     Write-Host ""
     Write-Host "[2/5] Skipping Terraform" -ForegroundColor DarkGray
@@ -54,7 +63,7 @@ if (-not $SkipTerraform) {
 
 if ($TerraformOnly) {
     Write-Host ""
-    Write-Host "Terraform-only mode — skipping Lambda code deployment" -ForegroundColor DarkGray
+    Write-Host "Terraform-only mode - skipping Lambda code deployment" -ForegroundColor DarkGray
     exit 0
 }
 
@@ -65,10 +74,8 @@ Write-Host "[3/5] Deploying monolith API Lambda..." -ForegroundColor Yellow
 $ApiDistDir = Join-Path $BackendDir "dist" "lambda"
 $ApiZip = Join-Path $BackendDir "dist" "api-lambda.zip"
 
-# Create zip from the built bundle
-Push-Location $ApiDistDir
-Compress-Archive -Path "index.mjs" -DestinationPath $ApiZip -Force
-Pop-Location
+# Create zip from the built bundle (index.mjs at the archive root)
+Compress-Archive -Path (Join-Path $ApiDistDir "index.mjs") -DestinationPath $ApiZip -Force
 
 $ApiFunctionName = "area-code-$Environment-api"
 Write-Host "  Deploying: $ApiFunctionName" -ForegroundColor Gray
@@ -77,8 +84,11 @@ aws lambda update-function-code `
     --zip-file "fileb://$ApiZip" `
     --region $Region `
     --publish --no-cli-pager
-if ($LASTEXITCODE -ne 0) { Write-Host "  ⚠ Failed to deploy $ApiFunctionName (may not exist yet)" -ForegroundColor DarkYellow }
-else { Write-Host "  ✓ $ApiFunctionName deployed" -ForegroundColor Green }
+if ($LASTEXITCODE -ne 0) { Write-Host "  [WARN] Failed to deploy $ApiFunctionName (may not exist yet)" -ForegroundColor DarkYellow }
+else {
+    aws lambda wait function-updated --function-name $ApiFunctionName --region $Region
+    Write-Host "  [OK] $ApiFunctionName deployed" -ForegroundColor Green
+}
 
 # ── Step 4: Package and deploy WebSocket Lambda ──────────────────────────────
 Write-Host ""
@@ -87,9 +97,7 @@ Write-Host "[4/5] Deploying WebSocket Lambda..." -ForegroundColor Yellow
 $WsDistDir = Join-Path $BackendDir "dist" "websocket"
 $WsZip = Join-Path $BackendDir "dist" "websocket-lambda.zip"
 
-Push-Location $WsDistDir
-Compress-Archive -Path "index.mjs" -DestinationPath $WsZip -Force
-Pop-Location
+Compress-Archive -Path (Join-Path $WsDistDir "index.mjs") -DestinationPath $WsZip -Force
 
 $WsFunctionName = "area-code-$Environment-websocket"
 Write-Host "  Deploying: $WsFunctionName" -ForegroundColor Gray
@@ -98,9 +106,10 @@ aws lambda update-function-code `
     --zip-file "fileb://$WsZip" `
     --region $Region `
     --publish --no-cli-pager
-if ($LASTEXITCODE -ne 0) { Write-Host "  ⚠ Failed to deploy $WsFunctionName (may not exist yet)" -ForegroundColor DarkYellow }
+if ($LASTEXITCODE -ne 0) { Write-Host "  [WARN] Failed to deploy $WsFunctionName (may not exist yet)" -ForegroundColor DarkYellow }
 else {
-    Write-Host "  ✓ $WsFunctionName deployed" -ForegroundColor Green
+    aws lambda wait function-updated --function-name $WsFunctionName --region $Region
+    Write-Host "  [OK] $WsFunctionName deployed" -ForegroundColor Green
 
     # Set WEBSOCKET_ENDPOINT env var (resolves circular dep from Terraform)
     if ($WsEndpoint) {
@@ -126,9 +135,7 @@ foreach ($worker in $Workers) {
     $FunctionName = "area-code-$Environment-$WorkerName"
     $WorkerZip = Join-Path $WorkersDir "$WorkerName.zip"
 
-    Push-Location $worker.FullName
-    Compress-Archive -Path "index.mjs" -DestinationPath $WorkerZip -Force
-    Pop-Location
+    Compress-Archive -Path (Join-Path $worker.FullName "index.mjs") -DestinationPath $WorkerZip -Force
 
     Write-Host "  Deploying: $FunctionName" -ForegroundColor Gray
     aws lambda update-function-code `
@@ -136,8 +143,8 @@ foreach ($worker in $Workers) {
         --zip-file "fileb://$WorkerZip" `
         --region $Region `
         --publish --no-cli-pager 2>$null
-    if ($LASTEXITCODE -ne 0) { Write-Host "    ⚠ Skipped (function may not exist in Terraform)" -ForegroundColor DarkYellow }
-    else { Write-Host "    ✓ deployed" -ForegroundColor Green }
+    if ($LASTEXITCODE -ne 0) { Write-Host "    [WARN] Skipped (function may not exist in Terraform)" -ForegroundColor DarkYellow }
+    else { Write-Host "    [OK] deployed" -ForegroundColor Green }
 }
 
 # ── Summary ──────────────────────────────────────────────────────────────────
