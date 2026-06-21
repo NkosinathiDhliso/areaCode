@@ -232,17 +232,6 @@ describe('MapScreen - 17.2 render and state coverage', () => {
     expect(screen.queryByText('location.enable')).toBeNull()
   })
 
-  it('shows the Onboarding_Hint until seen and suppresses it in Commit_Mode (R17.1, R17.3)', async () => {
-    useUserStore.setState({ onboarding: { hintSeen: false, layerHintSeen: true, firstCheckIn: true } })
-    await renderScreen()
-    expect(screen.getByText('map.tapHint')).toBeTruthy()
-
-    act(() => {
-      useSelectionStore.getState().enterCommit()
-    })
-    expect(screen.queryByText('map.tapHint')).toBeNull()
-  })
-
   it('opens the SearchSheet when the search control is tapped (R13.6, R15.1)', async () => {
     const { container } = await renderScreen()
     expect(container.querySelector('[data-search-sheet]')!.getAttribute('data-open')).toBe('false')

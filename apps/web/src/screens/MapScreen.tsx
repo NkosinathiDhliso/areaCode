@@ -185,10 +185,9 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   // input methods feed one model (R3.1, R3.4).
   const handleMarkerTap = useCallback(
     (node: Node) => {
-      if (!onboarding.hintSeen) markHintSeen('hintSeen')
       onMarkerTap(node.id)
     },
-    [onboarding.hintSeen, markHintSeen, onMarkerTap],
+    [onMarkerTap],
   )
 
   useMapMarkers(mapRef, categoryFilter, handleMarkerTap, mapReady, activeVenueId)
@@ -359,36 +358,6 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
         </div>
       )}
 
-      {overlay.showOnboardingHint && (
-        <div
-          className="absolute left-1/2 -translate-x-1/2 z-20 pointer-events-none [&>*]:pointer-events-auto"
-          style={{ bottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
-        >
-          <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-2xl px-4 py-3 flex items-center gap-2 shadow-lg">
-            <span className="text-[var(--text-secondary)] text-sm">{t('map.tapHint')}</span>
-            <button
-              onClick={() => markHintSeen('hintSeen')}
-              className="text-[var(--text-muted)] text-xs"
-              aria-label={t('map.tapHint')}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
-
       <ToastOverlay />
       {overlay.showNudge && <ProximityNudgeBanner onNavigate={onNavigate} />}
 
@@ -476,7 +445,6 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
             }
             addNode(node)
           }
-          if (!onboarding.hintSeen) markHintSeen('hintSeen')
           onSearchSelect(result.id)
         }}
       />

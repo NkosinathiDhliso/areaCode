@@ -61,17 +61,33 @@ export function MapboxAddressInput({
   const [suggestions, setSuggestions] = useState<MapboxFeature[]>([])
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
-  // Suppress the next fetch when value changes because the user just picked a suggestion.
-  const skipNextFetch = useRef(false)
+  // The address value the user just picked from the dropdown. While `value`
+  // still equals this, we must NOT geocode again (that is what re-opened the
+  // dropdown after a selection). It is a ref, not a one-shot flag, so it stays
+  // valid across the multiple re-renders a selection triggers in the parent
+  // (it updates address + lat + lng). It is cleared the moment the user types.
+  const selectedValue = useRef<string | null>(null)
+  // Hold `onUnavailable` in a ref so the fetch effect can depend on `value`
+  // ALONE. The parent passes a fresh inline `onUnavailable` on every render;
+  // if the effect depended on it, every parent re-render (including the ones a
+  // selection causes) would re-run the effect and re-trigger the dropdown.
+  const onUnavailableRef = useRef(onUnavailable)
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    onUnavailableRef.current = onUnavailable
+  }, [onUnavailable])
+
+  useEffect(() => {
     if (!MAPBOX_TOKEN) {
-      onUnavailable?.()
+      onUnavailableRef.current?.()
       return
     }
-    if (skipNextFetch.current) {
-      skipNextFetch.current = false
+    // The value was just chosen from a suggestion — it is already resolved, so
+    // skip geocoding and keep the dropdown closed no matter how many times this
+    // effect re-runs for the same value.
+    if (value === selectedValue.current) {
+      setOpen(false)
       return
     }
     const query = value.trim()
@@ -114,7 +130,7 @@ export function MapboxAddressInput({
       clearTimeout(handle)
       controller.abort()
     }
-  }, [value, onUnavailable])
+  }, [value])
 
   // Close the dropdown when clicking outside.
   useEffect(() => {
@@ -130,7 +146,9 @@ export function MapboxAddressInput({
   function choose(feature: MapboxFeature) {
     const address = feature.properties?.full_address || feature.properties?.name || ''
     const coords = feature.properties?.coordinates
-    skipNextFetch.current = true
+    // Remember the chosen value so the fetch effect skips it for as long as the
+    // input holds it — robust against the parent's selection-driven re-renders.
+    selectedValue.current = address
     setOpen(false)
     setSuggestions([])
     setActiveIndex(-1)
@@ -139,6 +157,13 @@ export function MapboxAddressInput({
     } else if (address) {
       onTextChange(address)
     }
+  }
+
+  function handleTextChange(text: string) {
+    // The user is typing again, so any prior selection no longer applies —
+    // clear the guard so geocoding resumes for the new input.
+    selectedValue.current = null
+    onTextChange(text)
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -164,7 +189,7 @@ export function MapboxAddressInput({
         ref={inputRef}
         type="text"
         value={value}
-        onChange={(e) => onTextChange(e.target.value)}
+        onChange={(e) => handleTextChange(e.target.value)}
         onKeyDown={onKeyDown}
         onFocus={() => suggestions.length > 0 && setOpen(true)}
         placeholder={placeholder}

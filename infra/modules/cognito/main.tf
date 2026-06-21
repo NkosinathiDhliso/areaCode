@@ -49,6 +49,36 @@ variable "verify_auth_challenge_arn" {
   default = ""
 }
 
+# ─── Hosted UI / federated (Google) sign-in ───
+# Provisions the Cognito Hosted-UI domain and the Google identity provider for
+# this pool. Gated by a plan-time boolean (defaults off) so pools that do not
+# use Hosted UI stay untouched. The user-pool *client*'s OAuth attributes are
+# deliberately NOT set here: they are Optional+Computed and are managed live
+# (consumer/business pools rely on this), so adding them would clobber existing
+# callback/identity-provider settings.
+variable "enable_hosted_ui" {
+  description = "Provision a Hosted UI domain and Google IdP for this pool."
+  type        = bool
+  default     = false
+}
+
+variable "hosted_ui_domain" {
+  description = "Cognito Hosted UI domain prefix. Defaults to area-code-<env>-<pool_name>."
+  type        = string
+  default     = ""
+}
+
+variable "google_client_id" {
+  type    = string
+  default = ""
+}
+
+variable "google_client_secret" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
+
 resource "aws_iam_role" "cognito_sns" {
   name = "area-code-${var.env}-${var.pool_name}-cognito-sns"
 
@@ -148,6 +178,41 @@ resource "aws_cognito_user_pool_client" "this" {
   }
 
   prevent_user_existence_errors = "ENABLED"
+}
+
+# ─── Hosted UI domain + Google identity provider ───
+# Gated on enable_hosted_ui. provider_details has ignore_changes because Cognito
+# auto-populates the Google endpoint URLs (authorize_url, token_url, ...) which
+# cannot be set in config and would otherwise show a perpetual diff.
+resource "aws_cognito_user_pool_domain" "this" {
+  count        = var.enable_hosted_ui ? 1 : 0
+  domain       = var.hosted_ui_domain != "" ? var.hosted_ui_domain : "area-code-${var.env}-${var.pool_name}"
+  user_pool_id = aws_cognito_user_pool.this.id
+}
+
+resource "aws_cognito_identity_provider" "google" {
+  count         = var.enable_hosted_ui ? 1 : 0
+  user_pool_id  = aws_cognito_user_pool.this.id
+  provider_name = "Google"
+  provider_type = "Google"
+
+  provider_details = {
+    client_id        = var.google_client_id
+    client_secret    = var.google_client_secret
+    authorize_scopes = "openid email profile"
+  }
+
+  attribute_mapping = {
+    email       = "email"
+    family_name = "family_name"
+    given_name  = "given_name"
+    name        = "name"
+    username    = "sub"
+  }
+
+  lifecycle {
+    ignore_changes = [provider_details]
+  }
 }
 
 output "user_pool_id" {

@@ -1,9 +1,14 @@
 // DynamoDB-backed Rewards Repository (replaces Prisma)
 import { GetCommand, ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
+
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
-import * as dynamo from './dynamodb-repository.js'
-import { getNodeById } from '../nodes/dynamodb-repository.js'
+import { kvGet } from '../../shared/kv/dynamodb-kv.js'
 import { getStaffById } from '../auth/dynamodb-repository.js'
+import { getNodeById } from '../nodes/dynamodb-repository.js'
+import { getLivePresenceCount } from '../presence/repository.js'
+
+import * as dynamo from './dynamodb-repository.js'
+import { rankGetsByVibe } from './ranking.js'
 
 export { getNodeById }
 export const getActiveRewardsByNodeId = dynamo.getActiveRewardsByNodeId
@@ -86,6 +91,7 @@ export async function getRewardsNearMe(lat: number, lng: number) {
     }),
   )
   const rewards = rewardsResult.Items || []
+  const nowMs = Date.now()
 
   const results = []
   for (const r of rewards) {
@@ -99,6 +105,28 @@ export async function getRewardsNearMe(lat: number, lng: number) {
       Math.cos((lat * Math.PI) / 180) * Math.cos((node.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
     const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
     if (distance <= 5000) {
+      // Honest aliveness signals for the venue behind this get (discovery-DNA:
+      // aliveness is the hero ranking signal, not proximity). `liveCount` is the
+      // honest CURRENT presence (check-in + check-out + expiry — honest-presence
+      // rule); `pulseScore` is the decaying activity score used across the map.
+      // Both are best-effort: a lookup miss falls back to 0 so a get is never
+      // dropped just because its pulse/presence is cold.
+      let pulseScore = 0
+      if (node.cityId) {
+        try {
+          const score = await kvGet(`pulse:${node.cityId}:${node.nodeId}`)
+          pulseScore = score ? parseFloat(score) : 0
+        } catch {
+          pulseScore = 0
+        }
+      }
+      let liveCount = 0
+      try {
+        liveCount = await getLivePresenceCount(node.nodeId, nowMs)
+      } catch {
+        liveCount = 0
+      }
+
       results.push({
         id: r['rewardId'] ?? r['id'],
         title: r['title'],
@@ -109,6 +137,10 @@ export async function getRewardsNearMe(lat: number, lng: number) {
         node_name: node.name,
         node_slug: node.slug,
         distance,
+        // Honest aliveness signals, surfaced so the service can rank vibe-first
+        // and the UI can lead with "who's here now" instead of distance.
+        pulse_score: pulseScore,
+        live_count: liveCount,
         expires_at: r['expiresAt'] ?? null,
         // Event/Offer get attributes threaded through so the service layer can
         // apply the lifecycle filter (R3.2-R3.4). A row written before this
@@ -119,7 +151,20 @@ export async function getRewardsNearMe(lat: number, lng: number) {
       })
     }
   }
-  return results.sort((a, b) => a.distance - b.distance).slice(0, 50)
+
+  // Order vibe-first (aliveness → taste → proximity → id), NOT nearest-first.
+  // Proximity is a tiebreaker only; payment never enters ordering (see
+  // ranking.ts and `.kiro/steering/discovery-dna-vibe-over-convenience.md`).
+  // `tasteMatch` is 0 for every get until the taste signal is wired, so
+  // aliveness leads and proximity stays a minor tiebreaker.
+  return rankGetsByVibe(
+    results.map((r) => ({
+      ...r,
+      aliveness: (r.pulse_score ?? 0) + (r.live_count ?? 0),
+      tasteMatch: 0,
+      distanceMeters: r.distance,
+    })),
+  ).slice(0, 50)
 }
 
 export async function getUnclaimedRewards(userId: string) {

@@ -137,6 +137,21 @@ data "aws_secretsmanager_secret_version" "qr_hmac" {
   secret_id = data.aws_secretsmanager_secret.qr_hmac.id
 }
 
+# Google OAuth credentials for the Cognito Hosted-UI Google identity providers
+# (staff + admin pools). Stored in Secrets Manager as JSON
+# {"client_id": "...", "client_secret": "..."} so the secret never lives in code.
+data "aws_secretsmanager_secret" "google_oauth" {
+  name = "area-code/${local.env}/google-oauth"
+}
+
+data "aws_secretsmanager_secret_version" "google_oauth" {
+  secret_id = data.aws_secretsmanager_secret.google_oauth.id
+}
+
+locals {
+  google_oauth = jsondecode(data.aws_secretsmanager_secret_version.google_oauth.secret_string)
+}
+
 # --- VPC / Networking ---
 module "vpc" {
   source             = "../../modules/vpc"
@@ -171,6 +186,12 @@ module "cognito_staff" {
   define_auth_challenge_arn = module.cognito_triggers_staff.define_auth_arn
   create_auth_challenge_arn = module.cognito_triggers_staff.create_auth_arn
   verify_auth_challenge_arn = module.cognito_triggers_staff.verify_auth_arn
+
+  # Hosted-UI Google sign-in (already live; codified here so terraform stops
+  # planning to destroy the existing domain + Google IdP).
+  enable_hosted_ui     = true
+  google_client_id     = local.google_oauth.client_id
+  google_client_secret = local.google_oauth.client_secret
 }
 
 module "cognito_admin" {
@@ -186,6 +207,12 @@ module "cognito_admin" {
     name = "admin_role"
     type = "String"
   }]
+
+  # Hosted-UI Google sign-in (already live; codified here so terraform stops
+  # planning to destroy the existing domain + Google IdP).
+  enable_hosted_ui     = true
+  google_client_id     = local.google_oauth.client_id
+  google_client_secret = local.google_oauth.client_secret
 }
 
 # --- Cognito CUSTOM_AUTH Lambda triggers ---

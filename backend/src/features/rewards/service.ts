@@ -1,9 +1,11 @@
 import { AppError } from '../../shared/errors/AppError.js'
 import { findBusinessById } from '../business/repository.js'
 import { getEffectiveTier } from '../business/service.js'
-import * as repo from './repository.js'
 import { notifyNewRewardConsumers } from '../notifications/service.js'
+
 import { validateWindow, classifyLifecycle, isVisibleInFeed } from './lifecycle.js'
+import { pulseStateFromScore, rankGetsByVibe } from './ranking.js'
+import * as repo from './repository.js'
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
@@ -18,6 +20,8 @@ const DEV_REWARDS = [
     nodeName: 'Father Coffee',
     nodeSlug: 'father-coffee',
     distance: 150,
+    pulseScore: 8,
+    liveCount: 2,
     expiresAt: null,
   },
   {
@@ -30,6 +34,8 @@ const DEV_REWARDS = [
     nodeName: "Kitchener's Bar",
     nodeSlug: 'kitcheners-bar',
     distance: 800,
+    pulseScore: 72,
+    liveCount: 23,
     expiresAt: null,
   },
   {
@@ -42,6 +48,8 @@ const DEV_REWARDS = [
     nodeName: "Nando's Rosebank",
     nodeSlug: 'nandos-rosebank',
     distance: 1200,
+    pulseScore: 18,
+    liveCount: 4,
     expiresAt: null,
   },
   {
@@ -54,6 +62,8 @@ const DEV_REWARDS = [
     nodeName: 'The Grillhouse',
     nodeSlug: 'the-grillhouse',
     distance: 600,
+    pulseScore: 55,
+    liveCount: 15,
     expiresAt: null,
   },
   {
@@ -66,6 +76,8 @@ const DEV_REWARDS = [
     nodeName: 'Virgin Active Sandton',
     nodeSlug: 'virgin-active-sandton',
     distance: 2000,
+    pulseScore: 3,
+    liveCount: 0,
     expiresAt: null,
   },
   // Event & Offer Gets dev fixtures (R7.3). DEV_MODE returns DEV_REWARDS
@@ -82,6 +94,8 @@ const DEV_REWARDS = [
     nodeName: "Kitchener's Bar",
     nodeSlug: 'kitcheners-bar',
     distance: 800,
+    pulseScore: 72,
+    liveCount: 23,
     expiresAt: null,
     getCategory: 'event',
     startsAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
@@ -98,6 +112,8 @@ const DEV_REWARDS = [
     nodeName: 'Father Coffee',
     nodeSlug: 'father-coffee',
     distance: 150,
+    pulseScore: 8,
+    liveCount: 2,
     expiresAt: null,
     getCategory: 'offer',
     startsAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
@@ -317,7 +333,19 @@ export async function updateReward(
 }
 
 export async function getRewardsNearMe(lat: number, lng: number) {
-  if (DEV_MODE) return DEV_REWARDS
+  if (DEV_MODE) {
+    // Mirror the production path: vibe-first ordering (aliveness → taste →
+    // proximity) and a derived Pulse_State, so the dev surface shows the same
+    // "buzzing-but-further beats quiet-but-closer" behaviour as prod.
+    return rankGetsByVibe(
+      DEV_REWARDS.map((r) => ({
+        ...r,
+        aliveness: (r.pulseScore ?? 0) + (r.liveCount ?? 0),
+        tasteMatch: 0,
+        distanceMeters: r.distance,
+      })),
+    ).map((r) => ({ ...r, pulseState: pulseStateFromScore(r.pulseScore ?? 0) }))
+  }
 
   const raw = await repo.getRewardsNearMe(lat, lng)
   const nowMs = Date.now()
@@ -352,6 +380,14 @@ export async function getRewardsNearMe(lat: number, lng: number) {
         nodeName: r.node_name,
         nodeSlug: r.node_slug,
         distance: Math.round(r.distance),
+        // Honest aliveness, surfaced so the consumer card can LEAD with
+        // "who's here now" + vibe instead of distance (discovery-DNA +
+        // honest-presence). `liveCount` is the honest current presence;
+        // `pulseState` is derived from the same decaying pulse score the map
+        // uses. The vibe-first ordering is already applied in the repository.
+        liveCount: (r as { live_count?: number }).live_count ?? 0,
+        pulseScore: (r as { pulse_score?: number }).pulse_score ?? 0,
+        pulseState: pulseStateFromScore((r as { pulse_score?: number }).pulse_score ?? 0),
         // `expires_at` already comes back from the DynamoDB repo as an ISO string
         // (legacy Prisma returned a Date here). Calling `.toISOString()` on a string
         // throws a TypeError → 500 on the Gets page whenever a nearby reward has an
