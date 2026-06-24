@@ -9,6 +9,7 @@
     "build:lambda": "npx tsx build.mts",
     "test": "vitest run",
     "test:data-integrity": "vitest run src/__tests__/data-integrity.test.ts",
+    "backfill:user-locks": "npx tsx src/scripts/backfill-user-locks.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

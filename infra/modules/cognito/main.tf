@@ -34,6 +34,19 @@ variable "username_attributes" {
   default = ["phone_number"]
 }
 
+# MFA mode for the pool. "OFF" (default), "ON" (required), or "OPTIONAL".
+# When not "OFF", software-token (TOTP) MFA is enabled. SMS MFA is deliberately
+# never configured — see .kiro/steering/no-sms-no-phone-auth.md.
+variable "mfa_configuration" {
+  type    = string
+  default = "OFF"
+
+  validation {
+    condition     = contains(["OFF", "ON", "OPTIONAL"], var.mfa_configuration)
+    error_message = "mfa_configuration must be one of OFF, ON, OPTIONAL."
+  }
+}
+
 variable "define_auth_challenge_arn" {
   type    = string
   default = ""
@@ -115,9 +128,18 @@ resource "aws_cognito_user_pool" "this" {
   name = "area-code-${var.env}-${var.pool_name}"
 
   auto_verified_attributes = var.username_attributes
-  mfa_configuration        = "OFF"
+  mfa_configuration        = var.mfa_configuration
 
   username_attributes = var.username_attributes
+
+  # TOTP (authenticator app) MFA. Enabled whenever MFA is not OFF. SMS MFA is
+  # intentionally omitted (no sms_mfa_configuration block) per the no-SMS rule.
+  dynamic "software_token_mfa_configuration" {
+    for_each = var.mfa_configuration == "OFF" ? [] : [1]
+    content {
+      enabled = true
+    }
+  }
 
   sms_configuration {
     external_id    = "area-code-${var.env}-${var.pool_name}-sns"

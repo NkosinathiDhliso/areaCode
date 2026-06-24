@@ -1,4 +1,5 @@
 import * as cognito from '../../shared/cognito/client.js'
+import { sendEmailVerificationEmail } from '../../shared/email/ses.js'
 import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet, kvSet, kvDel, kvIncr } from '../../shared/kv/dynamodb-kv.js'
 import { reportOtpFeedback } from '../../shared/sms/feedback.js'
@@ -9,6 +10,8 @@ import * as repo from './repository.js'
 import { createLoginSession } from './session-service.js'
 
 import { LEGAL_CLAUSES_VERSION } from '@area-code/shared/constants/legal'
+
+import { randomBytes } from 'node:crypto'
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
@@ -172,33 +175,45 @@ export async function consumerOAuthSync(opts: { cognitoSub: string; email?: stri
     }
 
     const dupEmail = await repo.getUserByEmail(email)
-    if (dupEmail && dupEmail.cognitoSub && dupEmail.cognitoSub !== cognitoSub) {
-      throw AppError.conflict('This email is already registered. Sign in with the method you used before.')
+    if (dupEmail) {
+      if (dupEmail.cognitoSub && dupEmail.cognitoSub !== cognitoSub) {
+        // A real account already owns this email under a different Cognito
+        // identity (e.g. email/password). Don't silently merge identities.
+        throw AppError.conflict('This email is already registered. Sign in with the method you used before.')
+      }
+      // The existing row has no linked Cognito sub — it's an orphan left by a
+      // partially-failed signup. Atomically adopt it (link the sub + claim the
+      // sub lock) instead of creating a duplicate row, which would strand the
+      // user's history/rewards on the old userId and read as "I lost my account".
+      const adopted = await repo.linkCognitoSub(dupEmail.userId, cognitoSub)
+      user = adopted ?? dupEmail
+      isNewUser = false
+    } else {
+      const city = await repo.getCityBySlug('johannesburg')
+      if (!city) throw AppError.internal('Default city missing')
+
+      let username = suggestedUsernameFromEmail(email)
+      let n = 0
+      while (await repo.findUserByUsername(username)) {
+        n += 1
+        username = `${suggestedUsernameFromEmail(email).slice(0, 18)}_${n}`
+      }
+
+      const emailLocal = email.split('@')[0] ?? 'Friend'
+      const displayName = emailLocal.length > 0 ? emailLocal.charAt(0).toUpperCase() + emailLocal.slice(1) : 'Explorer'
+
+      user = await repo.createUser({
+        email,
+        username,
+        displayName,
+        cityId: city.id,
+        cognitoSub,
+        emailVerified: true,
+      })
+
+      const consentVersion = currentConsentVersion()
+      await repo.insertConsentRecord(user.userId, consentVersion, false)
     }
-
-    const city = await repo.getCityBySlug('johannesburg')
-    if (!city) throw AppError.internal('Default city missing')
-
-    let username = suggestedUsernameFromEmail(email)
-    let n = 0
-    while (await repo.findUserByUsername(username)) {
-      n += 1
-      username = `${suggestedUsernameFromEmail(email).slice(0, 18)}_${n}`
-    }
-
-    const emailLocal = email.split('@')[0] ?? 'Friend'
-    const displayName = emailLocal.length > 0 ? emailLocal.charAt(0).toUpperCase() + emailLocal.slice(1) : 'Explorer'
-
-    user = await repo.createUser({
-      email,
-      username,
-      displayName,
-      cityId: city.id,
-      cognitoSub,
-    })
-
-    const consentVersion = currentConsentVersion()
-    await repo.insertConsentRecord(user.userId, consentVersion, false)
   }
 
   await cognito.updateUserAttributesByCognitoSub('consumer', cognitoSub, {
@@ -265,6 +280,79 @@ export async function consumerVerifyOtp(phone: string, code: string, userAgent?:
   }
 }
 
+/**
+ * Create the consumer's Cognito email/password user, or recover an orphan.
+ *
+ * `createEmailPasswordUser` throws `UsernameTakenError` when a Cognito user
+ * already exists for this email. Callers invoke this only AFTER confirming no
+ * DynamoDB account owns the email, so an existing Cognito user must be an
+ * orphan from a previously-failed signup — safe to recover by setting the new
+ * password. This never resets a live account's password.
+ */
+const EMAIL_VERIFY_TTL_SECONDS = 24 * 60 * 60
+
+function webBaseUrl(): string {
+  return process.env['AREA_CODE_WEB_URL'] ?? 'https://areacode.co.za'
+}
+
+/**
+ * Issue a single-use, TTL-bound verification token and email the link.
+ * Best-effort by design — signup and login must never fail because email
+ * delivery hiccupped. Users who don't get the mail can trigger a resend from
+ * the in-app banner.
+ */
+export async function sendConsumerEmailVerification(userId: string, email: string): Promise<void> {
+  try {
+    const token = randomBytes(24).toString('base64url')
+    await kvSet(`email-verify:${token}`, userId, EMAIL_VERIFY_TTL_SECONDS)
+    const url = `${webBaseUrl()}/verify-email?token=${encodeURIComponent(token)}`
+    await sendEmailVerificationEmail(email, url)
+  } catch (err) {
+    console.error('email verification send failed', { userId, error: (err as Error).message })
+  }
+}
+
+/** Confirm an email from the verification link's token. */
+export async function verifyConsumerEmail(token: string): Promise<{ verified: boolean }> {
+  if (DEV_MODE) return { verified: true }
+  const userId = await kvGet(`email-verify:${token}`)
+  if (!userId) {
+    throw AppError.badRequest('This verification link is invalid or has expired. Request a new one.')
+  }
+  await repo.updateUser(userId, { emailVerified: true })
+  await kvDel(`email-verify:${token}`)
+  return { verified: true }
+}
+
+/** Re-issue a verification email for the signed-in consumer. */
+export async function resendConsumerEmailVerification(
+  userId: string,
+): Promise<{ sent: boolean; alreadyVerified?: boolean }> {
+  if (DEV_MODE) return { sent: true }
+  const user = await repo.getUserById(userId)
+  if (!user) throw AppError.notFound('User not found')
+  if (user.emailVerified) return { sent: false, alreadyVerified: true }
+  if (!user.email) throw AppError.unprocessable('No email on file to verify.')
+  await sendConsumerEmailVerification(userId, user.email)
+  return { sent: true }
+}
+
+async function createOrRecoverConsumerCognitoUser(email: string, password: string) {
+  try {
+    return await cognito.createEmailPasswordUser('consumer', email, password)
+  } catch (err) {
+    if (err instanceof cognito.UsernameTakenError) {
+      // Re-check the authoritative store. If a DynamoDB row now owns this email
+      // (e.g. a concurrent signup won the race), this is a real duplicate, not
+      // an orphan — refuse rather than reset a live account's password.
+      const existing = await repo.getUserByEmail(email)
+      if (existing) throw AppError.conflict('Email already registered')
+      return cognito.recoverOrphanEmailUser('consumer', email, password)
+    }
+    throw err
+  }
+}
+
 export async function consumerEmailSignup(data: {
   email: string
   password: string
@@ -299,32 +387,63 @@ export async function consumerEmailSignup(data: {
   const emailLocal = email.split('@')[0] ?? 'Friend'
   const displayName = emailLocal.length > 0 ? emailLocal.charAt(0).toUpperCase() + emailLocal.slice(1) : 'Explorer'
 
-  const cognitoUser = await cognito.createEmailPasswordUser('consumer', email, data.password)
+  const cognitoUser = await createOrRecoverConsumerCognitoUser(email, data.password)
 
-  const user = await repo.createUser({
-    email,
-    username,
-    displayName,
-    cityId: city.id,
-    cognitoSub: cognitoUser.sub,
-  })
+  // Cognito user now exists. Everything after this point must either fully
+  // succeed or be rolled back — otherwise we leave an orphaned Cognito user
+  // (no DynamoDB row) or a DynamoDB row with no linked `custom:userId`, which
+  // is the root cause of "I signed up but can't log in / lost my account".
+  let user: Awaited<ReturnType<typeof repo.createUser>> | undefined
+  try {
+    user = await repo.createUser({
+      email,
+      username,
+      displayName,
+      cityId: city.id,
+      cognitoSub: cognitoUser.sub,
+      emailVerified: false,
+    })
 
-  await cognito.updateUserAttributes('consumer', email, {
-    userId: user.userId,
-    citySlug: 'johannesburg',
-  })
+    await cognito.updateUserAttributes('consumer', email, {
+      userId: user.userId,
+      citySlug: 'johannesburg',
+    })
 
-  const consentVersion = currentConsentVersion()
-  await repo.insertConsentRecord(user.userId, consentVersion, data.consentAnalytics ?? false)
+    const consentVersion = currentConsentVersion()
+    await repo.insertConsentRecord(user.userId, consentVersion, data.consentAnalytics ?? false)
+  } catch (err) {
+    // Compensating cleanup so the user can retry from a clean slate. Releasing
+    // the DynamoDB row also releases its email/sub locks (see deleteUser).
+    if (user?.userId) {
+      await repo.deleteUser(user.userId).catch(() => undefined)
+    }
+    // If the failure was a 409 the email belongs to a different (concurrent)
+    // signup that won the race — leave their Cognito user alone. Otherwise we
+    // own the freshly-created Cognito user and must remove it.
+    if (!(err instanceof AppError && err.statusCode === 409)) {
+      await cognito.deleteUserByUsername('consumer', email).catch(() => undefined)
+    }
+    throw err
+  }
 
   const tokens = await cognito.passwordAuth('consumer', email, data.password)
   const loginSession = await createLoginSession(user.userId, data.userAgent ?? '')
+
+  // Fire off the (non-blocking) verification email. The account is already
+  // usable; verification only unlocks gated actions like reward redemption.
+  await sendConsumerEmailVerification(user.userId, email)
 
   return {
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
     sessionId: loginSession.sessionId,
-    user: { id: user.userId, username: user.username, displayName: user.displayName, tier: user.tier },
+    user: {
+      id: user.userId,
+      username: user.username,
+      displayName: user.displayName,
+      tier: user.tier,
+      emailVerified: false,
+    },
   }
 }
 
@@ -360,7 +479,13 @@ export async function consumerEmailLogin(emailRaw: string, password: string, use
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
     sessionId: loginSession.sessionId,
-    user: { id: user.userId, username: user.username, displayName: user.displayName, tier: user.tier },
+    user: {
+      id: user.userId,
+      username: user.username,
+      displayName: user.displayName,
+      tier: user.tier,
+      emailVerified: user.emailVerified ?? false,
+    },
   }
 }
 
@@ -951,31 +1076,114 @@ export async function adminLogin(email: string, password: string) {
   }
 
   try {
-    const tokens = await cognito.adminPasswordAuth(email, password)
+    const outcome = await cognito.adminBeginAuth(email, password)
 
-    // Extract admin role from ID token claims
-    const cognitoUser = await cognito.getCognitoUser('admin', email)
-
-    // Defence in depth: Cognito's password auth runs before we look up the
-    // user, so a deactivated admin could still get tokens. If the lookup
-    // returns nothing (deactivated, deleted, or not in the admin pool) we
-    // refuse the login outright. Tokens issued in the previous call lapse
-    // naturally — we don't have a way to revoke them inline.
-    if (!cognitoUser?.sub) {
-      throw AppError.unauthorized('Account not found or has been disabled')
+    // MFA already enrolled — ask the client for the 6-digit TOTP code.
+    if (outcome.challengeName === 'SOFTWARE_TOKEN_MFA') {
+      return {
+        mfaRequired: true as const,
+        challenge: 'SOFTWARE_TOKEN_MFA' as const,
+        session: outcome.session ?? '',
+        email: email.toLowerCase().trim(),
+      }
     }
-    const role = cognitoUser.attributes['custom:admin_role'] ?? 'support_agent'
-    const adminId = cognitoUser.sub
 
-    return {
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      adminId,
-      role,
+    // MFA required but not yet set up — hand back a TOTP secret to enrol.
+    if (outcome.challengeName === 'MFA_SETUP') {
+      const assoc = await cognito.adminAssociateSoftwareToken(outcome.session ?? '')
+      const normalizedEmail = email.toLowerCase().trim()
+      return {
+        mfaRequired: true as const,
+        challenge: 'MFA_SETUP' as const,
+        session: assoc.session,
+        email: normalizedEmail,
+        secretCode: assoc.secretCode,
+        otpauthUri: buildTotpUri(normalizedEmail, assoc.secretCode),
+      }
     }
+
+    if (!outcome.tokens) throw AppError.unauthorized('Invalid credentials')
+    return finalizeAdminLogin(email, outcome.tokens)
   } catch (err) {
     if (err instanceof AppError) throw err
     throw AppError.unauthorized('Invalid credentials')
+  }
+}
+
+/** Respond to the SOFTWARE_TOKEN_MFA challenge for an already-enrolled admin. */
+export async function adminMfaRespond(opts: { email: string; session: string; code: string }) {
+  if (DEV_MODE) {
+    return {
+      accessToken: `dev-admin-access-${Date.now()}`,
+      refreshToken: `dev-admin-refresh-${Date.now()}`,
+      adminId: 'dev-admin-1',
+      role: 'super_admin' as const,
+    }
+  }
+  try {
+    const tokens = await cognito.adminRespondToMfaChallenge({
+      email: opts.email,
+      session: opts.session,
+      challengeName: 'SOFTWARE_TOKEN_MFA',
+      code: opts.code,
+    })
+    return finalizeAdminLogin(opts.email, tokens)
+  } catch (err) {
+    if (err instanceof AppError) throw err
+    throw AppError.unauthorized('That code was incorrect or expired. Try again.')
+  }
+}
+
+/** Verify the first TOTP code and complete the MFA_SETUP challenge. */
+export async function adminMfaCompleteSetup(opts: { email: string; session: string; code: string }) {
+  if (DEV_MODE) {
+    return {
+      accessToken: `dev-admin-access-${Date.now()}`,
+      refreshToken: `dev-admin-refresh-${Date.now()}`,
+      adminId: 'dev-admin-1',
+      role: 'super_admin' as const,
+    }
+  }
+  try {
+    const verified = await cognito.adminVerifySoftwareToken(opts.session, opts.code)
+    const tokens = await cognito.adminRespondToMfaChallenge({
+      email: opts.email,
+      session: verified.session,
+      challengeName: 'MFA_SETUP',
+    })
+    return finalizeAdminLogin(opts.email, tokens)
+  } catch (err) {
+    if (err instanceof AppError) throw err
+    throw AppError.unauthorized('That code was incorrect or expired. Try again.')
+  }
+}
+
+/** Build an otpauth:// URI for authenticator-app QR codes. */
+function buildTotpUri(email: string, secret: string): string {
+  const issuer = 'Area Code Admin'
+  const label = `${issuer}:${email}`
+  const params = new URLSearchParams({ secret, issuer })
+  return `otpauth://totp/${encodeURIComponent(label)}?${params.toString()}`
+}
+
+/**
+ * Shared tail of every admin login path: confirm the admin still exists/enabled
+ * in the pool and resolve their role. Defence in depth — Cognito issues tokens
+ * before we look the user up, so a disabled admin is rejected here.
+ */
+async function finalizeAdminLogin(
+  email: string,
+  tokens: { accessToken: string; refreshToken: string },
+): Promise<{ accessToken: string; refreshToken: string; adminId: string; role: string }> {
+  const cognitoUser = await cognito.getCognitoUser('admin', email)
+  if (!cognitoUser?.sub) {
+    throw AppError.unauthorized('Account not found or has been disabled')
+  }
+  return {
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    adminId: cognitoUser.sub,
+    role: cognitoUser.attributes['custom:admin_role'] ?? 'support_agent',
   }
 }
 

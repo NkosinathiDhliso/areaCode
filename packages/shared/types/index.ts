@@ -291,6 +291,9 @@ export interface User {
   genresUpdatedAt?: string | null
   onboardingComplete?: boolean
   privacyLevel?: PrivacyLevel
+  email?: string | null
+  /** True once the user has confirmed their email via the verification link. */
+  emailVerified?: boolean
   /**
    * Per-user opt-out for the GPS-proximity check-in nudge.
    * (Churn-defences spec, Requirement 4.6)

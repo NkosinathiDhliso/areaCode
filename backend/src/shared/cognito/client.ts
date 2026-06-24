@@ -21,6 +21,9 @@ import {
   AdminGetUserCommand,
   AdminUpdateUserAttributesCommand,
   AdminSetUserPasswordCommand,
+  AssociateSoftwareTokenCommand,
+  VerifySoftwareTokenCommand,
+  AdminDeleteUserCommand,
   AdminDisableUserCommand,
   AdminUserGlobalSignOutCommand,
   ListUsersCommand,
@@ -136,7 +139,15 @@ export async function createEmailPasswordUser(
       }),
     )
   } catch (err: unknown) {
-    if ((err as { name?: string }).name !== 'UsernameExistsException') throw err
+    // Surface "already exists" to the caller instead of silently swallowing it.
+    // The previous behaviour fell through to AdminSetUserPassword below, which
+    // would RESET an existing user's password on a duplicate signup — an
+    // account-takeover hazard. Callers decide how to handle a true duplicate
+    // (409) vs. an orphan recovery (see recoverOrphanEmailUser).
+    if ((err as { name?: string }).name === 'UsernameExistsException') {
+      throw new UsernameTakenError(normalizedEmail)
+    }
+    throw err
   }
 
   await cognitoClient.send(
@@ -151,6 +162,61 @@ export async function createEmailPasswordUser(
   const user = await getCognitoUser(role, normalizedEmail)
   if (!user?.sub) throw new Error('Failed to create Cognito email user')
   return user
+}
+
+/**
+ * Sentinel thrown by createEmailPasswordUser when the Cognito username (email)
+ * already exists. Lets the service distinguish a real duplicate from an orphan.
+ */
+export class UsernameTakenError extends Error {
+  constructor(public readonly email: string) {
+    super('Cognito username already exists')
+    this.name = 'UsernameTakenError'
+  }
+}
+
+/**
+ * Recover an orphaned Cognito email user — one that exists in Cognito but has
+ * no backing DynamoDB row (left behind by a partially-failed signup). Sets the
+ * permanent password the user just chose and returns the user. The caller MUST
+ * have already confirmed (via the authoritative DynamoDB email lock) that no
+ * real account owns this email, so this can never reset a live account.
+ */
+export async function recoverOrphanEmailUser(role: AuthRole, email: string, password: string) {
+  const pool = getPool(role)
+  const normalizedEmail = email.toLowerCase().trim()
+  await cognitoClient.send(
+    new AdminSetUserPasswordCommand({
+      UserPoolId: pool.userPoolId,
+      Username: normalizedEmail,
+      Password: password,
+      Permanent: true,
+    }),
+  )
+  const user = await getCognitoUser(role, normalizedEmail)
+  if (!user?.sub) throw new Error('Failed to recover Cognito email user')
+  return user
+}
+
+/**
+ * Delete a Cognito user by their username (the normalized email for
+ * email/password users). Used to roll back a half-created account when a
+ * later step of signup fails, so the user gets a clean retry instead of an
+ * orphaned Cognito user with no backing DynamoDB row. Best-effort: swallows
+ * "user not found" so callers can call it unconditionally during cleanup.
+ */
+export async function deleteUserByUsername(role: AuthRole, username: string): Promise<void> {
+  const pool = getPool(role)
+  try {
+    await cognitoClient.send(
+      new AdminDeleteUserCommand({
+        UserPoolId: pool.userPoolId,
+        Username: username.toLowerCase().trim(),
+      }),
+    )
+  } catch (err: unknown) {
+    if ((err as { name?: string }).name !== 'UserNotFoundException') throw err
+  }
 }
 
 // ─── Initiate Auth (send OTP) ───────────────────────────────────────────────
@@ -359,6 +425,108 @@ export async function adminPasswordAuth(email: string, password: string) {
     throw new Error('Authentication failed')
   }
 
+  return {
+    accessToken: result.AuthenticationResult.AccessToken ?? '',
+    refreshToken: result.AuthenticationResult.RefreshToken ?? '',
+    idToken: result.AuthenticationResult.IdToken ?? '',
+  }
+}
+
+// ─── Admin TOTP (software token) MFA ────────────────────────────────────────
+
+export interface AdminAuthOutcome {
+  /** Present when authentication is fully complete (no MFA, or DEV). */
+  tokens?: { accessToken: string; refreshToken: string; idToken: string }
+  /** 'SOFTWARE_TOKEN_MFA' (enrolled) or 'MFA_SETUP' (must enrol now). */
+  challengeName?: 'SOFTWARE_TOKEN_MFA' | 'MFA_SETUP'
+  /** Opaque Cognito session to carry into the challenge response. */
+  session?: string
+}
+
+/**
+ * Begin admin login. Returns either final tokens (MFA disabled / not required)
+ * or a challenge the caller must satisfy. For MFA_SETUP we don't associate the
+ * token here — the dedicated /mfa/associate-setup step does that with the
+ * returned session.
+ */
+export async function adminBeginAuth(email: string, password: string): Promise<AdminAuthOutcome> {
+  const pool = getPool('admin')
+  const result = await cognitoClient.send(
+    new AdminInitiateAuthCommand({
+      UserPoolId: pool.userPoolId,
+      ClientId: pool.clientId,
+      AuthFlow: 'ADMIN_USER_PASSWORD_AUTH' as AuthFlowType,
+      AuthParameters: { USERNAME: email, PASSWORD: password },
+    }),
+  )
+
+  if (result.AuthenticationResult) {
+    return {
+      tokens: {
+        accessToken: result.AuthenticationResult.AccessToken ?? '',
+        refreshToken: result.AuthenticationResult.RefreshToken ?? '',
+        idToken: result.AuthenticationResult.IdToken ?? '',
+      },
+    }
+  }
+
+  const challenge = result.ChallengeName
+  if (challenge === 'SOFTWARE_TOKEN_MFA' || challenge === 'MFA_SETUP') {
+    return { challengeName: challenge, session: result.Session }
+  }
+
+  throw new Error(`Unsupported admin auth challenge: ${challenge ?? 'none'}`)
+}
+
+/**
+ * Associate a new TOTP secret during the MFA_SETUP challenge. Returns the
+ * base32 secret (for manual entry / QR) and a fresh session to carry into the
+ * verify step.
+ */
+export async function adminAssociateSoftwareToken(session: string): Promise<{ secretCode: string; session: string }> {
+  const result = await cognitoClient.send(new AssociateSoftwareTokenCommand({ Session: session }))
+  if (!result.SecretCode || !result.Session) throw new Error('Failed to associate software token')
+  return { secretCode: result.SecretCode, session: result.Session }
+}
+
+/**
+ * Verify the first TOTP code during MFA setup. Returns a fresh session to carry
+ * into the MFA_SETUP challenge response. Throws on a wrong/expired code.
+ */
+export async function adminVerifySoftwareToken(session: string, code: string): Promise<{ session: string }> {
+  const result = await cognitoClient.send(
+    new VerifySoftwareTokenCommand({ Session: session, UserCode: code, FriendlyDeviceName: 'Area Code Admin' }),
+  )
+  if (result.Status !== 'SUCCESS' || !result.Session) {
+    throw new Error('TOTP verification failed')
+  }
+  return { session: result.Session }
+}
+
+/** Complete an MFA challenge (SOFTWARE_TOKEN_MFA or MFA_SETUP) and get tokens. */
+export async function adminRespondToMfaChallenge(opts: {
+  email: string
+  session: string
+  challengeName: 'SOFTWARE_TOKEN_MFA' | 'MFA_SETUP'
+  code?: string
+}): Promise<{ accessToken: string; refreshToken: string; idToken: string }> {
+  const pool = getPool('admin')
+  const challengeResponses: Record<string, string> =
+    opts.challengeName === 'SOFTWARE_TOKEN_MFA'
+      ? { USERNAME: opts.email, SOFTWARE_TOKEN_MFA_CODE: opts.code ?? '' }
+      : { USERNAME: opts.email }
+
+  const result = await cognitoClient.send(
+    new AdminRespondToAuthChallengeCommand({
+      UserPoolId: pool.userPoolId,
+      ClientId: pool.clientId,
+      ChallengeName: opts.challengeName,
+      Session: opts.session,
+      ChallengeResponses: challengeResponses,
+    }),
+  )
+
+  if (!result.AuthenticationResult) throw new Error('MFA challenge did not return tokens')
   return {
     accessToken: result.AuthenticationResult.AccessToken ?? '',
     refreshToken: result.AuthenticationResult.RefreshToken ?? '',

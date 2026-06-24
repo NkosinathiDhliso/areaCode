@@ -23,6 +23,8 @@ import {
   staffOAuthAcceptInviteBodySchema,
   staffInviteEmailAcceptBodySchema,
   adminLoginBodySchema,
+  adminMfaBodySchema,
+  verifyEmailBodySchema,
 } from './types.js'
 
 /**
@@ -168,6 +170,36 @@ export async function authRoutes(app: FastifyInstance) {
     async (request) => {
       const body = request.body as z.infer<typeof refreshBodySchema>
       return service.refreshToken(body.refreshToken, 'consumer')
+    },
+  )
+
+  // POST /v1/auth/consumer/verify-email — confirm via the emailed link's token
+  app.post(
+    '/v1/auth/consumer/verify-email',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'consumer-verify-email', max: 10, windowSeconds: 300 }),
+        validate({ body: verifyEmailBodySchema }),
+      ],
+    },
+    async (request) => {
+      const body = request.body as z.infer<typeof verifyEmailBodySchema>
+      return service.verifyConsumerEmail(body.token)
+    },
+  )
+
+  // POST /v1/auth/consumer/resend-verification — re-issue the verification email
+  app.post(
+    '/v1/auth/consumer/resend-verification',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'consumer-resend-verification', max: 3, windowSeconds: 600 }),
+        requireAuth('consumer'),
+      ],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      return service.resendConsumerEmailVerification(auth.userId)
     },
   )
 
@@ -417,6 +449,36 @@ export async function authRoutes(app: FastifyInstance) {
     async (request) => {
       const body = request.body as z.infer<typeof adminLoginBodySchema>
       return service.adminLogin(body.email, body.password)
+    },
+  )
+
+  // POST /v1/auth/admin/mfa/respond — answer the TOTP challenge (enrolled admin)
+  app.post(
+    '/v1/auth/admin/mfa/respond',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'admin-mfa-respond', max: 10, windowSeconds: 300 }),
+        validate({ body: adminMfaBodySchema }),
+      ],
+    },
+    async (request) => {
+      const body = request.body as z.infer<typeof adminMfaBodySchema>
+      return service.adminMfaRespond({ email: body.email, session: body.session, code: body.code })
+    },
+  )
+
+  // POST /v1/auth/admin/mfa/complete-setup — verify first code + finish enrolment
+  app.post(
+    '/v1/auth/admin/mfa/complete-setup',
+    {
+      preHandler: [
+        rateLimitMiddleware({ key: 'admin-mfa-setup', max: 10, windowSeconds: 300 }),
+        validate({ body: adminMfaBodySchema }),
+      ],
+    },
+    async (request) => {
+      const body = request.body as z.infer<typeof adminMfaBodySchema>
+      return service.adminMfaCompleteSetup({ email: body.email, session: body.session, code: body.code })
     },
   )
 

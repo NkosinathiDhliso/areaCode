@@ -199,6 +199,9 @@ module "cognito_admin" {
   env                 = local.env
   pool_name           = "admin"
   username_attributes = ["email"]
+  # Admin console requires TOTP MFA. SMS MFA is never configured (no-SMS rule);
+  # only software-token (authenticator app) MFA is enabled by the module.
+  mfa_configuration = "ON"
   explicit_auth_flows = [
     "ALLOW_ADMIN_USER_PASSWORD_AUTH",
     "ALLOW_REFRESH_TOKEN_AUTH",
@@ -904,6 +907,10 @@ resource "aws_iam_role_policy" "api_cognito" {
         "cognito-idp:AdminDeleteUser",
         "cognito-idp:AdminInitiateAuth",
         "cognito-idp:AdminRespondToAuthChallenge",
+        "cognito-idp:AdminSetUserMFAPreference",
+        "cognito-idp:AssociateSoftwareToken",
+        "cognito-idp:VerifySoftwareToken",
+        "cognito-idp:SetUserMFAPreference",
         "cognito-idp:ListUsers",
         "cognito-idp:SignUp",
         "cognito-idp:InitiateAuth",
@@ -981,6 +988,28 @@ resource "aws_iam_role_policy" "api_s3_media" {
         "s3:DeleteObject"
       ]
       Resource = "${module.s3_media.bucket_arn}/*"
+    }]
+  })
+}
+
+# --- Lambda IAM: API -> SES (transactional email) ---
+# Powers email verification, password-reset codes, trial-expiry notices and
+# win-back campaigns (backend/src/shared/email/ses.ts). Without this the SESv2
+# SendEmail calls are denied with AccessDenied. Scoped to the verified sending
+# identity for areacode.co.za in this account/region.
+resource "aws_iam_role_policy" "api_ses_send" {
+  name = "ses-send"
+  role = module.lambda_api.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ses:SendEmail",
+        "ses:SendRawEmail"
+      ]
+      Resource = "*"
     }]
   })
 }

@@ -77,6 +77,10 @@ module "cognito_admin" {
   env                 = local.env
   pool_name           = "admin"
   username_attributes = ["email"]
+  # Dev keeps MFA OPTIONAL so local/force-live testing isn't blocked by an
+  # authenticator enrolment. Prod enforces it ("ON"). The backend's DEV_MODE
+  # bypasses the challenge entirely for ordinary dev runs.
+  mfa_configuration = "OPTIONAL"
   explicit_auth_flows = [
     "ALLOW_ADMIN_USER_PASSWORD_AUTH",
     "ALLOW_REFRESH_TOKEN_AUTH",
@@ -905,6 +909,10 @@ resource "aws_iam_role_policy" "api_cognito" {
         "cognito-idp:AdminInitiateAuth",
         "cognito-idp:AdminRespondToAuthChallenge",
         "cognito-idp:AdminUserGlobalSignOut",
+        "cognito-idp:AdminSetUserMFAPreference",
+        "cognito-idp:AssociateSoftwareToken",
+        "cognito-idp:VerifySoftwareToken",
+        "cognito-idp:SetUserMFAPreference",
         "cognito-idp:ListUsers"
       ]
       Resource = [
@@ -946,6 +954,24 @@ resource "aws_iam_role_policy" "api_sqs_send" {
       Effect   = "Allow"
       Action   = ["sqs:SendMessage"]
       Resource = [module.sqs_reward_eval.queue_arn, module.sqs_push_sender.queue_arn]
+    }]
+  })
+}
+
+# Lambda IAM: API -> SES (transactional email: verification, password reset, etc.)
+resource "aws_iam_role_policy" "api_ses_send" {
+  name = "ses-send"
+  role = module.lambda_api.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ses:SendEmail",
+        "ses:SendRawEmail"
+      ]
+      Resource = "*"
     }]
   })
 }

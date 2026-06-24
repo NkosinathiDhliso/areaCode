@@ -96,3 +96,31 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
 }
+
+/**
+ * Transactional email-verification message. Non-blocking: the user can already
+ * use the app; this link flips their `emailVerified` flag and unlocks gated
+ * actions (e.g. reward redemption). The link carries an opaque, single-use,
+ * TTL-bound token — no PII beyond the destination address.
+ */
+export async function sendEmailVerificationEmail(to: string, verifyUrl: string): Promise<void> {
+  await ses.send(
+    new SendEmailCommand({
+      FromEmailAddress: FROM_EMAIL,
+      Destination: { ToAddresses: [to] },
+      Content: {
+        Simple: {
+          Subject: { Data: 'Confirm your email for Area Code' },
+          Body: {
+            Text: {
+              Data: `Welcome to Area Code!\n\nConfirm your email address to unlock rewards and keep your account secure:\n${verifyUrl}\n\nThis link expires in 24 hours. If you didn't create an account, you can ignore this email.`,
+            },
+            Html: {
+              Data: `<div style="font-family:sans-serif;max-width:440px;margin:0 auto;padding:24px"><h2 style="color:#333">Confirm your email</h2><p style="color:#444;font-size:15px;line-height:1.5">Welcome to Area Code! Confirm your email to unlock rewards and keep your account secure.</p><p style="margin:24px 0"><a href="${escapeHtml(verifyUrl)}" style="background:#6366f1;color:#fff;text-decoration:none;padding:12px 24px;border-radius:10px;font-weight:600;display:inline-block">Confirm email</a></p><p style="color:#888;font-size:13px">Or paste this link into your browser:<br><span style="word-break:break-all">${escapeHtml(verifyUrl)}</span></p><p style="color:#999;font-size:12px;margin-top:24px">This link expires in 24 hours. If you didn't create an account, ignore this email.</p></div>`,
+            },
+          },
+        },
+      },
+    }),
+  )
+}

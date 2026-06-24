@@ -3,11 +3,13 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useNavigationStore } from '@area-code/shared/stores/navigationStore'
 import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
+import { useUserStore } from '@area-code/shared/stores/userStore'
 import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { useRewardSocket } from '@area-code/shared/hooks/useRewardSocket'
 import { useNotificationSocket } from '@area-code/shared/hooks/useNotificationSocket'
 import { api } from '@area-code/shared/lib/api'
 import { getSocket } from '@area-code/shared/lib/socket'
+import type { User } from '@area-code/shared/types'
 import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
 import { GlobalErrorToast } from '@area-code/shared/components/GlobalErrorToast'
 import { OnboardingFlow } from '@area-code/shared/components/OnboardingFlow'
@@ -25,6 +27,7 @@ import { CheckInHistoryScreen } from './screens/CheckInHistoryScreen'
 import { ConsumerLogin } from './screens/ConsumerLogin'
 import { ConsumerSignup } from './screens/ConsumerSignup'
 import { ConsumerOAuthCallback } from './screens/ConsumerOAuthCallback'
+import { VerifyEmail } from './screens/VerifyEmail'
 import { AuthLanding } from './screens/AuthLanding'
 import { ForgotPassword } from './screens/ForgotPassword'
 import { FirstGetPrompt } from './screens/FirstGetPrompt'
@@ -33,6 +36,7 @@ import { PrivacyPolicyScreen } from './screens/PrivacyPolicyScreen'
 import { TermsScreen } from './screens/TermsScreen'
 import { BottomNav } from './components/BottomNav'
 import { ConnectivityBanner } from './components/ConnectivityBanner'
+import { VerifyEmailBanner } from './components/VerifyEmailBanner'
 import type { AppRoute } from './types'
 
 // Initialise API auth before any React render so queries fired during mount
@@ -115,6 +119,7 @@ function AppContent() {
 
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [onboardingChecked, setOnboardingChecked] = useState(false)
+  const setUser = useUserStore((s) => s.setUser)
 
   const [route, setRouteState] = useState<AppRoute>(() => pathToRoute(window.location.pathname))
 
@@ -173,7 +178,10 @@ function AppContent() {
     if (!isAuthenticated || onboardingChecked) return
     async function checkOnboarding() {
       try {
-        const profile = await api.get<{ onboardingComplete?: boolean }>('/v1/users/me')
+        const profile = await api.get<User>('/v1/users/me')
+        // Populate the shared user store so other surfaces (e.g. the email
+        // verification banner) can read profile state without a second fetch.
+        setUser(profile)
         if (profile.onboardingComplete === false) {
           setShowOnboarding(true)
         }
@@ -214,6 +222,13 @@ function AppContent() {
   // OAuth callback is the only screen rendered without the shell
   if (window.location.pathname.startsWith('/auth/callback')) {
     return <ConsumerOAuthCallback onNavigate={setRoute} />
+  }
+
+  // Email-verification deep link: /verify-email?token=…
+  // Rendered full-screen and reachable without the bottom-nav shell; the token
+  // in the URL is the proof, so no auth is required to land here.
+  if (window.location.pathname === '/verify-email') {
+    return <VerifyEmail onNavigate={setRoute} />
   }
 
   // Public legal pages - must be reachable without login (Google OAuth
@@ -265,6 +280,7 @@ function AppContent() {
   return (
     <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
       <ConnectivityBanner />
+      {isAuthenticated && !showAuthGate && <VerifyEmailBanner />}
       <div ref={contentRef} className="flex-1 relative overflow-x-hidden overflow-y-auto overscroll-y-contain">
         {showAuthGate ? (
           <AuthLanding onNavigate={setRoute} />

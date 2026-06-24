@@ -99,9 +99,23 @@ export const accountTypeQuerySchema = z.object({
   phone: z.string().regex(/^\+\d{10,15}$/),
 })
 
+// Email verification (non-blocking). The token is the single-use proof, so the
+// confirm route needs no auth; resend is authenticated.
+export const verifyEmailBodySchema = z.object({
+  token: z.string().min(1).max(256),
+})
+
 export const adminLoginBodySchema = z.object({
   email: z.string().email(),
   password: z.string().min(1).max(256),
+})
+
+// Admin TOTP MFA challenge responses. The session is the opaque Cognito session
+// returned by the login challenge; the code is the 6-digit authenticator code.
+export const adminMfaBodySchema = z.object({
+  email: z.string().email(),
+  session: z.string().min(1).max(8192),
+  code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code from your authenticator app'),
 })
 
 // ============================================================================
@@ -130,6 +144,7 @@ export interface User {
   privacyLevel?: string
   isDisabled?: boolean
   disabledAt?: string
+  emailVerified?: boolean
   onboardingComplete?: boolean
   streakStartDate?: string
   createdAt: string

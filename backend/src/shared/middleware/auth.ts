@@ -258,3 +258,30 @@ export function getAuth(request: FastifyRequest): AuthPayload {
 export function getOptionalAuth(request: FastifyRequest): AuthPayload | null {
   return (request as FastifyRequest & { auth?: AuthPayload }).auth ?? null
 }
+
+/**
+ * Fastify preHandler that requires the authenticated consumer to have a
+ * verified email. Attach AFTER `requireAuth('consumer')`. Email verification is
+ * non-blocking for ordinary app use; attach this guard only to genuinely
+ * sensitive routes (e.g. anything that moves real-world value) so the bulk of
+ * the experience stays friction-free.
+ *
+ * We read our own DynamoDB `emailVerified` flag rather than the Cognito
+ * `email_verified` claim, because the email/password signup path sets the
+ * Cognito attribute to `true` unconditionally — only our flag reflects a real
+ * confirmed click-through.
+ */
+export function requireVerifiedEmail() {
+  return async (request: FastifyRequest, _reply: FastifyReply) => {
+    if (DEV_MODE) return
+    const auth = getAuth(request)
+    const user = await getUserByCognitoSub(auth.cognitoSub)
+    if (!user?.emailVerified) {
+      throw new AppError(
+        403,
+        'email_unverified',
+        'Confirm your email to do this. Check your inbox or request a new verification link.',
+      )
+    }
+  }
+}

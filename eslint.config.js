@@ -173,6 +173,23 @@ export default tseslint.config(
       'import/order': 'warn',
     },
   },
+  // Node-run helper scripts (build/codegen/ops) use Node globals.
+  {
+    files: ['scripts/**/*.js', 'scripts/**/*.mjs', 'scripts/**/*.cjs'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        Buffer: 'readonly',
+        console: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        URL: 'readonly',
+        fetch: 'readonly',
+        module: 'readonly',
+        require: 'readonly',
+      },
+    },
+  },
   {
     ignores: [
       '**/node_modules/**',

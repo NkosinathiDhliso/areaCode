@@ -52,8 +52,13 @@ export function ConsumerSignup({ onNavigate }: ConsumerSignupProps) {
       setAuth(res.accessToken, res.refreshToken, res.user.id, res.sessionId)
       await maybeRedeemFirstGetToken()
       onNavigate('map')
-    } catch {
-      setError(t('auth.signup.emailFailed', 'Could not create your account. Check your details.'))
+    } catch (err) {
+      const status = (err as { statusCode?: number } | null)?.statusCode
+      if (status === 409) {
+        setError(t('auth.signup.emailTaken', 'That email is already registered. Try signing in instead.'))
+      } else {
+        setError(t('auth.signup.emailFailed', 'Could not create your account. Check your details.'))
+      }
     } finally {
       setLoading(false)
     }

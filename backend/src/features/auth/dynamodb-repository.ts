@@ -3,10 +3,45 @@
 //   users      → PK: userId  (no SK)     GSIs: EmailIndex, CognitoIndex
 //   businesses → PK: businessId (no SK)  GSI: OwnerIndex
 //   app-data   → PK: pk, SK: sk          GSI: GSI1(gsi1pk, gsi1sk)
-import { GetCommand, QueryCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
+import {
+  GetCommand,
+  QueryCommand,
+  PutCommand,
+  UpdateCommand,
+  DeleteCommand,
+  ScanCommand,
+  TransactWriteCommand,
+} from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
+import { AppError } from '../../shared/errors/AppError.js'
 import type { User, BusinessAccount, StaffAccount } from './types.js'
+
+// ────────────────────────────────────────────────────────────────────────────
+// Uniqueness locks.
+//
+// The users table is keyed only by `userId`, so it cannot natively enforce that
+// an email or Cognito sub is used by at most one row. We enforce it with
+// sentinel "lock" items written in the SAME transaction as the user row:
+//
+//   { userId: "EMAIL#<email>", lockType: "email", linkedUserId: <uuid> }
+//   { userId: "SUB#<sub>",     lockType: "sub",   linkedUserId: <uuid> }
+//
+// Each is created with `attribute_not_exists(userId)`, so a duplicate email or
+// sub makes the whole transaction fail atomically — duplicate accounts become
+// structurally impossible instead of being merely guarded in application code.
+//
+// The lock items carry no `email` / `cognitoSub` attribute, so they never
+// appear in EmailIndex / CognitoIndex and are invisible to the normal lookups.
+// ────────────────────────────────────────────────────────────────────────────
+
+const emailLockKey = (email: string) => `EMAIL#${email.toLowerCase().trim()}`
+const subLockKey = (cognitoSub: string) => `SUB#${cognitoSub}`
+
+function isTransactionConflict(err: unknown): boolean {
+  const name = (err as { name?: string }).name
+  return name === 'TransactionCanceledException' || name === 'ConditionalCheckFailedException'
+}
 
 // ============================================================================
 // USER OPERATIONS  (table PK = userId, no SK)
@@ -79,9 +114,92 @@ export async function createUser(data: Omit<User, 'userId' | 'createdAt'>): Prom
     updatedAt: now,
   }
 
-  await documentClient.send(new PutCommand({ TableName: TableNames.users, Item: item }))
+  // Build a single atomic transaction: the user row plus an email lock and a
+  // sub lock. If either lock already exists the whole write is cancelled and we
+  // surface a clean 409 instead of silently creating a duplicate account.
+  const transactItems: NonNullable<ConstructorParameters<typeof TransactWriteCommand>[0]['TransactItems']> = [
+    {
+      Put: {
+        TableName: TableNames.users,
+        Item: item,
+        ConditionExpression: 'attribute_not_exists(userId)',
+      },
+    },
+  ]
+
+  if (data.email) {
+    transactItems.push({
+      Put: {
+        TableName: TableNames.users,
+        Item: { userId: emailLockKey(data.email), lockType: 'email', linkedUserId: userId, createdAt: now },
+        ConditionExpression: 'attribute_not_exists(userId)',
+      },
+    })
+  }
+
+  if (data.cognitoSub) {
+    transactItems.push({
+      Put: {
+        TableName: TableNames.users,
+        Item: { userId: subLockKey(data.cognitoSub), lockType: 'sub', linkedUserId: userId, createdAt: now },
+        ConditionExpression: 'attribute_not_exists(userId)',
+      },
+    })
+  }
+
+  try {
+    await documentClient.send(new TransactWriteCommand({ TransactItems: transactItems }))
+  } catch (err) {
+    if (isTransactionConflict(err)) {
+      throw AppError.conflict('This email is already registered. Sign in instead.')
+    }
+    throw err
+  }
 
   return mapUser(item)
+}
+
+/**
+ * Atomically link a Cognito sub onto an existing (orphaned) user row and claim
+ * the sub lock in one transaction. Used when a federated (Google) sign-in lands
+ * on an email that already has a row with no linked sub — we adopt that row
+ * rather than create a duplicate. Returns the updated row, or null if the row
+ * vanished. Throws a 409 if the sub is already claimed by another row.
+ */
+export async function linkCognitoSub(userId: string, cognitoSub: string): Promise<User | null> {
+  const now = new Date().toISOString()
+  try {
+    await documentClient.send(
+      new TransactWriteCommand({
+        TransactItems: [
+          {
+            Update: {
+              TableName: TableNames.users,
+              Key: { userId },
+              UpdateExpression: 'SET cognitoSub = :sub, updatedAt = :now',
+              // Only adopt a row that has no sub yet (or already points at us) —
+              // never steal a row that belongs to a different identity.
+              ConditionExpression: 'attribute_not_exists(cognitoSub) OR cognitoSub = :sub',
+              ExpressionAttributeValues: { ':sub': cognitoSub, ':now': now },
+            },
+          },
+          {
+            Put: {
+              TableName: TableNames.users,
+              Item: { userId: subLockKey(cognitoSub), lockType: 'sub', linkedUserId: userId, createdAt: now },
+              ConditionExpression: 'attribute_not_exists(userId)',
+            },
+          },
+        ],
+      }),
+    )
+  } catch (err) {
+    if (isTransactionConflict(err)) {
+      throw AppError.conflict('This account is already linked to another sign-in method.')
+    }
+    throw err
+  }
+  return getUserById(userId)
 }
 
 export async function updateUser(
@@ -364,7 +482,26 @@ export async function getStaffByBusinessId(businessId: string): Promise<StaffAcc
 }
 
 export async function deleteUser(userId: string): Promise<void> {
-  await documentClient.send(new DeleteCommand({ TableName: TableNames.users, Key: { userId } }))
+  // Release the email/sub uniqueness locks in the same transaction as the row
+  // delete, otherwise a deleted user's email could never be claimed again.
+  const existing = await getUserById(userId)
+  if (!existing) {
+    await documentClient.send(new DeleteCommand({ TableName: TableNames.users, Key: { userId } }))
+    return
+  }
+
+  const transactItems: NonNullable<ConstructorParameters<typeof TransactWriteCommand>[0]['TransactItems']> = [
+    { Delete: { TableName: TableNames.users, Key: { userId } } },
+  ]
+
+  if (existing.email) {
+    transactItems.push({ Delete: { TableName: TableNames.users, Key: { userId: emailLockKey(existing.email) } } })
+  }
+  if (existing.cognitoSub) {
+    transactItems.push({ Delete: { TableName: TableNames.users, Key: { userId: subLockKey(existing.cognitoSub) } } })
+  }
+
+  await documentClient.send(new TransactWriteCommand({ TransactItems: transactItems }))
 }
 
 function mapStaff(item: Record<string, unknown>): StaffAccount {
