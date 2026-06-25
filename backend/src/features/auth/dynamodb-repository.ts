@@ -202,6 +202,71 @@ export async function linkCognitoSub(userId: string, cognitoSub: string): Promis
   return getUserById(userId)
 }
 
+/**
+ * Migrate an existing user row from a stale Cognito sub onto a new one, moving
+ * the sub lock with it. Used by the consumer v1->v2 pool migration: a row
+ * created under the old (decommissioned) pool still carries its old sub, so a
+ * sign-in under the new pool arrives with a different sub for the same verified
+ * email. Within a single live pool an email maps to exactly one sub, so the
+ * mismatch is provably a stale sub, not a rival identity, so we re-point the
+ * row instead of stranding the account behind a 409.
+ *
+ * The row update and the new sub lock are written atomically. The stale sub
+ * lock (absent on rows that predate the lock model) is dropped best-effort
+ * afterwards; a missing lock is not an error. Throws 409 if the row already
+ * moved on or the new sub is already locked by a different row.
+ */
+export async function relinkCognitoSub(userId: string, oldSub: string, newSub: string): Promise<User | null> {
+  const now = new Date().toISOString()
+  try {
+    await documentClient.send(
+      new TransactWriteCommand({
+        TransactItems: [
+          {
+            Update: {
+              TableName: TableNames.users,
+              Key: { userId },
+              UpdateExpression: 'SET cognitoSub = :new, updatedAt = :now',
+              // Only migrate a row that still holds exactly the stale sub we read.
+              ConditionExpression: 'cognitoSub = :old',
+              ExpressionAttributeValues: { ':new': newSub, ':old': oldSub, ':now': now },
+            },
+          },
+          {
+            Put: {
+              TableName: TableNames.users,
+              Item: { userId: subLockKey(newSub), lockType: 'sub', linkedUserId: userId, createdAt: now },
+              ConditionExpression: 'attribute_not_exists(userId)',
+            },
+          },
+        ],
+      }),
+    )
+  } catch (err) {
+    if (isTransactionConflict(err)) {
+      throw AppError.conflict('This account is already linked to another sign-in method.')
+    }
+    throw err
+  }
+
+  // Drop the stale sub lock if it exists and still points at this row. Rows that
+  // predate the lock model carry no such item, so a missing lock is expected.
+  try {
+    await documentClient.send(
+      new DeleteCommand({
+        TableName: TableNames.users,
+        Key: { userId: subLockKey(oldSub) },
+        ConditionExpression: 'attribute_exists(userId) AND linkedUserId = :uid',
+        ExpressionAttributeValues: { ':uid': userId },
+      }),
+    )
+  } catch (err) {
+    if (!isTransactionConflict(err)) throw err
+  }
+
+  return getUserById(userId)
+}
+
 export async function updateUser(
   userId: string,
   data: Partial<Omit<User, 'userId' | 'createdAt'>>,

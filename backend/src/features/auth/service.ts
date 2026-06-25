@@ -177,17 +177,25 @@ export async function consumerOAuthSync(opts: { cognitoSub: string; email?: stri
     const dupEmail = await repo.getUserByEmail(email)
     if (dupEmail) {
       if (dupEmail.cognitoSub && dupEmail.cognitoSub !== cognitoSub) {
-        // A real account already owns this email under a different Cognito
-        // identity (e.g. email/password). Don't silently merge identities.
-        throw AppError.conflict('This email is already registered. Sign in with the method you used before.')
+        // The row points at a *different* Cognito sub for this email. Within the
+        // live consumer pool an email maps to exactly one sub, so the mismatch
+        // means the row still carries a sub from the decommissioned v1 pool: the
+        // v1->v2 migration re-pooled auth but left user rows linked to old subs.
+        // The email is Cognito-verified (we only reach here via a federated
+        // sign-in token or a verified-email lookup), so the caller owns it.
+        // Migrate the row onto the new sub rather than stranding the account.
+        const relinked = await repo.relinkCognitoSub(dupEmail.userId, dupEmail.cognitoSub, cognitoSub)
+        user = relinked ?? dupEmail
+        isNewUser = false
+      } else {
+        // The existing row has no linked Cognito sub — it's an orphan left by a
+        // partially-failed signup. Atomically adopt it (link the sub + claim the
+        // sub lock) instead of creating a duplicate row, which would strand the
+        // user's history/rewards on the old userId and read as "I lost my account".
+        const adopted = await repo.linkCognitoSub(dupEmail.userId, cognitoSub)
+        user = adopted ?? dupEmail
+        isNewUser = false
       }
-      // The existing row has no linked Cognito sub — it's an orphan left by a
-      // partially-failed signup. Atomically adopt it (link the sub + claim the
-      // sub lock) instead of creating a duplicate row, which would strand the
-      // user's history/rewards on the old userId and read as "I lost my account".
-      const adopted = await repo.linkCognitoSub(dupEmail.userId, cognitoSub)
-      user = adopted ?? dupEmail
-      isNewUser = false
     } else {
       const city = await repo.getCityBySlug('johannesburg')
       if (!city) throw AppError.internal('Default city missing')

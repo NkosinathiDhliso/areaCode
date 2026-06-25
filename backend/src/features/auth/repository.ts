@@ -12,6 +12,7 @@ import {
   updateUser,
   deleteUser,
   linkCognitoSub,
+  relinkCognitoSub,
   getBusinessByEmail,
   createBusiness as createBusinessDb,
   getStaffById,
@@ -23,7 +24,7 @@ import {
 // Re-export DynamoDB functions with same names as Prisma
 export { getStaffById, getUserByCognitoSub, getUserById }
 export { getUserByEmail } from './dynamodb-repository.js'
-export { updateUser, deleteUser, linkCognitoSub }
+export { updateUser, deleteUser, linkCognitoSub, relinkCognitoSub }
 
 // ─── User Profile ───────────────────────────────────────────────────────────
 
