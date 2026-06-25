@@ -63,23 +63,23 @@ const HOW_IT_WORKS = [
   {
     Icon: MapPin,
     titleKey: 'landing.step1Title',
-    titleFallback: 'Open the live map',
+    titleFallback: 'Open the map',
     bodyKey: 'landing.step1Body',
-    bodyFallback: 'See which venues are busy right now near you.',
+    bodyFallback: 'See what’s busy near you.',
   },
   {
     Icon: Zap,
     titleKey: 'landing.step2Title',
-    titleFallback: 'Check in when you arrive',
+    titleFallback: 'Check in',
     bodyKey: 'landing.step2Body',
-    bodyFallback: "Tap in at the venue to prove you're there.",
+    bodyFallback: 'Tap in when you arrive.',
   },
   {
     Icon: Sparkles,
     titleKey: 'landing.step3Title',
     titleFallback: 'Earn rewards',
     bodyKey: 'landing.step3Body',
-    bodyFallback: "Unlock perks from the spot and climb your city's leaderboard.",
+    bodyFallback: 'Unlock perks. Climb the board.',
   },
 ] as const
 
@@ -131,14 +131,12 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
         </div>
 
         {/* Hero */}
-        <h1 className="font-[Syne] text-3xl font-extrabold leading-tight tracking-[-0.02em]">
+        <h1 className="font-[Geist] text-3xl font-semibold leading-tight tracking-[-0.01em]">
           {t('landing.heroLine1', 'Find the spots')}
-          <span className="block bg-[linear-gradient(90deg,var(--accent-bright),var(--accent))] bg-clip-text text-transparent">
-            {t('landing.heroLine2', 'buzzing right now.')}
-          </span>
+          <span className="block text-[var(--accent-bright)]">{t('landing.heroLine2', 'buzzing right now.')}</span>
         </h1>
         <p className="mt-3 text-sm text-[var(--text-secondary)] leading-relaxed max-w-xs">
-          {t('landing.subtitle', "A live map of what's busy near you, updated as people check in.")}
+          {t('landing.subtitle', 'See which bars, cafés and clubs are alive near you — right now.')}
         </p>
 
         {/* How it works: the quick idea, before we ask for anything. The deeper
@@ -157,25 +155,27 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
           ))}
         </div>
 
-        {/* CTAs */}
+        {/* CTAs — lead with the low-friction value action (see the live map)
+            and keep sign-up as the secondary step, per landing-page attention-
+            ratio / show-value-before-commitment research. */}
         <div className="mt-6 flex gap-3">
-          <button
-            onClick={() => {
-              recordEvent('landing_cta_signup')
-              go('signup', '/signup')
-            }}
-            className="flex-1 rounded-xl bg-[var(--accent)] py-3.5 text-sm font-semibold text-[var(--on-accent)] transition-all active:scale-95 hover:bg-[var(--accent-bright)]"
-          >
-            {t('landing.signUp', 'Sign Up')}
-          </button>
           <button
             onClick={() => {
               recordEvent('landing_cta_explore', { source: 'hero' })
               go('map', '/map')
             }}
-            className="flex-1 rounded-xl border border-[var(--border-strong)] bg-[var(--bg-surface)] py-3.5 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--accent)]"
+            className="flex-1 rounded-xl bg-[var(--accent)] py-3.5 text-sm font-semibold text-[var(--on-accent)] transition-all active:scale-95 hover:bg-[var(--accent-bright)]"
           >
             {t('landing.exploreMap', 'Explore Map')}
+          </button>
+          <button
+            onClick={() => {
+              recordEvent('landing_cta_signup')
+              go('signup', '/signup')
+            }}
+            className="flex-1 rounded-xl border border-[var(--border-strong)] bg-[var(--bg-surface)] py-3.5 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--accent)]"
+          >
+            {t('landing.signUp', 'Sign Up')}
           </button>
         </div>
 
