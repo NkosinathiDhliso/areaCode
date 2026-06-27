@@ -61,8 +61,6 @@ export interface MoveCameraOptions {
  * Validates: Requirements 1.4, 1.5, 8.5
  */
 export function moveCameraToActive(map: MapInstance, node: Node, { reducedMotion, zoom }: MoveCameraOptions): void {
-  // [cam-debug] temporary diagnostic for the no-snap report; remove once fixed.
-  console.info('[cam-debug] flyTo', { center: [node.lng, node.lat], zoom, offset: sheetFocusOffset(), reducedMotion })
   map.flyTo({
     center: [node.lng, node.lat],
     offset: sheetFocusOffset(),

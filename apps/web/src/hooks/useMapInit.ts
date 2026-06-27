@@ -593,7 +593,17 @@ export function useMapInit() {
       lastTime = now
 
       const paused = Date.now() < driftPausedUntilRef.current
-      if (!paused && mapRef.current === map) {
+      // Never drift while a camera move is animating. setBearing is an
+      // instantaneous jump that aborts any in-flight flyTo/easeTo, so drifting
+      // during the carousel's fly-to-active-venue would cancel it every frame
+      // (the "no-snap" bug: the flyTo fires but the camera never arrives).
+      let animating = false
+      try {
+        animating = map.isMoving()
+      } catch {
+        /* isMoving unavailable (e.g. test mock) - treat as not animating */
+      }
+      if (!paused && !animating && mapRef.current === map) {
         try {
           const current = map.getBearing()
           // 0.3 degrees per second, wraps cleanly through 360
