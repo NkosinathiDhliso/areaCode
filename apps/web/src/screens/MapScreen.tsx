@@ -192,7 +192,15 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReady) return
-    const handler = () => notifyViewportChanged()
+    // Only recompute the in-viewport order for user-driven pan/zoom. The
+    // camera's own flyTo (when stepping to the Active_Venue) fires moveend/zoom
+    // with no `originalEvent`; recomputing on those would rescope the order to
+    // whatever is near the venue we just centered, progressively shrinking the
+    // browse strip until it collapses to the single active venue and the
+    // Flick_Controls gray out (R6.2 applies to user navigation, not self-moves).
+    const handler = (e: object) => {
+      if ((e as { originalEvent?: unknown }).originalEvent) notifyViewportChanged()
+    }
     map.on('moveend', handler)
     map.on('zoom', handler)
     return () => {
