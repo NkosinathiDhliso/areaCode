@@ -32,6 +32,9 @@ import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 import { writeDwellRow } from '../features/presence/dwell-sink.js'
 import { endPresenceByExpiry, queryDuePresenceRecords, reconcileCounter } from '../features/presence/repository.js'
 import { broadcastPresenceUpdate } from '../shared/websocket/broadcast.js'
+import { emitFriendCheckout } from '../shared/socket/events.js'
+import { getMutualFollowIds, getFollowingIds } from '../features/social/repository.js'
+import { canEmitIdentity } from '../shared/privacy/privacy-guard.js'
 
 /** Cities are stored in `app-data` as `CITY#<id>` rows where `sk = pk`. */
 async function getCities() {
@@ -92,6 +95,21 @@ export async function handler() {
           termination: 'expiry_terminated',
           endedAt: expired.endedAt!,
         })
+
+        // Best-effort emit `friend:checkout` to the expired user's mutual friends
+        // so their taste-match store stays honest (Requirements 3.4, 3.5).
+        try {
+          const canEmit = await canEmitIdentity(record.userId)
+          if (canEmit) {
+            const followingIds = await getFollowingIds(record.userId)
+            const friendIds = await getMutualFollowIds(record.userId, followingIds)
+            for (const friendId of friendIds) {
+              emitFriendCheckout(friendId, { userId: record.userId, nodeId })
+            }
+          }
+        } catch (err) {
+          console.warn(`[presence-expiry] friend:checkout emit failed for user ${record.userId}: ${String(err)}`)
+        }
 
         expiredForNode++
         totalExpired++

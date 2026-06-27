@@ -13,6 +13,10 @@ export const leaderboardParamsSchema = z.object({
   citySlug: z.string().min(1),
 })
 
+export const leaderboardQuerySchema = z.object({
+  archetypeId: z.string().min(1).optional(),
+})
+
 export const nearbyRecentQuerySchema = z.object({
   lat: z.coerce.number().min(-90).max(90),
   lng: z.coerce.number().min(-180).max(180),

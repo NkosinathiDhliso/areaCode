@@ -478,7 +478,14 @@ export interface ServerToClientEvents {
   'leaderboard:update': (payload: { userId: string; rank: number; delta: number }) => void
   'business:checkin': (payload: BusinessCheckinPayload) => void
   'business:reward_claimed': (payload: BusinessRewardClaimedPayload) => void
-  'toast:friend_checkin': (payload: { type: 'checkin'; message: string; nodeId?: string; avatarUrl?: string }) => void
+  'toast:friend_checkin': (payload: {
+    type: 'checkin'
+    message: string
+    userId: string
+    nodeId: string
+    avatarUrl?: string
+  }) => void
+  'friend:checkout': (payload: { userId: string; nodeId: string }) => void
   'node:archetype_change': (payload: { nodeId: string; liveArchetypeId: string; branch: LiveArchetypeBranch }) => void
   'tier:changed': (payload: { oldTier: string; newTier: string; benefits?: string[] }) => void
   'notification:new': (payload: {

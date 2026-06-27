@@ -107,7 +107,14 @@ export interface ServerToClientEvents {
   'business:checkin': (payload: BusinessCheckinPayload) => void
   'business:checkin_detail': (payload: BusinessCheckinDetailPayload) => void
   'business:reward_claimed': (payload: BusinessRewardClaimedPayload) => void
-  'toast:friend_checkin': (payload: { type: ToastType; message: string; nodeId?: string; avatarUrl?: string }) => void
+  'toast:friend_checkin': (payload: {
+    type: ToastType
+    message: string
+    userId: string
+    nodeId: string
+    avatarUrl?: string
+  }) => void
+  'friend:checkout': (payload: { userId: string; nodeId: string }) => void
   'tier:changed': (payload: TierChangedPayload) => void
   'notification:new': (payload: NotificationNewPayload) => void
 }

@@ -1,29 +1,105 @@
-import { useCallback, useRef, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
-import { useInfiniteQuery } from '@tanstack/react-query'
-import { Users } from 'lucide-react'
-import { api } from '@area-code/shared/lib/api'
-import { Avatar } from '@area-code/shared/components/Avatar'
 import { Skeleton } from '@area-code/shared/components/Skeleton'
-import { formatRelativeTime } from '@area-code/shared/lib/formatters'
-import type { Tier } from '@area-code/shared/types'
+import { api } from '@area-code/shared/lib/api'
+import { useLocationStore } from '@area-code/shared/stores/locationStore'
+import { useMapStore } from '@area-code/shared/stores/mapStore'
+import { useUserStore } from '@area-code/shared/stores/userStore'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { Users } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 
-interface FeedItem {
-  id: string
-  checkedInAt: string
-  user: { id: string; username: string; displayName: string; avatarUrl: string | null; tier: string }
-  node: { id: string; name: string; slug: string; category: string }
-}
+import { FeedItemRow } from '../components/FeedItemRow'
+import { resolveArchetypeDisplayName } from '../lib/archetypeDisplay'
+import {
+  filterArchetypeCluster,
+  filterLiveGets,
+  sortFeedItems,
+  type EnrichedFeedItem,
+  type RawFeedItem,
+} from '../lib/feedEnrichment'
+import { getNodeState } from '../lib/mapHelpers'
+import type { AppRoute } from '../types'
 
 interface FeedResponse {
-  items: FeedItem[]
+  items: RawFeedItem[]
   nextCursor: string | null
   hasMore: boolean
 }
 
-export function FeedScreen() {
+interface NearbyReward {
+  id: string
+  title: string
+  nodeId: string
+  nodeName: string
+  getCategory?: 'loyalty' | 'event' | 'offer'
+  lifecycle?: 'upcoming' | 'live' | 'ended'
+}
+
+const DEFAULT_LAT = -26.2041
+const DEFAULT_LNG = 28.0473
+
+interface FeedScreenProps {
+  onNavigate: (route: AppRoute) => void
+}
+
+/** Live vibe snapshot the feed enriches each item from (R11.1, R11.2). */
+interface EnrichContext {
+  pulseScores: Record<string, number>
+  checkInCounts: Record<string, number>
+  archetypeIds: Record<string, string>
+  friendsAtVenue: Record<string, string[]>
+  defaultArchetypeOf: (nodeId: string) => string | null
+  isKnown: (nodeId: string) => boolean
+}
+
+/**
+ * Enrich a raw check-in with current venue vibe from the live store. Pulse
+ * state is null when no live data exists for the venue, so we never claim a
+ * stale state (honest presence, R11.1.3).
+ */
+function enrichCheckin(item: RawFeedItem, ctx: EnrichContext): EnrichedFeedItem {
+  const nodeId = item.node?.id ?? ''
+  const venuePulseState = ctx.isKnown(nodeId) ? getNodeState(ctx.pulseScores[nodeId] ?? 0) : null
+  return {
+    id: item.id,
+    feedType: 'checkin',
+    checkedInAt: item.checkedInAt,
+    user: item.user,
+    node: item.node,
+    venuePulseState,
+    venueCheckInCount: ctx.checkInCounts[nodeId] ?? 0,
+    venueArchetypeId: ctx.archetypeIds[nodeId] ?? ctx.defaultArchetypeOf(nodeId),
+    friendStillPresent: item.user ? (ctx.friendsAtVenue[nodeId] ?? []).includes(item.user.id) : false,
+  }
+}
+
+/** Pass a milestone item through unchanged (no venue vibe to enrich). */
+function toMilestoneItem(item: RawFeedItem): EnrichedFeedItem {
+  return {
+    id: item.id,
+    feedType: 'milestone',
+    checkedInAt: item.checkedInAt,
+    venuePulseState: null,
+    venueCheckInCount: 0,
+    venueArchetypeId: null,
+    friendStillPresent: false,
+    title: item.title,
+    body: item.body,
+  }
+}
+
+export function FeedScreen({ onNavigate }: FeedScreenProps) {
   const { t } = useTranslation()
   const sentinelRef = useRef<HTMLDivElement>(null)
+
+  const archetypeId = useUserStore((s) => s.user?.archetypeId ?? null)
+  const pulseScores = useMapStore((s) => s.pulseScores)
+  const checkInCounts = useMapStore((s) => s.checkInCounts)
+  const archetypeIds = useMapStore((s) => s.archetypeIds)
+  const friendsAtVenue = useMapStore((s) => s.friendsAtVenue)
+  const nodes = useMapStore((s) => s.nodes)
+  const setFocusNodeId = useMapStore((s) => s.setFocusNodeId)
+  const pos = useLocationStore((s) => s.lastKnownPosition)
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, refetch } = useInfiniteQuery({
     queryKey: ['feed'],
@@ -36,6 +112,22 @@ export function FeedScreen() {
     getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.nextCursor : undefined),
     staleTime: 30_000,
   })
+
+  // Live gets near the consumer (R11.4). Shares RewardsScreen's query cache.
+  const { data: rewards } = useQuery({
+    queryKey: ['rewards', 'near-me', pos?.lat, pos?.lng],
+    queryFn: () =>
+      api.get<NearbyReward[]>(`/v1/rewards/near-me?lat=${pos?.lat ?? DEFAULT_LAT}&lng=${pos?.lng ?? DEFAULT_LNG}`),
+    staleTime: 30_000,
+  })
+
+  const handleFocusVenue = useCallback(
+    (nodeId: string) => {
+      setFocusNodeId(nodeId)
+      onNavigate('map')
+    },
+    [setFocusNodeId, onNavigate],
+  )
 
   const handleIntersect = useCallback(
     (entries: IntersectionObserverEntry[]) => {
@@ -54,7 +146,45 @@ export function FeedScreen() {
     return () => observer.disconnect()
   }, [handleIntersect])
 
-  const allItems = data?.pages.flatMap((p) => p.items) ?? []
+  const rawItems = useMemo(() => data?.pages.flatMap((p) => p.items) ?? [], [data])
+
+  // Enrich, then split into the archetype cluster (pinned) and the main feed.
+  const { clusterItems, mainItems } = useMemo(() => {
+    const ctx: EnrichContext = {
+      pulseScores,
+      checkInCounts,
+      archetypeIds,
+      friendsAtVenue,
+      defaultArchetypeOf: (nodeId) => nodes[nodeId]?.defaultArchetypeId ?? null,
+      isKnown: (nodeId) => nodes[nodeId] !== undefined || nodeId in pulseScores,
+    }
+    const enriched = rawItems.map((i) => (i.feedType === 'milestone' ? toMilestoneItem(i) : enrichCheckin(i, ctx)))
+
+    const cluster = filterArchetypeCluster(enriched, archetypeId).slice(0, 5)
+    const clusterIds = new Set(cluster.map((i) => i.id))
+
+    const liveGets: EnrichedFeedItem[] = filterLiveGets(rewards ?? []).map((r) => ({
+      id: `live-get-${r.id}`,
+      feedType: 'live_get',
+      checkedInAt: new Date().toISOString(),
+      node: { id: r.nodeId, name: r.nodeName, slug: '', category: '' },
+      venuePulseState: null,
+      venueCheckInCount: 0,
+      venueArchetypeId: null,
+      friendStillPresent: false,
+      getTitle: r.title,
+    }))
+
+    const main = sortFeedItems([...enriched.filter((i) => !clusterIds.has(i.id)), ...liveGets])
+    return { clusterItems: cluster, mainItems: main }
+  }, [rawItems, rewards, archetypeId, pulseScores, checkInCounts, archetypeIds, friendsAtVenue, nodes])
+
+  const clusterLabel = archetypeId
+    ? t('feed.clusterLabel', {
+        archetype: resolveArchetypeDisplayName(archetypeId).replace(/^The /, ''),
+        defaultValue: '{{archetype}}s are out',
+      })
+    : ''
 
   return (
     <div
@@ -79,28 +209,23 @@ export function FeedScreen() {
             {t('common.retry', 'Retry')}
           </button>
         </div>
-      ) : allItems.length > 0 ? (
+      ) : mainItems.length > 0 || clusterItems.length > 0 ? (
         <div className="flex flex-col gap-3">
-          {allItems.map((item) => (
-            <div
-              key={item.id}
-              className="flex flex-row items-center gap-3 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3"
-            >
-              <Avatar
-                url={item.user.avatarUrl}
-                displayName={item.user.displayName}
-                size="sm"
-                tier={item.user.tier as Tier}
-              />
-              <div className="flex-1">
-                <p className="text-[var(--text-primary)] text-sm">
-                  <span className="font-medium">{item.user.username}</span>
-                  {' checked in to '}
-                  <span className="font-medium">{item.node.name}</span>
-                </p>
-                <p className="text-[var(--text-muted)] text-xs mt-0.5">{formatRelativeTime(item.checkedInAt)}</p>
-              </div>
-            </div>
+          {/* Archetype cluster pinned at the top (R11.3, R11.6.1). */}
+          {clusterItems.length > 0 && (
+            <section className="flex flex-col gap-2">
+              <h2 className="text-[var(--text-secondary)] text-xs font-semibold uppercase tracking-wide">
+                {clusterLabel}
+              </h2>
+              {clusterItems.map((item) => (
+                <FeedItemRow key={`cluster-${item.id}`} item={item} onFocusVenue={handleFocusVenue} />
+              ))}
+              <div className="border-t border-[var(--border)] mt-1" />
+            </section>
+          )}
+
+          {mainItems.map((item) => (
+            <FeedItemRow key={item.id} item={item} onFocusVenue={handleFocusVenue} />
           ))}
 
           <div ref={sentinelRef} className="h-8" />

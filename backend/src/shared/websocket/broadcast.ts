@@ -276,7 +276,8 @@ export async function broadcastFriendCheckin(
   userId: string,
   payload: {
     message: string
-    nodeId?: string
+    userId: string
+    nodeId: string
     avatarUrl?: string
   },
 ): Promise<void> {
@@ -286,5 +287,20 @@ export async function broadcastFriendCheckin(
       type: 'checkin',
       ...payload,
     },
+  })
+}
+
+/**
+ * Broadcast friend checkout notification. Emitted when a mutual friend checks
+ * out (manual) or their presence expires so the client can remove them from the
+ * friends-at-venue store (honest presence — Requirement 3.5).
+ */
+export async function broadcastFriendCheckout(
+  recipientUserId: string,
+  payload: { userId: string; nodeId: string },
+): Promise<void> {
+  await broadcastToUser(recipientUserId, {
+    type: 'friend:checkout',
+    payload,
   })
 }

@@ -1,12 +1,13 @@
 import { BottomSheet } from '@area-code/shared/components/BottomSheet'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import type { NodeCategory, NodeState, Reward } from '@area-code/shared/types'
-import { ChevronDown, ChevronUp } from 'lucide-react'
-import { useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
+import { useEffect, useReducer, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { UseCarouselSelectionResult } from '../hooks/useCarouselSelection'
 import { DRAG_AXIS_THRESHOLD } from '../lib/carouselConstants'
+import { browseReducer, deriveBrowseStrip } from '../lib/carouselRanking'
 import { classifyDrag } from '../lib/gestureClassifier'
 
 import { FlickControls } from './FlickControls'
@@ -64,6 +65,11 @@ export interface PeekCarouselProps {
   qrFallback?: boolean
   /** Whether a check-in request is in flight (CTA pending state). */
   isCheckingIn?: boolean
+  /**
+   * The active Category_Filter - passed so the browse strip state machine can
+   * dispatch `FILTER_CHANGE` when it changes, resetting to top 2 view (R4.4).
+   */
+  categoryFilter?: NodeCategory | null
 }
 
 /** Visually-hidden style for the aria-live announcer (portable `sr-only`). */
@@ -88,6 +94,7 @@ export function PeekCarousel({
   onSignup,
   qrFallback = false,
   isCheckingIn = false,
+  categoryFilter = null,
 }: PeekCarouselProps) {
   const { t } = useTranslation()
   const nodes = useMapStore((s) => s.nodes)
@@ -106,6 +113,50 @@ export function PeekCarousel({
     dismiss,
     setSwipeInProgress,
   } = selection
+
+  // ── Browse strip expansion state (Top 2 + More) ──────────────────────────
+  // Managed via the pure `browseReducer` from carouselRanking.ts. The reducer
+  // resets to collapsed (top 2) on OPEN, FILTER_CHANGE, and DISMISS, and
+  // expands on TAP_MORE (R4.3, R4.4).
+  const [browseState, browseDispatch] = useReducer(browseReducer, { isExpanded: false })
+
+  // Dispatch OPEN when the carousel transitions from closed to browse/commit,
+  // and DISMISS when it transitions to closed (R4.4).
+  const prevModeRef = useRef(mode)
+  useEffect(() => {
+    const prevMode = prevModeRef.current
+    prevModeRef.current = mode
+    if (prevMode === 'closed' && mode !== 'closed') {
+      browseDispatch({ type: 'OPEN' })
+    } else if (prevMode !== 'closed' && mode === 'closed') {
+      browseDispatch({ type: 'DISMISS' })
+    }
+  }, [mode])
+
+  // Dispatch FILTER_CHANGE when the categoryFilter changes.
+  const prevFilterRef = useRef(categoryFilter)
+  useEffect(() => {
+    if (prevFilterRef.current !== categoryFilter) {
+      prevFilterRef.current = categoryFilter
+      browseDispatch({ type: 'FILTER_CHANGE' })
+    }
+  }, [categoryFilter])
+
+  // Derive visible venues and "showMore" from the full carousel order and the
+  // expansion state. The selector is pure and property-tested (Property 6).
+  // We resolve the full Node[] from the VMs' ids to pass to deriveBrowseStrip,
+  // then map back to VMs for rendering.
+  const { visibleVMs, showMore } = (() => {
+    const allNodes = carouselOrderVMs
+      .map((vm) => nodes[vm.id])
+      .filter((n): n is NonNullable<typeof n> => n !== undefined)
+    const { visible, showMore } = deriveBrowseStrip(allNodes, browseState.isExpanded)
+    const visibleIds = new Set(visible.map((n) => n.id))
+    return {
+      visibleVMs: carouselOrderVMs.filter((vm) => visibleIds.has(vm.id)),
+      showMore,
+    }
+  })()
 
   // ── Gesture state ─────────────────────────────────────────────────────────
   // Pointer-down origin plus whether the gesture began on the rewards row, so
@@ -192,8 +243,9 @@ export function PeekCarousel({
 
         {mode === 'browse' ? (
           <BrowseMode
-            carouselOrderVMs={carouselOrderVMs}
+            carouselOrderVMs={visibleVMs}
             activeVenueId={activeVenueId}
+            showMore={showMore}
             nodeCategoryOf={(id) => nodes[id]?.category ?? null}
             onCardSelect={(id) => {
               // Tapping the active card enters Commit_Mode (R2.2); tapping any
@@ -201,6 +253,7 @@ export function PeekCarousel({
               if (id === activeVenueId) enterCommit()
               else selectVenue(id, 'swipe')
             }}
+            onTapMore={() => browseDispatch({ type: 'TAP_MORE' })}
             onEnterCommit={enterCommit}
           />
         ) : (
@@ -227,12 +280,24 @@ export function PeekCarousel({
 interface BrowseModeProps {
   carouselOrderVMs: UseCarouselSelectionResult['carouselOrderVMs']
   activeVenueId: string | null
+  /** Whether to render the "Keep exploring" card after the venue cards (R4.2). */
+  showMore: boolean
   nodeCategoryOf: (id: string) => NodeCategory | null
   onCardSelect: (id: string) => void
+  /** Callback when the "Keep exploring" card is activated (R4.3). */
+  onTapMore: () => void
   onEnterCommit: () => void
 }
 
-function BrowseMode({ carouselOrderVMs, activeVenueId, nodeCategoryOf, onCardSelect, onEnterCommit }: BrowseModeProps) {
+function BrowseMode({
+  carouselOrderVMs,
+  activeVenueId,
+  showMore,
+  nodeCategoryOf,
+  onCardSelect,
+  onTapMore,
+  onEnterCommit,
+}: BrowseModeProps) {
   const { t } = useTranslation()
   // Empty Browse_Mode invite when no venue falls within the current viewport
   // (R6.3) - invite the consumer to zoom out or move the map.
@@ -253,7 +318,8 @@ function BrowseMode({ carouselOrderVMs, activeVenueId, nodeCategoryOf, onCardSel
     <div className="flex flex-col gap-3">
       {/* Swipeable Venue_Card strip (R1.1). Horizontal overflow scrolls so all
           in-viewport cards are reachable; selection is driven by tap, swipe,
-          and the FlickControls below. */}
+          and the FlickControls below. In collapsed (top 2) view, a "Keep
+          exploring" card follows the venue cards as the third element (R4.2). */}
       <div className="flex flex-row gap-3 overflow-x-auto pb-1 -mx-1 px-1" style={{ scrollbarWidth: 'none' }}>
         {carouselOrderVMs.map((vm) => {
           const category = nodeCategoryOf(vm.id)
@@ -269,6 +335,26 @@ function BrowseMode({ carouselOrderVMs, activeVenueId, nodeCategoryOf, onCardSel
             </div>
           )
         })}
+        {/* "Keep exploring" card - shown only in the collapsed top 2 view when
+            3+ venues are available. Keyboard-operable (focusable, Enter/Space
+            activates) and carries an accessible label (R4.6). Tapping expands
+            to the full ranked list (R4.3). */}
+        {showMore && (
+          <div key="keep-exploring" className="shrink-0 w-[200px]">
+            <button
+              type="button"
+              data-keep-exploring
+              onClick={onTapMore}
+              aria-label={t('map.keepExploringLabel', 'Keep exploring — show all venues')}
+              className="glass-raised flex flex-col items-center justify-center gap-2 rounded-2xl px-4 py-3 w-full h-full min-h-[80px] text-center border-2 border-dashed border-[var(--accent)] transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] hover:bg-[var(--accent)]/10"
+            >
+              <Sparkles size={20} className="text-[var(--accent)]" strokeWidth={1.75} />
+              <span className="text-[var(--accent)] text-xs font-semibold">
+                {t('map.keepExploring', 'Keep exploring')}
+              </span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Keyboard-/screen-reader-operable stepping (R8.1, R8.2, R8.6). */}

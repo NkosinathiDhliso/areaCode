@@ -180,7 +180,7 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
 
   const incrementResult = await repo.incrementTotalCheckIns(userId)
   const newTier = incrementResult.tier
-  await repo.updateStreak(userId)
+  const streakValue = await repo.updateStreak(userId)
 
   // 4b. Advance threshold-lock progress on every active reward at this venue
   // (Churn-defences spec, Requirement 1). Failures here are logged but not
@@ -254,6 +254,42 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
     }
   }
 
+  // Shareable milestones (R11.5). Best-effort and idempotent: first check-in at
+  // this venue (recorded once per node via conditional put), streak
+  // achievements, and tier-ups. Failures never block the check-in.
+  try {
+    const { recordMilestone, streakMilestoneFor } = await import('../social/milestones.js')
+    const nowIso = new Date().toISOString()
+    await recordMilestone(userId, {
+      type: 'first_checkin',
+      qualifier: input.nodeId,
+      title: 'First check-in',
+      body: `First check-in at ${node.name}`,
+      createdAt: nowIso,
+    })
+    const streakHit = streakMilestoneFor(streakValue)
+    if (streakHit) {
+      await recordMilestone(userId, {
+        type: 'streak',
+        qualifier: String(streakHit),
+        title: `${streakHit}-day streak`,
+        body: `You're on a ${streakHit}-day check-in streak`,
+        createdAt: nowIso,
+      })
+    }
+    if (oldTier !== newTier) {
+      await recordMilestone(userId, {
+        type: 'tier_up',
+        qualifier: newTier,
+        title: 'Tier up',
+        body: `You moved up to ${newTier}`,
+        createdAt: nowIso,
+      })
+    }
+  } catch (err) {
+    console.warn(`[check-in] milestone generation failed: ${String(err)}`)
+  }
+
   // 5. Set cooldown
   await kvSet(cooldownKey, '1', cooldownTtl)
 
@@ -320,11 +356,13 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
             const friendPayload: {
               type: 'checkin'
               message: string
+              userId: string
               nodeId: string
               avatarUrl?: string
             } = {
               type: 'checkin',
               message: `${displayName} just checked in at ${node.name}`,
+              userId,
               nodeId: input.nodeId,
             }
             if (user?.avatarUrl) {

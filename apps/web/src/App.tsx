@@ -14,6 +14,7 @@ import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
 import { GlobalErrorToast } from '@area-code/shared/components/GlobalErrorToast'
 import { OnboardingFlow } from '@area-code/shared/components/OnboardingFlow'
 
+import { useFriendsPresence } from './hooks/useFriendsPresence'
 import { MapScreen } from './screens/MapScreen'
 import { RewardsScreen } from './screens/RewardsScreen'
 import { LeaderboardScreen } from './screens/LeaderboardScreen'
@@ -116,6 +117,9 @@ function AppContent() {
   // not just the map. These no-op until a token is present.
   useRewardSocket(accessToken ?? undefined)
   useNotificationSocket(accessToken ?? undefined)
+  // Friends presence: seed from API on auth, listen for socket events,
+  // re-seed on reconnect, clear on logout (R3.1, R3.4, R3.5, R14.1).
+  useFriendsPresence(accessToken ?? undefined)
 
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [onboardingChecked, setOnboardingChecked] = useState(false)
@@ -293,8 +297,8 @@ function AppContent() {
             {activeRoute === 'first-get-prompt' && <FirstGetPrompt onNavigate={setRoute} />}
             {activeRoute === 'map' && <MapScreen onNavigate={setRoute} />}
             {activeRoute === 'gets' && <RewardsScreen onNavigate={setRoute} />}
-            {activeRoute === 'ranks' && <LeaderboardScreen />}
-            {activeRoute === 'feed' && <FeedScreen />}
+            {activeRoute === 'ranks' && <LeaderboardScreen onNavigate={setRoute} />}
+            {activeRoute === 'feed' && <FeedScreen onNavigate={setRoute} />}
             {activeRoute === 'friends' && <FriendsScreen />}
             {activeRoute === 'profile' && <ProfileScreen onNavigate={setRoute} />}
             {activeRoute === 'privacy' && <PrivacySettingsScreen onNavigate={setRoute} />}

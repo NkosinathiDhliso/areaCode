@@ -26,6 +26,7 @@ import { SignupSheet } from '../components/SignupSheet'
 import { ToastOverlay } from '../components/ToastOverlay'
 import { useCarouselSelection } from '../hooks/useCarouselSelection'
 import { useCheckInFlow } from '../hooks/useCheckInFlow'
+import { useHasLiveGets } from '../hooks/useHasLiveGets'
 import { useMapInit } from '../hooks/useMapInit'
 import { useMapMarkers } from '../hooks/useMapMarkers'
 import { useMapSockets } from '../hooks/useMapSockets'
@@ -120,6 +121,10 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
   // Socket subscriptions, citySlug passed for anonymous room join
   useMapSockets(citySlug, accessToken ?? undefined, userId)
+
+  // Populate the live-gets ranking signal from rewards-near-me (R5.1, R15.2).
+  // Shares RewardsScreen's query cache so this adds no extra network call.
+  useHasLiveGets()
 
   // Live archetype delivery is gated by the `live_vibe_on_map` flag (R12.4,
   // R12.6). When the flag is `false` the subscriber is unmounted and the
@@ -365,6 +370,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
         onSignup={checkInFlow.activateCheckIn}
         qrFallback={checkInFlow.qrFallback}
         isCheckingIn={checkInFlow.isPending}
+        categoryFilter={categoryFilter}
       />
 
       {/* Auth + QR surfaces owned by the check-in flow. The only auth entry

@@ -19,7 +19,9 @@ import { getUserById } from '../auth/repository.js'
 import { endPresenceByCheckOut, getLivePresenceCount } from '../presence/repository.js'
 import { writeDwellRow } from '../presence/dwell-sink.js'
 import { getNodeWithCity } from '../check-in/repository.js'
-import { emitPresenceUpdate } from '../../shared/socket/events.js'
+import { emitPresenceUpdate, emitFriendCheckout } from '../../shared/socket/events.js'
+import { getMutualFollowIds, getFollowingIds } from '../social/repository.js'
+import { canEmitIdentity } from '../../shared/privacy/privacy-guard.js'
 import type { CheckOutInput, CheckOutResponse } from './types.js'
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
@@ -91,6 +93,22 @@ export async function processCheckOut(userId: string, input: CheckOutInput): Pro
     }
   } catch (err) {
     console.warn(`[check-out] presence update emit failed: ${String(err)}`)
+  }
+
+  // Best-effort emit `friend:checkout` to mutual friends so their client can
+  // call `removeFriendPresence(nodeId, userId)` and keep taste-match honest
+  // (Requirements 3.4, 3.5).
+  try {
+    const canEmit = await canEmitIdentity(userId)
+    if (canEmit) {
+      const followingIds = await getFollowingIds(userId)
+      const friendIds = await getMutualFollowIds(userId, followingIds)
+      for (const friendId of friendIds) {
+        emitFriendCheckout(friendId, { userId, nodeId: input.nodeId })
+      }
+    }
+  } catch (err) {
+    console.warn(`[check-out] friend:checkout emit failed: ${String(err)}`)
   }
 
   return { nodeId: input.nodeId, presenceState: 'checked_out', dwellSeconds: record.dwellSeconds! }

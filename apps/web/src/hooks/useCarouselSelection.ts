@@ -5,6 +5,7 @@ import {
   type SelectionMode,
   type SelectionSource,
 } from '@area-code/shared/stores'
+import { useUserStore } from '@area-code/shared/stores/userStore'
 import type { MapInstance, Node, NodeCategory } from '@area-code/shared/types'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 
@@ -197,6 +198,12 @@ export function useCarouselSelection({
       checkInCounts: mapState.checkInCounts,
       lastKnownPosition: useLocationStore.getState().lastKnownPosition,
       positionFresh,
+      // Taste-match and live-gets signals (vibe-ranked-browse R1, R15.3).
+      // Read from live snapshots so ranking always sees the latest values.
+      consumerArchetypeId: useUserStore.getState().user?.archetypeId ?? null,
+      venueArchetypeIds: mapState.archetypeIds,
+      friendsAtVenue: mapState.friendsAtVenue,
+      hasLiveGets: mapState.hasLiveGets,
     })
 
     const bounds = readBounds(mapState.mapInstance)

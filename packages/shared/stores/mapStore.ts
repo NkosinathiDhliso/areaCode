@@ -19,6 +19,19 @@ interface MapStore {
    * reconnect from the next live nodes payload (R11.6, R11.7).
    */
   archetypeIds: Record<string, string>
+  /**
+   * Friends currently checked in at each venue. Keyed by nodeId, value is an
+   * array of mutual-friend userIds (deduplicated on insert). Seeded from
+   * `GET /v1/friends/presence` on session start, updated via socket events
+   * (`toast:friend_checkin`, `friend:checkout`). Cleared on logout (R3.3).
+   */
+  friendsAtVenue: Record<string, string[]>
+  /**
+   * Whether a venue has at least one live event or offer get. Derived from
+   * the rewards-near-me response via `deriveHasLiveGets`. Used as priority-4
+   * signal in the lexicographic ranking (R5.1, R5.2).
+   */
+  hasLiveGets: Record<string, boolean>
   mapInstance: MapInstance | null
   /**
    * Cross-screen focus signal: set by surfaces like the Gets list to ask the
@@ -48,6 +61,20 @@ interface MapStore {
   clearArchetypeId: (nodeId: string) => void
   setMapInstance: (instance: MapInstance | null) => void
   setFocusNodeId: (nodeId: string | null) => void
+  /** Bulk-replace the friends presence map. Takes `filterActiveFriends`' output directly. */
+  setFriendsPresence: (byNode: Record<string, string[]>) => void
+  /**
+   * Add a single friend to a venue's presence list. No-op if the userId is
+   * already present at that node (dedup), so a repeated `toast:friend_checkin`
+   * never double-counts taste-match (R3.2, R3.6).
+   */
+  addFriendPresence: (nodeId: string, userId: string) => void
+  /** Remove a single friend from a venue's presence list. */
+  removeFriendPresence: (nodeId: string, userId: string) => void
+  /** Reset friends presence to empty. Called on logout (R3.3). */
+  clearFriendsPresence: () => void
+  /** Bulk-set the hasLiveGets map from `deriveHasLiveGets` output. */
+  setHasLiveGets: (map: Record<string, boolean>) => void
 }
 
 export const useMapStore = create<MapStore>()(
@@ -56,6 +83,8 @@ export const useMapStore = create<MapStore>()(
     pulseScores: {},
     archetypeIds: {},
     checkInCounts: {},
+    friendsAtVenue: {},
+    hasLiveGets: {},
     mapInstance: null,
     focusNodeId: null,
     setNodes: (nodes) =>
@@ -94,6 +123,40 @@ export const useMapStore = create<MapStore>()(
     setFocusNodeId: (nodeId) =>
       set((state) => {
         state.focusNodeId = nodeId
+      }),
+    setFriendsPresence: (byNode) =>
+      set((state) => {
+        state.friendsAtVenue = byNode
+      }),
+    addFriendPresence: (nodeId, userId) =>
+      set((state) => {
+        if (!state.friendsAtVenue[nodeId]) {
+          state.friendsAtVenue[nodeId] = [userId]
+        } else if (!state.friendsAtVenue[nodeId].includes(userId)) {
+          state.friendsAtVenue[nodeId].push(userId)
+        }
+        // No-op when userId is already present (dedup)
+      }),
+    removeFriendPresence: (nodeId, userId) =>
+      set((state) => {
+        const arr = state.friendsAtVenue[nodeId]
+        if (!arr) return
+        const idx = arr.indexOf(userId)
+        if (idx !== -1) {
+          arr.splice(idx, 1)
+        }
+        // Clean up empty arrays to keep the store lean
+        if (arr.length === 0) {
+          delete state.friendsAtVenue[nodeId]
+        }
+      }),
+    clearFriendsPresence: () =>
+      set((state) => {
+        state.friendsAtVenue = {}
+      }),
+    setHasLiveGets: (map) =>
+      set((state) => {
+        state.hasLiveGets = map
       }),
   })),
 )

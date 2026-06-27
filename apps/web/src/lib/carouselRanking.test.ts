@@ -2,8 +2,8 @@ import type { Node } from '@area-code/shared/types'
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 
-import type { RankInput, ViewportBounds } from './carouselRanking'
-import { haversineMeters, scopeToViewport, vibeRank } from './carouselRanking'
+import type { BrowseAction, BrowseState, RankInput, ViewportBounds } from './carouselRanking'
+import { browseReducer, deriveBrowseStrip, haversineMeters, scopeToViewport, vibeRank } from './carouselRanking'
 
 /**
  * Map Discovery - proximity-biased ranking + viewport scoping property tests.
@@ -201,5 +201,80 @@ describe('Feature: map-discovery-experience, Property 11: Active_Venue is never 
         expect(scopeToViewport(rankByIdOnly(venues), null, null)).toEqual([])
       }),
     )
+  })
+})
+
+// ─── Browse Strip State Machine (browseReducer) ─────────────────────────────
+
+describe('Feature: vibe-ranked-browse, browseReducer unit tests', () => {
+  it('OPEN resets to collapsed', () => {
+    expect(browseReducer({ isExpanded: true }, { type: 'OPEN' })).toEqual({ isExpanded: false })
+    expect(browseReducer({ isExpanded: false }, { type: 'OPEN' })).toEqual({ isExpanded: false })
+  })
+
+  it('TAP_MORE expands', () => {
+    expect(browseReducer({ isExpanded: false }, { type: 'TAP_MORE' })).toEqual({ isExpanded: true })
+  })
+
+  it('DISMISS resets to collapsed', () => {
+    expect(browseReducer({ isExpanded: true }, { type: 'DISMISS' })).toEqual({ isExpanded: false })
+  })
+
+  it('FILTER_CHANGE resets to collapsed', () => {
+    expect(browseReducer({ isExpanded: true }, { type: 'FILTER_CHANGE' })).toEqual({ isExpanded: false })
+  })
+
+  it('STEP does not change state', () => {
+    const expanded: BrowseState = { isExpanded: true }
+    const collapsed: BrowseState = { isExpanded: false }
+    expect(browseReducer(expanded, { type: 'STEP' })).toBe(expanded)
+    expect(browseReducer(collapsed, { type: 'STEP' })).toBe(collapsed)
+  })
+})
+
+// ─── Top 2 + More Selector (deriveBrowseStrip) ─────────────────────────────
+
+describe('Feature: vibe-ranked-browse, deriveBrowseStrip unit tests', () => {
+  const nodes = [makeNode('a', 0, 0), makeNode('b', 1, 1), makeNode('c', 2, 2), makeNode('d', 3, 3)]
+
+  it('shows top 2 + showMore when >= 3 venues and collapsed', () => {
+    const result = deriveBrowseStrip(nodes, false)
+    expect(result.visible).toHaveLength(2)
+    expect(result.visible[0]!.id).toBe('a')
+    expect(result.visible[1]!.id).toBe('b')
+    expect(result.showMore).toBe(true)
+  })
+
+  it('shows all venues with showMore=false when expanded', () => {
+    const result = deriveBrowseStrip(nodes, true)
+    expect(result.visible).toHaveLength(4)
+    expect(result.showMore).toBe(false)
+  })
+
+  it('shows all venues with showMore=false when < 3 venues (collapsed)', () => {
+    const twoNodes = [makeNode('x', 0, 0), makeNode('y', 1, 1)]
+    const result = deriveBrowseStrip(twoNodes, false)
+    expect(result.visible).toHaveLength(2)
+    expect(result.showMore).toBe(false)
+  })
+
+  it('returns empty visible and showMore=false for empty list', () => {
+    const result = deriveBrowseStrip([], false)
+    expect(result.visible).toHaveLength(0)
+    expect(result.showMore).toBe(false)
+  })
+
+  it('exactly 3 venues collapsed shows top 2 + showMore', () => {
+    const threeNodes = [makeNode('a', 0, 0), makeNode('b', 1, 1), makeNode('c', 2, 2)]
+    const result = deriveBrowseStrip(threeNodes, false)
+    expect(result.visible).toHaveLength(2)
+    expect(result.showMore).toBe(true)
+  })
+
+  it('1 venue collapsed shows all with no showMore', () => {
+    const one = [makeNode('z', 5, 5)]
+    const result = deriveBrowseStrip(one, false)
+    expect(result.visible).toHaveLength(1)
+    expect(result.showMore).toBe(false)
   })
 })

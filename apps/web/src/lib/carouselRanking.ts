@@ -1,4 +1,5 @@
 import type { Node } from '@area-code/shared/types'
+import { TIER_SIZE_MULTIPLIER } from '@area-code/shared/constants'
 
 /**
  * Pure vibe-first ranking and viewport scoping for the Peek-Carousel.
@@ -26,6 +27,15 @@ export interface RankInput {
   lastKnownPosition: { lat: number; lng: number } | null
   /** True when `capturedAt` is within the Position_Freshness_Window. */
   positionFresh: boolean
+  // --- Taste-match and live-gets signals (vibe-ranked-browse) ---
+  /** The consumer's archetype id, or null if unset / unauthenticated. */
+  consumerArchetypeId?: string | null
+  /** Live archetype overrides per venue (mapStore.archetypeIds). */
+  venueArchetypeIds?: Record<string, string>
+  /** Friends currently checked in per venue: nodeId -> userId[]. */
+  friendsAtVenue?: Record<string, string[]>
+  /** Whether a venue has at least one live event/offer get. */
+  hasLiveGets?: Record<string, boolean>
 }
 
 export interface ViewportBounds {
@@ -55,50 +65,176 @@ export function haversineMeters(a: { lat: number; lng: number }, b: { lat: numbe
 }
 
 /**
- * Order venues vibe-first: the most alive venues lead, and proximity is only a
- * tiebreaker between venues of equal vibe - it can never pull a closer-but-deader
- * venue above a more-alive one. This structurally enforces the discovery DNA
- * (`.kiro/steering/discovery-dna-vibe-over-convenience.md`): we pull people
- * toward what is alive and their kind of crowd, never toward whatever is merely
- * closest.
+ * Resolve the effective archetype for a venue using the live-override cascade:
+ *   1. Live override from `venueArchetypeIds[node.id]` (real-time map data)
+ *   2. Fallback to `node.defaultArchetypeId` (static node config)
+ *   3. Final fallback: `'archetype-eclectic'` (no archetype is penalised)
  *
- * The order is lexicographic, strongest signal first:
- *   1. Vibe (aliveness): buzz = (pulseScores[id] ?? 0) + (checkInCounts[id] ?? 0),
- *      higher first. When taste-match lands it joins THIS primary comparison,
- *      ahead of proximity - never below it.
- *   2. Proximity: a pure tiebreaker, nearer first, applied only when two venues
- *      have equal vibe and a fresh position exists. Structurally incapable of
- *      outranking a more-alive venue (vibe is compared first and short-circuits).
- *   3. Venue id ascending: a final deterministic tiebreak so the order is total
- *      and two consecutive computations on identical input agree (R5.3, R5.5).
+ * Design: .kiro/specs/vibe-ranked-browse/design.md § resolveArchetype
+ * Requirements: 2.1
+ */
+export function resolveArchetype(node: Node, venueArchetypeIds: Record<string, string>): string {
+  return venueArchetypeIds[node.id] ?? node.defaultArchetypeId ?? 'archetype-eclectic'
+}
+
+/**
+ * Compute the taste-match score for a single venue.
  *
- * When `positionFresh` is false (or no `lastKnownPosition` exists) the proximity
- * tiebreaker is skipped, so ranking falls back to vibe-then-id without raising
- * an error (R5.2).
+ * The score is a simple sum:
+ *   - Archetype match: 1 if `consumerArchetypeId` equals `venueArchetypeId`, else 0.
+ *     When the consumer has no archetype (null/undefined), match is always 0.
+ *   - Friends at venue: the count of mutual friends currently checked in.
  *
- * NOTE: an earlier version blended an additive `buzz + 0.5·proximity` score.
- * That only stayed vibe-first by the accident of integer buzz; it would let
- * proximity sway order the moment a fractional signal (e.g. taste-match) was
- * added. The lexicographic form makes "proximity never outranks vibe" a
- * structural guarantee, per the DNA rule.
+ * This produces a numeric score so the lexicographic sort can compare venues at
+ * priority 1. A venue with archetype match + 2 friends (score 3) outranks one
+ * with only archetype match (score 1).
+ *
+ * Design: .kiro/specs/vibe-ranked-browse/design.md § tasteMatchScore
+ * Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7
+ */
+export function tasteMatchScore(
+  consumerArchetypeId: string | null | undefined,
+  venueArchetypeId: string,
+  friendsAtVenueCount: number,
+): number {
+  const archetypeMatch = consumerArchetypeId && consumerArchetypeId === venueArchetypeId ? 1 : 0
+  return archetypeMatch + friendsAtVenueCount
+}
+
+/**
+ * Filter friend presence entries by expiry, returning only friends whose
+ * check-in has NOT expired relative to the given `nowMs` timestamp.
+ *
+ * This is a defence-in-depth filter: the server already returns only active
+ * friends, but the client re-applies the check in case of clock skew or
+ * slightly stale rows from the `GET /v1/friends/presence` seed response.
+ *
+ * Pure function — no internal `Date.now()`; the caller supplies `nowMs`.
+ *
+ * Design: .kiro/specs/vibe-ranked-browse/design.md § filterActiveFriends
+ * Requirements: 2.8, 3.5
+ */
+export function filterActiveFriends(
+  friends: Array<{ nodeId: string; userId: string; expiresAt: string }>,
+  nowMs: number,
+): Record<string, string[]> {
+  const result: Record<string, string[]> = {}
+  for (const f of friends) {
+    if (Date.parse(f.expiresAt) > nowMs) {
+      const arr = result[f.nodeId] ?? (result[f.nodeId] = [])
+      arr.push(f.userId)
+    }
+  }
+  return result
+}
+
+/**
+ * Derive a boolean map indicating which venues have at least one live event or
+ * offer get. Only rewards with `lifecycle === 'live'` AND `getCategory` of
+ * 'event' or 'offer' produce a `true` entry; all other venues are absent from
+ * the map (treated as `false` by the ranking comparator via
+ * `hasLiveGets[id] ? 1 : 0`).
+ *
+ * Used to populate `mapStore.hasLiveGets` when rewards-near-me data arrives.
+ *
+ * Requirements: 5.3, 5.4, 5.5
+ */
+export function deriveHasLiveGets(
+  rewards: Array<{ nodeId: string; getCategory?: string; lifecycle?: string }>,
+): Record<string, boolean> {
+  const result: Record<string, boolean> = {}
+  for (const r of rewards) {
+    if ((r.getCategory === 'event' || r.getCategory === 'offer') && r.lifecycle === 'live') {
+      result[r.nodeId] = true
+    }
+  }
+  return result
+}
+
+/**
+ * Order venues by the full lexicographic ranking - each signal short-circuits
+ * before the next is consulted, so a higher-priority signal structurally cannot
+ * be overridden by any combination of lower-priority ones. This enforces the
+ * Discovery DNA (`.kiro/steering/discovery-dna-vibe-over-convenience.md`):
+ * proximity is incapable of outranking taste, vibe, tier, or live gets.
+ *
+ * The 6-signal order:
+ *   1. **Taste-match score** (archetype affinity + friends-at-venue count).
+ *      Higher wins. When the consumer has no archetypeId and no friends, this
+ *      is 0 for all venues → gracefully degrades to aliveness-first (R7.1).
+ *   2. **Aliveness** (pulseScore + checkInCount). Higher wins.
+ *   3. **Business tier** (TIER_SIZE_MULTIPLIER[node.businessTier ?? 'starter']).
+ *      Higher multiplier wins - the paid lever among equally-alive venues.
+ *   4. **Has live gets** (boolean: at least one live event/offer get). True > false.
+ *   5. **Distance** (haversine metres, nearer wins). Only applied when
+ *      `positionFresh && lastKnownPosition != null`; otherwise skipped entirely
+ *      (not treated as zero distance).
+ *   6. **Venue ID ascending** - deterministic tiebreaker ensuring total order.
+ *
+ * The function is pure: no I/O, no Date.now, clock injected from outside.
+ * Deterministic for any valid RankInput (R1.8, R5.3, R5.5).
+ *
+ * Design: .kiro/specs/vibe-ranked-browse/design.md § vibeRank Comparator
+ * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 8.1, 8.2, 8.3
  */
 export function vibeRank(input: RankInput): Node[] {
-  const { venues, pulseScores, checkInCounts, lastKnownPosition, positionFresh } = input
+  const {
+    venues,
+    pulseScores,
+    checkInCounts,
+    lastKnownPosition,
+    positionFresh,
+    consumerArchetypeId: rawConsumerArchetypeId,
+    venueArchetypeIds: rawVenueArchetypeIds,
+    friendsAtVenue: rawFriendsAtVenue,
+    hasLiveGets: rawHasLiveGets,
+  } = input
+
+  // Safe defaults for optional fields (graceful degradation R7.1, R7.2)
+  const consumerArchetypeId = rawConsumerArchetypeId ?? null
+  const venueArchetypeIds = rawVenueArchetypeIds ?? {}
+  const friendsAtVenue = rawFriendsAtVenue ?? {}
+  const hasLiveGets = rawHasLiveGets ?? {}
 
   const useProximity = positionFresh && lastKnownPosition !== null
 
-  const vibeOf = (v: Node): number => (pulseScores[v.id] ?? 0) + (checkInCounts[v.id] ?? 0)
-  const distanceOf = (v: Node): number =>
-    useProximity ? haversineMeters(lastKnownPosition as { lat: number; lng: number }, { lat: v.lat, lng: v.lng }) : 0
-
   return [...venues].sort((a, b) => {
-    // 1) Vibe / aliveness - the hero signal. Higher buzz always wins outright.
-    const vibeDelta = vibeOf(b) - vibeOf(a)
-    if (vibeDelta !== 0) return vibeDelta
-    // 2) Proximity - pure tiebreaker only (nearer first), never able to outrank vibe.
-    const distDelta = distanceOf(a) - distanceOf(b)
-    if (distDelta !== 0) return distDelta
-    // 3) Deterministic id tie-break by venue id ascending (R5.5).
+    // 1) Taste-match score (higher wins) — archetype affinity + friends count
+    const tasteA = tasteMatchScore(
+      consumerArchetypeId,
+      resolveArchetype(a, venueArchetypeIds),
+      (friendsAtVenue[a.id] ?? []).length,
+    )
+    const tasteB = tasteMatchScore(
+      consumerArchetypeId,
+      resolveArchetype(b, venueArchetypeIds),
+      (friendsAtVenue[b.id] ?? []).length,
+    )
+    if (tasteA !== tasteB) return tasteB - tasteA
+
+    // 2) Aliveness (higher wins) — pulse + check-in count
+    const aliveA = (pulseScores[a.id] ?? 0) + (checkInCounts[a.id] ?? 0)
+    const aliveB = (pulseScores[b.id] ?? 0) + (checkInCounts[b.id] ?? 0)
+    if (aliveA !== aliveB) return aliveB - aliveA
+
+    // 3) Business tier (higher multiplier wins) — paid lever among equals
+    const tierA = TIER_SIZE_MULTIPLIER[a.businessTier ?? 'starter']
+    const tierB = TIER_SIZE_MULTIPLIER[b.businessTier ?? 'starter']
+    if (tierA !== tierB) return tierB - tierA
+
+    // 4) Has live gets (true > false)
+    const getsA = hasLiveGets[a.id] ? 1 : 0
+    const getsB = hasLiveGets[b.id] ? 1 : 0
+    if (getsA !== getsB) return getsB - getsA
+
+    // 5) Distance (nearer wins) — only when position is fresh; skipped otherwise (R1.6)
+    if (useProximity) {
+      const distA = haversineMeters(lastKnownPosition as { lat: number; lng: number }, { lat: a.lat, lng: a.lng })
+      const distB = haversineMeters(lastKnownPosition as { lat: number; lng: number }, { lat: b.lat, lng: b.lng })
+      if (distA !== distB) return distA - distB
+    }
+
+    // 6) Venue ID ascending — deterministic tiebreaker (R1.7)
     if (a.id < b.id) return -1
     if (a.id > b.id) return 1
     return 0
@@ -132,6 +268,93 @@ export function scopeToViewport(ranked: Node[], bounds: ViewportBounds | null, a
   const active = ranked.find((v) => v.id === activeVenueId)
   return active ? [active, ...inViewport] : inViewport
 }
+
+// ─── Browse Strip State Machine ──────────────────────────────────────────────
+
+/**
+ * Actions that drive the browse strip state transitions.
+ *
+ *   - `OPEN` / `FILTER_CHANGE` -> reset to collapsed (top 2 view)
+ *   - `TAP_MORE` -> expand to full list
+ *   - `DISMISS` -> reset to collapsed
+ *   - `STEP` -> no expansion change (stepping through venues)
+ *
+ * Design: .kiro/specs/vibe-ranked-browse/design.md § Browse Strip State Reducer
+ * Requirements: 4.3, 4.4
+ */
+export type BrowseAction =
+  | { type: 'OPEN' }
+  | { type: 'TAP_MORE' }
+  | { type: 'DISMISS' }
+  | { type: 'FILTER_CHANGE' }
+  | { type: 'STEP' }
+
+/**
+ * State of the browse strip expansion.
+ *   - `isExpanded = false`: shows top 2 + "More" (collapsed view)
+ *   - `isExpanded = true`: shows all ranked venues (expanded view)
+ */
+export interface BrowseState {
+  isExpanded: boolean
+}
+
+/**
+ * Pure state reducer for the browse strip expansion state machine.
+ *
+ * This is the **Property 7 (Browse Expansion State Machine)** target.
+ *
+ * Transitions:
+ *   - `OPEN`, `DISMISS`, `FILTER_CHANGE` → `isExpanded: false` (reset to top 2)
+ *   - `TAP_MORE` → `isExpanded: true` (unlock full list)
+ *   - `STEP` → no change (stepping doesn't affect expansion)
+ *
+ * Once expanded via TAP_MORE, the strip remains expanded until DISMISS or
+ * FILTER_CHANGE resets it. This is the key invariant for Property 7.
+ *
+ * Design: .kiro/specs/vibe-ranked-browse/design.md § Browse Strip State Reducer
+ * Requirements: 4.3, 4.4
+ */
+export function browseReducer(state: BrowseState, action: BrowseAction): BrowseState {
+  switch (action.type) {
+    case 'OPEN':
+    case 'DISMISS':
+    case 'FILTER_CHANGE':
+      return { isExpanded: false }
+    case 'TAP_MORE':
+      return { isExpanded: true }
+    case 'STEP':
+      return state
+  }
+}
+
+// ─── Top 2 + More Selector ──────────────────────────────────────────────────
+
+/**
+ * Derive the visible venues and "More" affordance for the browse strip.
+ *
+ * This is the **Property 6 (Top 2 Initial Display)** target — a pure selector
+ * kept separate from the reducer so it can be property-tested independently.
+ *
+ * Rules:
+ *   - When `ranked` has >= 3 venues AND `isExpanded` is false:
+ *     show the first 2 venues and `showMore = true`.
+ *   - When `ranked` has < 3 venues:
+ *     show all venues, `showMore = false` (no "More" needed; collapsed and
+ *     expanded views are identical).
+ *   - When `isExpanded` is true:
+ *     show all venues, `showMore = false` (already expanded).
+ *
+ * Design: .kiro/specs/vibe-ranked-browse/design.md § Top 2 + More Entry Point
+ * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
+ */
+export function deriveBrowseStrip(ranked: Node[], isExpanded: boolean): { visible: Node[]; showMore: boolean } {
+  if (ranked.length < 3 || isExpanded) {
+    return { visible: ranked, showMore: false }
+  }
+  return { visible: ranked.slice(0, 2), showMore: true }
+}
+
+// ─── Viewport Scoping (unchanged) ──────────────────────────────────────────
 
 /** True when the coordinate lies inside the bounds, handling antimeridian wrap. */
 function withinBounds(v: { lat: number; lng: number }, b: ViewportBounds): boolean {

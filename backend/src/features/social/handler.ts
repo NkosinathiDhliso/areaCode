@@ -7,6 +7,7 @@ import {
   followParamsSchema,
   feedQuerySchema,
   leaderboardParamsSchema,
+  leaderboardQuerySchema,
   nearbyRecentQuerySchema,
   whoIsHereParamsSchema,
   userSearchQuerySchema,
@@ -79,12 +80,16 @@ export async function socialRoutes(app: FastifyInstance) {
   app.get(
     '/v1/leaderboard/:citySlug',
     {
-      preHandler: [optionalAuth('consumer'), validate({ params: leaderboardParamsSchema })],
+      preHandler: [
+        optionalAuth('consumer'),
+        validate({ params: leaderboardParamsSchema, query: leaderboardQuerySchema }),
+      ],
     },
     async (request) => {
       const auth = getOptionalAuth(request)
       const params = request.params as z.infer<typeof leaderboardParamsSchema>
-      return service.getCityLeaderboard(params.citySlug, auth?.userId)
+      const query = request.query as z.infer<typeof leaderboardQuerySchema>
+      return service.getCityLeaderboard(params.citySlug, auth?.userId, query.archetypeId)
     },
   )
 
@@ -133,6 +138,21 @@ export async function socialRoutes(app: FastifyInstance) {
       const auth = getAuth(request)
       const query = request.query as z.infer<typeof userSearchQuerySchema>
       return service.searchUsers(auth.userId, query.q)
+    },
+  )
+
+  // GET /v1/friends/presence
+  // Returns active (non-expired) check-ins of the consumer's mutual friends.
+  // Auth required: unauthenticated requests get 401 (R3.3 - store stays empty when logged out).
+  // Called once on session start (R14.1 - no polling).
+  app.get(
+    '/v1/friends/presence',
+    {
+      preHandler: [requireAuth('consumer')],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      return service.getFriendsPresence(auth.userId)
     },
   )
 }

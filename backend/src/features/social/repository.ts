@@ -103,6 +103,9 @@ export async function getActivityFeed(userId: string, cursor: string | undefined
               displayName: user.displayName,
               avatarUrl: user.avatarUrl,
               tier: user.tier,
+              // Carried so the client archetype cluster (R11.3) can match the
+              // checking-in user's archetype against the consumer's.
+              archetypeId: user.archetypeId ?? null,
             }
           : null,
         node: node ? { id: node.nodeId, name: node.name, slug: node.slug, category: node.category } : null,
@@ -198,21 +201,30 @@ export async function getCityBySlug(slug: string) {
   return result.Item ? { id: result.Item['cityId'] ?? slug, slug, name: result.Item['name'] } : null
 }
 
-export async function getLeaderboardTop50(cityId: string) {
+export async function getLeaderboardTop50(cityId: string, archetypeId?: string) {
   // DynamoDB-backed leaderboard stored in app_data
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.appData,
-      KeyConditionExpression: 'pk = :pk',
-      ExpressionAttributeValues: { ':pk': `LEADERBOARD#${cityId}` },
-      ScanIndexForward: false,
-      Limit: 50,
-    }),
-  )
+  const queryParams: Record<string, unknown> = {
+    TableName: TableNames.appData,
+    KeyConditionExpression: 'pk = :pk',
+    ExpressionAttributeValues: { ':pk': `LEADERBOARD#${cityId}` } as Record<string, unknown>,
+    ScanIndexForward: false,
+    Limit: 50,
+  }
+
+  // Apply filter expression for archetype segment (acceptable at <=50 entries)
+  if (archetypeId) {
+    queryParams['FilterExpression'] = 'archetypeId = :archetypeId'
+    ;(queryParams['ExpressionAttributeValues'] as Record<string, unknown>)[':archetypeId'] = archetypeId
+  }
+
+  const result = await documentClient.send(new QueryCommand(queryParams as any))
   return (result.Items || []).map((item, i) => ({
     userId: item['userId'] as string,
     checkInCount: (item['checkInCount'] as number) ?? 0,
     rank: i + 1,
+    archetypeId: (item['archetypeId'] as string) ?? undefined,
+    topVenueId: (item['topVenueId'] as string) ?? undefined,
+    topVenueName: (item['topVenueName'] as string) ?? undefined,
   }))
 }
 
@@ -350,4 +362,49 @@ export async function searchUsers(query: string, viewerId: string) {
       isMutual: mutualIds.has(uid),
     }
   })
+}
+
+// ─── Friends Presence ───────────────────────────────────────────────────────
+
+/**
+ * Get active (non-expired) presence records for a set of mutual friends.
+ * Queries the `presence` table by userId (PK) for each friend, filtering for
+ * `presenceState = 'present' AND expiresAt > nowSeconds`.
+ *
+ * Returns flat list: { nodeId, userId, expiresAt (ISO string) }
+ */
+export async function getFriendsPresence(
+  friendIds: string[],
+  nowSeconds: number,
+): Promise<Array<{ nodeId: string; userId: string; expiresAt: string }>> {
+  if (friendIds.length === 0) return []
+
+  const results: Array<{ nodeId: string; userId: string; expiresAt: string }> = []
+
+  // Query presence table for each friend. The table PK is userId, SK is nodeId.
+  // We filter for presenceState = 'present' AND expiresAt > nowSeconds.
+  for (const friendId of friendIds) {
+    const queryResult = await documentClient.send(
+      new QueryCommand({
+        TableName: TableNames.presence,
+        KeyConditionExpression: 'userId = :uid',
+        FilterExpression: 'presenceState = :present AND expiresAt > :now',
+        ExpressionAttributeValues: {
+          ':uid': friendId,
+          ':present': 'present',
+          ':now': nowSeconds,
+        },
+      }),
+    )
+
+    for (const item of queryResult.Items || []) {
+      results.push({
+        nodeId: item['nodeId'] as string,
+        userId: friendId,
+        expiresAt: new Date((item['expiresAt'] as number) * 1000).toISOString(),
+      })
+    }
+  }
+
+  return results
 }

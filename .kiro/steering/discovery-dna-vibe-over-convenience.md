@@ -76,15 +76,19 @@ Always. If your ranking can ever produce the opposite, it is wrong.
 
 ## Known code that this rule now governs
 
-- `apps/web/src/lib/carouselRanking.ts` — `vibeRank` (renamed from the original
-  `proximityBiasedRank`). Now orders venues **lexicographically**: vibe
-  (buzz, and taste-match once wired) first, proximity only as a tiebreaker
-  between venues of equal vibe, then venue id. Proximity is structurally
-  incapable of outranking a more-alive venue. The old additive
-  `buzz + 0.5·proximity` blend was removed because it only stayed vibe-first by
-  the accident of integer buzz and would break the moment a fractional signal
-  (taste-match) was added. When taste-match lands, add it to the primary vibe
-  comparison — never below proximity.
+- `apps/web/src/lib/carouselRanking.ts` — `vibeRank`. Orders venues in strict
+  lexicographic priority (each level short-circuits before the next is
+  consulted):
+  1. **Taste-match score** (archetype match + friends-at-venue count)
+  2. **Aliveness** (pulseScore + checkInCount)
+  3. **Business tier / node boost** (paid lever — growth/pro get an edge among
+     equally-alive venues)
+  4. **Has live gets** (boolean: venue has ≥1 live event/offer)
+  5. **Distance** (nearer wins, only when position is fresh)
+  6. **Venue ID** (deterministic tiebreaker)
+
+  Proximity is structurally incapable of outranking any higher signal.
+  Spec: `.kiro/specs/vibe-ranked-browse/requirements.md`
 
 ## The pull: answer "why go THERE, right now?"
 

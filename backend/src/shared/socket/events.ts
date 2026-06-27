@@ -121,11 +121,22 @@ export function emitFriendToast(
   payload: {
     type: ToastType
     message: string
-    nodeId?: string
+    userId: string
+    nodeId: string
     avatarUrl?: string
   },
 ) {
   getIO()?.to(userRoom(userId)).emit('toast:friend_checkin', payload)
+}
+
+/**
+ * Emit `friend:checkout` to a specific user when one of their mutual friends
+ * checks out (manual) or their presence expires (serverless sweep). The client
+ * uses this to call `removeFriendPresence(nodeId, userId)` so the taste-match
+ * score stays honest (Requirement 3.5).
+ */
+export function emitFriendCheckout(recipientUserId: string, payload: { userId: string; nodeId: string }) {
+  getIO()?.to(userRoom(recipientUserId)).emit('friend:checkout', payload)
 }
 
 export function emitBusinessCheckinDetail(businessId: string, payload: BusinessCheckinDetailPayload) {

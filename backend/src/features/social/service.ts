@@ -1,8 +1,27 @@
 import { AppError } from '../../shared/errors/AppError.js'
 import { filterByPrivacy } from '../../shared/privacy/privacy-guard.js'
 import * as repo from './repository.js'
+import { deriveTopVenue } from './leaderboard-utils.js'
 
 const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
+
+/**
+ * Returns the ISO string for the start of the current week (Monday 00:00 SAST).
+ * Used to scope check-in queries to the current leaderboard period.
+ */
+function getStartOfCurrentWeek(): string {
+  const now = new Date()
+  // Adjust to SAST (UTC+2)
+  const sast = new Date(now.getTime() + 2 * 60 * 60 * 1000)
+  const day = sast.getUTCDay()
+  // Monday = 1, Sunday = 0 -> days since Monday
+  const daysSinceMonday = day === 0 ? 6 : day - 1
+  sast.setUTCDate(sast.getUTCDate() - daysSinceMonday)
+  sast.setUTCHours(0, 0, 0, 0)
+  // Convert back from SAST to UTC for the ISO string
+  const utc = new Date(sast.getTime() - 2 * 60 * 60 * 1000)
+  return utc.toISOString()
+}
 
 // ─── Identity Stripper ──────────────────────────────────────────────────────
 
@@ -64,60 +83,79 @@ export async function unfollowUser(followerId: string, followingId: string) {
 
 export async function getActivityFeed(userId: string, cursor: string | undefined, limit: number) {
   if (DEV_MODE) {
+    const devItems = [
+      {
+        id: 'feed-1',
+        checkedInAt: new Date(Date.now() - 300000).toISOString(),
+        user: {
+          id: 'dev-user-2',
+          username: 'sipho_jozi',
+          displayName: 'Sipho',
+          avatarUrl: null,
+          tier: 'trailblazer',
+          archetypeId: 'archetype-nomad',
+        },
+        node: { id: 'dev-3', name: "Kitchener's Bar", slug: 'kitcheners-bar', category: 'nightlife' },
+        isFriend: true,
+      },
+      {
+        id: 'feed-2',
+        checkedInAt: new Date(Date.now() - 900000).toISOString(),
+        user: {
+          id: 'dev-user-3',
+          username: 'thandi_sa',
+          displayName: 'Thandi',
+          avatarUrl: null,
+          tier: 'explorer',
+          archetypeId: 'archetype-nomad',
+        },
+        node: { id: 'dev-6', name: 'Arts on Main', slug: 'arts-on-main', category: 'culture' },
+        isFriend: true,
+      },
+      {
+        id: 'feed-3',
+        checkedInAt: new Date(Date.now() - 1800000).toISOString(),
+        user: {
+          id: 'dev-user-4',
+          username: 'bongani_jhb',
+          displayName: 'Bongani',
+          avatarUrl: null,
+          tier: 'explorer',
+        },
+        node: { id: 'dev-1', name: 'Father Coffee', slug: 'father-coffee', category: 'coffee' },
+        isFriend: true,
+      },
+      {
+        id: 'feed-4',
+        checkedInAt: new Date(Date.now() - 3600000).toISOString(),
+        user: {
+          id: 'dev-user-5',
+          username: 'lerato_rosebank',
+          displayName: 'Lerato',
+          avatarUrl: null,
+          tier: 'local',
+        },
+        node: { id: 'dev-7', name: "Nando's Rosebank", slug: 'nandos-rosebank', category: 'food' },
+        isFriend: true,
+      },
+      {
+        id: 'feed-5',
+        checkedInAt: new Date(Date.now() - 7200000).toISOString(),
+        user: { id: 'dev-user-1', username: 'neo_sandton', displayName: 'Neo', avatarUrl: null, tier: 'local' },
+        node: { id: 'dev-5', name: 'Sandton City', slug: 'sandton-city', category: 'shopping' },
+        isFriend: true,
+      },
+    ]
     return {
       items: [
+        ...devItems.map((i) => ({ ...i, feedType: 'checkin' as const })),
         {
-          id: 'feed-1',
-          checkedInAt: new Date(Date.now() - 300000).toISOString(),
-          user: {
-            id: 'dev-user-2',
-            username: 'sipho_jozi',
-            displayName: 'Sipho',
-            avatarUrl: null,
-            tier: 'trailblazer',
-          },
-          node: { id: 'dev-3', name: "Kitchener's Bar", slug: 'kitcheners-bar', category: 'nightlife' },
-          isFriend: true,
-        },
-        {
-          id: 'feed-2',
-          checkedInAt: new Date(Date.now() - 900000).toISOString(),
-          user: { id: 'dev-user-3', username: 'thandi_sa', displayName: 'Thandi', avatarUrl: null, tier: 'explorer' },
-          node: { id: 'dev-6', name: 'Arts on Main', slug: 'arts-on-main', category: 'culture' },
-          isFriend: true,
-        },
-        {
-          id: 'feed-3',
-          checkedInAt: new Date(Date.now() - 1800000).toISOString(),
-          user: {
-            id: 'dev-user-4',
-            username: 'bongani_jhb',
-            displayName: 'Bongani',
-            avatarUrl: null,
-            tier: 'explorer',
-          },
-          node: { id: 'dev-1', name: 'Father Coffee', slug: 'father-coffee', category: 'coffee' },
-          isFriend: true,
-        },
-        {
-          id: 'feed-4',
-          checkedInAt: new Date(Date.now() - 3600000).toISOString(),
-          user: {
-            id: 'dev-user-5',
-            username: 'lerato_rosebank',
-            displayName: 'Lerato',
-            avatarUrl: null,
-            tier: 'local',
-          },
-          node: { id: 'dev-7', name: "Nando's Rosebank", slug: 'nandos-rosebank', category: 'food' },
-          isFriend: true,
-        },
-        {
-          id: 'feed-5',
-          checkedInAt: new Date(Date.now() - 7200000).toISOString(),
-          user: { id: 'dev-user-1', username: 'neo_sandton', displayName: 'Neo', avatarUrl: null, tier: 'local' },
-          node: { id: 'dev-5', name: 'Sandton City', slug: 'sandton-city', category: 'shopping' },
-          isFriend: true,
+          id: 'milestone-streak-7',
+          feedType: 'milestone' as const,
+          checkedInAt: new Date(Date.now() - 600000).toISOString(),
+          milestoneType: 'streak' as const,
+          title: '7-day streak',
+          body: "You're on a 7-day check-in streak",
         },
       ],
       nextCursor: null,
@@ -141,6 +179,9 @@ export async function getActivityFeed(userId: string, cursor: string | undefined
     const original = f._original as Record<string, unknown>
     return {
       ...original,
+      // Discriminator so the client can render check-ins vs other feed item
+      // types (live gets, archetype cluster) it composes locally (R11 / 10.1).
+      feedType: 'checkin' as const,
       user: {
         ...(original.user as Record<string, unknown>),
         displayName: f.displayName,
@@ -150,9 +191,19 @@ export async function getActivityFeed(userId: string, cursor: string | undefined
       isFriend: true,
     }
   })
+  // Merge the viewer's own shareable milestones (R11.5). Best-effort: a read
+  // failure degrades to a feed without milestone items.
+  let milestones: Awaited<ReturnType<typeof import('./milestones.js').getRecentMilestones>> = []
+  try {
+    const { getRecentMilestones } = await import('./milestones.js')
+    milestones = await getRecentMilestones(userId, 10)
+  } catch {
+    // non-critical
+  }
+
   return {
     ...result,
-    items: privacyFilteredItems,
+    items: [...privacyFilteredItems, ...milestones],
   }
 }
 
@@ -212,7 +263,9 @@ export async function getWhoIsHere(nodeId: string, viewerId?: string) {
 
 // ─── Leaderboard ────────────────────────────────────────────────────────────
 
-export async function getCityLeaderboard(citySlug: string, viewerId?: string) {
+export async function getCityLeaderboard(citySlug: string, viewerId?: string, archetypeId?: string) {
+  const segment: 'archetype' | 'city-wide' = archetypeId ? 'archetype' : 'city-wide'
+
   if (DEV_MODE) {
     const entries = [
       {
@@ -224,6 +277,9 @@ export async function getCityLeaderboard(citySlug: string, viewerId?: string) {
         rank: 1,
         checkInCount: 142,
         isFriend: true,
+        archetypeId: archetypeId ?? 'archetype-nomad',
+        topVenueId: 'dev-3',
+        topVenueName: "Kitchener's Bar",
       },
       {
         userId: 'dev-user-2',
@@ -234,6 +290,9 @@ export async function getCityLeaderboard(citySlug: string, viewerId?: string) {
         rank: 2,
         checkInCount: 98,
         isFriend: false,
+        archetypeId: archetypeId ?? 'archetype-nomad',
+        topVenueId: 'dev-6',
+        topVenueName: 'Arts on Main',
       },
       {
         userId: 'dev-user-3',
@@ -244,6 +303,9 @@ export async function getCityLeaderboard(citySlug: string, viewerId?: string) {
         rank: 3,
         checkInCount: 76,
         isFriend: false,
+        archetypeId: archetypeId ?? 'archetype-eclectic',
+        topVenueId: undefined,
+        topVenueName: undefined,
       },
       {
         userId: 'dev-user-4',
@@ -254,6 +316,9 @@ export async function getCityLeaderboard(citySlug: string, viewerId?: string) {
         rank: 4,
         checkInCount: 54,
         isFriend: true,
+        archetypeId: archetypeId ?? 'archetype-eclectic',
+        topVenueId: 'dev-1',
+        topVenueName: 'Father Coffee',
       },
       {
         userId: 'dev-user-5',
@@ -264,15 +329,18 @@ export async function getCityLeaderboard(citySlug: string, viewerId?: string) {
         rank: 5,
         checkInCount: 41,
         isFriend: false,
+        archetypeId: archetypeId ?? 'archetype-nomad',
+        topVenueId: undefined,
+        topVenueName: undefined,
       },
     ]
-    return { entries, userRank: viewerId ? { rank: 12, checkInCount: 8 } : null }
+    return { entries, userRank: viewerId ? { rank: 12, checkInCount: 8 } : null, segment }
   }
 
   const city = await repo.getCityBySlug(citySlug)
   if (!city) throw AppError.notFound('City not found')
 
-  const top50 = await repo.getLeaderboardTop50(city.id)
+  const top50 = await repo.getLeaderboardTop50(city.id, archetypeId)
   const userIds = top50.map((e) => e.userId)
 
   // Include requesting user if not in top 50
@@ -285,7 +353,40 @@ export async function getCityLeaderboard(citySlug: string, viewerId?: string) {
   const profiles = await repo.getUserProfiles(userIds)
   const profileMap = new Map(profiles.map((p) => [p.id, p]))
 
-  const rawEntries = top50.map((e) => {
+  // For entries missing topVenueId, compute from check-in history
+  const startOfWeek = getStartOfCurrentWeek()
+  const now = new Date().toISOString()
+
+  const enrichedTop50 = await Promise.all(
+    top50.map(async (e) => {
+      if (e.topVenueId) return e
+      // Derive topVenue from user's check-in history this period
+      try {
+        const { getCheckInsByUser } = await import('../check-in/dynamodb-repository.js')
+        const { checkIns } = await getCheckInsByUser(e.userId, {
+          startTime: startOfWeek,
+          endTime: now,
+          limit: 200,
+        })
+        const result = deriveTopVenue(checkIns.map((ci) => ({ nodeId: ci.nodeId, checkedInAt: ci.checkedInAt })))
+        if (result) {
+          // Resolve venue name
+          const { getNodeById } = await import('../nodes/dynamodb-repository.js')
+          const node = await getNodeById(result.topVenueId)
+          return {
+            ...e,
+            topVenueId: result.topVenueId,
+            topVenueName: node?.name ?? undefined,
+          }
+        }
+      } catch {
+        // Non-critical: degrade gracefully without top venue
+      }
+      return e
+    }),
+  )
+
+  const rawEntries = enrichedTop50.map((e) => {
     const profile = profileMap.get(e.userId)
     return {
       userId: e.userId,
@@ -295,6 +396,9 @@ export async function getCityLeaderboard(citySlug: string, viewerId?: string) {
       tier: profile?.tier ?? 'local',
       rank: e.rank,
       checkInCount: e.checkInCount,
+      archetypeId: e.archetypeId,
+      topVenueId: e.topVenueId,
+      topVenueName: e.topVenueName,
     }
   })
 
@@ -313,9 +417,13 @@ export async function getCityLeaderboard(citySlug: string, viewerId?: string) {
   const entries = privacyFiltered.map((entry) => ({
     ...entry,
     isFriend: entry.userId === (viewerId ?? '') || friendIds.has(entry.userId),
+    // Respect privacy: only show venue callout when user's identity is visible
+    // (Privacy guard already nulls displayName for anonymous users; use that as signal)
+    topVenueId: entry.displayName ? entry.topVenueId : undefined,
+    topVenueName: entry.displayName ? entry.topVenueName : undefined,
   }))
 
-  return { entries, userRank }
+  return { entries, userRank, segment }
 }
 
 // ─── Friends List ───────────────────────────────────────────────────────────
@@ -356,4 +464,35 @@ export async function searchUsers(viewerId: string, query: string) {
   }
   const users = await repo.searchUsers(query, viewerId)
   return { users }
+}
+
+// ─── Friends Presence ───────────────────────────────────────────────────────
+
+export async function getFriendsPresence(userId: string) {
+  if (DEV_MODE) {
+    return {
+      items: [
+        {
+          nodeId: 'dev-3',
+          userId: 'dev-user-2',
+          expiresAt: new Date(Date.now() + 3600000).toISOString(),
+        },
+        {
+          nodeId: 'dev-1',
+          userId: 'dev-user-3',
+          expiresAt: new Date(Date.now() + 1800000).toISOString(),
+        },
+      ],
+    }
+  }
+
+  // Get mutual friend IDs
+  const followingIds = await repo.getFollowingIds(userId)
+  const mutualIds = await repo.getMutualFollowIds(userId, followingIds)
+
+  // Query active presence for each mutual friend
+  const nowSeconds = Math.floor(Date.now() / 1000)
+  const items = await repo.getFriendsPresence(Array.from(mutualIds), nowSeconds)
+
+  return { items }
 }
