@@ -293,11 +293,17 @@ export function useCarouselSelection({
       return
     }
     if (activeVenueId === prevActiveRef.current) return
-    prevActiveRef.current = activeVenueId
 
     const map = useMapStore.getState().mapInstance
     const node = useMapStore.getState().nodes[activeVenueId]
+    // Map or node not ready yet (e.g. a cold open while Mapbox is still
+    // loading): do NOT advance prevActiveRef, so this effect retries once
+    // `mapReady` flips true (it is in the dep array). Advancing the ref here
+    // would permanently skip the first fly-to and leave the map parked on the
+    // country overview - which also collapses the viewport-scoped carousel
+    // order to a single venue, so stepping could never recover (R4.7, R6.1).
     if (!map || !node) return
+    prevActiveRef.current = activeVenueId
 
     // First move of the session: if the map is still parked on the zoomed-out
     // country overview (below MIN_MARKER_ZOOM, where markers are hidden), zoom
@@ -320,7 +326,7 @@ export function useCarouselSelection({
       reducedMotion: reducedMotionValue,
       ...(arrivalZoom !== undefined ? { zoom: arrivalZoom } : {}),
     })
-  }, [activeVenueId, reducedMotionValue])
+  }, [activeVenueId, reducedMotionValue, mapReady])
 
   // ── Focus_Signal consumption ──────────────────────────────────────────────
   //
