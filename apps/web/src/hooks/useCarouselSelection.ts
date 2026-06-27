@@ -302,8 +302,20 @@ export function useCarouselSelection({
     // would permanently skip the first fly-to and leave the map parked on the
     // country overview - which also collapses the viewport-scoped carousel
     // order to a single venue, so stepping could never recover (R4.7, R6.1).
-    if (!map || !node) return
+    if (!map || !node) {
+      // [cam-debug] temporary diagnostic for the no-snap report; remove once fixed.
+      console.info('[cam-debug] skip move', { activeVenueId, hasMap: !!map, hasNode: !!node, mapReady })
+      return
+    }
     prevActiveRef.current = activeVenueId
+    // [cam-debug] temporary diagnostic: confirms the move fires and with what target.
+    console.info('[cam-debug] move ->', {
+      id: node.id,
+      name: (node as { name?: string }).name,
+      lng: node.lng,
+      lat: node.lat,
+      reducedMotion: reducedMotionValue,
+    })
 
     // First move of the session: if the map is still parked on the zoomed-out
     // country overview (below MIN_MARKER_ZOOM, where markers are hidden), zoom
