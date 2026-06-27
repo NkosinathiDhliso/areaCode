@@ -283,10 +283,6 @@ export function useCarouselSelection({
 
   // ── Camera: fly to the Active_Venue on change (exactly one move) ──────────
   const prevActiveRef = useRef<string | null>(null)
-  // Tracks whether we've made the first camera move of this map session, so a
-  // cold open (map still on the country overview) zooms in to MAP_ARRIVAL_ZOOM
-  // while every later browse move preserves the user's chosen zoom.
-  const hasArrivedRef = useRef(false)
   useEffect(() => {
     if (activeVenueId === null) {
       prevActiveRef.current = null
@@ -307,22 +303,21 @@ export function useCarouselSelection({
     }
     prevActiveRef.current = activeVenueId
 
-    // First move of the session: if the map is still parked on the zoomed-out
-    // country overview (below MIN_MARKER_ZOOM, where markers are hidden), zoom
-    // in so the consumer opens straight onto the alive venue instead of an
-    // empty map. Leads with aliveness, not proximity (discovery-DNA rule).
-    // Subsequent moves omit zoom and preserve the user's zoom (browse flow).
+    // Snap in whenever the map is too far out to show venue markers (below
+    // MIN_MARKER_ZOOM). This covers the cold open AND any later selection made
+    // while zoomed out to the globe/country overview, so picking a venue (tap
+    // or flick arrows) always brings it into view instead of an imperceptible
+    // pan. Leads with aliveness, not proximity (discovery-DNA rule). When the
+    // user is already zoomed past the marker threshold the move omits zoom and
+    // preserves their chosen zoom (browse flow).
     let arrivalZoom: number | undefined
-    if (!hasArrivedRef.current) {
-      hasArrivedRef.current = true
-      let currentZoom = MAP_ARRIVAL_ZOOM
-      try {
-        currentZoom = map.getZoom?.() ?? MAP_ARRIVAL_ZOOM
-      } catch {
-        /* map read failed - treat as already-zoomed, don't force a zoom */
-      }
-      if (currentZoom < MIN_MARKER_ZOOM) arrivalZoom = MAP_ARRIVAL_ZOOM
+    let currentZoom = MAP_ARRIVAL_ZOOM
+    try {
+      currentZoom = map.getZoom?.() ?? MAP_ARRIVAL_ZOOM
+    } catch {
+      /* map read failed - treat as already-zoomed, don't force a zoom */
     }
+    if (currentZoom < MIN_MARKER_ZOOM) arrivalZoom = MAP_ARRIVAL_ZOOM
 
     moveCameraToActive(map, node, {
       reducedMotion: reducedMotionValue,

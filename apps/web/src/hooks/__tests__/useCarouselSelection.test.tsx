@@ -178,15 +178,21 @@ describe('Feature: live-vibe-on-map, cold-open arrival zoom', () => {
   // is treated as a cold open. Globe-spanning bounds keep every venue
   // in-viewport so the order is populated.
   function coldOpenMap(zoom: number) {
+    // Track zoom like the real map: a flyTo carrying a zoom updates subsequent
+    // getZoom() reads, so the "snap in only while below the marker threshold"
+    // rule is exercised realistically across successive moves.
+    let currentZoom = zoom
     return {
+      getZoom: () => currentZoom,
       getBounds: () => ({
         toArray: () => [
           [-180, -85],
           [180, 85],
         ],
       }),
-      getZoom: () => zoom,
-      flyTo: vi.fn(),
+      flyTo: vi.fn((opts?: { zoom?: number }) => {
+        if (typeof opts?.zoom === 'number') currentZoom = opts.zoom
+      }),
     }
   }
 
