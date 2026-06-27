@@ -9,6 +9,14 @@ type NavRoute = 'map' | 'gets' | 'ranks' | 'feed' | 'profile'
 interface BottomNavProps {
   active: string
   onNavigate: (route: AppRoute) => void
+  /**
+   * Tab re-selection action: fired when the user taps the tab that is already
+   * active (e.g. tapping Map while on the Map screen). Lets a screen attach a
+   * secondary action to its own tab, such as toggling the Peek_Carousel. When
+   * provided and the tapped tab is active, navigation is suppressed in favour
+   * of this callback.
+   */
+  onReselect?: (route: NavRoute) => void
 }
 
 const NAV_ITEMS: ReadonlyArray<{ route: NavRoute; labelKey: string; Icon: LucideIcon }> = [
@@ -19,13 +27,18 @@ const NAV_ITEMS: ReadonlyArray<{ route: NavRoute; labelKey: string; Icon: Lucide
   { route: 'profile', labelKey: 'nav.profile', Icon: User },
 ]
 
-export function BottomNav({ active, onNavigate }: BottomNavProps) {
+export function BottomNav({ active, onNavigate, onReselect }: BottomNavProps) {
   const { t } = useTranslation()
   const setHasNavigated = useNavigationStore((s) => s.setHasNavigated)
   const hasNavigated = useNavigationStore((s) => s.hasNavigated)
 
   function handleTap(route: NavRoute) {
     if (!hasNavigated) setHasNavigated()
+    // Re-tapping the active tab runs its secondary action instead of navigating.
+    if (route === active && onReselect) {
+      onReselect(route)
+      return
+    }
     onNavigate(route)
   }
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useNavigationStore } from '@area-code/shared/stores/navigationStore'
+import { useSelectionStore } from '@area-code/shared/stores/selectionStore'
 import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
 import { useUserStore } from '@area-code/shared/stores/userStore'
 import { useTheme } from '@area-code/shared/hooks/useTheme'
@@ -308,7 +309,14 @@ function AppContent() {
           </>
         )}
       </div>
-      <BottomNav active={activeRoute} onNavigate={setRoute} />
+      <BottomNav
+        active={activeRoute}
+        onNavigate={setRoute}
+        onReselect={(route) => {
+          // Re-tapping Map while on the Map screen toggles the Peek_Carousel.
+          if (route === 'map') useSelectionStore.getState().toggleOpen()
+        }}
+      />
     </div>
   )
 }

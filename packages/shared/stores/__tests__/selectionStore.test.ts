@@ -34,6 +34,7 @@ describe('Feature: map-discovery-experience, Property 3: Single Active_Venue inv
     fc.constant({ k: 'browse' as const }),
     fc.constant({ k: 'dismiss' as const }),
     fc.constant({ k: 'reopen' as const }),
+    fc.constant({ k: 'toggle' as const }),
     fc.uniqueArray(idArb, { maxLength: 4 }).map((order) => ({ k: 'order' as const, order })),
   )
 
@@ -61,6 +62,9 @@ describe('Feature: map-discovery-experience, Property 3: Single Active_Venue inv
               break
             case 'reopen':
               s.reopenLast()
+              break
+            case 'toggle':
+              s.toggleOpen()
               break
             case 'order':
               s.setOrder(op.order)
@@ -119,7 +123,52 @@ describe('Feature: map-discovery-experience, Property 5: Flick stepping wraps de
       ),
     )
   })
+})
 
+describe('Feature: map-discovery-experience, toggleOpen (tab re-selection)', () => {
+  it('closes when open, retaining the venue for re-open', () => {
+    reset()
+    const store = useSelectionStore.getState()
+    store.setOrder(['a', 'b', 'c'])
+    store.selectVenue('b', 'marker')
+    expect(useSelectionStore.getState().mode).toBe('browse')
+
+    useSelectionStore.getState().toggleOpen()
+    expect(useSelectionStore.getState().mode).toBe('closed')
+    expect(useSelectionStore.getState().activeVenueId).toBeNull()
+    expect(useSelectionStore.getState().lastVenueId).toBe('b')
+  })
+
+  it('re-opens on the last venue when closed', () => {
+    reset()
+    const store = useSelectionStore.getState()
+    store.setOrder(['a', 'b', 'c'])
+    store.selectVenue('b', 'marker')
+    useSelectionStore.getState().toggleOpen() // close
+
+    useSelectionStore.getState().toggleOpen() // open
+    expect(useSelectionStore.getState().mode).toBe('browse')
+    expect(useSelectionStore.getState().activeVenueId).toBe('b')
+    expect(useSelectionStore.getState().openedFromFocus).toBe(false)
+  })
+
+  it('falls back to the first venue in the order when there is no last venue', () => {
+    reset()
+    useSelectionStore.getState().setOrder(['x', 'y'])
+    useSelectionStore.getState().toggleOpen()
+    expect(useSelectionStore.getState().mode).toBe('browse')
+    expect(useSelectionStore.getState().activeVenueId).toBe('x')
+  })
+
+  it('is a no-op when closed with nothing to open', () => {
+    reset()
+    useSelectionStore.getState().toggleOpen()
+    expect(useSelectionStore.getState().mode).toBe('closed')
+    expect(useSelectionStore.getState().activeVenueId).toBeNull()
+  })
+})
+
+describe('Feature: map-discovery-experience, Property 5 (cont.)', () => {
   it('step is a no-op for an empty order or an Active_Venue absent from the order', () => {
     reset()
     const store = useSelectionStore.getState()

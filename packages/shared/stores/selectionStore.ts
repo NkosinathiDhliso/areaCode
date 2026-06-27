@@ -43,6 +43,15 @@ export interface SelectionState {
    * never counts as a Focus_Signal, so `openedFromFocus` is reset to false.
    */
   reopenLast: () => void
+  /**
+   * Toggle the carousel open/closed in one call, for the "tab re-selection"
+   * affordance (re-tapping the active Map tab). When open (Browse or Commit)
+   * it closes like {@link dismiss}; when closed it re-opens in Browse_Mode on
+   * the {@link lastVenueId}, falling back to the first venue in
+   * {@link carouselOrder}. No-op when closed and there is nothing to open.
+   * Never a Focus_Signal, so `openedFromFocus` is reset to false.
+   */
+  toggleOpen: () => void
   setOrder: (order: string[]) => void
 }
 
@@ -140,6 +149,27 @@ export const useSelectionStore = create<SelectionState>()(
         if (state.mode === 'closed') {
           state.mode = 'browse'
         }
+      }),
+
+    toggleOpen: () =>
+      set((state) => {
+        if (state.mode !== 'closed') {
+          // Close (mirrors `dismiss`): retain the venue for a later re-open.
+          if (state.activeVenueId !== null) {
+            state.lastVenueId = state.activeVenueId
+          }
+          state.activeVenueId = null
+          state.mode = 'closed'
+          state.openedFromFocus = false
+          return
+        }
+        // Open in Browse_Mode on the last venue, else the first in the order.
+        const target = state.lastVenueId ?? state.carouselOrder[0] ?? null
+        if (target === null) return
+        state.activeVenueId = target
+        state.lastVenueId = target
+        state.openedFromFocus = false
+        state.mode = 'browse'
       }),
 
     setOrder: (order) =>
