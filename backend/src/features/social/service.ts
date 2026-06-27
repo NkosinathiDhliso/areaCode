@@ -486,13 +486,20 @@ export async function getFriendsPresence(userId: string) {
     }
   }
 
-  // Get mutual friend IDs
-  const followingIds = await repo.getFollowingIds(userId)
-  const mutualIds = await repo.getMutualFollowIds(userId, followingIds)
-
-  // Query active presence for each mutual friend
-  const nowSeconds = Math.floor(Date.now() / 1000)
-  const items = await repo.getFriendsPresence(Array.from(mutualIds), nowSeconds)
+  // Query active presence for the consumer's mutual friends. The dedicated
+  // presence table is not provisioned in every environment, so a lookup failure
+  // (e.g. ResourceNotFoundException) degrades to an empty result rather than a
+  // 500. Honest presence means showing absence, never stale or erroring data,
+  // and the client seed treats empty as a clean no-op (R3.3).
+  let items: Awaited<ReturnType<typeof repo.getFriendsPresence>> = []
+  try {
+    const followingIds = await repo.getFollowingIds(userId)
+    const mutualIds = await repo.getMutualFollowIds(userId, followingIds)
+    const nowSeconds = Math.floor(Date.now() / 1000)
+    items = await repo.getFriendsPresence(Array.from(mutualIds), nowSeconds)
+  } catch (err) {
+    console.warn(`[friends-presence] presence lookup failed, returning empty: ${String(err)}`)
+  }
 
   return { items }
 }
