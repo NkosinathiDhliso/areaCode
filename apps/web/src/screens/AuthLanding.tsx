@@ -136,7 +136,7 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
           <span className="block text-[var(--accent-bright)]">{t('landing.heroLine2', 'buzzing right now.')}</span>
         </h1>
         <p className="mt-3 text-sm text-[var(--text-secondary)] leading-relaxed max-w-xs">
-          {t('landing.subtitle', 'See which bars, cafés and clubs are alive near you - right now.')}
+          {t('landing.subtitle', 'See which bars, cafés and clubs are alive near you | right now.')}
         </p>
 
         {/* How it works: the quick idea, before we ask for anything. The deeper
@@ -202,7 +202,7 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
           </p>
           <p className="text-sm text-[var(--text-secondary)] leading-relaxed mt-2">
             Customers check in when they arrive at a venue to earn rewards from that venue, climb local leaderboards,
-            and discover places that match their taste. Sign in with Google or with email and password - no phone number
+            and discover places that match their taste. Sign in with Google or with email and password. No phone number
             required.
           </p>
         </section>

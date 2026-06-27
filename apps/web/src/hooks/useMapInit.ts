@@ -18,7 +18,7 @@ const COUNTRY_ZOOM = 5
 /**
  * Zoom the Recenter button flies to: roughly a 20 km radius around the user on
  * a typical phone viewport. (At ~zoom 10 and mid-SA latitude one screen width
- * spans ~40–50 km, i.e. a ~20–25 km radius.) Kept as a zoom level rather than
+ * spans ~40-50 km, i.e. a ~20-25 km radius.) Kept as a zoom level rather than
  * a `fitBounds` so the existing R1 recenter tests - which assert a `flyTo`
  * with a center + duration - keep passing.
  */

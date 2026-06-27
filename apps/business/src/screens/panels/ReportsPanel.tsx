@@ -429,7 +429,7 @@ export function ReportsPanel() {
             ← Prev
           </button>
           <span className="text-[var(--text-primary)] text-sm font-medium">
-            {formatDate(currentListItem.periodStart)} – {formatDate(currentListItem.periodEnd)}
+            {formatDate(currentListItem.periodStart)} - {formatDate(currentListItem.periodEnd)}
           </span>
           <button
             onClick={goNext}

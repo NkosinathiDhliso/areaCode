@@ -108,7 +108,7 @@ function AppContent() {
   const setApiOnly = useConnectivityStore((s) => s.setApiOnly)
   const setOffline = useConnectivityStore((s) => s.setOffline)
 
-  // Activate SAST time-based theme (06:00–18:00 light, 18:00–06:00 dark)
+  // Activate SAST time-based theme (06:00-18:00 light, 18:00-06:00 dark)
   useTheme()
 
   // App-wide live subscriptions: reward codes land in the wallet and

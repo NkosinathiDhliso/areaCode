@@ -19,7 +19,7 @@ const THEME_COLORS: Record<ResolvedTheme, string> = {
   light: '#f0ece6',
 }
 
-/** Returns the current hour in SAST (0–23). */
+/** Returns the current hour in SAST (0-23). */
 function getSASTHour(): number {
   const now = new Date()
   const utcHour = now.getUTCHours()
@@ -49,8 +49,8 @@ function applyTheme(theme: ResolvedTheme): void {
  * Time-of-day theme hook for Area Code.
  *
  * Default behaviour ('auto'):
- *   06:00–18:00 SAST → light mode
- *   18:00–06:00 SAST → dark mode
+ *   06:00-18:00 SAST → light mode
+ *   18:00-06:00 SAST → dark mode
  *
  * Users can override via setPreference('light' | 'dark' | 'auto').
  * Override persists in localStorage under 'area-code:theme-preference'.

@@ -120,7 +120,7 @@ export function FirstGetIssuer() {
         </div>
         <p className="text-[var(--text-muted)] text-xs">
           Issue them a one-time code for <strong className="text-[var(--text-secondary)]">{reward.title}</strong>. They
-          enter it when they sign up - no phone, no email needed at the till.
+          enter it when they sign up. No phone, no email needed at the till.
         </p>
 
         {phase === 'idle' && (

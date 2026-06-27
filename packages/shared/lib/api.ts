@@ -238,12 +238,12 @@ class ApiClient {
     } catch (err) {
       clearTimeout(timeout)
       const canRetry = RETRYABLE_METHODS.has(method) && attempt === 0
-      // Transient failure on an idempotent read — retry once before giving up.
+      // Transient failure on an idempotent read - retry once before giving up.
       if (canRetry) {
         await delay(RETRY_BACKOFF_MS)
         return this.request<T>(method, path, body, attempt + 1)
       }
-      // Connectivity failures (offline, DNS, timeout) are self-evident — the
+      // Connectivity failures (offline, DNS, timeout) are self-evident - the
       // user can see their connection is down. We do NOT toast these; we just
       // throw so a screen that needs to can render its own inline state.
       if ((err as Error).name === 'AbortError') {

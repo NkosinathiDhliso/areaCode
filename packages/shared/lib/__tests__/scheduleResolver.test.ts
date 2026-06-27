@@ -206,7 +206,7 @@ const validScheduleArb: fc.Arbitrary<MusicSchedule> = fc
 
 /**
  * RFC 3339 timestamp arbitrary. We pick an epoch millisecond inside a wide
- * window spanning roughly 2000–2050 so DST transitions and leap days are
+ * window spanning roughly 2000-2050 so DST transitions and leap days are
  * well-represented across the IANA timezones in `VALID_TIMEZONES`. The
  * resulting `Date.toISOString()` string is RFC 3339 with the `Z` offset.
  */

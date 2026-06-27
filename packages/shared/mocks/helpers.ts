@@ -8,7 +8,7 @@ export function randomBetween(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
-/** Returns a Promise that resolves after a random 100–400ms delay. */
+/** Returns a Promise that resolves after a random 100-400ms delay. */
 export function mockDelay(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, randomBetween(100, 400)))
 }

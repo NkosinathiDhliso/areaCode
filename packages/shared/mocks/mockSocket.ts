@@ -66,7 +66,7 @@ function getNodeState(score: number): NodeState {
   return 'popping'
 }
 
-/** Emits consumer-facing events at 8–20s intervals */
+/** Emits consumer-facing events at 8-20s intervals */
 export function startConsumerEmitter(socket: MockSocket): () => void {
   let idx = 0
   const scores = { ...MOCK_PULSE_SCORES }
@@ -123,7 +123,7 @@ export function startConsumerEmitter(socket: MockSocket): () => void {
   return () => clearTimeout(timerId)
 }
 
-/** Emits business-facing events at 15–45s intervals */
+/** Emits business-facing events at 15-45s intervals */
 export function startBusinessEmitter(socket: MockSocket, _businessId?: string): () => void {
   let idx = 0
   const bizNodes = MOCK_NODES.filter((n) => n.businessId === 'mock-biz-2')

@@ -70,7 +70,7 @@ export function PrivacyPolicyScreen({ onNavigate }: PrivacyPolicyScreenProps) {
             <li>
               <strong>Check-in metadata:</strong> the venue you checked in at, the timestamp, and (briefly, in memory) a
               GPS reading used to verify you are physically near the venue. The GPS reading is discarded immediately
-              after verification - we do not store your latitude or longitude, and we do not build a location history.
+              after verification. We do not store your latitude or longitude, and we do not build a location history.
             </li>
             <li>
               <strong>Music taste data (optional):</strong> if you connect a Spotify or Apple Music account, we read
@@ -103,7 +103,7 @@ export function PrivacyPolicyScreen({ onNavigate }: PrivacyPolicyScreenProps) {
             <li>To produce the live venue pulse score and to power features such as the music taste profile.</li>
             <li>
               To produce <strong>anonymized, aggregated</strong> intelligence reports for participating businesses.
-              These reports never contain your name, email, or any other identifier - only group-level counts and
+              These reports never contain your name, email, or any other identifier, only group-level counts and
               percentages (for example, &quot;28% of visitors this week were first-timers&quot;).
             </li>
             <li>To detect abuse, fraud, and platform misuse.</li>

@@ -17,7 +17,9 @@
     "test:data-integrity": "vitest run backend/src/__tests__/data-integrity.test.ts",
     "guard:serverless": "powershell -ExecutionPolicy Bypass -File scripts/assert-serverless-only.ps1",
     "guard:no-sms": "powershell -ExecutionPolicy Bypass -File scripts/assert-phone-otp-disabled.ps1",
-    "guard:all": "pnpm guard:serverless && pnpm guard:no-sms",
+    "guard:no-dashes": "powershell -ExecutionPolicy Bypass -File scripts/assert-no-em-dashes.ps1",
+    "fix:no-dashes": "powershell -ExecutionPolicy Bypass -File scripts/assert-no-em-dashes.ps1 -Fix",
+    "guard:all": "pnpm guard:serverless && pnpm guard:no-sms && pnpm guard:no-dashes",
     "prepare": "husky"
   },
   "pnpm": {

@@ -61,7 +61,7 @@ export type MusicGenre =
 // Personality dimensions , 5 scoring axes
 export type PersonalityDimension = 'energy' | 'cultural_rootedness' | 'sophistication' | 'edge' | 'spirituality'
 
-// Dimension score vector , maps each dimension to 0.0–1.0
+// Dimension score vector , maps each dimension to 0.0-1.0
 export type DimensionScoreVector = Record<PersonalityDimension, number>
 
 // Streaming provider

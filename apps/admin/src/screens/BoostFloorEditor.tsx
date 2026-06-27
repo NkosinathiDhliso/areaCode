@@ -247,7 +247,7 @@ function FloorCard({ floor, onUpdated }: FloorCardProps) {
       </div>
 
       {floor.isDefault ? (
-        <div className="text-[var(--text-muted)] text-xs italic">default - never edited</div>
+        <div className="text-[var(--text-muted)] text-xs italic">default | never edited</div>
       ) : (
         <div className="flex flex-col gap-0.5 text-[var(--text-muted)] text-xs">
           <div>Updated {floor.updatedAt ? formatTimestamp(floor.updatedAt) : '-'}</div>

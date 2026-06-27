@@ -480,14 +480,14 @@ function WeekTimeline({ slotsByDay, pairBaseById, onSlotClick, dayLabel }: WeekT
                     }}
                     title={
                       pairBase
-                        ? `Cross-midnight slot · ${slot.startTime}–${slot.endTime} · ${slot.mode}`
-                        : `${slot.startTime}–${slot.endTime} · ${slot.mode}`
+                        ? `Cross-midnight slot · ${slot.startTime}-${slot.endTime} · ${slot.mode}`
+                        : `${slot.startTime}-${slot.endTime} · ${slot.mode}`
                     }
                     data-testid={`music-schedule-slot-${slot.slotId}`}
                     data-mode={slot.mode}
                     {...(pairBase ? { 'data-pair-base': pairBase } : {})}
                   >
-                    {slot.startTime}–{slot.endTime}
+                    {slot.startTime}-{slot.endTime}
                     {slot.mode === 'lineup' ? ' · lineup' : ''}
                   </button>
                 )
@@ -876,8 +876,8 @@ function SlotEditorSheet({ schedule, slot, onSaved, onClose }: SlotEditorSheetPr
 
     // Local field-format checks - give crisp messages before the validator
     // has to repeat them with longer prose.
-    if (!isHhMm(draft.startTime)) errors['startTime'] = 'Start time must be HH:mm (00:00–23:59).'
-    if (!isHhMm(draft.endTime)) errors['endTime'] = 'End time must be HH:mm (00:00–23:59).'
+    if (!isHhMm(draft.startTime)) errors['startTime'] = 'Start time must be HH:mm (00:00-23:59).'
+    if (!isHhMm(draft.endTime)) errors['endTime'] = 'End time must be HH:mm (00:00-23:59).'
     if (draft.mode === 'blanket' && draft.genres.length === 0) {
       errors['genres'] = 'Pick at least one genre.'
     }
@@ -1242,7 +1242,7 @@ function SlotEditorSheet({ schedule, slot, onSaved, onClose }: SlotEditorSheetPr
         {/* Mode-specific body */}
         {draft.mode === 'blanket' ? (
           <div className="flex flex-col gap-2">
-            <span className="text-[var(--text-secondary)] text-xs uppercase tracking-wider">Genres (1–5)</span>
+            <span className="text-[var(--text-secondary)] text-xs uppercase tracking-wider">Genres (1-5)</span>
             <div className="flex flex-row flex-wrap gap-2" data-testid="slot-editor-genres">
               {MUSIC_GENRES.map((g) => {
                 const selected = draft.genres.includes(g)
@@ -1270,7 +1270,7 @@ function SlotEditorSheet({ schedule, slot, onSaved, onClose }: SlotEditorSheetPr
           </div>
         ) : (
           <div className="flex flex-col gap-3" data-testid="slot-editor-lineup">
-            <span className="text-[var(--text-secondary)] text-xs uppercase tracking-wider">Lineup (1–20 entries)</span>
+            <span className="text-[var(--text-secondary)] text-xs uppercase tracking-wider">Lineup (1-20 entries)</span>
             {allErrors['lineup'] && <span className="text-[var(--danger)] text-xs">{allErrors['lineup']}</span>}
             <div className="flex flex-col gap-3">
               {draft.lineup.map((entry, idx) => (

@@ -208,7 +208,7 @@ export function SettingsPanel() {
                   : 'bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-secondary)]'
               }`}
             >
-              Staff - scan codes only
+              Staff | scan codes only
             </button>
             <button
               onClick={() => setInviteRole('manager')}
@@ -218,7 +218,7 @@ export function SettingsPanel() {
                   : 'bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-secondary)]'
               }`}
             >
-              Manager - full access
+              Manager | full access
             </button>
           </div>
         </div>

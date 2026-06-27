@@ -217,13 +217,13 @@ export function PlansPanel() {
 
       {trialIsActive && trialEndsAt && (
         <div className="bg-[var(--success-subtle,#e7f7ee)] border border-[var(--success)] rounded-xl px-4 py-3 text-[var(--text-primary)] text-sm">
-          Free trial active - ends {new Date(trialEndsAt).toLocaleDateString()}. Add a payment method before then to
+          Free trial active | ends {new Date(trialEndsAt).toLocaleDateString()}. Add a payment method before then to
           keep your {currentTier} features.
         </div>
       )}
       {!trialIsActive && hasUsedTrial && (
         <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl px-4 py-3 text-[var(--text-secondary)] text-xs">
-          Your trial is over - pick a plan.
+          Your trial is over | pick a plan.
         </div>
       )}
       {checkoutError && (

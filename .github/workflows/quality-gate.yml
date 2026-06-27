@@ -31,6 +31,10 @@ jobs:
         shell: pwsh
         run: pwsh ./scripts/assert-phone-otp-disabled.ps1
 
+      - name: Typography lock — no em/en dashes, pipe separators in user-facing copy
+        shell: pwsh
+        run: pwsh ./scripts/assert-no-em-dashes.ps1
+
       - name: TypeScript check (monorepo)
         run: pnpm exec tsc --noEmit
 

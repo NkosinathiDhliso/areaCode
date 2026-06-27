@@ -52,7 +52,7 @@ export function isActiveMarker(nodeId: string, activeVenueId: string | null): bo
 }
 
 /**
- * Returns a 0–1 visibility factor for the given zoom level - the
+ * Returns a 0-1 visibility factor for the given zoom level - the
  * *presence* channel: should the marker be on screen at all, and how far
  * through the fade-in from the hidden tier is it.
  *
@@ -122,7 +122,7 @@ const SCALE_LAYER = 'scale-layer'
  * `transform: translate(screenX, screenY) …` onto the root element every frame.
  * The CSS `scale` property (and any transform on the root) composes as
  * `scale ∘ transform`, which scales that screen-position translate too -
- * displacing the marker by `(1 − scale) · (center − screenPos)`. Because
+ * displacing the marker by `(1 - scale) · (center - screenPos)`. Because
  * `screenPos` changes as the user pans, the marker visibly drifts off its
  * lng/lat whenever `scale ≠ 1`. Scaling a child element instead leaves the
  * root's translate untouched, so the marker stays geo-anchored at every zoom

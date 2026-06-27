@@ -470,7 +470,7 @@ export function NodeEditorPanel() {
               <label className="text-[var(--text-primary)] text-xs font-medium">Address</label>
               {mapsUnavailable && (
                 <p className="text-[var(--text-muted)] text-xs -mt-1">
-                  Autocomplete unavailable - enter address manually.
+                  Autocomplete unavailable | enter address manually.
                 </p>
               )}
               <MapboxAddressInput
