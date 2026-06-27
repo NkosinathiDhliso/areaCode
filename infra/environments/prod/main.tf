@@ -173,6 +173,26 @@ locals {
   ]
 }
 
+# Canonical consumer pool the live Hosted UI signs into.
+#
+# A second consumer pool (`area-code-prod-consumer-v2`, us-east-1_QnPocNSib) was
+# created by hand on 2026-06-25 and given the `area-code-prod-consumer` Hosted UI
+# domain + Google IdP. The web app (Amplify) points its VITE_COGNITO_* vars at
+# this v2 pool, so every consumer access token is issued by it. The original
+# `module.cognito_consumer` pool (us-east-1_nnSoej4pn) no longer has a Hosted UI
+# domain and cannot serve login, but the API Lambda was still verifying tokens
+# against it, 401-ing every consumer request (oauth-sync first).
+#
+# The Lambda's consumer pool/client env vars are pinned to v2 here so token
+# verification targets the pool that actually issues the tokens. The v2 pool is
+# managed out of band for now; `module.cognito_consumer` is left in place (it
+# keeps the original pool + its 20 legacy users alive) but no longer feeds the
+# API. Fold v2 into Terraform properly as a follow-up.
+locals {
+  consumer_pool_id   = "us-east-1_QnPocNSib"
+  consumer_client_id = "4c495r02cghsaoqq4k13p4mhuf"
+}
+
 module "cognito_consumer" {
   source                    = "../../modules/cognito"
   env                       = local.env
@@ -614,8 +634,9 @@ module "lambda_api" {
     BUSINESSES_TABLE                        = aws_dynamodb_table.businesses.name
     APP_DATA_TABLE                          = aws_dynamodb_table.app_data.name
     AREA_CODE_REWARD_QUEUE_URL              = module.sqs_reward_eval.queue_url
-    AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID = module.cognito_consumer.user_pool_id
-    AREA_CODE_COGNITO_CONSUMER_CLIENT_ID    = module.cognito_consumer.client_id
+    # Pinned to the v2 pool that owns the live Hosted UI domain (see locals above).
+    AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID = local.consumer_pool_id
+    AREA_CODE_COGNITO_CONSUMER_CLIENT_ID    = local.consumer_client_id
     AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID = module.cognito_business.user_pool_id
     AREA_CODE_COGNITO_BUSINESS_CLIENT_ID    = module.cognito_business.client_id
     AREA_CODE_COGNITO_STAFF_USER_POOL_ID    = module.cognito_staff.user_pool_id
