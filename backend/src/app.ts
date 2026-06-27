@@ -129,6 +129,21 @@ export async function buildApp() {
       })
     }
 
+    // AWS SDK errors (Cognito, DynamoDB, SQS) carry their HTTP status on
+    // `$metadata`, not a top-level `statusCode`. A 4xx here is a client-side
+    // problem (bad input, conditional check, throttling), not a server crash —
+    // return the real status with a safe generic message instead of a scary
+    // 500. We never echo the raw AWS message, to avoid leaking internals.
+    const awsStatus = (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode
+    if (typeof awsStatus === 'number' && awsStatus >= 400 && awsStatus < 500) {
+      app.log.warn({ err: error }, 'AWS client error mapped to 4xx')
+      return reply.status(awsStatus).send({
+        error: 'bad_request',
+        message: 'Please check your details and try again.',
+        statusCode: awsStatus,
+      })
+    }
+
     app.log.error(error)
     captureError(error)
     return reply.status(500).send({

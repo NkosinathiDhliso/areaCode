@@ -31,6 +31,7 @@ import {
 } from '@aws-sdk/client-cognito-identity-provider'
 
 import type { AuthRole } from '../middleware/auth.js'
+import { withCognitoErrorMapping } from './errors.js'
 
 const region = process.env['AWS_REGION'] ?? 'us-east-1'
 const cognitoClient = new CognitoIdentityProviderClient({ region })
@@ -150,13 +151,15 @@ export async function createEmailPasswordUser(
     throw err
   }
 
-  await cognitoClient.send(
-    new AdminSetUserPasswordCommand({
-      UserPoolId: pool.userPoolId,
-      Username: normalizedEmail,
-      Password: password,
-      Permanent: true,
-    }),
+  await withCognitoErrorMapping(() =>
+    cognitoClient.send(
+      new AdminSetUserPasswordCommand({
+        UserPoolId: pool.userPoolId,
+        Username: normalizedEmail,
+        Password: password,
+        Permanent: true,
+      }),
+    ),
   )
 
   const user = await getCognitoUser(role, normalizedEmail)
@@ -185,13 +188,15 @@ export class UsernameTakenError extends Error {
 export async function recoverOrphanEmailUser(role: AuthRole, email: string, password: string) {
   const pool = getPool(role)
   const normalizedEmail = email.toLowerCase().trim()
-  await cognitoClient.send(
-    new AdminSetUserPasswordCommand({
-      UserPoolId: pool.userPoolId,
-      Username: normalizedEmail,
-      Password: password,
-      Permanent: true,
-    }),
+  await withCognitoErrorMapping(() =>
+    cognitoClient.send(
+      new AdminSetUserPasswordCommand({
+        UserPoolId: pool.userPoolId,
+        Username: normalizedEmail,
+        Password: password,
+        Permanent: true,
+      }),
+    ),
   )
   const user = await getCognitoUser(role, normalizedEmail)
   if (!user?.sub) throw new Error('Failed to recover Cognito email user')
@@ -278,16 +283,18 @@ export async function respondToAuthChallenge(role: AuthRole, phone: string, code
 export async function passwordAuth(role: AuthRole, email: string, password: string) {
   const pool = getPool(role)
 
-  const result = await cognitoClient.send(
-    new AdminInitiateAuthCommand({
-      UserPoolId: pool.userPoolId,
-      ClientId: pool.clientId,
-      AuthFlow: 'ADMIN_USER_PASSWORD_AUTH' as AuthFlowType,
-      AuthParameters: {
-        USERNAME: email.toLowerCase().trim(),
-        PASSWORD: password,
-      },
-    }),
+  const result = await withCognitoErrorMapping(() =>
+    cognitoClient.send(
+      new AdminInitiateAuthCommand({
+        UserPoolId: pool.userPoolId,
+        ClientId: pool.clientId,
+        AuthFlow: 'ADMIN_USER_PASSWORD_AUTH' as AuthFlowType,
+        AuthParameters: {
+          USERNAME: email.toLowerCase().trim(),
+          PASSWORD: password,
+        },
+      }),
+    ),
   )
 
   if (!result.AuthenticationResult) {
@@ -409,16 +416,18 @@ export async function updateUserAttributesByCognitoSub(
 export async function adminPasswordAuth(email: string, password: string) {
   const pool = getPool('admin')
 
-  const result = await cognitoClient.send(
-    new AdminInitiateAuthCommand({
-      UserPoolId: pool.userPoolId,
-      ClientId: pool.clientId,
-      AuthFlow: 'ADMIN_USER_PASSWORD_AUTH' as AuthFlowType,
-      AuthParameters: {
-        USERNAME: email,
-        PASSWORD: password,
-      },
-    }),
+  const result = await withCognitoErrorMapping(() =>
+    cognitoClient.send(
+      new AdminInitiateAuthCommand({
+        UserPoolId: pool.userPoolId,
+        ClientId: pool.clientId,
+        AuthFlow: 'ADMIN_USER_PASSWORD_AUTH' as AuthFlowType,
+        AuthParameters: {
+          USERNAME: email,
+          PASSWORD: password,
+        },
+      }),
+    ),
   )
 
   if (!result.AuthenticationResult) {
@@ -451,13 +460,15 @@ export interface AdminAuthOutcome {
  */
 export async function adminBeginAuth(email: string, password: string): Promise<AdminAuthOutcome> {
   const pool = getPool('admin')
-  const result = await cognitoClient.send(
-    new AdminInitiateAuthCommand({
-      UserPoolId: pool.userPoolId,
-      ClientId: pool.clientId,
-      AuthFlow: 'ADMIN_USER_PASSWORD_AUTH' as AuthFlowType,
-      AuthParameters: { USERNAME: email, PASSWORD: password },
-    }),
+  const result = await withCognitoErrorMapping(() =>
+    cognitoClient.send(
+      new AdminInitiateAuthCommand({
+        UserPoolId: pool.userPoolId,
+        ClientId: pool.clientId,
+        AuthFlow: 'ADMIN_USER_PASSWORD_AUTH' as AuthFlowType,
+        AuthParameters: { USERNAME: email, PASSWORD: password },
+      }),
+    ),
   )
 
   if (result.AuthenticationResult) {
@@ -494,8 +505,10 @@ export async function adminAssociateSoftwareToken(session: string): Promise<{ se
  * into the MFA_SETUP challenge response. Throws on a wrong/expired code.
  */
 export async function adminVerifySoftwareToken(session: string, code: string): Promise<{ session: string }> {
-  const result = await cognitoClient.send(
-    new VerifySoftwareTokenCommand({ Session: session, UserCode: code, FriendlyDeviceName: 'Area Code Admin' }),
+  const result = await withCognitoErrorMapping(() =>
+    cognitoClient.send(
+      new VerifySoftwareTokenCommand({ Session: session, UserCode: code, FriendlyDeviceName: 'Area Code Admin' }),
+    ),
   )
   if (result.Status !== 'SUCCESS' || !result.Session) {
     throw new Error('TOTP verification failed')
@@ -516,14 +529,16 @@ export async function adminRespondToMfaChallenge(opts: {
       ? { USERNAME: opts.email, SOFTWARE_TOKEN_MFA_CODE: opts.code ?? '' }
       : { USERNAME: opts.email }
 
-  const result = await cognitoClient.send(
-    new AdminRespondToAuthChallengeCommand({
-      UserPoolId: pool.userPoolId,
-      ClientId: pool.clientId,
-      ChallengeName: opts.challengeName,
-      Session: opts.session,
-      ChallengeResponses: challengeResponses,
-    }),
+  const result = await withCognitoErrorMapping(() =>
+    cognitoClient.send(
+      new AdminRespondToAuthChallengeCommand({
+        UserPoolId: pool.userPoolId,
+        ClientId: pool.clientId,
+        ChallengeName: opts.challengeName,
+        Session: opts.session,
+        ChallengeResponses: challengeResponses,
+      }),
+    ),
   )
 
   if (!result.AuthenticationResult) throw new Error('MFA challenge did not return tokens')

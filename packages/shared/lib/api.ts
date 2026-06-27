@@ -9,6 +9,8 @@
  * Falls back to localhost for local dev. The native app may also call
  * `api.setBaseUrl()` at boot to override this from `expo-constants` extra.
  */
+import { ERROR_COPY } from '../constants/error-copy'
+
 function resolveApiBaseUrl(): string {
   try {
     if (typeof import.meta !== 'undefined') {
@@ -29,6 +31,14 @@ function resolveApiBaseUrl(): string {
 }
 
 const API_BASE_URL = resolveApiBaseUrl()
+
+// One automatic retry for transient failures on idempotent reads (GET).
+// Lambda cold starts, brief DynamoDB throttling, and dropped connections are
+// the common causes of a random 5xx; retrying once after a short backoff
+// resolves most of them before the user ever sees an error.
+const RETRYABLE_METHODS = new Set(['GET'])
+const RETRY_BACKOFF_MS = 400
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 // Error toast handler - wired at app startup via setApiErrorHandler()
 let _showError: ((msg: string) => void) | null = null
@@ -187,7 +197,7 @@ class ApiClient {
     return token
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  private async request<T>(method: string, path: string, body?: unknown, attempt = 0): Promise<T> {
     const headers: Record<string, string> = {}
 
     // Only set Content-Type when we actually have a body - otherwise Fastify
@@ -227,22 +237,27 @@ class ApiClient {
       })
     } catch (err) {
       clearTimeout(timeout)
+      const canRetry = RETRYABLE_METHODS.has(method) && attempt === 0
+      // Transient failure on an idempotent read — retry once before giving up.
+      if (canRetry) {
+        await delay(RETRY_BACKOFF_MS)
+        return this.request<T>(method, path, body, attempt + 1)
+      }
+      // Connectivity failures (offline, DNS, timeout) are self-evident — the
+      // user can see their connection is down. We do NOT toast these; we just
+      // throw so a screen that needs to can render its own inline state.
       if ((err as Error).name === 'AbortError') {
-        const error = {
+        throw {
           error: 'timeout',
-          message: 'Request timed out. Check your connection.',
+          message: ERROR_COPY.timeout,
           statusCode: 0,
         } as ApiError
-        getShowError()?.('Request timed out. Check your connection.')
-        throw error
       }
-      const error = {
+      throw {
         error: 'network',
-        message: 'Unable to connect. Check your connection.',
+        message: ERROR_COPY.network,
         statusCode: 0,
       } as ApiError
-      getShowError()?.('Unable to connect. Check your connection.')
-      throw error
     } finally {
       clearTimeout(timeout)
     }
@@ -268,14 +283,23 @@ class ApiClient {
     }
 
     if (!response.ok) {
+      // Retry transient server errors once on idempotent reads, before we even
+      // parse the body, to absorb Lambda cold starts / brief throttling.
+      if (response.status >= 500 && RETRYABLE_METHODS.has(method) && attempt === 0) {
+        await delay(RETRY_BACKOFF_MS)
+        return this.request<T>(method, path, body, attempt + 1)
+      }
       const error: ApiError = await response.json().catch(() => ({
         error: 'unknown',
         message: response.statusText,
         statusCode: response.status,
       }))
-      // Show toast for server errors (5xx)
+      // Server-side failure (5xx). Never surface the raw backend text (e.g.
+      // "Internal server error"). Use the reassuring, approved copy on both the
+      // toast and the thrown error so no downstream handler can leak it either.
       if (response.status >= 500) {
-        getShowError()?.(error.message || 'Something went wrong. Please try again.')
+        error.message = ERROR_COPY.serverError
+        getShowError()?.(ERROR_COPY.serverError)
       }
       throw error
     }

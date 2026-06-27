@@ -18,3 +18,4 @@ export {
 } from './archetype-icons'
 export type { ArchetypeIconSpec, ArchetypeIconWeight } from './archetype-icons'
 export { TIER_SIZE_MULTIPLIER } from './tier-size'
+export { ERROR_COPY, type ErrorCopyKey } from './error-copy'

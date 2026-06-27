@@ -32,8 +32,17 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
       }>('/v1/auth/consumer/email-login', { email, password })
       setAuth(res.accessToken, res.refreshToken, res.user.id, res.sessionId)
       onNavigate('map')
-    } catch {
-      setError(t('auth.login.emailFailed', 'Invalid email or password.'))
+    } catch (err) {
+      const status = (err as { statusCode?: number } | null)?.statusCode
+      if (status === 429) {
+        setError(t('auth.login.tooManyAttempts', 'Too many attempts. Please try again in a few minutes.'))
+      } else if (status !== undefined && status >= 500) {
+        // The global toast already shows the reassuring server-error copy;
+        // keep the inline message aligned instead of blaming the credentials.
+        setError(t('auth.login.serverError', 'Something went wrong on our side. Please try again.'))
+      } else {
+        setError(t('auth.login.emailFailed', 'Invalid email or password.'))
+      }
     } finally {
       setLoading(false)
     }
