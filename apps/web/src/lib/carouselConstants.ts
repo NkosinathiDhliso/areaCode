@@ -49,8 +49,8 @@ export const MIN_MARKER_ZOOM = 8
  * Zoom the camera flies to on the first cold-open move, when the map is still
  * sitting on the country-wide overview (below {@link MIN_MARKER_ZOOM}, where
  * markers are hidden). Landing here means the consumer opens straight onto a
- * city where the alive, taste-matched venue is visible as a glyph — "the city
- * is alive, now you can see it" — instead of an empty country map they have to
+ * city where the alive, taste-matched venue is visible as a glyph - "the city
+ * is alive, now you can see it" - instead of an empty country map they have to
  * pinch-zoom into. Chosen just above {@link GLYPH_ZOOM_THRESHOLD} so the hero
  * venue and its neighbours render as detailed glyphs on arrival.
  */

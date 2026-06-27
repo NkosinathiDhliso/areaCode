@@ -117,7 +117,7 @@ describe('Feature: live-vibe-on-map, zoom-aware sizing considers the map zoom', 
     expect(zoomSizeFactor(BASE_PRESENTATION_ZOOM - 2)).toBeLessThan(1)
   })
 
-  it('is pure — the same zoom always yields the same factor', () => {
+  it('is pure - the same zoom always yields the same factor', () => {
     fc.assert(
       fc.property(zoomArb, (z) => {
         expect(zoomSizeFactor(z)).toBe(zoomSizeFactor(z))

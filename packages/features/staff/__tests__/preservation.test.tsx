@@ -1,5 +1,5 @@
 /**
- * Preservation Property Tests — Staff QR Scanner
+ * Preservation Property Tests - Staff QR Scanner
  *
  * These tests capture EXISTING correct behavior on UNFIXED code.
  * They must PASS on the current unfixed code to establish a baseline
@@ -260,7 +260,7 @@ describe('Preservation Property: Camera permission denial handling', () => {
     })
     expect(scanQrButton).not.toBeNull()
 
-    // Trigger startCamera — will fail with permission denied
+    // Trigger startCamera - will fail with permission denied
     await act(async () => {
       scanQrButton!.click()
       await new Promise((r) => setTimeout(r, 10))

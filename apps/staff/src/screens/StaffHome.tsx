@@ -25,7 +25,7 @@ export function StaffHome() {
       })
       .catch((err: unknown) => {
         // Only treat 403 as deactivation (explicit denial).
-        // 404 means the endpoint isn't deployed yet — don't block the user.
+        // 404 means the endpoint isn't deployed yet - don't block the user.
         if ((err as { statusCode?: number })?.statusCode === 403) setBusinessDeactivated(true)
       })
   }, [businessId])
@@ -69,7 +69,7 @@ export function StaffHome() {
       {/*
         Single scroll container for the whole shift surface. Previously these
         sections were stacked directly in the h-dvh column with only
-        RecentRedemptions set to flex-1/overflow — on short phones the
+        RecentRedemptions set to flex-1/overflow - on short phones the
         validator + first-get + rank cards alone overflowed the viewport, the
         scroll region collapsed to zero height, and the lower cards were cut
         off and unreachable. A plain block scroll wrapper lets the entire

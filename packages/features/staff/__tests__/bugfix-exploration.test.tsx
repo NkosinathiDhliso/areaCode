@@ -159,7 +159,7 @@ describe('Bug Condition Exploration - Missing jsQR Fallback (Test 1b)', () => {
    *
    * EXPECTED BEHAVIOR (what the fix should achieve):
    * QR decoding continues via canvas+jsQR fallback (scanIntervalRef is set,
-   * no error shown, camera stays active — stream tracks are NOT stopped).
+   * no error shown, camera stays active - stream tracks are NOT stopped).
    *
    * ON UNFIXED CODE: This test FAILS because stopCamera() is called which
    * stops the stream tracks, and error message "QR scanning not supported" is shown.
@@ -187,7 +187,7 @@ describe('Bug Condition Exploration - Missing jsQR Fallback (Test 1b)', () => {
     })
     expect(scanQrButton).not.toBeNull()
 
-    // Trigger startCamera — this will call getUserMedia and then requestAnimationFrame
+    // Trigger startCamera - this will call getUserMedia and then requestAnimationFrame
     await act(async () => {
       scanQrButton!.click()
       // Wait for getUserMedia promise to resolve
@@ -198,7 +198,7 @@ describe('Bug Condition Exploration - Missing jsQR Fallback (Test 1b)', () => {
     // The rAF callback has been captured but not yet fired
     expect(rAFCallback).not.toBeNull()
 
-    // Now fire the rAF callback — the video element should be in the DOM
+    // Now fire the rAF callback - the video element should be in the DOM
     // This simulates the rAF firing AFTER React renders (the ideal case)
     // which means startScanning() WILL be called
     await act(async () => {

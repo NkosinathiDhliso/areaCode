@@ -168,7 +168,7 @@
   "leaderboard.noData": "No ranks data yet",
   "leaderboard.anonymousExplorer": "Area Code Explorer",
   "leaderboard.you": "You",
-  "feed.emptyState": "No activity yet — follow friends to fill this up",
+  "feed.emptyState": "No activity yet - follow friends to fill this up",
   "friends.title": "Friends",
   "friends.mutual": "Friends",
   "friends.mutualCount": "{{count}} mutual friends",

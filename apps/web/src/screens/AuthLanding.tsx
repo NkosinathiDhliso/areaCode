@@ -136,7 +136,7 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
           <span className="block text-[var(--accent-bright)]">{t('landing.heroLine2', 'buzzing right now.')}</span>
         </h1>
         <p className="mt-3 text-sm text-[var(--text-secondary)] leading-relaxed max-w-xs">
-          {t('landing.subtitle', 'See which bars, cafés and clubs are alive near you — right now.')}
+          {t('landing.subtitle', 'See which bars, cafés and clubs are alive near you - right now.')}
         </p>
 
         {/* How it works: the quick idea, before we ask for anything. The deeper
@@ -155,7 +155,7 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
           ))}
         </div>
 
-        {/* CTAs — lead with the low-friction value action (see the live map)
+        {/* CTAs - lead with the low-friction value action (see the live map)
             and keep sign-up as the secondary step, per landing-page attention-
             ratio / show-value-before-commitment research. */}
         <div className="mt-6 flex gap-3">

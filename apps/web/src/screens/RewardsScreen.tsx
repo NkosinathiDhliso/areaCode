@@ -293,7 +293,7 @@ function RewardCard({
         </div>
       </div>
 
-      {/* Distance is a small, secondary hint only — never the lead. */}
+      {/* Distance is a small, secondary hint only - never the lead. */}
       <p className="text-[var(--text-muted)] text-[11px]">{Math.round(r.distance)}m away</p>
     </div>
   )

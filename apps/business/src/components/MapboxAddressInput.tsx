@@ -83,7 +83,7 @@ export function MapboxAddressInput({
       onUnavailableRef.current?.()
       return
     }
-    // The value was just chosen from a suggestion — it is already resolved, so
+    // The value was just chosen from a suggestion - it is already resolved, so
     // skip geocoding and keep the dropdown closed no matter how many times this
     // effect re-runs for the same value.
     if (value === selectedValue.current) {
@@ -147,7 +147,7 @@ export function MapboxAddressInput({
     const address = feature.properties?.full_address || feature.properties?.name || ''
     const coords = feature.properties?.coordinates
     // Remember the chosen value so the fetch effect skips it for as long as the
-    // input holds it — robust against the parent's selection-driven re-renders.
+    // input holds it - robust against the parent's selection-driven re-renders.
     selectedValue.current = address
     setOpen(false)
     setSuggestions([])
@@ -160,7 +160,7 @@ export function MapboxAddressInput({
   }
 
   function handleTextChange(text: string) {
-    // The user is typing again, so any prior selection no longer applies —
+    // The user is typing again, so any prior selection no longer applies -
     // clear the guard so geocoding resumes for the new input.
     selectedValue.current = null
     onTextChange(text)

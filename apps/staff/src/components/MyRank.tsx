@@ -1,7 +1,7 @@
 /**
  * "Your rank" widget for the staff home screen.
  *
- * Reuses the shared business leaderboard endpoint — staff are members of
+ * Reuses the shared business leaderboard endpoint - staff are members of
  * the business pool via their staff record, so the same endpoint resolves
  * their businessId server-side.
  *

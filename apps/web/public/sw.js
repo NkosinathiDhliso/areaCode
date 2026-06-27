@@ -18,7 +18,7 @@ self.addEventListener('push', (event) => {
 
     event.waitUntil(self.registration.showNotification(title, options))
   } catch {
-    // Malformed push payload — ignore
+    // Malformed push payload - ignore
   }
 })
 

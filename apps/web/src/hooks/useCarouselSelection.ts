@@ -304,7 +304,7 @@ export function useCarouselSelection({
       try {
         currentZoom = map.getZoom?.() ?? MAP_ARRIVAL_ZOOM
       } catch {
-        /* map read failed — treat as already-zoomed, don't force a zoom */
+        /* map read failed - treat as already-zoomed, don't force a zoom */
       }
       if (currentZoom < MIN_MARKER_ZOOM) arrivalZoom = MAP_ARRIVAL_ZOOM
     }

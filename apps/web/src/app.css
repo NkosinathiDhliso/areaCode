@@ -24,7 +24,7 @@
      extends edge-to-edge INCLUDING under the home indicator, so the in-flow
      bottom nav reaches the true screen bottom and its padding-bottom (the
      safe-area inset) paints the nav's own background through the indicator
-     zone. (A position:fixed/inset:0 shell does the opposite — it clamps to the
+     zone. (A position:fixed/inset:0 shell does the opposite - it clamps to the
      safe area and leaves the home-indicator strip unpainted, i.e. a black gap.) */
 
   /* Bottom safe-area inset for the home indicator. The bottom nav lives in the

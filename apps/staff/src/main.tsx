@@ -13,7 +13,7 @@ async function bootstrap() {
     const { initRum } = await import('@area-code/shared/lib/rum')
     await initRum()
   } catch {
-    // RUM init failed — app continues without monitoring
+    // RUM init failed - app continues without monitoring
   }
 
   if (import.meta.env.VITE_DEV_MOCK === 'true') {
