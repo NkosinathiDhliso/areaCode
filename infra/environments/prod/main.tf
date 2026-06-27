@@ -1048,6 +1048,10 @@ resource "aws_iam_role_policy" "api_cognito" {
         "cognito-idp:GlobalSignOut"
       ]
       Resource = [
+        # v2 is the live consumer pool the API operates on (ListUsers,
+        # AdminUpdateUserAttributes during oauth-sync). The original
+        # module.cognito_consumer pool is kept for its legacy users.
+        aws_cognito_user_pool.consumer_v2.arn,
         module.cognito_consumer.user_pool_arn,
         module.cognito_business.user_pool_arn,
         module.cognito_staff.user_pool_arn,
