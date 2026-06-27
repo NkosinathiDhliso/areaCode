@@ -160,10 +160,24 @@ module "vpc" {
 }
 
 # --- Cognito pools (4 separate pools) ---
+# Email/password is the supported live auth path (phone OTP is dead, returns
+# 410). The backend signs in via AdminInitiateAuth ADMIN_USER_PASSWORD_AUTH, so
+# every pool's app client must enable that flow. Codified here to match what is
+# live (the consumer client was enabled by hand) and to stop a future apply from
+# stripping it and breaking sign-in.
+locals {
+  email_password_auth_flows = [
+    "ALLOW_ADMIN_USER_PASSWORD_AUTH",
+    "ALLOW_USER_PASSWORD_AUTH",
+    "ALLOW_REFRESH_TOKEN_AUTH",
+  ]
+}
+
 module "cognito_consumer" {
   source                    = "../../modules/cognito"
   env                       = local.env
   pool_name                 = "consumer"
+  explicit_auth_flows       = local.email_password_auth_flows
   define_auth_challenge_arn = module.cognito_triggers_consumer.define_auth_arn
   create_auth_challenge_arn = module.cognito_triggers_consumer.create_auth_arn
   verify_auth_challenge_arn = module.cognito_triggers_consumer.verify_auth_arn
@@ -173,6 +187,7 @@ module "cognito_business" {
   source                    = "../../modules/cognito"
   env                       = local.env
   pool_name                 = "business"
+  explicit_auth_flows       = local.email_password_auth_flows
   define_auth_challenge_arn = module.cognito_triggers_business.define_auth_arn
   create_auth_challenge_arn = module.cognito_triggers_business.create_auth_arn
   verify_auth_challenge_arn = module.cognito_triggers_business.verify_auth_arn
@@ -183,6 +198,7 @@ module "cognito_staff" {
   env                       = local.env
   pool_name                 = "staff"
   access_token_ttl_hours    = 8
+  explicit_auth_flows       = local.email_password_auth_flows
   define_auth_challenge_arn = module.cognito_triggers_staff.define_auth_arn
   create_auth_challenge_arn = module.cognito_triggers_staff.create_auth_arn
   verify_auth_challenge_arn = module.cognito_triggers_staff.verify_auth_arn
