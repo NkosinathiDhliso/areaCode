@@ -31,6 +31,7 @@ import {
 } from '@aws-sdk/client-cognito-identity-provider'
 
 import type { AuthRole } from '../middleware/auth.js'
+
 import { withCognitoErrorMapping } from './errors.js'
 
 const region = process.env['AWS_REGION'] ?? 'us-east-1'
