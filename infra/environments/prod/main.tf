@@ -173,24 +173,117 @@ locals {
   ]
 }
 
-# Canonical consumer pool the live Hosted UI signs into.
+# ── Canonical consumer pool (v2) ──
 #
-# A second consumer pool (`area-code-prod-consumer-v2`, us-east-1_QnPocNSib) was
-# created by hand on 2026-06-25 and given the `area-code-prod-consumer` Hosted UI
-# domain + Google IdP. The web app (Amplify) points its VITE_COGNITO_* vars at
-# this v2 pool, so every consumer access token is issued by it. The original
-# `module.cognito_consumer` pool (us-east-1_nnSoej4pn) no longer has a Hosted UI
-# domain and cannot serve login, but the API Lambda was still verifying tokens
-# against it, 401-ing every consumer request (oauth-sync first).
+# `area-code-prod-consumer-v2` (us-east-1_QnPocNSib) was created by hand on
+# 2026-06-25 and given the `area-code-prod-consumer` Hosted UI domain + Google
+# IdP. The web app (Amplify) and the API Lambda both target it, so every consumer
+# access token is issued by this pool. The original `module.cognito_consumer`
+# pool (us-east-1_nnSoej4pn) lost its Hosted UI domain and can no longer serve
+# login; it is left in place (below) only to keep its 20 legacy users alive and
+# no longer feeds the API.
 #
-# The Lambda's consumer pool/client env vars are pinned to v2 here so token
-# verification targets the pool that actually issues the tokens. The v2 pool is
-# managed out of band for now; `module.cognito_consumer` is left in place (it
-# keeps the original pool + its 20 legacy users alive) but no longer feeds the
-# API. Fold v2 into Terraform properly as a follow-up.
+# These resources are imported to match the live v2 pool exactly (it is serving
+# all consumer auth — never let TF recreate it). The client name intentionally
+# stays `area-code-prod-consumer-client` (not `-v2-client`); renaming it forces
+# replacement and would break the app client id the web app uses. The OAuth /
+# Hosted-UI client attributes (callback urls, scopes, IdPs) and the IdP
+# provider_details are managed live and ignored here.
+resource "aws_cognito_user_pool" "consumer_v2" {
+  name = "area-code-prod-consumer-v2"
+
+  username_attributes      = ["email"]
+  auto_verified_attributes = ["email"]
+  mfa_configuration        = "OFF"
+
+  password_policy {
+    minimum_length    = 8
+    require_lowercase = false
+    require_numbers   = false
+    require_symbols   = false
+    require_uppercase = false
+  }
+
+  account_recovery_setting {
+    recovery_mechanism {
+      name     = "verified_email"
+      priority = 1
+    }
+  }
+
+  # custom:citySlug / custom:userId are live; recreating schema forces a pool
+  # replacement, so never diff it.
+  lifecycle {
+    ignore_changes = [schema]
+  }
+}
+
+resource "aws_cognito_user_pool_client" "consumer_v2" {
+  name         = "area-code-prod-consumer-client"
+  user_pool_id = aws_cognito_user_pool.consumer_v2.id
+
+  explicit_auth_flows = local.email_password_auth_flows
+
+  access_token_validity  = 1
+  id_token_validity      = 1
+  refresh_token_validity = 30
+
+  token_validity_units {
+    access_token  = "hours"
+    id_token      = "hours"
+    refresh_token = "days"
+  }
+
+  prevent_user_existence_errors = "ENABLED"
+
+  # Hosted-UI / OAuth attributes are Optional+Computed and managed live.
+  lifecycle {
+    ignore_changes = [
+      callback_urls,
+      logout_urls,
+      allowed_oauth_flows,
+      allowed_oauth_scopes,
+      allowed_oauth_flows_user_pool_client,
+      supported_identity_providers,
+    ]
+  }
+}
+
+resource "aws_cognito_user_pool_domain" "consumer_v2" {
+  domain       = "area-code-prod-consumer"
+  user_pool_id = aws_cognito_user_pool.consumer_v2.id
+}
+
+resource "aws_cognito_identity_provider" "consumer_v2_google" {
+  user_pool_id  = aws_cognito_user_pool.consumer_v2.id
+  provider_name = "Google"
+  provider_type = "Google"
+
+  provider_details = {
+    client_id        = local.google_oauth.client_id
+    client_secret    = local.google_oauth.client_secret
+    authorize_scopes = "openid email profile"
+  }
+
+  attribute_mapping = {
+    email       = "email"
+    family_name = "family_name"
+    given_name  = "given_name"
+    name        = "name"
+    username    = "sub"
+  }
+
+  # Cognito auto-populates the Google endpoint URLs; never diff provider_details.
+  lifecycle {
+    ignore_changes = [provider_details]
+  }
+}
+
+# Consumer pool/client the API Lambda verifies against, now sourced from the
+# imported v2 resources above.
 locals {
-  consumer_pool_id   = "us-east-1_QnPocNSib"
-  consumer_client_id = "4c495r02cghsaoqq4k13p4mhuf"
+  consumer_pool_id   = aws_cognito_user_pool.consumer_v2.id
+  consumer_client_id = aws_cognito_user_pool_client.consumer_v2.id
 }
 
 module "cognito_consumer" {
@@ -1713,7 +1806,7 @@ output "dynamodb_tables" {
 }
 
 output "cognito_consumer_pool_id" {
-  value = module.cognito_consumer.user_pool_id
+  value = aws_cognito_user_pool.consumer_v2.id
 }
 
 output "cognito_business_pool_id" {
