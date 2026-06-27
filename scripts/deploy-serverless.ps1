@@ -11,7 +11,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RootDir = Split-Path $PSScriptRoot -Parent
 $BackendDir = Join-Path $RootDir "backend"
-$InfraDir = Join-Path $RootDir "infra" "environments" $Environment
+$InfraDir = [System.IO.Path]::Combine($RootDir, "infra", "environments", $Environment)
 
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "  Area Code - Serverless Deployment" -ForegroundColor Cyan
@@ -71,8 +71,8 @@ if ($TerraformOnly) {
 Write-Host ""
 Write-Host "[3/5] Deploying monolith API Lambda..." -ForegroundColor Yellow
 
-$ApiDistDir = Join-Path $BackendDir "dist" "lambda"
-$ApiZip = Join-Path $BackendDir "dist" "api-lambda.zip"
+$ApiDistDir = [System.IO.Path]::Combine($BackendDir, "dist", "lambda")
+$ApiZip = [System.IO.Path]::Combine($BackendDir, "dist", "api-lambda.zip")
 
 # Create zip from the built bundle (index.mjs at the archive root)
 Compress-Archive -Path (Join-Path $ApiDistDir "index.mjs") -DestinationPath $ApiZip -Force
@@ -94,8 +94,8 @@ else {
 Write-Host ""
 Write-Host "[4/5] Deploying WebSocket Lambda..." -ForegroundColor Yellow
 
-$WsDistDir = Join-Path $BackendDir "dist" "websocket"
-$WsZip = Join-Path $BackendDir "dist" "websocket-lambda.zip"
+$WsDistDir = [System.IO.Path]::Combine($BackendDir, "dist", "websocket")
+$WsZip = [System.IO.Path]::Combine($BackendDir, "dist", "websocket-lambda.zip")
 
 Compress-Archive -Path (Join-Path $WsDistDir "index.mjs") -DestinationPath $WsZip -Force
 
@@ -127,7 +127,7 @@ else {
 Write-Host ""
 Write-Host "[5/5] Deploying worker Lambdas..." -ForegroundColor Yellow
 
-$WorkersDir = Join-Path $BackendDir "dist" "workers"
+$WorkersDir = [System.IO.Path]::Combine($BackendDir, "dist", "workers")
 $Workers = Get-ChildItem -Path $WorkersDir -Directory
 
 foreach ($worker in $Workers) {
@@ -138,12 +138,21 @@ foreach ($worker in $Workers) {
     Compress-Archive -Path (Join-Path $worker.FullName "index.mjs") -DestinationPath $WorkerZip -Force
 
     Write-Host "  Deploying: $FunctionName" -ForegroundColor Gray
+    # Native-command stderr under Windows PowerShell 5.1 becomes a terminating
+    # error when $ErrorActionPreference is 'Stop', so soften it locally and rely
+    # on $LASTEXITCODE for the real result (warn-and-continue is intentional:
+    # a worker that is still being created by Terraform already has the new
+    # code and a transient ResourceConflict here is non-fatal).
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     aws lambda update-function-code `
         --function-name $FunctionName `
         --zip-file "fileb://$WorkerZip" `
         --region $Region `
-        --publish --no-cli-pager 2>$null
-    if ($LASTEXITCODE -ne 0) { Write-Host "    [WARN] Skipped (function may not exist in Terraform)" -ForegroundColor DarkYellow }
+        --publish --no-cli-pager | Out-Null
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = $prevEAP
+    if ($code -ne 0) { Write-Host "    [WARN] Skipped (function still initialising or not in Terraform)" -ForegroundColor DarkYellow }
     else { Write-Host "    [OK] deployed" -ForegroundColor Green }
 }
 
