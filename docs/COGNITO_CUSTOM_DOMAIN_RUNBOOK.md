@@ -12,9 +12,18 @@ ACM cert ARN in §State below.
 
 - ACM cert: `arn:aws:acm:us-east-1:562691664641:certificate/97a216e7-a059-48e1-b77c-164163389c45`
 - Route 53 zone: `Z0263725FVT0QYF18KLO` (areacode.co.za)
-- Consumer pool: `us-east-1_nnSoej4pn`
-- Consumer client: `5pn5l49sk08bqdavsom3eusf0b`
-- Existing Hosted UI domain: `area-code-prod-consumer` (Cognito-hosted)
+- Consumer pool: `us-east-1_QnPocNSib` (pool name `area-code-prod-consumer-v2`)
+- Consumer client: `4c495r02cghsaoqq4k13p4mhuf`
+- Existing Hosted UI domain: `area-code-prod-consumer` (Cognito-hosted, bound to the v2 pool)
+
+> Migration note (2026-06-25): the consumer pool was moved from v1
+> (`us-east-1_nnSoej4pn`, client `5pn5l49sk08bqdavsom3eusf0b`) to v2
+> (`us-east-1_QnPocNSib`, client `4c495r02cghsaoqq4k13p4mhuf`). Backend Lambda
+> env, the Hosted UI domain, and the consumer Amplify build all point at v2.
+> The v1 pool still holds ~20 old user records and is now orphaned. If you see
+> `/error?error=invalid_request` from the Hosted UI, check the frontend client
+> id matches the pool the domain is bound to.
+
 - Cognito only allows ONE custom domain per pool. We're swapping, not adding.
 
 ## Why this needs care

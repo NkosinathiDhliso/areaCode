@@ -25,7 +25,7 @@ $AmplifyApps = @(
 )
 
 # SPA rewrite: any path without a static file extension -> index.html (200 rewrite)
-$rulesJson = '[{"source":"</^[^.]+$|\\.(?!(css|gif|ico|jpg|jpeg|js|png|txt|svg|woff|woff2|ttf|map|json|webp|avif)$)([^.]+$)/>","target":"/index.html","status":"200"}]'
+$rulesJson = '[{"source":"</^[^.]+$|\\.(?!(css|gif|ico|jpg|jpeg|js|png|txt|xml|svg|woff|woff2|ttf|map|json|webmanifest|webp|avif)$)([^.]+$)/>","target":"/index.html","status":"200"}]'
 
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Cyan
