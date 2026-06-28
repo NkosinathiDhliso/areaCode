@@ -1,5 +1,5 @@
 /**
- * Constellation beam DOM: upside-down cone pillars from ground to glyph apex.
+ * Constellation beam DOM: inverted cone — tip at venue, wide mouth under glyph.
  */
 
 import type { NodeState } from '@area-code/shared/types'
@@ -38,14 +38,17 @@ const BEAM_HEIGHT: Record<NodeState, number> = {
   popping: 158,
 }
 
-/** Cone base width (px) by Pulse_State before tier multiplier. */
-const CONE_BASE: Record<NodeState, number> = {
+/** Cone top width (px) by Pulse_State before tier multiplier — wide mouth under glyph. */
+const CONE_TOP: Record<NodeState, number> = {
   dormant: 16,
   quiet: 20,
   active: 28,
   buzzing: 36,
   popping: 48,
 }
+
+/** Wide at top (glyph), tip pinned to venue coordinate at bottom. */
+const CONE_CLIP = 'polygon(4% 0%, 96% 0%, 50% 100%)'
 
 const BEAM_ANIM: Record<NodeState, { animation: string; speed: string }> = {
   dormant: { animation: 'breathe', speed: '4s' },
@@ -67,19 +70,21 @@ function scaledBeamHeight(state: NodeState, pitchScale: number): number {
   return Math.round(BEAM_HEIGHT[state] * pitchScale)
 }
 
-function coneBaseWidth(state: NodeState, tierScale: number, hybrid: boolean): number {
-  const base = CONE_BASE[state] * tierScale * (hybrid ? 1.08 : 1)
-  return Math.round(base)
+function coneTopWidth(state: NodeState, tierScale: number, hybrid: boolean): number {
+  const top = CONE_TOP[state] * tierScale * (hybrid ? 1.08 : 1)
+  return Math.round(top)
 }
 
 function beamGradient(colour: string): string {
+  // Bright at the venue tip (bottom), dissipating upward toward the glyph.
   return [
     `linear-gradient(to top,`,
     `${colour} 0%,`,
-    `${colour}cc 12%,`,
-    `${colour}88 30%,`,
-    `${colour}44 58%,`,
-    `${colour}18 82%,`,
+    `${colour}ee 6%,`,
+    `${colour}cc 18%,`,
+    `${colour}88 38%,`,
+    `${colour}44 62%,`,
+    `${colour}18 85%,`,
     `transparent 100%)`,
   ].join(' ')
 }
@@ -100,7 +105,7 @@ export function beamHeightForState(state: NodeState): number {
 /** Container size for a Constellation marker (wide hit column + tall beam + glyph). */
 export function beamContainerSize(state: NodeState, tierScale = 1, glyphSize = 0): { width: number; height: number } {
   const beamH = beamHeightForState(state)
-  const baseW = coneBaseWidth(state, tierScale, false)
+  const baseW = coneTopWidth(state, tierScale, false)
   return {
     width: Math.max(BEAM_HIT_WIDTH_PX, baseW + 8, glyphSize * 1.2),
     height: beamH + glyphSize + 12,
@@ -149,7 +154,7 @@ function applyBeamEmbellishments(
       transform: 'translateX(-50%)',
       width: '85%',
       height: `${beamH}px`,
-      clipPath: 'polygon(50% 0%, 6% 100%, 94% 100%)',
+      clipPath: CONE_CLIP,
       background: `linear-gradient(to top, transparent, ${colour}66, ${colour}44, transparent)`,
       filter: 'blur(3px)',
       pointerEvents: 'none',
@@ -194,14 +199,14 @@ function applyConeStyles(
   cone: HTMLElement,
   colour: string,
   beamH: number,
-  baseW: number,
+  topW: number,
   opacity: number,
   hybrid: boolean,
 ): void {
   Object.assign(cone.style, {
-    width: `${baseW}px`,
+    width: `${topW}px`,
     height: `${beamH}px`,
-    clipPath: 'polygon(50% 0%, 4% 100%, 96% 100%)',
+    clipPath: CONE_CLIP,
     background: beamGradient(colour),
     opacity: String(Math.min(1, opacity)),
     boxShadow: hybrid ? `0 0 14px ${colour}77, 0 0 28px ${colour}33` : `0 0 10px ${colour}55, 0 0 20px ${colour}22`,
@@ -212,26 +217,34 @@ function applyConeStyles(
   })
 }
 
-function ensureApexConnector(hit: HTMLElement, colour: string, glyphSize: number, opacity: number): void {
-  let apex = hit.querySelector('[data-layer="beam-apex"]') as HTMLElement | null
-  if (!apex) {
-    apex = document.createElement('div')
-    apex.dataset.layer = 'beam-apex'
-    hit.appendChild(apex)
+/** Soft glow at the wide cone mouth where the glyph sits. */
+function ensureMouthConnector(
+  hit: HTMLElement,
+  colour: string,
+  topW: number,
+  glyphSize: number,
+  opacity: number,
+): void {
+  let mouth = hit.querySelector('[data-layer="beam-apex"]') as HTMLElement | null
+  if (!mouth) {
+    mouth = document.createElement('div')
+    mouth.dataset.layer = 'beam-apex'
+    hit.appendChild(mouth)
   }
-  const size = Math.max(8, Math.round(glyphSize * 0.35))
-  Object.assign(apex.style, {
+  const w = Math.max(topW * 0.92, glyphSize * 0.72)
+  const h = Math.max(8, Math.round(glyphSize * 0.22))
+  Object.assign(mouth.style, {
     position: 'absolute',
-    top: `-${Math.round(size * 0.35)}px`,
+    top: `${-Math.round(h * 0.35)}px`,
     left: '50%',
     transform: 'translateX(-50%)',
-    width: `${size}px`,
-    height: `${size}px`,
+    width: `${w}px`,
+    height: `${h}px`,
     borderRadius: '50%',
-    background: `radial-gradient(circle, ${colour} 0%, ${colour}88 45%, transparent 72%)`,
-    opacity: String(Math.min(1, opacity + 0.1)),
+    background: `radial-gradient(ellipse, ${colour}cc 0%, ${colour}66 45%, transparent 72%)`,
+    opacity: String(Math.min(1, opacity + 0.08)),
     pointerEvents: 'none',
-    filter: `blur(${Math.max(1, size * 0.08)}px)`,
+    filter: `blur(${Math.max(1, h * 0.12)}px)`,
   })
 }
 
@@ -277,14 +290,14 @@ export function ensureBeamLayers(
   const tierScale = options.tierBaseScale ?? 1
   const hybrid = options.hybridStrength !== undefined && options.hybridStrength < 0.98
   const beamH = scaledBeamHeight(state, pitchScale * (hybrid ? 1.12 : 1))
-  const baseW = coneBaseWidth(state, tierScale, hybrid)
+  const topW = coneTopWidth(state, tierScale, hybrid)
   const opacity = resolveBeamOpacity(state, options) * (hybrid ? 1.08 : 1)
   const glyphSize = options.glyphSize ?? 24
   const reducedMotion = prefersReducedMotion()
 
   Object.assign(hit.style, {
     position: 'relative',
-    width: `${Math.max(BEAM_HIT_WIDTH_PX, baseW + 12)}px`,
+    width: `${Math.max(BEAM_HIT_WIDTH_PX, topW + 12)}px`,
     height: `${beamH + 6}px`,
     cursor: 'pointer',
     pointerEvents: 'auto',
@@ -294,7 +307,7 @@ export function ensureBeamLayers(
     flexShrink: '0',
   })
 
-  applyConeStyles(cone, colour, beamH, baseW, opacity, hybrid)
+  applyConeStyles(cone, colour, beamH, topW, opacity, hybrid)
 
   let glow = hit.querySelector('[data-layer="beam-glow"]') as HTMLElement | null
   if (!glow) {
@@ -302,21 +315,21 @@ export function ensureBeamLayers(
     glow.dataset.layer = 'beam-glow'
     hit.insertBefore(glow, cone)
   }
-  const glowPx = Math.round(baseW * (hybrid ? 1.15 : 1))
+  const tipGlowPx = Math.max(8, Math.round(topW * 0.22))
   Object.assign(glow.style, {
     position: 'absolute',
     bottom: '0',
     left: '50%',
-    transform: 'translateX(-50%)',
-    width: `${glowPx}px`,
-    height: `${Math.round(glowPx * 0.55)}px`,
+    transform: 'translate(-50%, 50%)',
+    width: `${tipGlowPx}px`,
+    height: `${tipGlowPx}px`,
     borderRadius: '50%',
-    background: `radial-gradient(ellipse, ${colour} 0%, ${colour}66 40%, transparent 72%)`,
-    opacity: String(Math.min(1, opacity + 0.12)),
+    background: `radial-gradient(circle, ${colour} 0%, ${colour}aa 35%, transparent 70%)`,
+    opacity: String(Math.min(1, opacity + 0.18)),
     pointerEvents: 'none',
   })
 
-  ensureApexConnector(hit, colour, glyphSize, opacity)
+  ensureMouthConnector(hit, colour, topW, glyphSize, opacity)
   applyBeamEmbellishments(hit, colour, beamH, options, reducedMotion)
 }
 
@@ -334,26 +347,26 @@ export function updateBeamLayers(
   const tierScale = options.tierBaseScale ?? 1
   const hybrid = options.hybridStrength !== undefined && options.hybridStrength < 0.98
   const beamH = scaledBeamHeight(state, pitchScale * (hybrid ? 1.12 : 1))
-  const baseW = coneBaseWidth(state, tierScale, hybrid)
+  const topW = coneTopWidth(state, tierScale, hybrid)
   const opacity = resolveBeamOpacity(state, options) * (hybrid ? 1.08 : 1)
   const glyphSize = options.glyphSize ?? 24
   const reducedMotion = prefersReducedMotion()
 
   Object.assign(hit.style, {
-    width: `${Math.max(BEAM_HIT_WIDTH_PX, baseW + 12)}px`,
+    width: `${Math.max(BEAM_HIT_WIDTH_PX, topW + 12)}px`,
     height: `${beamH + 6}px`,
   })
-  if (cone) applyConeStyles(cone, colour, beamH, baseW, opacity, hybrid)
+  if (cone) applyConeStyles(cone, colour, beamH, topW, opacity, hybrid)
   if (glow) {
-    const glowPx = Math.round(baseW * (hybrid ? 1.15 : 1))
+    const tipGlowPx = Math.max(8, Math.round(topW * 0.22))
     Object.assign(glow.style, {
-      width: `${glowPx}px`,
-      height: `${Math.round(glowPx * 0.55)}px`,
-      background: `radial-gradient(ellipse, ${colour} 0%, ${colour}66 40%, transparent 72%)`,
-      opacity: String(Math.min(1, opacity + 0.12)),
+      width: `${tipGlowPx}px`,
+      height: `${tipGlowPx}px`,
+      background: `radial-gradient(circle, ${colour} 0%, ${colour}aa 35%, transparent 70%)`,
+      opacity: String(Math.min(1, opacity + 0.18)),
     })
   }
-  ensureApexConnector(hit, colour, glyphSize, opacity)
+  ensureMouthConnector(hit, colour, topW, glyphSize, opacity)
   applyBeamEmbellishments(hit, colour, beamH, options, reducedMotion)
 }
 

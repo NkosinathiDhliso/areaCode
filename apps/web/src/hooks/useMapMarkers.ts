@@ -205,7 +205,7 @@ function buildMarkerElement(
     { ...beamOptions, glyphSize },
   )
 
-  // ── Glyph wrapper (sits on the cone apex) ──
+  // ── Glyph wrapper (sits on the wide cone mouth) ──
   const glyphWrapper = document.createElement('div')
   Object.assign(glyphWrapper.style, {
     position: 'relative',
@@ -214,7 +214,7 @@ function buildMarkerElement(
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: '-2px',
+    marginBottom: '-4px',
     cursor: 'pointer',
     pointerEvents: 'auto',
     filter: state === 'dormant' ? 'none' : `drop-shadow(0 0 ${glyphSize * 0.25}px ${colour}66)`,
