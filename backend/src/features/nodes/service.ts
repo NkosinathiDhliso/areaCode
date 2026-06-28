@@ -201,19 +201,30 @@ export async function getNodesByCitySlug(citySlug: string) {
     }))
   }
 
-  const city = await repo.getCityBySlug(citySlug)
   const nodes = await repo.getNodesByCitySlug(citySlug)
-  if (!city || nodes.length === 0) return nodes
+  if (nodes.length === 0) return nodes
 
-  const now = Math.floor(Date.now() / 1000)
-  return Promise.all(
-    nodes.map(async (node) => {
-      const scoreStr = await kvGet(`pulse:${city.id}:${node.id}`)
-      const pulseScore = scoreStr ? parseFloat(scoreStr) : 0
-      const liveCheckInCount = await getLivePresenceCount(node.id, now)
-      return { ...node, pulseScore, liveCheckInCount }
-    }),
-  )
+  // Best-effort pulse seed for Constellation beams on first paint. This must
+  // NEVER break the map: any KV failure falls back to a base node (pulseScore
+  // 0) and the beam lights up once the live socket pulse arrives. We only read
+  // the cheap pulse KV here - live presence counts come over the WebSocket, so
+  // we deliberately avoid a per-node GSI fan-out on this hot read path.
+  try {
+    const city = await repo.getCityBySlug(citySlug)
+    if (!city) return nodes
+    return await Promise.all(
+      nodes.map(async (node) => {
+        try {
+          const scoreStr = await kvGet(`pulse:${city.id}:${node.id}`)
+          return { ...node, pulseScore: scoreStr ? parseFloat(scoreStr) : 0 }
+        } catch {
+          return { ...node, pulseScore: 0 }
+        }
+      }),
+    )
+  } catch {
+    return nodes
+  }
 }
 
 export async function getNodeDetail(nodeId: string) {
