@@ -332,22 +332,27 @@ export async function updateReward(
   return repo.updateReward(rewardId, updateData)
 }
 
-export async function getRewardsNearMe(lat: number, lng: number) {
+export async function getRewardsNearMe(lat: number, lng: number, viewerId?: string) {
   if (DEV_MODE) {
-    // Mirror the production path: vibe-first ordering (aliveness → taste →
-    // proximity) and a derived Pulse_State, so the dev surface shows the same
-    // "buzzing-but-further beats quiet-but-closer" behaviour as prod.
+    // Mirror the production path: taste-first ordering (taste → aliveness → tier
+    // → has-live-gets → proximity) and a derived Pulse_State, so the dev surface
+    // shows the same ranking behaviour as prod. Taste is neutral (0) in dev.
+    const liveGetNodes = new Set(
+      DEV_REWARDS.filter((r) => r.getCategory === 'event' || r.getCategory === 'offer').map((r) => r.nodeId),
+    )
     return rankGetsByVibe(
       DEV_REWARDS.map((r) => ({
         ...r,
-        aliveness: (r.pulseScore ?? 0) + (r.liveCount ?? 0),
         tasteMatch: 0,
+        aliveness: (r.pulseScore ?? 0) + (r.liveCount ?? 0),
+        tierMultiplier: 1.0,
+        hasLiveGets: liveGetNodes.has(r.nodeId),
         distanceMeters: r.distance,
       })),
     ).map((r) => ({ ...r, pulseState: pulseStateFromScore(r.pulseScore ?? 0) }))
   }
 
-  const raw = await repo.getRewardsNearMe(lat, lng)
+  const raw = await repo.getRewardsNearMe(lat, lng, viewerId)
   const nowMs = Date.now()
   return raw
     .filter((r) => {
@@ -425,6 +430,60 @@ export async function getUnclaimedRewards(userId: string) {
     ]
   }
   return repo.getUnclaimedRewards(userId)
+}
+
+/**
+ * Anonymised "just claimed near you" social proof for the Gets page. Returns
+ * recent claims at nearby venues without ever revealing who claimed them. Gets
+ * are the motivating factor to go out, so seeing live claim activity nearby is
+ * the nudge — identity is deliberately stripped (POPIA / honest-presence).
+ */
+export async function getRecentClaimsNearMe(lat: number, lng: number) {
+  if (DEV_MODE) {
+    const ago = (mins: number) => new Date(Date.now() - mins * 60 * 1000).toISOString()
+    return [
+      {
+        id: 'claim-near-1',
+        rewardTitle: 'Free Coffee',
+        nodeId: 'dev-1',
+        nodeName: 'Father Coffee',
+        distance: 150,
+        claimedAt: ago(4),
+      },
+      {
+        id: 'claim-near-2',
+        rewardTitle: '20% Off Cocktails',
+        nodeId: 'dev-3',
+        nodeName: "Kitchener's Bar",
+        distance: 800,
+        claimedAt: ago(12),
+      },
+      {
+        id: 'claim-near-3',
+        rewardTitle: 'Buy 1 Get 1 Free',
+        nodeId: 'dev-9',
+        nodeName: 'The Grillhouse',
+        distance: 600,
+        claimedAt: ago(28),
+      },
+    ]
+  }
+  return repo.getRecentClaimsNearMe(lat, lng)
+}
+
+/**
+ * The viewer's own claimed-and-redeemed get history (gets they have already
+ * used), newest first. Complements the wallet of active codes.
+ */
+export async function getClaimedRewards(userId: string) {
+  if (DEV_MODE) {
+    const ago = (mins: number) => new Date(Date.now() - mins * 60 * 1000).toISOString()
+    return [
+      { id: 'hist-1', rewardTitle: 'Free Starter', nodeName: "Nando's Rosebank", redeemedAt: ago(60) },
+      { id: 'hist-2', rewardTitle: 'Free Day Pass', nodeName: 'Virgin Active Sandton', redeemedAt: ago(1500) },
+    ]
+  }
+  return repo.getClaimedRewards(userId)
 }
 
 export async function redeemReward(code: string, staffId?: string) {

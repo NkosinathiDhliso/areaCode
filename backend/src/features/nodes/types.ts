@@ -90,6 +90,14 @@ export interface Node {
   qrCheckinEnabled: boolean
   isVerified: boolean
   isActive: boolean
+  /**
+   * Fallback Archetype id used by taste-match ranking (and the Live_Archetype
+   * resolver) when no live archetype is currently emitted. Absent/unknown ids
+   * fall through to `archetype-eclectic`.
+   */
+  defaultArchetypeId?: string | null
+  /** Last Live_Archetype id emitted for this venue, when one is active. */
+  currentArchetypeId?: string | null
   createdAt: string
   updatedAt: string
 }

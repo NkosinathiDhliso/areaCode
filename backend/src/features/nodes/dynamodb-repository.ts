@@ -171,6 +171,8 @@ function mapNode(item: Record<string, unknown>): Node {
     qrCheckinEnabled: (item['qrCheckinEnabled'] as boolean) ?? false,
     isVerified: (item['isVerified'] as boolean) ?? false,
     isActive: (item['isActive'] as boolean) ?? true,
+    defaultArchetypeId: (item['defaultArchetypeId'] as string | null | undefined) ?? null,
+    currentArchetypeId: (item['currentArchetypeId'] as string | null | undefined) ?? null,
     createdAt: (item['createdAt'] as string) ?? '',
     updatedAt: (item['updatedAt'] as string) ?? '',
   }
