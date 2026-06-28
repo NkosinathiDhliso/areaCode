@@ -23,6 +23,7 @@ import {
   beamBlendForZoom,
   constellationVisibleIds,
   isActiveMarker,
+  markerVisibilityScale,
   presentationTierForZoom,
   scaleForZoom,
   zoomSizeFactor,
@@ -33,6 +34,7 @@ export {
   BASE_PRESENTATION_ZOOM,
   beamBlendForZoom,
   isActiveMarker,
+  markerVisibilityScale,
   presentationTierForZoom,
   scaleForZoom,
   zoomSizeFactor,
@@ -79,7 +81,7 @@ const SCALE_LAYER = 'scale-layer'
  */
 function applyZoomScale(markerEl: HTMLElement, zoom: number): void {
   const layer = markerEl.querySelector(`[data-layer="${SCALE_LAYER}"]`) as HTMLElement | null
-  const visibility = scaleForZoom(zoom)
+  const visibility = markerVisibilityScale(zoom)
   if (layer) {
     layer.style.transform = `scale(${visibility * zoomSizeFactor(zoom)})`
   }
@@ -526,14 +528,16 @@ export function useMapMarkers(
   onCommitZoomRef.current = onCommitZoom
 
   const beamOptionsFor = useCallback(
-    (nodeId: string): BeamVisualOptions => {
+    (nodeId: string, zoom: number): BeamVisualOptions => {
       const node = nodes[nodeId]
       const venueArchetype = archetypeIds[nodeId] ?? node?.defaultArchetypeId ?? null
+      const blend = beamBlendForZoom(zoom)
       return {
         pitchScale: is3D ? BEAM_PITCH_SCALE_3D : 1,
         tasteMatch: !!(consumerArchetypeId && venueArchetype && consumerArchetypeId === venueArchetype),
         hasLiveGet: !!hasLiveGets[nodeId],
         brushed: brushedNodeId === nodeId,
+        hybridStrength: blend < 0.98 ? blend : undefined,
       }
     },
     [nodes, archetypeIds, consumerArchetypeId, hasLiveGets, is3D, brushedNodeId],
@@ -561,11 +565,20 @@ export function useMapMarkers(
       const blend = beamBlendForZoom(zoom)
       const dimInactive = blend >= 0.98 && activeVenueId !== null
 
-      for (const [, marker] of markersRef.current) {
+      for (const [nodeId, marker] of markersRef.current) {
         const el = marker.getElement()
         applyZoomScale(el, zoom)
         const isActive = el.dataset.active === 'true'
         applyPresentationTier(el, tier, isActive, dimInactive, blend)
+
+        const node = useMapStore.getState().nodes[nodeId]
+        if (node && blend < 0.98) {
+          const score = useMapStore.getState().pulseScores[nodeId] ?? 0
+          const state = getNodeState(score)
+          const colour = getCategoryColour(node.category)
+          const scaleLayer = el.querySelector(`[data-layer="${SCALE_LAYER}"]`) as HTMLElement | null
+          if (scaleLayer) updateBeamLayers(scaleLayer, colour, state, beamOptionsFor(nodeId, zoom))
+        }
       }
 
       setPresentationTier((prev) => (prev === tier ? prev : tier))
@@ -580,7 +593,7 @@ export function useMapMarkers(
         /* ignore */
       }
     }
-  }, [mapRef, mapReady, activeVenueId])
+  }, [mapRef, mapReady, activeVenueId, beamOptionsFor])
 
   useEffect(() => {
     const map = mapRef.current
@@ -662,7 +675,7 @@ export function useMapMarkers(
             state,
             liveCount,
             active,
-            beamOptionsFor(node.id),
+            beamOptionsFor(node.id, curZoom),
           )
           renderGlyph(
             glyphRootsRef.current,
@@ -686,7 +699,7 @@ export function useMapMarkers(
           liveCount,
           active,
           () => onNodeTapRef.current(node),
-          beamOptionsFor(node.id),
+          beamOptionsFor(node.id, curZoom),
           () => onCommitZoomRef.current?.(node),
         )
 

@@ -5,17 +5,18 @@ import {
   CONSTELLATION_DORMANT_CUTOFF_ZOOM,
   CONSTELLATION_MIN_ZOOM,
   GLYPH_ZOOM_THRESHOLD,
+  MAP_ARRIVAL_ZOOM,
   MIN_MARKER_ZOOM,
   RECOMMENDED_LIMIT,
 } from './carouselConstants'
 import {
-  constellationVisibleIds,
-  presentationTierForZoom,
-  scaleForZoom,
   beamBlendForZoom,
   BEAM_BLEND_FLOOR,
+  constellationVisibleIds,
+  markerVisibilityScale,
+  presentationTierForZoom,
+  scaleForZoom,
 } from './markerPresentation'
-import { MAP_ARRIVAL_ZOOM, MIN_MARKER_ZOOM } from './carouselConstants'
 
 function node(id: string, lat = -26.2, lng = 28.04): Node {
   return { id, name: id, category: 'nightlife', lat, lng } as Node
@@ -68,5 +69,11 @@ describe('markerPresentation', () => {
     expect(beamBlendForZoom(MIN_MARKER_ZOOM + 0.5)).toBeLessThan(1)
     expect(beamBlendForZoom(MAP_ARRIVAL_ZOOM)).toBe(BEAM_BLEND_FLOOR)
     expect(beamBlendForZoom(MAP_ARRIVAL_ZOOM + 5)).toBe(BEAM_BLEND_FLOOR)
+  })
+
+  it('never collapses marker visibility at z8 while hybrid beams are active', () => {
+    expect(scaleForZoom(MIN_MARKER_ZOOM)).toBe(0)
+    expect(markerVisibilityScale(MIN_MARKER_ZOOM)).toBeGreaterThan(0)
+    expect(markerVisibilityScale(MAP_ARRIVAL_ZOOM)).toBeGreaterThanOrEqual(BEAM_BLEND_FLOOR * 0.35)
   })
 })

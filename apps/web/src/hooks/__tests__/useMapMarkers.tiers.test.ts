@@ -10,6 +10,7 @@ import { CONSTELLATION_MIN_ZOOM, GLYPH_ZOOM_THRESHOLD, MIN_MARKER_ZOOM } from '.
 import {
   BASE_PRESENTATION_ZOOM,
   isActiveMarker,
+  markerVisibilityScale,
   presentationTierForZoom,
   scaleForZoom,
   zoomSizeFactor,
@@ -93,6 +94,7 @@ describe('Feature: map-discovery-experience, Property 18: Markers stay geo-ancho
 
   it('is continuous at glyph threshold; beam hands off to dot at MIN_MARKER_ZOOM', () => {
     expect(scaleForZoom(MIN_MARKER_ZOOM)).toBe(0)
+    expect(markerVisibilityScale(MIN_MARKER_ZOOM)).toBeGreaterThan(0)
     expect(scaleForZoom(GLYPH_ZOOM_THRESHOLD)).toBe(1)
     expect(scaleForZoom(CONSTELLATION_MIN_ZOOM)).toBeGreaterThan(0)
   })
@@ -136,11 +138,11 @@ describe('Feature: live-vibe-on-map, zoom-aware sizing considers the map zoom', 
     )
   })
 
-  // Combined transform scale must never be negative. Beam tier uses a sub-1 ramp.
+  // Combined transform scale must never be negative. Hybrid beams keep visibility > 0 at z8.
   it('combined visibility×size scale is ≥ 0 everywhere', () => {
     fc.assert(
       fc.property(zoomArb, (zoom) => {
-        const combined = scaleForZoom(zoom) * zoomSizeFactor(zoom)
+        const combined = markerVisibilityScale(zoom) * zoomSizeFactor(zoom)
         expect(combined).toBeGreaterThanOrEqual(0)
       }),
     )

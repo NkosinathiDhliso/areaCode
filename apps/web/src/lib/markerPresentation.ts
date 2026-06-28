@@ -38,7 +38,7 @@ export function presentationTierForZoom(zoom: number): MarkerPresentationTier {
 }
 
 /** Beam opacity floor once zoomed past {@link MAP_ARRIVAL_ZOOM} (hybrid with glyphs). */
-export const BEAM_BLEND_FLOOR = 0.38
+export const BEAM_BLEND_FLOOR = 0.55
 
 /**
  * Beam pillar opacity by zoom. Full at Constellation, crossfades with dots/glyphs
@@ -67,6 +67,18 @@ export function scaleForZoom(zoom: number): number {
 export function zoomSizeFactor(zoom: number): number {
   const factor = 1 + (zoom - BASE_PRESENTATION_ZOOM) * ZOOM_SIZE_SLOPE
   return Math.min(ZOOM_SIZE_MAX, Math.max(ZOOM_SIZE_MIN, factor))
+}
+
+/**
+ * Combined marker visibility scale for {@link applyZoomScale}. Never drops to
+ * zero while {@link beamBlendForZoom} is active, so hybrid beams stay visible
+ * when dots/glyphs ramp in (fixes the z8 collapse where scaleForZoom hit 0).
+ */
+export function markerVisibilityScale(zoom: number): number {
+  const glyphDot = scaleForZoom(zoom)
+  const beamPresence = beamBlendForZoom(zoom) * BEAM_SCALE_MAX
+  if (zoom >= MIN_MARKER_ZOOM) return Math.max(glyphDot, beamPresence)
+  return glyphDot
 }
 
 export function isActiveMarker(nodeId: string, activeVenueId: string | null): boolean {

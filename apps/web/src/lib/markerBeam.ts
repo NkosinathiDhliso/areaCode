@@ -20,6 +20,8 @@ export interface BeamVisualOptions {
   hasLiveGet?: boolean
   /** Finger sweep proximity brighten. */
   brushed?: boolean
+  /** Beam blend when hybrid with glyphs (0–1); boosts glow when < 1. */
+  hybridStrength?: number
 }
 
 /** Pillar height (px) by Pulse_State — aliveness only, not business tier. */
@@ -165,8 +167,9 @@ export function ensureBeamLayers(
   }
 
   const pitchScale = options.pitchScale ?? 1
-  const beamH = scaledBeamHeight(state, pitchScale)
-  const opacity = resolveBeamOpacity(state, options)
+  const hybrid = options.hybridStrength !== undefined && options.hybridStrength < 0.98
+  const beamH = scaledBeamHeight(state, pitchScale * (hybrid ? 1.15 : 1))
+  const opacity = resolveBeamOpacity(state, options) * (hybrid ? 1.1 : 1)
   const anim = BEAM_ANIM[state]
   const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
@@ -229,25 +232,32 @@ export function updateBeamLayers(
   const column = hit.querySelector(`[data-layer="${BEAM_COLUMN_LAYER}"]`) as HTMLElement | null
   const glow = hit.querySelector('[data-layer="beam-glow"]') as HTMLElement | null
   const pitchScale = options.pitchScale ?? 1
-  const beamH = scaledBeamHeight(state, pitchScale)
-  const opacity = resolveBeamOpacity(state, options)
+  const hybrid = options.hybridStrength !== undefined && options.hybridStrength < 0.98
+  const beamH = scaledBeamHeight(state, pitchScale * (hybrid ? 1.15 : 1))
+  const opacity = resolveBeamOpacity(state, options) * (hybrid ? 1.1 : 1)
   const anim = BEAM_ANIM[state]
   const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
   Object.assign(hit.style, { height: `${beamH + 8}px` })
   if (column) {
+    const colW = hybrid ? '12px' : '10px'
+    const shadow = hybrid ? `0 0 16px ${colour}88, 0 0 32px ${colour}44` : `0 0 12px ${colour}66, 0 0 24px ${colour}33`
     Object.assign(column.style, {
+      width: colW,
       height: `${beamH}px`,
       background: beamGradient(colour),
-      opacity: String(opacity),
-      boxShadow: `0 0 12px ${colour}66, 0 0 24px ${colour}33`,
+      opacity: String(Math.min(1, opacity)),
+      boxShadow: shadow,
       animation: reducedMotion ? 'none' : `${anim.animation} ${anim.speed} ease-in-out infinite`,
     })
   }
   if (glow) {
+    const glowPx = hybrid ? 32 : 20
     Object.assign(glow.style, {
+      width: `${glowPx}px`,
+      height: `${glowPx}px`,
       background: `radial-gradient(circle, ${colour} 0%, transparent 70%)`,
-      opacity: String(Math.min(1, opacity + 0.15)),
+      opacity: String(Math.min(1, opacity + (hybrid ? 0.25 : 0.15))),
     })
   }
   applyBeamEmbellishments(hit, colour, options, reducedMotion)
@@ -288,7 +298,11 @@ export function applyPresentationTier(
     glyphWrapper.style.pointerEvents = showGlyphDot && glyphOpacity > 0.15 ? 'auto' : 'none'
   }
   if (halo) {
-    halo.style.display = showGlyphDot ? 'block' : 'none'
+    const showHalo = showGlyphDot || (showBeam && beamBlend < 0.98)
+    halo.style.display = showHalo ? 'block' : 'none'
+    if (showBeam && beamBlend < 0.98) {
+      halo.style.opacity = String(Math.min(0.55, beamBlend * 0.7))
+    }
   }
 
   scaleLayer.style.opacity = '1'
