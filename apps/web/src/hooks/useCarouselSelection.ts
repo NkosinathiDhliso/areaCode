@@ -487,7 +487,24 @@ export function useCarouselSelection({
   )
 
   const notifyViewportChanged = useCallback(() => {
-    const current = readViewportSnapshot(useMapStore.getState().mapInstance)
+    const map = useMapStore.getState().mapInstance
+    let zoom = MAP_ARRIVAL_ZOOM
+    try {
+      zoom = map?.getZoom() ?? MAP_ARRIVAL_ZOOM
+    } catch {
+      /* ignore */
+    }
+
+    // Constellation zoom: stay citywide recommended; never enter area scope.
+    if (zoom < MIN_MARKER_ZOOM) {
+      if (browseScopeRef.current === 'area') {
+        setBrowseScope('recommended')
+        recomputeOrder()
+      }
+      return
+    }
+
+    const current = readViewportSnapshot(map)
     if (!current) return
 
     const previous = lastViewportRef.current
@@ -503,7 +520,7 @@ export function useCarouselSelection({
     }
 
     debouncedRecompute()
-  }, [setBrowseScope, debouncedRecompute])
+  }, [setBrowseScope, debouncedRecompute, recomputeOrder])
 
   // Return to the citywide recommended scope (the "Back to recommended" cue).
   const showRecommended = useCallback(() => {

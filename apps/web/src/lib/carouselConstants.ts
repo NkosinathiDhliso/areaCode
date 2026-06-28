@@ -42,8 +42,20 @@ export const POSITION_FRESHNESS_WINDOW = 60_000
  */
 export const GLYPH_ZOOM_THRESHOLD = 12.5
 
-/** Zoom below which venue markers are hidden entirely (Globe_Zoom boundary). */
+/**
+ * Zoom below which the Marker_Layer renders Constellation beams instead of
+ * dots/glyphs. Former Globe_Zoom "hidden" tier — see constellation-mode.md.
+ */
 export const MIN_MARKER_ZOOM = 8
+
+/** Map minZoom; beams do not render below this. */
+export const CONSTELLATION_MIN_ZOOM = 4
+
+/** Below this zoom, dormant venues are omitted from the Constellation cap. */
+export const CONSTELLATION_DORMANT_CUTOFF_ZOOM = 6
+
+/** Tap target width for Constellation beams (px). */
+export const BEAM_HIT_WIDTH_PX = 48
 
 /**
  * Zoom the camera flies to on the first cold-open move, when the map is still

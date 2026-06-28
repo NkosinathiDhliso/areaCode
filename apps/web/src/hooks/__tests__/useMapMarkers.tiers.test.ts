@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 // globals. The Marker class is only constructed inside the hook, never at import.
 vi.mock('mapbox-gl', () => ({ default: { Marker: class {} } }))
 
-import { GLYPH_ZOOM_THRESHOLD, MIN_MARKER_ZOOM } from '../../lib/carouselConstants'
+import { CONSTELLATION_MIN_ZOOM, GLYPH_ZOOM_THRESHOLD, MIN_MARKER_ZOOM } from '../../lib/carouselConstants'
 import {
   BASE_PRESENTATION_ZOOM,
   isActiveMarker,
@@ -29,12 +29,12 @@ import {
 const zoomArb = fc.double({ min: 0, max: 24, noNaN: true })
 
 describe('Feature: map-discovery-experience, Property 17: Marker presentation tier is a function of zoom', () => {
-  it('selects glyph / dot / hidden by the documented zoom thresholds', () => {
+  it('selects glyph / dot / beam by the documented zoom thresholds', () => {
     fc.assert(
       fc.property(zoomArb, (zoom) => {
         const tier = presentationTierForZoom(zoom)
         if (zoom >= GLYPH_ZOOM_THRESHOLD) expect(tier).toBe('glyph')
-        else if (zoom < MIN_MARKER_ZOOM) expect(tier).toBe('hidden')
+        else if (zoom < MIN_MARKER_ZOOM) expect(tier).toBe('beam')
         else expect(tier).toBe('dot')
       }),
     )
@@ -50,7 +50,7 @@ describe('Feature: map-discovery-experience, Property 17: Marker presentation ti
 })
 
 describe('Feature: map-discovery-experience, Property 18: Markers stay geo-anchored across transitions', () => {
-  it('keeps scale within [0,1] and monotonic non-decreasing in zoom (no detaching jump)', () => {
+  it('keeps scale within [0,1] and is monotonic within each tier band', () => {
     fc.assert(
       fc.property(zoomArb, zoomArb, (z1, z2) => {
         const lo = Math.min(z1, z2)
@@ -61,18 +61,28 @@ describe('Feature: map-discovery-experience, Property 18: Markers stay geo-ancho
           expect(s).toBeGreaterThanOrEqual(0)
           expect(s).toBeLessThanOrEqual(1)
         }
-        expect(sLo).toBeLessThanOrEqual(sHi)
+        const tierLo = presentationTierForZoom(lo)
+        const tierHi = presentationTierForZoom(hi)
+        if (tierLo === tierHi) {
+          expect(sLo).toBeLessThanOrEqual(sHi)
+        }
       }),
     )
   })
 
-  it('is 1 in the glyph tier, 0 in the hidden tier, and partial across the dot tier', () => {
+  it('is 1 in the glyph tier, beam-ramped below MIN_MARKER_ZOOM, and partial across the dot tier', () => {
     fc.assert(
       fc.property(zoomArb, (zoom) => {
         const tier = presentationTierForZoom(zoom)
         const scale = scaleForZoom(zoom)
         if (tier === 'glyph') expect(scale).toBe(1)
-        if (tier === 'hidden') expect(scale).toBe(0)
+        if (tier === 'beam') {
+          if (zoom < CONSTELLATION_MIN_ZOOM) expect(scale).toBe(0)
+          else {
+            expect(scale).toBeGreaterThan(0)
+            expect(scale).toBeLessThan(1)
+          }
+        }
         if (tier === 'dot') {
           expect(scale).toBeGreaterThanOrEqual(0)
           expect(scale).toBeLessThan(1)
@@ -81,9 +91,10 @@ describe('Feature: map-discovery-experience, Property 18: Markers stay geo-ancho
     )
   })
 
-  it('is continuous at both tier thresholds', () => {
+  it('is continuous at glyph threshold; beam hands off to dot at MIN_MARKER_ZOOM', () => {
     expect(scaleForZoom(MIN_MARKER_ZOOM)).toBe(0)
     expect(scaleForZoom(GLYPH_ZOOM_THRESHOLD)).toBe(1)
+    expect(scaleForZoom(CONSTELLATION_MIN_ZOOM)).toBeGreaterThan(0)
   })
 })
 
@@ -125,16 +136,12 @@ describe('Feature: live-vibe-on-map, zoom-aware sizing considers the map zoom', 
     )
   })
 
-  // The combined transform scale (visibility ramp × size factor) is what is
-  // actually applied to a marker's scale-layer. It must never be negative and
-  // must collapse to exactly 0 in the hidden tier so a faded marker truly
-  // disappears (and its pointer-events are gated off).
-  it('combined visibility×size scale is 0 in the hidden tier and ≥ 0 everywhere', () => {
+  // Combined transform scale must never be negative. Beam tier uses a sub-1 ramp.
+  it('combined visibility×size scale is ≥ 0 everywhere', () => {
     fc.assert(
       fc.property(zoomArb, (zoom) => {
         const combined = scaleForZoom(zoom) * zoomSizeFactor(zoom)
         expect(combined).toBeGreaterThanOrEqual(0)
-        if (presentationTierForZoom(zoom) === 'hidden') expect(combined).toBe(0)
       }),
     )
   })

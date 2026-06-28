@@ -116,8 +116,16 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   // Drives the Peek_Carousel, the camera, and the marker layer. Replaces the
   // legacy ad-hoc selectedNode/sheetOpen/handleFlick state.
   const selection = useCarouselSelection({ categoryFilter, mapReady })
-  const { activeVenueId, notifyViewportChanged, carouselOrder, selectVenue, onMarkerTap, onSearchSelect, dismiss } =
-    selection
+  const {
+    activeVenueId,
+    notifyViewportChanged,
+    carouselOrder,
+    selectVenue,
+    onMarkerTap,
+    onSearchSelect,
+    dismiss,
+    mode: carouselMode,
+  } = selection
 
   // Socket subscriptions, citySlug passed for anonymous room join
   useMapSockets(citySlug, accessToken ?? undefined, userId)
@@ -213,11 +221,10 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     }
   }, [mapRef, mapReady, notifyViewportChanged])
 
-  // ── First-paint open into Browse_Mode (R1.1) ──
-  // Once the map is ready and the Carousel_Order has at least one venue, open
-  // the carousel in Browse_Mode on the first (highest-ranked) citywide pick.
-  // Skipped when a Focus_Signal is pending (it opens the carousel on its own
-  // target) or when the carousel is already open.
+  // ── First-paint open (segmented Constellation cold open) ──
+  // First-time users stay at country zoom with beams visible (carousel closed).
+  // Returning users with a retained lastVenueId reopen on that venue. Skipped
+  // when a Focus_Signal is pending or the carousel is already open.
   const autoOpenedRef = useRef(false)
   useEffect(() => {
     if (autoOpenedRef.current || !mapReady) return
@@ -226,10 +233,17 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       return
     }
     if (focusNodeId) return
-    const first = carouselOrder[0]
-    if (!first) return
+
+    const storedLast = useSelectionStore.getState().lastVenueId
+    if (!storedLast) {
+      autoOpenedRef.current = true
+      return
+    }
+
+    const target = storedLast ?? carouselOrder[0]
+    if (!target) return
     autoOpenedRef.current = true
-    selectVenue(first, 'swipe')
+    selectVenue(target, 'swipe')
   }, [mapReady, carouselOrder, focusNodeId, selectVenue])
 
   // Fetch rewards for the Active_Venue (Commit_Mode body).
@@ -365,6 +379,18 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
       {liveVibeOnMap && <LiveArchetypeSubscriber token={accessToken ?? undefined} citySlug={citySlug} />}
       <CityPulseToastMount mapReady={mapReady} />
+
+      {/* Constellation hint: first open at country zoom before a beam is tapped. */}
+      {mapReady && !mapError && carouselMode === 'closed' && !activeVenueId && (nodeList?.length ?? 0) > 0 && (
+        <div
+          className="absolute left-0 right-0 z-10 flex justify-center pointer-events-none"
+          style={{ bottom: 'calc(5.5rem + env(safe-area-inset-bottom, 0px))' }}
+        >
+          <p className="glass rounded-full px-4 py-2 text-[var(--text-secondary)] text-xs font-medium">
+            {t('map.constellationHint', 'Tap a light to explore')}
+          </p>
+        </div>
+      )}
 
       {/* Peek_Carousel - the two-state browse-and-compare surface (R1.1, R2.x).
           Browse_Mode (swipeable Venue_Card strip + FlickControls) and

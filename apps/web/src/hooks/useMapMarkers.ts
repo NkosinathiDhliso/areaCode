@@ -1,13 +1,35 @@
 import { TIER_SIZE_MULTIPLIER } from '@area-code/shared/constants'
-import { useMapStore } from '@area-code/shared/stores/mapStore'
+import { useLocationStore, useMapStore } from '@area-code/shared/stores'
+import { useUserStore } from '@area-code/shared/stores/userStore'
 import type { Node, NodeCategory, NodeState } from '@area-code/shared/types'
 import mapboxgl from 'mapbox-gl'
 import { createElement, useEffect, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 
 import { ArchetypeGlyph } from '../components/ArchetypeGlyph'
-import { DEFAULT_ARCHETYPE_ID, GLYPH_ZOOM_THRESHOLD, MIN_MARKER_ZOOM } from '../lib/carouselConstants'
+import { canRecenter } from '../lib/cameraControl'
+import { DEFAULT_ARCHETYPE_ID, GLYPH_ZOOM_THRESHOLD } from '../lib/carouselConstants'
+import { vibeRank } from '../lib/carouselRanking'
 import { getNodeState, getCategoryColour } from '../lib/mapHelpers'
+import { beamContainerSize, ensureBeamLayers, updateBeamLayers, applyPresentationTier } from '../lib/markerBeam'
+import {
+  BASE_PRESENTATION_ZOOM,
+  constellationVisibleIds,
+  isActiveMarker,
+  presentationTierForZoom,
+  scaleForZoom,
+  zoomSizeFactor,
+  type MarkerPresentationTier,
+} from '../lib/markerPresentation'
+
+export {
+  BASE_PRESENTATION_ZOOM,
+  isActiveMarker,
+  presentationTierForZoom,
+  scaleForZoom,
+  zoomSizeFactor,
+  type MarkerPresentationTier,
+}
 
 /**
  * The three legibility tiers the Marker_Layer renders, selected purely by
@@ -17,98 +39,13 @@ import { getNodeState, getCategoryColour } from '../lib/mapHelpers'
  * - `dot`    - zoom in `[MIN_MARKER_ZOOM, GLYPH_ZOOM_THRESHOLD)` (8 → 12.5):
  *              a simple category-coloured dot so a packed city-overview reads
  *              as clean density rather than a collage of tiny icons.
- * - `hidden` - zoom < `MIN_MARKER_ZOOM` (8): markers are hidden because at
- *              continent/globe zoom an individual venue marker covers a huge
- *              geographic area and visually detaches from the globe surface.
+ * - `beam`   - zoom < `MIN_MARKER_ZOOM` (Constellation mode): pulse-driven
+ *              sky beams anchored at the venue. See constellation-mode.md.
  *
  * `GLYPH_ZOOM_THRESHOLD` and `MIN_MARKER_ZOOM` are imported from
  * `carouselConstants` - the single shared home for the map-presentation
  * thresholds - so the carousel, camera, and marker layers all agree.
  */
-export type MarkerPresentationTier = 'glyph' | 'dot' | 'hidden'
-
-/**
- * Pure mapping from a zoom level to its {@link MarkerPresentationTier}.
- * Extracted as a total, side-effect-free function so it can be property-tested
- * (design Property 17, task 13.2) independently of the React/Mapbox wiring.
- *
- * Validates: Requirements 12.1, 12.2, 12.3
- */
-export function presentationTierForZoom(zoom: number): MarkerPresentationTier {
-  if (zoom >= GLYPH_ZOOM_THRESHOLD) return 'glyph'
-  if (zoom < MIN_MARKER_ZOOM) return 'hidden'
-  return 'dot'
-}
-
-/**
- * Pure predicate: is `nodeId` the current Active_Venue? Extracted so the
- * active-marker distinction (design Property 19, task 13.4) is testable without
- * a live map. Returns false when there is no Active_Venue.
- *
- * Validates: Requirements 12.6
- */
-export function isActiveMarker(nodeId: string, activeVenueId: string | null): boolean {
-  return activeVenueId !== null && nodeId === activeVenueId
-}
-
-/**
- * Returns a 0-1 visibility factor for the given zoom level - the
- * *presence* channel: should the marker be on screen at all, and how far
- * through the fade-in from the hidden tier is it.
- *
- * Stays consistent with {@link presentationTierForZoom}: it is exactly 0 in the
- * `hidden` tier and 1 in the `glyph` tier, ramping linearly across the `dot`
- * tier so the transition across a threshold is smooth and never detaches the
- * marker from its coordinates (design Property 18).
- *
- * This is composed with {@link zoomSizeFactor} (the *size* channel) into the
- * single transform scale applied to each marker's scale-layer in
- * {@link applyZoomScale}.
- */
-export function scaleForZoom(zoom: number): number {
-  if (zoom >= GLYPH_ZOOM_THRESHOLD) return 1
-  if (zoom < MIN_MARKER_ZOOM) return 0
-  return (zoom - MIN_MARKER_ZOOM) / (GLYPH_ZOOM_THRESHOLD - MIN_MARKER_ZOOM)
-}
-
-/**
- * The zoom at which a marker renders at exactly its designed pixel size
- * (`zoomSizeFactor === 1`). The `GLYPH_SIZE` table and the per-tier / per-state
- * sizing were tuned for the detailed glyph tier, so we anchor the zoom-aware
- * sizing at the glyph threshold: at and below it the factor stays ≤ 1, and as
- * the user zooms past it the glyph grows gently so a venue the user has zoomed
- * right up to reads as physically present on its block rather than staying a
- * fixed screen-space pip. Keeping the anchor here also makes the new sizing a
- * no-op at the threshold, so existing glyph-tier behaviour is unchanged.
- */
-export const BASE_PRESENTATION_ZOOM = GLYPH_ZOOM_THRESHOLD
-
-/** How much the glyph grows/shrinks per zoom level away from the base zoom. */
-const ZOOM_SIZE_SLOPE = 0.12
-/** Hard floor/ceiling so the glyph never collapses to nothing or swallows the map. */
-const ZOOM_SIZE_MIN = 0.7
-const ZOOM_SIZE_MAX = 1.6
-
-/**
- * Returns a continuous size multiplier for the given zoom level, anchored on
- * {@link BASE_PRESENTATION_ZOOM} so the marker's pixel size *considers the map
- * zoom* instead of being a flat screen-space constant.
- *
- * - At the base zoom the factor is exactly 1 (designed size).
- * - Above the base zoom it grows by {@link ZOOM_SIZE_SLOPE} per level, capped
- *   at {@link ZOOM_SIZE_MAX}, so zooming in makes a venue feel closer.
- * - Below the base zoom it shrinks, floored at {@link ZOOM_SIZE_MIN}, so a
- *   packed regional overview reads as tidy density rather than a collage of
- *   full-size icons.
- *
- * Pure and total (clamped, never NaN for finite input) so it can be
- * property-tested independently of the Mapbox wiring, the same way
- * {@link scaleForZoom} is.
- */
-export function zoomSizeFactor(zoom: number): number {
-  const factor = 1 + (zoom - BASE_PRESENTATION_ZOOM) * ZOOM_SIZE_SLOPE
-  return Math.min(ZOOM_SIZE_MAX, Math.max(ZOOM_SIZE_MIN, factor))
-}
 
 /** Data-layer tag for the inner element that owns the zoom transform. */
 const SCALE_LAYER = 'scale-layer'
@@ -197,17 +134,14 @@ function buildMarkerElement(
 ): HTMLDivElement {
   void node
   const cfg = STATE_CONFIG[state]
-  // Container is the Mapbox-positioned root: Mapbox writes a per-frame
-  // `transform: translate(x,y) …` onto it to geo-anchor the marker. We must
-  // NOT put a scale on this element (see applyZoomScale) - instead all visual
-  // layers live inside `scaleLayer` and the zoom scale is applied there,
-  // leaving the root's positioning translate untouched so the marker stays
-  // locked to its lng/lat as the user pans and zooms.
-  const totalSize = glyphSize * 3
+  const beamBox = beamContainerSize(state)
+  const glyphFootprint = glyphSize * 3
+  const totalSize = Math.max(glyphFootprint, beamBox.height)
+  const totalWidth = Math.max(glyphFootprint, beamBox.width)
   const container = document.createElement('div')
   container.className = 'node-marker'
   Object.assign(container.style, {
-    width: `${totalSize}px`,
+    width: `${totalWidth}px`,
     height: `${totalSize}px`,
     // Must stay 'absolute' so Mapbox's per-frame `transform: translate(x,y)`
     // geo-anchors the marker to the map origin. Mapbox's `.mapboxgl-marker`
@@ -317,6 +251,8 @@ function buildMarkerElement(
   glyphWrapper.appendChild(glyphHost)
   scaleLayer.appendChild(glyphWrapper)
 
+  ensureBeamLayers(scaleLayer, colour, state, onTap)
+
   // ── Live count badge (buzzing / popping only) ──
   // The badge shows the venue's Live_Check_In_Count (`mapStore.checkInCounts`),
   // the raw "how many people are here right now" headcount - distinct from the
@@ -414,8 +350,11 @@ function updateMarkerElement(
   isActive: boolean,
 ): void {
   const cfg = STATE_CONFIG[state]
-  const totalSize = glyphSize * 3
-  el.style.width = `${totalSize}px`
+  const beamBox = beamContainerSize(state)
+  const glyphFootprint = glyphSize * 3
+  const totalSize = Math.max(glyphFootprint, beamBox.height)
+  const totalWidth = Math.max(glyphFootprint, beamBox.width)
+  el.style.width = `${totalWidth}px`
   el.style.height = `${totalSize}px`
   // The scale-layer mirrors the container box so its centre stays on the
   // geo-anchor; new ripple/badge nodes are mounted here, not on the root.
@@ -510,6 +449,9 @@ function updateMarkerElement(
     badge.remove()
   }
 
+  const scaleLayerForBeam = (el.querySelector(`[data-layer="${SCALE_LAYER}"]`) as HTMLElement | null) ?? el
+  updateBeamLayers(scaleLayerForBeam, colour, state)
+
   applyActiveStyling(el, isActive, colour)
 }
 
@@ -541,14 +483,11 @@ export function useMapMarkers(
   const onNodeTapRef = useRef(onNodeTap)
   onNodeTapRef.current = onNodeTap
 
-  // Whether to render the detailed archetype icon (true) or a simple dot
-  // (false), driven by the live map zoom. Starts true so the default
-  // browsing zoom (13) shows icons immediately.
-  const [showIcon, setShowIcon] = useState(true)
+  // Presentation tier (beam / dot / glyph), driven by live map zoom.
+  const [presentationTier, setPresentationTier] = useState<MarkerPresentationTier>('glyph')
+  const [mapZoom, setMapZoom] = useState(GLYPH_ZOOM_THRESHOLD)
 
-  // Track zoom and flip `showIcon` when crossing the threshold. Reading via
-  // state (not a ref) lets the marker effect below re-run and re-render every
-  // glyph host when the mode changes.
+  // Track zoom and flip presentation tier when crossing thresholds.
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReady) return
@@ -560,24 +499,19 @@ export function useMapMarkers(
       } catch {
         /* map gone */
       }
+      setMapZoom(zoom)
 
-      // HTML markers don't scale with Mapbox's WebGL zoom. We apply our own
-      // zoom-aware scale (visibility ramp × size factor) to each marker's
-      // inner scale-layer - never to the Mapbox-positioned root - so markers
-      // shrink at low zoom and grow as you zoom in WITHOUT drifting off their
-      // lng/lat. Crossing a threshold only changes the scale and the glyph/dot
-      // render mode; the marker is never removed, so it stays geo-anchored
-      // (R12.4, Property 18).
+      const tier = presentationTierForZoom(zoom)
+      const dimInactive = tier === 'beam' && activeVenueId !== null
+
       for (const [, marker] of markersRef.current) {
-        applyZoomScale(marker.getElement(), zoom)
+        const el = marker.getElement()
+        applyZoomScale(el, zoom)
+        const isActive = el.dataset.active === 'true'
+        applyPresentationTier(el, tier, isActive, dimInactive)
       }
 
-      // glyph tier → detailed icon; dot/hidden tiers → category dot (the
-      // `hidden` tier additionally collapses to scale 0 above).
-      setShowIcon((prev) => {
-        const next = presentationTierForZoom(zoom) === 'glyph'
-        return prev === next ? prev : next
-      })
+      setPresentationTier((prev) => (prev === tier ? prev : tier))
     }
 
     syncFromZoom()
@@ -589,7 +523,7 @@ export function useMapMarkers(
         /* ignore */
       }
     }
-  }, [mapRef, mapReady])
+  }, [mapRef, mapReady, activeVenueId])
 
   useEffect(() => {
     const map = mapRef.current
@@ -602,10 +536,36 @@ export function useMapMarkers(
     const addMarkers = () => {
       if (cancelled) return
 
+      let curZoom = GLYPH_ZOOM_THRESHOLD
+      try {
+        curZoom = map.getZoom()
+      } catch {
+        /* ignore */
+      }
+
+      const tier = presentationTierForZoom(curZoom)
+      const showIcon = tier === 'glyph'
+      const dimInactive = tier === 'beam' && activeVenueId !== null
+
       const nodeArray = Object.values(nodes)
       const filtered = categoryFilter ? nodeArray.filter((n) => n.category === categoryFilter) : nodeArray
 
-      const filteredIds = new Set(filtered.map((n) => n.id))
+      const positionFresh = canRecenter(useLocationStore.getState().capturedAt, Date.now())
+      const mapState = useMapStore.getState()
+      const ranked = vibeRank({
+        venues: filtered,
+        pulseScores: mapState.pulseScores,
+        checkInCounts: mapState.checkInCounts,
+        lastKnownPosition: useLocationStore.getState().lastKnownPosition,
+        positionFresh,
+        consumerArchetypeId: useUserStore.getState().user?.archetypeId ?? null,
+        venueArchetypeIds: mapState.archetypeIds,
+        friendsAtVenue: mapState.friendsAtVenue,
+        hasLiveGets: mapState.hasLiveGets,
+      })
+      const beamCap = constellationVisibleIds(ranked, curZoom, activeVenueId, pulseScores)
+
+      const filteredIds = new Set(filtered.filter((n) => beamCap === null || beamCap.has(n.id)).map((n) => n.id))
 
       for (const [id, marker] of markersRef.current) {
         if (!filteredIds.has(id)) {
@@ -620,6 +580,8 @@ export function useMapMarkers(
       }
 
       for (const node of filtered) {
+        if (beamCap !== null && !beamCap.has(node.id)) continue
+
         const score = pulseScores[node.id] ?? 0
         const state = getNodeState(score)
         const liveCount = checkInCounts[node.id] ?? 0
@@ -645,6 +607,8 @@ export function useMapMarkers(
             node.category,
             showIcon,
           )
+          applyPresentationTier(existing.getElement(), tier, active, dimInactive)
+          applyZoomScale(existing.getElement(), curZoom)
           continue
         }
 
@@ -663,16 +627,8 @@ export function useMapMarkers(
           .setLngLat([node.lng, node.lat])
           .addTo(map)
 
-        // Sync scale to current zoom immediately so newly added markers don't
-        // flash at full size before the next zoom event fires. Applied to the
-        // scale-layer (inside applyZoomScale), never the positioned root.
-        let curZoom = GLYPH_ZOOM_THRESHOLD
-        try {
-          curZoom = map.getZoom()
-        } catch {
-          /* ignore */
-        }
         applyZoomScale(el, curZoom)
+        applyPresentationTier(el, tier, active, dimInactive)
 
         markersRef.current.set(node.id, marker)
         renderGlyph(glyphRootsRef.current, el, node.id, archetypeId, state, node.category, showIcon)
@@ -689,7 +645,18 @@ export function useMapMarkers(
       cancelled = true
       map.off('load', addMarkers)
     }
-  }, [nodes, pulseScores, checkInCounts, archetypeIds, categoryFilter, activeVenueId, mapRef, mapReady, showIcon])
+  }, [
+    nodes,
+    pulseScores,
+    checkInCounts,
+    archetypeIds,
+    categoryFilter,
+    activeVenueId,
+    mapRef,
+    mapReady,
+    presentationTier,
+    mapZoom,
+  ])
 
   // Tear down every glyph root on unmount so a remount of the map screen
   // doesn't leak React commits to dead DOM.

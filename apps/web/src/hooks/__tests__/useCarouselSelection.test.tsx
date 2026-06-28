@@ -335,6 +335,29 @@ describe('Feature: vibe-ranked-browse, hybrid browse scope (recommended vs area)
     expect([...result.current.carouselOrder].sort()).toEqual(['a', 'b', 'c'])
   })
 
+  it('does not flip to area scope while below MIN_MARKER_ZOOM', () => {
+    const map = mutableTightMap()
+    seedTight(map)
+    const { result } = renderHook(() => useCarouselSelection({ ...baseParams, recomputeDebounceMs: 100_000 }))
+
+    act(() => {
+      useMapStore.setState({
+        mapInstance: {
+          ...map,
+          getZoom: () => 5,
+        } as never,
+      })
+    })
+
+    act(() => result.current.notifyViewportChanged())
+    act(() => {
+      map.setCenter(-26.21, 28.04)
+      result.current.notifyViewportChanged()
+    })
+
+    expect(result.current.browseScope).toBe('recommended')
+  })
+
   it('switches to area scope on a meaningful pan, then restores recommended', () => {
     const map = mutableTightMap()
     seedTight(map)
