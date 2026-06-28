@@ -130,7 +130,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     commitZoom,
   } = selection
 
-  const { brushedNodeId, whisper } = useConstellationSweep(mapRef, mapReady)
+  const { brushedNodeId } = useConstellationSweep(mapRef, mapReady)
 
   const handleCommitZoom = useCallback(
     (node: Node) => {
@@ -416,27 +416,6 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
       {liveVibeOnMap && <LiveArchetypeSubscriber token={accessToken ?? undefined} citySlug={citySlug} />}
       <CityPulseToastMount mapReady={mapReady} />
-
-      {/* Constellation hint: first open at country zoom before a beam is tapped. */}
-      {mapReady && !mapError && carouselMode === 'closed' && !activeVenueId && (nodeList?.length ?? 0) > 0 && (
-        <div
-          className="absolute left-0 right-0 z-10 flex justify-center pointer-events-none"
-          style={{ bottom: 'calc(5.5rem + env(safe-area-inset-bottom, 0px))' }}
-        >
-          <p className="glass rounded-full px-4 py-2 text-[var(--text-secondary)] text-xs font-medium">
-            {t('map.constellationHint', 'Tap a light to explore')}
-          </p>
-        </div>
-      )}
-
-      {whisper && carouselMode === 'closed' && (
-        <div
-          className="absolute left-0 right-0 z-10 flex justify-center pointer-events-none"
-          style={{ bottom: 'calc(7.5rem + env(safe-area-inset-bottom, 0px))' }}
-        >
-          <p className="glass rounded-full px-4 py-2 text-[var(--text-primary)] text-xs font-medium">{whisper}</p>
-        </div>
-      )}
 
       {/* Peek_Carousel - the two-state browse-and-compare surface (R1.1, R2.x).
           Browse_Mode (swipeable Venue_Card strip + FlickControls) and

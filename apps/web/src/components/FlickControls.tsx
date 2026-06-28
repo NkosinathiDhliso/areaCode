@@ -34,7 +34,7 @@ function FlickControlsComponent({ disabled = false, className = '' }: FlickContr
   const step = useSelectionStore((s) => s.step)
 
   return (
-    <div className={`flex flex-row items-center justify-between ${className}`.trim()}>
+    <div className={`flex flex-row items-center justify-center gap-4 ${className}`.trim()}>
       <button
         type="button"
         onClick={() => step(-1)}
@@ -46,7 +46,6 @@ function FlickControlsComponent({ disabled = false, className = '' }: FlickContr
       >
         <ChevronLeft size={18} strokeWidth={1.75} />
       </button>
-      <span className="text-[var(--text-muted)] text-xs">{t('map.flickHint', 'Tap through venues')}</span>
       <button
         type="button"
         onClick={() => step(1)}

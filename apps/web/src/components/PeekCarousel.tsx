@@ -392,9 +392,6 @@ function BrowseMode({
         <p className="text-[var(--text-primary)] text-sm font-semibold">
           {t('map.browseEmptyTitle', 'No venues in view')}
         </p>
-        <p className="text-[var(--text-secondary)] text-xs max-w-[260px]">
-          {t('map.browseEmptyHint', 'Zoom out or move the map to find venues near you.')}
-        </p>
         {recommendedCue}
       </div>
     )

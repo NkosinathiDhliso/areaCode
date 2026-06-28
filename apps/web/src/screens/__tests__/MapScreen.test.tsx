@@ -60,7 +60,7 @@ vi.mock('../../hooks/useMapInit', () => ({
 }))
 vi.mock('../../hooks/useMapMarkers', () => ({ useMapMarkers: () => {} }))
 vi.mock('../../hooks/useConstellationSweep', () => ({
-  useConstellationSweep: () => ({ brushedNodeId: null, whisper: null }),
+  useConstellationSweep: () => ({ brushedNodeId: null }),
 }))
 vi.mock('../../hooks/useMapSockets', () => ({ useMapSockets: () => {} }))
 

@@ -229,7 +229,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
     <>
       {/* Node-flick controls: cycle through nearby venues without closing. */}
       {(onPrev || onNext) && (
-        <div className="flex flex-row items-center justify-between mb-3">
+        <div className="flex flex-row items-center justify-center gap-4 mb-3">
           <button
             onClick={onPrev}
             disabled={!onPrev}
@@ -238,7 +238,6 @@ export const NodeDetailContent = memo(function NodeDetailContent({
           >
             <ChevronLeft size={18} strokeWidth={1.75} />
           </button>
-          <span className="text-[var(--text-muted)] text-xs">{t('map.flickHint', 'Tap through venues')}</span>
           <button
             onClick={onNext}
             disabled={!onNext}

@@ -1,9 +1,6 @@
 {
   "app.name": "Area Code",
   "map.quietHere": "Quiet here | see what's happening nearby",
-  "map.tapHint": "Pick a spot",
-  "map.layerHint": "← Social  Trending  Gets →",
-  "map.firstCheckIn": "You're on the map.",
   "map.beFirst": "Be the first to check in today.",
   "venueCard.beFirst": "Be the first in",
   "venueCard.hereNow": "here now",
@@ -14,7 +11,6 @@
   "map.categories.fitness": "Fitness",
   "map.categories.arts": "Arts",
   "map.controls.cityPulse": "City Pulse",
-  "map.controls.cityPulseHint": "Live activity across every venue you can see",
   "map.controls.lift": "Lift to 3D",
   "map.controls.flatten": "Flatten",
   "map.controls.north": "Reset to north",

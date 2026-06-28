@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 
 import { DRAG_AXIS_THRESHOLD, MIN_MARKER_ZOOM } from '../lib/carouselConstants'
 import { classifyDrag } from '../lib/gestureClassifier'
-import { getNodeState } from '../lib/mapHelpers'
 
 const SWEEP_HIT_PX = 44
 
@@ -13,30 +12,12 @@ function detectReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
-function whisperForNode(
-  nodeId: string,
-  pulseScores: Record<string, number>,
-  checkInCounts: Record<string, number>,
-  friendsAtVenue: Record<string, string[]>,
-): string {
-  const score = pulseScores[nodeId] ?? 0
-  const state = getNodeState(score)
-  const friends = friendsAtVenue[nodeId]?.length ?? 0
-  if (friends > 0) return 'Buzzing · your crowd'
-  if (state === 'popping' || state === 'buzzing') return `${state === 'popping' ? 'Popping' : 'Buzzing'} · people here`
-  if (state === 'active') return 'Active now'
-  const count = checkInCounts[nodeId] ?? 0
-  if (count > 0) return `${count} here now`
-  return 'Quiet · be first'
-}
-
 /**
- * Constellation play layer: horizontal sweeps brighten nearby beams and show a
- * one-line magnet whisper. Does not select venues or flip browse scope.
+ * Constellation play layer: horizontal sweeps brighten nearby beams.
+ * Does not select venues or flip browse scope.
  */
 export function useConstellationSweep(mapRef: RefObject<mapboxgl.Map | null>, mapReady: boolean) {
   const [brushedNodeId, setBrushedNodeId] = useState<string | null>(null)
-  const [whisper, setWhisper] = useState<string | null>(null)
   const dragStartRef = useRef<{ x: number; y: number } | null>(null)
   const lastVibratedRef = useRef<string | null>(null)
   const reducedMotionRef = useRef(detectReducedMotion())
@@ -62,7 +43,6 @@ export function useConstellationSweep(mapRef: RefObject<mapboxgl.Map | null>, ma
       }
       if (zoom >= MIN_MARKER_ZOOM) {
         setBrushedNodeId(null)
-        setWhisper(null)
         return
       }
 
@@ -70,7 +50,6 @@ export function useConstellationSweep(mapRef: RefObject<mapboxgl.Map | null>, ma
       const dy = e.clientY - start.y
       if (classifyDrag(dx, dy, DRAG_AXIS_THRESHOLD) !== 'horizontal') {
         setBrushedNodeId(null)
-        setWhisper(null)
         return
       }
 
@@ -89,26 +68,21 @@ export function useConstellationSweep(mapRef: RefObject<mapboxgl.Map | null>, ma
       }
 
       setBrushedNodeId(nearestId)
-      if (nearestId) {
-        setWhisper(whisperForNode(nearestId, mapState.pulseScores, mapState.checkInCounts, mapState.friendsAtVenue))
-        if (
-          !reducedMotionRef.current &&
-          typeof navigator !== 'undefined' &&
-          navigator.vibrate &&
-          lastVibratedRef.current !== nearestId
-        ) {
-          navigator.vibrate(8)
-          lastVibratedRef.current = nearestId
-        }
-      } else {
-        setWhisper(null)
+      if (
+        nearestId &&
+        !reducedMotionRef.current &&
+        typeof navigator !== 'undefined' &&
+        navigator.vibrate &&
+        lastVibratedRef.current !== nearestId
+      ) {
+        navigator.vibrate(8)
+        lastVibratedRef.current = nearestId
       }
     }
 
     const onUp = () => {
       dragStartRef.current = null
       setBrushedNodeId(null)
-      setWhisper(null)
       lastVibratedRef.current = null
     }
 
@@ -124,5 +98,5 @@ export function useConstellationSweep(mapRef: RefObject<mapboxgl.Map | null>, ma
     }
   }, [mapRef, mapReady])
 
-  return { brushedNodeId, whisper }
+  return { brushedNodeId }
 }
