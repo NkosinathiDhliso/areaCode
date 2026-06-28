@@ -217,6 +217,13 @@ export interface Node {
    * absent.
    */
   liveArchetypeId?: string | null
+  /**
+   * Optional pulse seed from `GET /v1/nodes/:citySlug` so Constellation beams
+   * render aliveness on first paint before the first socket event.
+   */
+  pulseScore?: number
+  /** Live presence count seeded from the nodes list (honest read model). */
+  liveCheckInCount?: number
 }
 
 export interface PulseScore {

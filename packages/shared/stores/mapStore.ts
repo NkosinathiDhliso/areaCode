@@ -91,6 +91,12 @@ export const useMapStore = create<MapStore>()(
       set((state) => {
         for (const node of nodes) {
           state.nodes[node.id] = node
+          if (node.pulseScore !== undefined) {
+            state.pulseScores[node.id] = node.pulseScore
+          }
+          if (node.liveCheckInCount !== undefined) {
+            state.checkInCounts[node.id] = node.liveCheckInCount
+          }
         }
       }),
     addNode: (node) =>

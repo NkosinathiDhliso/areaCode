@@ -112,6 +112,10 @@ export interface UseCarouselSelectionResult {
   enterCommit: () => void
   /** Return to Browse_Mode (preserves Active_Venue). */
   enterBrowse: () => void
+  /** Fly to venue zoom and enter full Browse_Mode from Constellation peek. */
+  commitZoom: (opts?: { skipFly?: boolean }) => void
+  /** Venues in the carousel order excluding the active one (Constellation peek). */
+  nearbyCount: number
   /** Dismiss the carousel, clearing the Active_Venue. */
   dismiss: () => void
   /** The most recently dismissed venue id, retained for re-open. Null if none. */
@@ -224,6 +228,7 @@ export function useCarouselSelection({
   const stepRaw = useSelectionStore((s) => s.step)
   const enterCommit = useSelectionStore((s) => s.enterCommit)
   const enterBrowse = useSelectionStore((s) => s.enterBrowse)
+  const enterConstellation = useSelectionStore((s) => s.enterConstellation)
   const dismiss = useSelectionStore((s) => s.dismiss)
   const reopenLastRaw = useSelectionStore((s) => s.reopenLast)
   const setOrder = useSelectionStore((s) => s.setOrder)
@@ -410,7 +415,16 @@ export function useCarouselSelection({
     } catch {
       /* map read failed - treat as already-zoomed, don't force a zoom */
     }
-    if (currentZoom < MIN_MARKER_ZOOM) arrivalZoom = MAP_ARRIVAL_ZOOM
+    if (currentZoom < MIN_MARKER_ZOOM) {
+      if (openedFromFocus) {
+        arrivalZoom = MAP_ARRIVAL_ZOOM
+      } else {
+        // Constellation: pan-only toward the venue, preserve country zoom.
+        moveCameraToActive(map, node, { reducedMotion: reducedMotionValue })
+        ;(map as MapWithOnce).once?.('moveend', snapshotViewport)
+        return
+      }
+    }
 
     moveCameraToActive(map, node, {
       reducedMotion: reducedMotionValue,
@@ -419,7 +433,35 @@ export function useCarouselSelection({
     // Refresh the exploration baseline after the fly-to settles so a later
     // micro-drag is not measured against the pre-selection viewport.
     ;(map as MapWithOnce).once?.('moveend', snapshotViewport)
-  }, [activeVenueId, reducedMotionValue, mapReady, snapshotViewport])
+  }, [activeVenueId, reducedMotionValue, mapReady, snapshotViewport, openedFromFocus])
+
+  const commitZoom = useCallback(
+    (opts?: { skipFly?: boolean }) => {
+      const id = useSelectionStore.getState().activeVenueId
+      if (!id) return
+      const map = useMapStore.getState().mapInstance
+      const node = useMapStore.getState().nodes[id]
+      if (!opts?.skipFly && map && node) {
+        moveCameraToActive(map, node, { reducedMotion: reducedMotionValue, zoom: MAP_ARRIVAL_ZOOM })
+        ;(map as MapWithOnce).once?.('moveend', snapshotViewport)
+      }
+      enterBrowse()
+    },
+    [reducedMotionValue, enterBrowse, snapshotViewport],
+  )
+
+  // Browse at country zoom → Constellation peek (except Focus_Signal dives).
+  useEffect(() => {
+    if (mode !== 'browse' || activeVenueId === null || !mapReady || openedFromFocus) return
+    const map = useMapStore.getState().mapInstance
+    let zoom = MAP_ARRIVAL_ZOOM
+    try {
+      zoom = map?.getZoom?.() ?? MAP_ARRIVAL_ZOOM
+    } catch {
+      return
+    }
+    if (zoom < MIN_MARKER_ZOOM) enterConstellation()
+  }, [mode, activeVenueId, mapReady, openedFromFocus, enterConstellation])
 
   // ── Focus_Signal consumption ──────────────────────────────────────────────
   //
@@ -462,17 +504,31 @@ export function useCarouselSelection({
   const onMarkerTap = useCallback(
     (nodeId: string) => {
       selectVenueRaw(nodeId, 'marker')
+      let zoom = MAP_ARRIVAL_ZOOM
+      try {
+        zoom = useMapStore.getState().mapInstance?.getZoom?.() ?? MAP_ARRIVAL_ZOOM
+      } catch {
+        /* ignore */
+      }
+      if (zoom < MIN_MARKER_ZOOM) enterConstellation()
       recomputeOrder()
     },
-    [selectVenueRaw, recomputeOrder],
+    [selectVenueRaw, recomputeOrder, enterConstellation],
   )
 
   const onSearchSelect = useCallback(
     (nodeId: string) => {
       selectVenueRaw(nodeId, 'search')
+      let zoom = MAP_ARRIVAL_ZOOM
+      try {
+        zoom = useMapStore.getState().mapInstance?.getZoom?.() ?? MAP_ARRIVAL_ZOOM
+      } catch {
+        /* ignore */
+      }
+      if (zoom < MIN_MARKER_ZOOM) enterConstellation()
       recomputeOrder()
     },
-    [selectVenueRaw, recomputeOrder],
+    [selectVenueRaw, recomputeOrder, enterConstellation],
   )
 
   const setSwipeInProgress = useCallback(
@@ -560,6 +616,8 @@ export function useCarouselSelection({
     [activeVenue, checkInCounts, pulseScores, archetypeIds],
   )
 
+  const nearbyCount = Math.max(0, carouselOrder.length - (activeVenueId ? 1 : 0))
+
   return {
     activeVenueId,
     activeVenue,
@@ -575,6 +633,8 @@ export function useCarouselSelection({
     onSearchSelect,
     enterCommit,
     enterBrowse,
+    commitZoom,
+    nearbyCount,
     dismiss,
     lastVenueId,
     reopenLast,

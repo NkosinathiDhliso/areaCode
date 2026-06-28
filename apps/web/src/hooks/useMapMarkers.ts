@@ -3,7 +3,7 @@ import { useLocationStore, useMapStore } from '@area-code/shared/stores'
 import { useUserStore } from '@area-code/shared/stores/userStore'
 import type { Node, NodeCategory, NodeState } from '@area-code/shared/types'
 import mapboxgl from 'mapbox-gl'
-import { createElement, useEffect, useRef, useState } from 'react'
+import { createElement, useCallback, useEffect, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 
 import { ArchetypeGlyph } from '../components/ArchetypeGlyph'
@@ -11,7 +11,13 @@ import { canRecenter } from '../lib/cameraControl'
 import { DEFAULT_ARCHETYPE_ID, GLYPH_ZOOM_THRESHOLD } from '../lib/carouselConstants'
 import { vibeRank } from '../lib/carouselRanking'
 import { getNodeState, getCategoryColour } from '../lib/mapHelpers'
-import { beamContainerSize, ensureBeamLayers, updateBeamLayers, applyPresentationTier } from '../lib/markerBeam'
+import {
+  beamContainerSize,
+  ensureBeamLayers,
+  updateBeamLayers,
+  applyPresentationTier,
+  type BeamVisualOptions,
+} from '../lib/markerBeam'
 import {
   BASE_PRESENTATION_ZOOM,
   constellationVisibleIds,
@@ -131,6 +137,8 @@ function buildMarkerElement(
   liveCount: number,
   isActive: boolean,
   onTap: () => void,
+  beamOptions: BeamVisualOptions = {},
+  onCommitZoom?: () => void,
 ): HTMLDivElement {
   void node
   const cfg = STATE_CONFIG[state]
@@ -251,7 +259,23 @@ function buildMarkerElement(
   glyphWrapper.appendChild(glyphHost)
   scaleLayer.appendChild(glyphWrapper)
 
-  ensureBeamLayers(scaleLayer, colour, state, onTap)
+  let lastBeamTapAt = 0
+  ensureBeamLayers(
+    scaleLayer,
+    colour,
+    state,
+    () => {
+      const now = Date.now()
+      if (now - lastBeamTapAt < 350 && onCommitZoom) {
+        lastBeamTapAt = 0
+        onCommitZoom()
+        return
+      }
+      lastBeamTapAt = now
+      onTap()
+    },
+    beamOptions,
+  )
 
   // ── Live count badge (buzzing / popping only) ──
   // The badge shows the venue's Live_Check_In_Count (`mapStore.checkInCounts`),
@@ -348,6 +372,7 @@ function updateMarkerElement(
   state: NodeState,
   liveCount: number,
   isActive: boolean,
+  beamOptions: BeamVisualOptions = {},
 ): void {
   const cfg = STATE_CONFIG[state]
   const beamBox = beamContainerSize(state)
@@ -450,10 +475,19 @@ function updateMarkerElement(
   }
 
   const scaleLayerForBeam = (el.querySelector(`[data-layer="${SCALE_LAYER}"]`) as HTMLElement | null) ?? el
-  updateBeamLayers(scaleLayerForBeam, colour, state)
+  updateBeamLayers(scaleLayerForBeam, colour, state, beamOptions)
 
   applyActiveStyling(el, isActive, colour)
 }
+
+export interface MapMarkerExtras {
+  is3D?: boolean
+  brushedNodeId?: string | null
+  onCommitZoom?: (node: Node) => void
+}
+
+/** 3D pitch multiplier for Constellation beam height (matches useMapInit). */
+const BEAM_PITCH_SCALE_3D = 1.35
 
 /**
  * Manages Mapbox markers for nodes. The marker is the Archetype_Glyph
@@ -469,11 +503,15 @@ export function useMapMarkers(
   onNodeTap: (node: Node) => void,
   mapReady = false,
   activeVenueId: string | null = null,
+  extras: MapMarkerExtras = {},
 ) {
+  const { is3D = true, brushedNodeId = null, onCommitZoom } = extras
   const nodes = useMapStore((s) => s.nodes)
   const pulseScores = useMapStore((s) => s.pulseScores)
   const checkInCounts = useMapStore((s) => s.checkInCounts)
   const archetypeIds = useMapStore((s) => s.archetypeIds)
+  const hasLiveGets = useMapStore((s) => s.hasLiveGets)
+  const consumerArchetypeId = useUserStore((s) => s.user?.archetypeId ?? null)
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map())
   // Per-marker React roots used to render <ArchetypeGlyph> inside each
   // marker. Tracked in parallel with `markersRef` so we can unmount the
@@ -482,6 +520,22 @@ export function useMapMarkers(
   // Keep a stable ref to the latest onNodeTap so marker click handlers are never stale
   const onNodeTapRef = useRef(onNodeTap)
   onNodeTapRef.current = onNodeTap
+  const onCommitZoomRef = useRef(onCommitZoom)
+  onCommitZoomRef.current = onCommitZoom
+
+  const beamOptionsFor = useCallback(
+    (nodeId: string): BeamVisualOptions => {
+      const node = nodes[nodeId]
+      const venueArchetype = archetypeIds[nodeId] ?? node?.defaultArchetypeId ?? null
+      return {
+        pitchScale: is3D ? BEAM_PITCH_SCALE_3D : 1,
+        tasteMatch: !!(consumerArchetypeId && venueArchetype && consumerArchetypeId === venueArchetype),
+        hasLiveGet: !!hasLiveGets[nodeId],
+        brushed: brushedNodeId === nodeId,
+      }
+    },
+    [nodes, archetypeIds, consumerArchetypeId, hasLiveGets, is3D, brushedNodeId],
+  )
 
   // Presentation tier (beam / dot / glyph), driven by live map zoom.
   const [presentationTier, setPresentationTier] = useState<MarkerPresentationTier>('glyph')
@@ -597,7 +651,15 @@ export function useMapMarkers(
 
         if (existing) {
           existing.setLngLat([node.lng, node.lat])
-          updateMarkerElement(existing.getElement(), glyphSize, colour, state, liveCount, active)
+          updateMarkerElement(
+            existing.getElement(),
+            glyphSize,
+            colour,
+            state,
+            liveCount,
+            active,
+            beamOptionsFor(node.id),
+          )
           renderGlyph(
             glyphRootsRef.current,
             existing.getElement(),
@@ -612,9 +674,17 @@ export function useMapMarkers(
           continue
         }
 
-        const el = buildMarkerElement(node, glyphSize, colour, state, liveCount, active, () => {
-          onNodeTapRef.current(node)
-        })
+        const el = buildMarkerElement(
+          node,
+          glyphSize,
+          colour,
+          state,
+          liveCount,
+          active,
+          () => onNodeTapRef.current(node),
+          beamOptionsFor(node.id),
+          () => onCommitZoomRef.current?.(node),
+        )
 
         const marker = new mapboxgl.Marker({
           element: el,
@@ -656,6 +726,11 @@ export function useMapMarkers(
     mapReady,
     presentationTier,
     mapZoom,
+    is3D,
+    brushedNodeId,
+    hasLiveGets,
+    consumerArchetypeId,
+    beamOptionsFor,
   ])
 
   // Tear down every glyph root on unmount so a remount of the map screen

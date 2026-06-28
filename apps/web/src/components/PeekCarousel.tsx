@@ -110,6 +110,8 @@ export function PeekCarousel({
     selectVenue,
     enterCommit,
     enterBrowse,
+    commitZoom,
+    nearbyCount,
     dismiss,
     setSwipeInProgress,
     browseScope,
@@ -200,6 +202,11 @@ export function PeekCarousel({
       return
     }
 
+    if (mode === 'constellation') {
+      if (axis === 'vertical' && dy > 0) dismiss()
+      return
+    }
+
     // Browse_Mode.
     if (axis === 'horizontal') {
       // R7.1: horizontal → Carousel_Swipe; never dismiss. Swiping left (dx < 0)
@@ -243,7 +250,15 @@ export function PeekCarousel({
           {announcement}
         </div>
 
-        {mode === 'browse' ? (
+        {mode === 'constellation' && activeVenueVM ? (
+          <ConstellationMode
+            vm={activeVenueVM}
+            nearbyCount={nearbyCount}
+            nodeCategory={nodes[activeVenueVM.id]?.category ?? null}
+            onZoomIn={() => commitZoom()}
+            onDismiss={dismiss}
+          />
+        ) : mode === 'browse' ? (
           <BrowseMode
             carouselOrderVMs={visibleVMs}
             activeVenueId={activeVenueId}
@@ -276,6 +291,49 @@ export function PeekCarousel({
         )}
       </div>
     </BottomSheet>
+  )
+}
+
+// ─── Constellation peek (country zoom) ─────────────────────────────────────
+
+interface ConstellationModeProps {
+  vm: NonNullable<UseCarouselSelectionResult['activeVenueVM']>
+  nearbyCount: number
+  nodeCategory: NodeCategory | null
+  onZoomIn: () => void
+  onDismiss: () => void
+}
+
+function ConstellationMode({ vm, nearbyCount, nodeCategory, onZoomIn, onDismiss }: ConstellationModeProps) {
+  const { t } = useTranslation()
+
+  return (
+    <div className="flex flex-col gap-3">
+      {nodeCategory && (
+        <div className="w-full max-w-[280px] mx-auto">
+          <VenueCard vm={vm} category={nodeCategory} isActive onSelect={() => {}} />
+        </div>
+      )}
+      {nearbyCount > 0 && (
+        <p className="text-center text-[var(--text-secondary)] text-xs">
+          {t('map.constellationMoreNearby', '{{count}} more nearby', { count: nearbyCount })}
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={onZoomIn}
+        className="w-full flex items-center justify-center gap-2 bg-[var(--accent)] text-white font-semibold rounded-xl py-3 text-sm transition-all duration-150 active:scale-95"
+      >
+        {t('map.zoomIn', 'Zoom in')}
+      </button>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="w-full text-[var(--text-secondary)] text-xs font-medium py-1 active:scale-95"
+      >
+        {t('map.dismissPeek', 'Not now')}
+      </button>
+    </div>
   )
 }
 

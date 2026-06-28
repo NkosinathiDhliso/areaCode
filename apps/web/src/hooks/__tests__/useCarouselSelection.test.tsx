@@ -215,16 +215,31 @@ describe('Feature: live-vibe-on-map, cold-open arrival zoom', () => {
     })
   }
 
-  it('zooms to MAP_ARRIVAL_ZOOM on the first move when the map is still on the country overview', () => {
+  it('pans without zoom at country overview (Constellation peek)', () => {
     const map = coldOpenMap(5)
     seedWithMap(map)
     const { result } = renderHook(() => useCarouselSelection({ ...baseParams, recomputeDebounceMs: 100_000 }))
     map.flyTo.mockClear()
 
-    act(() => result.current.selectVenue('a', 'marker'))
+    act(() => result.current.onMarkerTap('a'))
 
-    // The first cold-open camera move carries the arrival zoom.
+    expect(map.flyTo).toHaveBeenCalled()
+    expect(map.flyTo.mock.calls.every((c) => c[0]?.zoom === undefined)).toBe(true)
+    expect(useSelectionStore.getState().mode).toBe('constellation')
+  })
+
+  it('commitZoom flies to MAP_ARRIVAL_ZOOM from Constellation peek', () => {
+    const map = coldOpenMap(5)
+    seedWithMap(map)
+    const { result } = renderHook(() => useCarouselSelection({ ...baseParams, recomputeDebounceMs: 100_000 }))
+    map.flyTo.mockClear()
+
+    act(() => result.current.onMarkerTap('a'))
+    map.flyTo.mockClear()
+    act(() => result.current.commitZoom())
+
     expect(map.flyTo.mock.calls.some((c) => c[0]?.zoom === MAP_ARRIVAL_ZOOM)).toBe(true)
+    expect(useSelectionStore.getState().mode).toBe('browse')
   })
 
   it('does NOT force a zoom on the first move when the map is already zoomed in (warm open)', () => {
@@ -240,19 +255,17 @@ describe('Feature: live-vibe-on-map, cold-open arrival zoom', () => {
     expect(map.flyTo.mock.calls.every((c) => c[0]?.zoom === undefined)).toBe(true)
   })
 
-  it('preserves zoom on subsequent browse moves after the cold-open arrival', () => {
+  it('preserves zoom on subsequent browse moves after Constellation commit', () => {
     const map = coldOpenMap(5)
     seedWithMap(map)
     const { result } = renderHook(() => useCarouselSelection({ ...baseParams, recomputeDebounceMs: 100_000 }))
     map.flyTo.mockClear()
 
-    act(() => result.current.selectVenue('a', 'marker'))
-    expect(map.flyTo.mock.calls.some((c) => c[0]?.zoom === MAP_ARRIVAL_ZOOM)).toBe(true)
-
+    act(() => result.current.onMarkerTap('a'))
+    act(() => result.current.commitZoom())
     const callsAfterArrival = map.flyTo.mock.calls.length
     act(() => result.current.selectVenue('b', 'marker'))
 
-    // Every browse move after arrival omits zoom (preserves the user's zoom).
     const browseCalls = map.flyTo.mock.calls.slice(callsAfterArrival)
     expect(browseCalls.length).toBeGreaterThan(0)
     expect(browseCalls.every((c) => c[0]?.zoom === undefined)).toBe(true)

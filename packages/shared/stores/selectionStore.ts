@@ -17,8 +17,8 @@ import { immer } from 'zustand/middleware/immer'
 /** The source that triggered an Active_Venue selection. */
 export type SelectionSource = 'swipe' | 'flick' | 'marker' | 'search' | 'focus'
 
-/** The two open states of Peek_Carousel plus the closed state. */
-export type SelectionMode = 'closed' | 'browse' | 'commit'
+/** Peek_Carousel modes plus closed. `constellation` = country-zoom peek sheet. */
+export type SelectionMode = 'closed' | 'constellation' | 'browse' | 'commit'
 
 export interface SelectionState {
   activeVenueId: string | null
@@ -36,6 +36,8 @@ export interface SelectionState {
   step: (dir: 1 | -1) => void
   enterCommit: () => void
   enterBrowse: () => void
+  /** Country-zoom peek: one card + "Zoom in", no check-in (constellation-mode.md). */
+  enterConstellation: () => void
   dismiss: () => void
   /**
    * Re-open the carousel (in Browse_Mode) on the {@link lastVenueId} retained
@@ -122,6 +124,13 @@ export const useSelectionStore = create<SelectionState>()(
       set((state) => {
         if (state.activeVenueId !== null) {
           state.mode = 'browse'
+        }
+      }),
+
+    enterConstellation: () =>
+      set((state) => {
+        if (state.activeVenueId !== null) {
+          state.mode = 'constellation'
         }
       }),
 

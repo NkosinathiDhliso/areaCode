@@ -25,6 +25,8 @@ import { SearchSheet, type SearchResult } from '../components/SearchSheet'
 import { SignupSheet } from '../components/SignupSheet'
 import { ToastOverlay } from '../components/ToastOverlay'
 import { useCarouselSelection } from '../hooks/useCarouselSelection'
+import { useConstellationSweep } from '../hooks/useConstellationSweep'
+import { MIN_MARKER_ZOOM } from '../lib/carouselConstants'
 import { useCheckInFlow } from '../hooks/useCheckInFlow'
 import { useHasLiveGets } from '../hooks/useHasLiveGets'
 import { useMapInit } from '../hooks/useMapInit'
@@ -125,7 +127,20 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     onSearchSelect,
     dismiss,
     mode: carouselMode,
+    commitZoom,
   } = selection
+
+  const { brushedNodeId, whisper } = useConstellationSweep(mapRef, mapReady)
+
+  const handleCommitZoom = useCallback(
+    (node: Node) => {
+      if (useSelectionStore.getState().activeVenueId !== node.id) {
+        onMarkerTap(node.id)
+      }
+      commitZoom()
+    },
+    [onMarkerTap, commitZoom],
+  )
 
   // Socket subscriptions, citySlug passed for anonymous room join
   useMapSockets(citySlug, accessToken ?? undefined, userId)
@@ -192,7 +207,29 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     [onMarkerTap],
   )
 
-  useMapMarkers(mapRef, categoryFilter, handleMarkerTap, mapReady, activeVenueId)
+  useMapMarkers(mapRef, categoryFilter, handleMarkerTap, mapReady, activeVenueId, {
+    is3D,
+    brushedNodeId,
+    onCommitZoom: handleCommitZoom,
+  })
+
+  // Pinch past Embers while in Constellation peek → full browse funnel.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady) return
+    const handler = () => {
+      if (carouselMode !== 'constellation') return
+      if (map.getZoom() >= MIN_MARKER_ZOOM) commitZoom({ skipFly: true })
+    }
+    map.on('zoomend', handler)
+    return () => {
+      try {
+        map.off('zoomend', handler)
+      } catch {
+        /* map torn down */
+      }
+    }
+  }, [mapRef, mapReady, carouselMode, commitZoom])
 
   // ── Viewport-change recompute ──
   // User pan/zoom recomputes the Carousel_Order in `area` scope (R6.2). Only
@@ -389,6 +426,15 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
           <p className="glass rounded-full px-4 py-2 text-[var(--text-secondary)] text-xs font-medium">
             {t('map.constellationHint', 'Tap a light to explore')}
           </p>
+        </div>
+      )}
+
+      {whisper && carouselMode === 'closed' && (
+        <div
+          className="absolute left-0 right-0 z-10 flex justify-center pointer-events-none"
+          style={{ bottom: 'calc(7.5rem + env(safe-area-inset-bottom, 0px))' }}
+        >
+          <p className="glass rounded-full px-4 py-2 text-[var(--text-primary)] text-xs font-medium">{whisper}</p>
         </div>
       )}
 

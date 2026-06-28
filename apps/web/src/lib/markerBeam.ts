@@ -10,6 +10,18 @@ import type { MarkerPresentationTier } from './markerPresentation'
 export const BEAM_COLUMN_LAYER = 'beam-column'
 export const BEAM_HIT_LAYER = 'beam-hit'
 
+/** Optional Constellation beam embellishments (Phase D/E). */
+export interface BeamVisualOptions {
+  /** 3D pitch scales pillar height; flat map uses 1. */
+  pitchScale?: number
+  /** Consumer taste matches venue live archetype. */
+  tasteMatch?: boolean
+  /** Venue has a live event/offer get. */
+  hasLiveGet?: boolean
+  /** Finger sweep proximity brighten. */
+  brushed?: boolean
+}
+
 /** Pillar height (px) by Pulse_State — aliveness only, not business tier. */
 const BEAM_HEIGHT: Record<NodeState, number> = {
   dormant: 44,
@@ -17,6 +29,10 @@ const BEAM_HEIGHT: Record<NodeState, number> = {
   active: 72,
   buzzing: 92,
   popping: 112,
+}
+
+function scaledBeamHeight(state: NodeState, pitchScale: number): number {
+  return Math.round(BEAM_HEIGHT[state] * pitchScale)
 }
 
 const BEAM_ANIM: Record<NodeState, { animation: string; speed: string }> = {
@@ -49,11 +65,84 @@ function beamGradient(colour: string): string {
   return `linear-gradient(to top, ${colour} 0%, ${colour}88 18%, ${colour}33 55%, transparent 100%)`
 }
 
+function applyBeamEmbellishments(
+  hit: HTMLElement,
+  colour: string,
+  options: BeamVisualOptions,
+  reducedMotion: boolean,
+): void {
+  let aurora = hit.querySelector('[data-layer="beam-aurora"]') as HTMLElement | null
+  if (options.tasteMatch) {
+    if (!aurora) {
+      aurora = document.createElement('div')
+      aurora.dataset.layer = 'beam-aurora'
+      hit.appendChild(aurora)
+    }
+    Object.assign(aurora.style, {
+      position: 'absolute',
+      bottom: '0',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      width: '14px',
+      height: '100%',
+      borderRadius: '9999px',
+      background: `linear-gradient(to top, transparent, ${colour}55, transparent)`,
+      filter: 'blur(4px)',
+      pointerEvents: 'none',
+      opacity: '0.85',
+    })
+  } else if (aurora) {
+    aurora.remove()
+  }
+
+  let comet = hit.querySelector('[data-layer="beam-comet"]') as HTMLElement | null
+  if (options.hasLiveGet) {
+    if (!comet) {
+      comet = document.createElement('div')
+      comet.dataset.layer = 'beam-comet'
+      hit.appendChild(comet)
+    }
+    Object.assign(comet.style, {
+      position: 'absolute',
+      top: '4px',
+      left: '50%',
+      width: '2px',
+      height: '18px',
+      transform: 'translateX(-50%) rotate(-25deg)',
+      background: `linear-gradient(to bottom, #fff, ${colour})`,
+      borderRadius: '9999px',
+      opacity: '0.9',
+      pointerEvents: 'none',
+      animation: reducedMotion ? 'none' : 'pulse 0.6s ease-in-out infinite',
+    })
+  } else if (comet) {
+    comet.remove()
+  }
+
+  if (options.brushed) {
+    hit.style.filter = 'brightness(1.35)'
+  } else {
+    hit.style.filter = ''
+  }
+}
+
+function resolveBeamOpacity(state: NodeState, options?: BeamVisualOptions): number {
+  let opacity = BEAM_OPACITY[state]
+  if (options?.brushed) opacity = Math.min(1, opacity + 0.2)
+  return opacity
+}
+
 /**
  * Append the beam column and hit target inside {@link scaleLayer}.
  * Idempotent if layers already exist.
  */
-export function ensureBeamLayers(scaleLayer: HTMLElement, colour: string, state: NodeState, onTap: () => void): void {
+export function ensureBeamLayers(
+  scaleLayer: HTMLElement,
+  colour: string,
+  state: NodeState,
+  onTap: () => void,
+  options: BeamVisualOptions = {},
+): void {
   let hit = scaleLayer.querySelector(`[data-layer="${BEAM_HIT_LAYER}"]`) as HTMLElement | null
   if (!hit) {
     hit = document.createElement('div')
@@ -75,9 +164,11 @@ export function ensureBeamLayers(scaleLayer: HTMLElement, colour: string, state:
     hit.appendChild(column)
   }
 
-  const beamH = beamHeightForState(state)
-  const opacity = BEAM_OPACITY[state]
+  const pitchScale = options.pitchScale ?? 1
+  const beamH = scaledBeamHeight(state, pitchScale)
+  const opacity = resolveBeamOpacity(state, options)
   const anim = BEAM_ANIM[state]
+  const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
   Object.assign(hit.style, {
     position: 'absolute',
@@ -102,10 +193,9 @@ export function ensureBeamLayers(scaleLayer: HTMLElement, colour: string, state:
     boxShadow: `0 0 12px ${colour}66, 0 0 24px ${colour}33`,
     pointerEvents: 'none',
     transformOrigin: 'bottom center',
-    animation: `${anim.animation} ${anim.speed} ease-in-out infinite`,
+    animation: reducedMotion ? 'none' : `${anim.animation} ${anim.speed} ease-in-out infinite`,
   })
 
-  // Ground glow at the anchor point.
   let glow = hit.querySelector('[data-layer="beam-glow"]') as HTMLElement | null
   if (!glow) {
     glow = document.createElement('div')
@@ -124,16 +214,25 @@ export function ensureBeamLayers(scaleLayer: HTMLElement, colour: string, state:
     opacity: String(Math.min(1, opacity + 0.15)),
     pointerEvents: 'none',
   })
+
+  applyBeamEmbellishments(hit, colour, options, reducedMotion)
 }
 
-export function updateBeamLayers(scaleLayer: HTMLElement, colour: string, state: NodeState): void {
+export function updateBeamLayers(
+  scaleLayer: HTMLElement,
+  colour: string,
+  state: NodeState,
+  options: BeamVisualOptions = {},
+): void {
   const hit = scaleLayer.querySelector(`[data-layer="${BEAM_HIT_LAYER}"]`) as HTMLElement | null
   if (!hit) return
   const column = hit.querySelector(`[data-layer="${BEAM_COLUMN_LAYER}"]`) as HTMLElement | null
   const glow = hit.querySelector('[data-layer="beam-glow"]') as HTMLElement | null
-  const beamH = beamHeightForState(state)
-  const opacity = BEAM_OPACITY[state]
+  const pitchScale = options.pitchScale ?? 1
+  const beamH = scaledBeamHeight(state, pitchScale)
+  const opacity = resolveBeamOpacity(state, options)
   const anim = BEAM_ANIM[state]
+  const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
   Object.assign(hit.style, { height: `${beamH + 8}px` })
   if (column) {
@@ -142,7 +241,7 @@ export function updateBeamLayers(scaleLayer: HTMLElement, colour: string, state:
       background: beamGradient(colour),
       opacity: String(opacity),
       boxShadow: `0 0 12px ${colour}66, 0 0 24px ${colour}33`,
-      animation: `${anim.animation} ${anim.speed} ease-in-out infinite`,
+      animation: reducedMotion ? 'none' : `${anim.animation} ${anim.speed} ease-in-out infinite`,
     })
   }
   if (glow) {
@@ -151,6 +250,7 @@ export function updateBeamLayers(scaleLayer: HTMLElement, colour: string, state:
       opacity: String(Math.min(1, opacity + 0.15)),
     })
   }
+  applyBeamEmbellishments(hit, colour, options, reducedMotion)
 }
 
 /**

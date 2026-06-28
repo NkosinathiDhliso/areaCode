@@ -184,9 +184,36 @@ const DEV_NODES = [
 
 export async function getNodesByCitySlug(citySlug: string) {
   if (DEV_MODE) {
-    return DEV_NODES.filter((n) => n.citySlug === citySlug)
+    return DEV_NODES.filter((n) => n.citySlug === citySlug).map((n) => ({
+      id: n.id,
+      name: n.name,
+      slug: n.slug,
+      category: n.category,
+      lat: n.lat,
+      lng: n.lng,
+      claimStatus: 'claimed' as const,
+      nodeColour: '#888',
+      nodeIcon: null,
+      isVerified: true,
+      businessTier: 'starter' as const,
+      pulseScore: n.pulseScore,
+      liveCheckInCount: n.pulseScore >= 31 ? Math.max(1, Math.round(n.pulseScore / 10)) : 0,
+    }))
   }
-  return repo.getNodesByCitySlug(citySlug)
+
+  const city = await repo.getCityBySlug(citySlug)
+  const nodes = await repo.getNodesByCitySlug(citySlug)
+  if (!city || nodes.length === 0) return nodes
+
+  const now = Math.floor(Date.now() / 1000)
+  return Promise.all(
+    nodes.map(async (node) => {
+      const scoreStr = await kvGet(`pulse:${city.id}:${node.id}`)
+      const pulseScore = scoreStr ? parseFloat(scoreStr) : 0
+      const liveCheckInCount = await getLivePresenceCount(node.id, now)
+      return { ...node, pulseScore, liveCheckInCount }
+    }),
+  )
 }
 
 export async function getNodeDetail(nodeId: string) {

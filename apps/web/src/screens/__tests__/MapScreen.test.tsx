@@ -59,6 +59,9 @@ vi.mock('../../hooks/useMapInit', () => ({
   }),
 }))
 vi.mock('../../hooks/useMapMarkers', () => ({ useMapMarkers: () => {} }))
+vi.mock('../../hooks/useConstellationSweep', () => ({
+  useConstellationSweep: () => ({ brushedNodeId: null, whisper: null }),
+}))
 vi.mock('../../hooks/useMapSockets', () => ({ useMapSockets: () => {} }))
 
 vi.mock('@area-code/shared/hooks', () => ({
@@ -188,11 +191,18 @@ async function renderScreen() {
 }
 
 describe('MapScreen - 17.2 render and state coverage', () => {
-  it('first paint opens the Peek_Carousel into Browse_Mode on the highest-ranked venue (R1.1)', async () => {
+  it('first paint stays closed with no prior venue (Constellation cold open)', async () => {
+    const { container } = await renderScreen()
+    const carousel = container.querySelector('[data-peek-carousel]')!
+    expect(carousel.getAttribute('data-mode')).toBe('closed')
+    expect(carousel.getAttribute('data-active')).toBe('')
+  })
+
+  it('returning users reopen on lastVenueId in Browse_Mode (R1.1 segmented)', async () => {
+    useSelectionStore.setState({ lastVenueId: 'a' })
     const { container } = await renderScreen()
     const carousel = container.querySelector('[data-peek-carousel]')!
     expect(carousel.getAttribute('data-mode')).toBe('browse')
-    // Buzz is uniformly zero, so the deterministic id tie-break ranks 'a' first.
     expect(carousel.getAttribute('data-active')).toBe('a')
   })
 
@@ -257,6 +267,7 @@ describe('MapScreen - 17.2 render and state coverage', () => {
 
 describe('MapScreen - 17.3 realtime and offline coherence', () => {
   it('reflects a node:pulse_update on the active venue without re-opening the sheet (R18.2, R18.4)', async () => {
+    useSelectionStore.setState({ lastVenueId: 'a' })
     const { container } = await renderScreen()
     const before = container.querySelector('[data-peek-carousel]')!
     expect(before.getAttribute('data-mode')).toBe('browse')
@@ -276,6 +287,7 @@ describe('MapScreen - 17.3 realtime and offline coherence', () => {
   })
 
   it('retains last-known live values when offline and reconciles on reconnect (R19.2, R19.4)', async () => {
+    useSelectionStore.setState({ lastVenueId: 'a' })
     const { container } = await renderScreen()
     act(() => {
       useMapStore.getState().updateNodePulse('a', 50, 9)

@@ -71,7 +71,7 @@ describe('Feature: map-discovery-experience, Property 3: Single Active_Venue inv
               break
           }
           const st = useSelectionStore.getState()
-          expect(['closed', 'browse', 'commit']).toContain(st.mode)
+          expect(['closed', 'constellation', 'browse', 'commit']).toContain(st.mode)
           expect(st.mode === 'closed').toBe(st.activeVenueId === null)
         }
       }),
