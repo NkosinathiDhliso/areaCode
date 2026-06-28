@@ -7,11 +7,28 @@ import {
 } from '@area-code/shared/stores'
 import { useUserStore } from '@area-code/shared/stores/userStore'
 import type { MapInstance, Node, NodeCategory } from '@area-code/shared/types'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { canRecenter, moveCameraToActive } from '../lib/cameraControl'
-import { MAP_ARRIVAL_ZOOM, MIN_MARKER_ZOOM, toVenueCardVM, type VenueCardVM } from '../lib/carouselConstants'
+import {
+  MAP_ARRIVAL_ZOOM,
+  MIN_MARKER_ZOOM,
+  RECOMMENDED_LIMIT,
+  toVenueCardVM,
+  type VenueCardVM,
+} from '../lib/carouselConstants'
 import { vibeRank, scopeToViewport, type ViewportBounds } from '../lib/carouselRanking'
+
+/**
+ * Browse scope for the Peek_Carousel strip:
+ *   - `recommended`: citywide top venues by `vibeRank` (taste/aliveness first),
+ *     independent of the map viewport. The default on open - it leads with the
+ *     strongest "why go THERE, right now" magnets across the whole city.
+ *   - `area`: venues within the current Map_Canvas bounds (still vibe-ordered).
+ *     Entered when the user actively pans/zooms to explore a place, per the
+ *     discovery-DNA rule that viewport scoping is allowed for active browsing.
+ */
+export type BrowseScope = 'recommended' | 'area'
 
 /**
  * `useCarouselSelection` - the selection orchestration hook that binds every
@@ -109,6 +126,13 @@ export interface UseCarouselSelectionResult {
   recomputeOrder: () => void
   /** Notify the hook that the viewport changed (debounced recompute) - wire to map `moveend`/`zoom`. */
   notifyViewportChanged: () => void
+  /**
+   * Current browse scope. `recommended` = citywide top venues (default);
+   * `area` = venues in the current viewport (after the user pans/zooms).
+   */
+  browseScope: BrowseScope
+  /** Return to the citywide `recommended` scope (the "Back to recommended" cue). */
+  showRecommended: () => void
 }
 
 /** Reads `prefers-reduced-motion: reduce`, defaulting to false off-DOM. */
@@ -178,6 +202,20 @@ export function useCarouselSelection({
 
   const reducedMotionValue = reducedMotion ?? detectReducedMotion()
 
+  // ── Browse scope (recommended citywide vs viewport area) ─────────────────
+  //
+  // Held in a ref so `computeOrder` always reads the current scope at call time
+  // (no stale closure across the debounce), mirrored in state so the render
+  // shells can surface the "Back to recommended" cue. The default is
+  // `recommended`: the carousel opens on the strongest citywide magnets, and
+  // only narrows to the viewport once the user actively pans/zooms.
+  const browseScopeRef = useRef<BrowseScope>('recommended')
+  const [browseScope, setBrowseScopeState] = useState<BrowseScope>('recommended')
+  const setBrowseScope = useCallback((scope: BrowseScope) => {
+    browseScopeRef.current = scope
+    setBrowseScopeState(scope)
+  }, [])
+
   // ── Order recompute core ────────────────────────────────────────────────
   //
   // Reads live snapshots via `getState()` so the computation always sees the
@@ -206,9 +244,26 @@ export function useCarouselSelection({
       hasLiveGets: mapState.hasLiveGets,
     })
 
-    const bounds = readBounds(mapState.mapInstance)
-    const scoped = scopeToViewport(ranked, bounds, useSelectionStore.getState().activeVenueId)
-    return scoped.map((n) => n.id)
+    const activeId = useSelectionStore.getState().activeVenueId
+
+    // Area scope: restrict to the current viewport (still vibe-ordered),
+    // never dropping the Active_Venue (R6.x). Entered when the user explores.
+    if (browseScopeRef.current === 'area') {
+      const bounds = readBounds(mapState.mapInstance)
+      const scoped = scopeToViewport(ranked, bounds, activeId)
+      return scoped.map((n) => n.id)
+    }
+
+    // Recommended scope (default): the full citywide vibe-ranked list, capped.
+    // Independent of the viewport so the strip leads with the strongest
+    // taste/aliveness magnets regardless of where the map currently sits. The
+    // Active_Venue is retained even if it ranks past the cap.
+    const top = ranked.slice(0, RECOMMENDED_LIMIT)
+    if (activeId && !top.some((n) => n.id === activeId)) {
+      const active = ranked.find((n) => n.id === activeId)
+      if (active) top.push(active)
+    }
+    return top.map((n) => n.id)
   }, [categoryFilter])
 
   // Lock flag for an in-progress Carousel_Swipe (R18.3 / Property 29).
@@ -391,8 +446,28 @@ export function useCarouselSelection({
   )
 
   const notifyViewportChanged = useCallback(() => {
+    // A real user pan/zoom means "show me what's here": switch to area scope so
+    // the strip reflects the place the user is exploring. (Programmatic camera
+    // moves from selection do not call this - MapScreen only wires user-driven
+    // moveend/zoom - so flying to the Active_Venue never narrows the scope.)
+    setBrowseScope('area')
     debouncedRecompute()
-  }, [debouncedRecompute])
+  }, [setBrowseScope, debouncedRecompute])
+
+  // Return to the citywide recommended scope (the "Back to recommended" cue).
+  const showRecommended = useCallback(() => {
+    setBrowseScope('recommended')
+    recomputeOrder()
+  }, [setBrowseScope, recomputeOrder])
+
+  // Reset to the recommended scope whenever the carousel closes, so each fresh
+  // open leads with the citywide recommendations rather than a stale area view.
+  // Recompute while closed (Active_Venue is null) so the next open is correct.
+  useEffect(() => {
+    if (mode !== 'closed') return
+    setBrowseScope('recommended')
+    recomputeOrder()
+  }, [mode, setBrowseScope, recomputeOrder])
 
   // Re-open the carousel on the last dismissed venue and ensure it is present
   // in the recomputed order so Browse_Mode surfaces it immediately.
@@ -436,5 +511,7 @@ export function useCarouselSelection({
     setSwipeInProgress,
     recomputeOrder,
     notifyViewportChanged,
+    browseScope,
+    showRecommended,
   }
 }

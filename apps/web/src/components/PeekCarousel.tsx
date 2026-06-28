@@ -112,6 +112,8 @@ export function PeekCarousel({
     enterBrowse,
     dismiss,
     setSwipeInProgress,
+    browseScope,
+    showRecommended,
   } = selection
 
   // ── Browse strip expansion state (Top 2 + More) ──────────────────────────
@@ -204,10 +206,10 @@ export function PeekCarousel({
       // advances to the next card; swiping right steps to the previous.
       onSwipe(dx < 0 ? 1 : -1)
     } else {
-      // R7.2: vertical → mode change/dismiss; never advance the carousel. Up
-      // expands to Commit_Mode (R2.2); down dismisses (R2.6).
-      if (dy < 0) enterCommit()
-      else dismiss()
+      // R7.2 (amended): vertical → dismiss only; never advance the carousel.
+      // Down dismisses (R2.6). Up no longer opens Commit_Mode - details open
+      // exclusively from the "View details" control, never from a gesture.
+      if (dy > 0) dismiss()
     }
   }
 
@@ -246,6 +248,8 @@ export function PeekCarousel({
             carouselOrderVMs={visibleVMs}
             activeVenueId={activeVenueId}
             showMore={showMore}
+            browseScope={browseScope}
+            onShowRecommended={showRecommended}
             nodeCategoryOf={(id) => nodes[id]?.category ?? null}
             onCardSelect={(id) => {
               // Cards are selection-only: tapping any card sets the Active_Venue
@@ -282,6 +286,10 @@ interface BrowseModeProps {
   activeVenueId: string | null
   /** Whether to render the "Keep exploring" card after the venue cards (R4.2). */
   showMore: boolean
+  /** Current browse scope - drives the "Back to recommended" cue in area scope. */
+  browseScope: UseCarouselSelectionResult['browseScope']
+  /** Return to the citywide recommended scope. */
+  onShowRecommended: () => void
   nodeCategoryOf: (id: string) => NodeCategory | null
   onCardSelect: (id: string) => void
   /** Callback when the "Keep exploring" card is activated (R4.3). */
@@ -293,14 +301,33 @@ function BrowseMode({
   carouselOrderVMs,
   activeVenueId,
   showMore,
+  browseScope,
+  onShowRecommended,
   nodeCategoryOf,
   onCardSelect,
   onTapMore,
   onEnterCommit,
 }: BrowseModeProps) {
   const { t } = useTranslation()
+  // Back-to-recommended cue, shown whenever the strip is scoped to the viewport
+  // (the user has panned/zoomed to explore an area) so there is always a way
+  // home to the citywide recommendations.
+  const recommendedCue =
+    browseScope === 'area' ? (
+      <button
+        type="button"
+        data-back-to-recommended
+        onClick={onShowRecommended}
+        className="self-start flex items-center gap-1.5 text-[var(--accent)] text-xs font-semibold transition-all duration-150 active:scale-95"
+      >
+        <Sparkles size={14} strokeWidth={1.75} />
+        {t('map.backToRecommended', 'Back to recommended')}
+      </button>
+    ) : null
+
   // Empty Browse_Mode invite when no venue falls within the current viewport
-  // (R6.3) - invite the consumer to zoom out or move the map.
+  // (R6.3) - invite the consumer to zoom out, move the map, or jump back to the
+  // citywide recommendations.
   if (carouselOrderVMs.length === 0) {
     return (
       <div data-browse-empty className="flex flex-col items-center gap-2 py-8 text-center">
@@ -310,12 +337,14 @@ function BrowseMode({
         <p className="text-[var(--text-secondary)] text-xs max-w-[260px]">
           {t('map.browseEmptyHint', 'Zoom out or move the map to find venues near you.')}
         </p>
+        {recommendedCue}
       </div>
     )
   }
 
   return (
     <div className="flex flex-col gap-3">
+      {recommendedCue}
       {/* Swipeable Venue_Card strip (R1.1). Horizontal overflow scrolls so all
           in-viewport cards are reachable; selection is driven by tap, swipe,
           and the FlickControls below. In collapsed (top 2) view, a "Keep

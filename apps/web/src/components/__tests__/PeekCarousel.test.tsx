@@ -72,6 +72,8 @@ function makeSelection(over: Partial<UseCarouselSelectionResult> = {}): UseCarou
     enterBrowse: vi.fn(),
     dismiss: vi.fn(),
     setSwipeInProgress: vi.fn(),
+    browseScope: 'recommended',
+    showRecommended: vi.fn(),
     ...over,
   } as UseCarouselSelectionResult
 }
@@ -118,6 +120,21 @@ describe('PeekCarousel', () => {
 
     // Card taps never enter Commit_Mode.
     expect(enterCommit).not.toHaveBeenCalled()
+  })
+
+  it('shows the "Back to recommended" cue only in area scope and calls showRecommended', () => {
+    const showRecommended = vi.fn()
+    const { container } = renderCarousel({ browseScope: 'area', showRecommended })
+
+    const cue = container.querySelector('[data-back-to-recommended]')
+    expect(cue).toBeTruthy()
+    fireEvent.click(cue!)
+    expect(showRecommended).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides the "Back to recommended" cue in recommended scope', () => {
+    const { container } = renderCarousel({ browseScope: 'recommended' })
+    expect(container.querySelector('[data-back-to-recommended]')).toBeNull()
   })
 
   it('the "View details" control enters Commit_Mode', () => {

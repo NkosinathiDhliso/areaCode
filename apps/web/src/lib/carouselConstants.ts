@@ -64,6 +64,16 @@ export const MAP_ARRIVAL_ZOOM = 13
 export const SHEET_FOCUS_OFFSET_RATIO = 0.3
 
 /**
+ * Max number of venues surfaced in the citywide "recommended" browse scope
+ * (the default carousel state). The list is the full `vibeRank` order capped to
+ * this many so the strip leads with the strongest taste/aliveness magnets
+ * without unbounded growth. The Active_Venue is always retained even if it
+ * falls past the cap. The "area" scope (after the user pans/zooms) is bounded
+ * by the viewport instead, so this cap does not apply there.
+ */
+export const RECOMMENDED_LIMIT = 20
+
+/**
  * Live_Archetype id used when no live value has arrived for a node and the node
  * carries no `defaultArchetypeId`. Mirrors R7.8's eclectic-fallback rule so the
  * Venue_Card glyph is never blank.

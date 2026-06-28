@@ -258,3 +258,72 @@ describe('Feature: live-vibe-on-map, cold-open arrival zoom', () => {
     expect(browseCalls.every((c) => c[0]?.zoom === undefined)).toBe(true)
   })
 })
+
+describe('Feature: vibe-ranked-browse, hybrid browse scope (recommended vs area)', () => {
+  // A map whose bounds tightly enclose only venue "a"; "b" and "c" sit far
+  // outside, so area scope drops them while recommended scope keeps them.
+  function tightMap() {
+    return {
+      getZoom: () => 13,
+      getBounds: () => ({
+        // [[west, south], [east, north]]
+        toArray: () => [
+          [28.0, -26.3],
+          [28.1, -26.1],
+        ],
+      }),
+      flyTo: vi.fn(),
+    }
+  }
+
+  function seedTight() {
+    useMapStore.setState({
+      nodes: {
+        a: node('a', 'nightlife', -26.2, 28.04),
+        b: node('b', 'nightlife', -25.0, 29.0),
+        c: node('c', 'nightlife', -27.0, 27.0),
+      },
+      pulseScores: {},
+      checkInCounts: {},
+      archetypeIds: {},
+      focusNodeId: null,
+      mapInstance: tightMap() as never,
+    })
+    useLocationStore.setState({ lastKnownPosition: null, capturedAt: null })
+    useSelectionStore.setState({
+      activeVenueId: null,
+      mode: 'closed',
+      carouselOrder: [],
+      openedFromFocus: false,
+      lastVenueId: null,
+    })
+  }
+
+  it('defaults to citywide recommended scope, independent of the viewport', () => {
+    seedTight()
+    const { result } = renderHook(() => useCarouselSelection({ ...baseParams, recomputeDebounceMs: 100_000 }))
+
+    act(() => result.current.selectVenue('a', 'marker'))
+
+    expect(result.current.browseScope).toBe('recommended')
+    // All three venues appear even though only "a" is within the map bounds.
+    expect([...result.current.carouselOrder].sort()).toEqual(['a', 'b', 'c'])
+  })
+
+  it('switches to area scope on a user pan/zoom, then restores recommended', () => {
+    seedTight()
+    const { result } = renderHook(() => useCarouselSelection({ ...baseParams, recomputeDebounceMs: 100_000 }))
+    act(() => result.current.selectVenue('a', 'marker'))
+
+    // User pans/zooms: scope flips to area and the order narrows to the viewport.
+    act(() => result.current.notifyViewportChanged())
+    act(() => result.current.recomputeOrder())
+    expect(result.current.browseScope).toBe('area')
+    expect(result.current.carouselOrder).toEqual(['a'])
+
+    // "Back to recommended" restores the citywide list.
+    act(() => result.current.showRecommended())
+    expect(result.current.browseScope).toBe('recommended')
+    expect([...result.current.carouselOrder].sort()).toEqual(['a', 'b', 'c'])
+  })
+})
