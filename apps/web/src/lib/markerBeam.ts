@@ -1,5 +1,5 @@
 /**
- * Constellation beam DOM: vertical light pillars at country zoom.
+ * Constellation beam DOM: upside-down cone pillars from ground to glyph apex.
  */
 
 import type { NodeState } from '@area-code/shared/types'
@@ -7,7 +7,8 @@ import type { NodeState } from '@area-code/shared/types'
 import { BEAM_HIT_WIDTH_PX } from './carouselConstants'
 import type { MarkerPresentationTier } from './markerPresentation'
 
-export const BEAM_COLUMN_LAYER = 'beam-column'
+export const BEACON_STACK = 'beacon-stack'
+export const BEAM_COLUMN_LAYER = 'beam-cone'
 export const BEAM_HIT_LAYER = 'beam-hit'
 
 /** Optional Constellation beam embellishments (Phase D/E). */
@@ -22,6 +23,10 @@ export interface BeamVisualOptions {
   brushed?: boolean
   /** Beam blend when hybrid with glyphs (0–1); boosts glow when < 1. */
   hybridStrength?: number
+  /** Business tier footprint scale (width only, never opacity). */
+  tierBaseScale?: number
+  /** Glyph diameter for apex connector sizing. */
+  glyphSize?: number
 }
 
 /** Pillar height (px) by Pulse_State — aliveness only, not business tier. */
@@ -33,8 +38,13 @@ const BEAM_HEIGHT: Record<NodeState, number> = {
   popping: 158,
 }
 
-function scaledBeamHeight(state: NodeState, pitchScale: number): number {
-  return Math.round(BEAM_HEIGHT[state] * pitchScale)
+/** Cone base width (px) by Pulse_State before tier multiplier. */
+const CONE_BASE: Record<NodeState, number> = {
+  dormant: 16,
+  quiet: 20,
+  active: 28,
+  buzzing: 36,
+  popping: 48,
 }
 
 const BEAM_ANIM: Record<NodeState, { animation: string; speed: string }> = {
@@ -53,23 +63,73 @@ const BEAM_OPACITY: Record<NodeState, number> = {
   popping: 0.95,
 }
 
+function scaledBeamHeight(state: NodeState, pitchScale: number): number {
+  return Math.round(BEAM_HEIGHT[state] * pitchScale)
+}
+
+function coneBaseWidth(state: NodeState, tierScale: number, hybrid: boolean): number {
+  const base = CONE_BASE[state] * tierScale * (hybrid ? 1.08 : 1)
+  return Math.round(base)
+}
+
+function beamGradient(colour: string): string {
+  return [
+    `linear-gradient(to top,`,
+    `${colour} 0%,`,
+    `${colour}cc 12%,`,
+    `${colour}88 30%,`,
+    `${colour}44 58%,`,
+    `${colour}18 82%,`,
+    `transparent 100%)`,
+  ].join(' ')
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+}
+
+function animationForState(state: NodeState): string {
+  const anim = BEAM_ANIM[state]
+  return prefersReducedMotion() ? 'none' : `${anim.animation} ${anim.speed} ease-in-out infinite`
+}
+
 export function beamHeightForState(state: NodeState): number {
   return BEAM_HEIGHT[state]
 }
 
-/** Container size for a Constellation marker (wide hit column + tall beam). */
-export function beamContainerSize(state: NodeState): { width: number; height: number } {
+/** Container size for a Constellation marker (wide hit column + tall beam + glyph). */
+export function beamContainerSize(state: NodeState, tierScale = 1, glyphSize = 0): { width: number; height: number } {
   const beamH = beamHeightForState(state)
-  return { width: BEAM_HIT_WIDTH_PX, height: beamH + 16 }
+  const baseW = coneBaseWidth(state, tierScale, false)
+  return {
+    width: Math.max(BEAM_HIT_WIDTH_PX, baseW + 8, glyphSize * 1.2),
+    height: beamH + glyphSize + 12,
+  }
 }
 
-function beamGradient(colour: string): string {
-  return `linear-gradient(to top, ${colour} 0%, ${colour}88 18%, ${colour}33 55%, transparent 100%)`
+/** Vertical stack that connects ground cone to glyph apex. */
+export function ensureBeaconStack(scaleLayer: HTMLElement): HTMLElement {
+  let stack = scaleLayer.querySelector(`[data-layer="${BEACON_STACK}"]`) as HTMLElement | null
+  if (!stack) {
+    stack = document.createElement('div')
+    stack.dataset.layer = BEACON_STACK
+    Object.assign(stack.style, {
+      position: 'relative',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      pointerEvents: 'none',
+    })
+    scaleLayer.appendChild(stack)
+  }
+  return stack
 }
 
 function applyBeamEmbellishments(
   hit: HTMLElement,
   colour: string,
+  beamH: number,
   options: BeamVisualOptions,
   reducedMotion: boolean,
 ): void {
@@ -78,20 +138,22 @@ function applyBeamEmbellishments(
     if (!aurora) {
       aurora = document.createElement('div')
       aurora.dataset.layer = 'beam-aurora'
-      hit.appendChild(aurora)
+      const cone = hit.querySelector(`[data-layer="${BEAM_COLUMN_LAYER}"]`)
+      if (cone) hit.insertBefore(aurora, cone)
+      else hit.appendChild(aurora)
     }
     Object.assign(aurora.style, {
       position: 'absolute',
-      bottom: '0',
+      bottom: '6px',
       left: '50%',
       transform: 'translateX(-50%)',
-      width: '14px',
-      height: '100%',
-      borderRadius: '9999px',
-      background: `linear-gradient(to top, transparent, ${colour}55, transparent)`,
-      filter: 'blur(4px)',
+      width: '85%',
+      height: `${beamH}px`,
+      clipPath: 'polygon(50% 0%, 6% 100%, 94% 100%)',
+      background: `linear-gradient(to top, transparent, ${colour}66, ${colour}44, transparent)`,
+      filter: 'blur(3px)',
       pointerEvents: 'none',
-      opacity: '0.85',
+      opacity: '0.9',
     })
   } else if (aurora) {
     aurora.remove()
@@ -106,14 +168,14 @@ function applyBeamEmbellishments(
     }
     Object.assign(comet.style, {
       position: 'absolute',
-      top: '4px',
+      top: '0',
       left: '50%',
-      width: '2px',
-      height: '18px',
-      transform: 'translateX(-50%) rotate(-25deg)',
+      width: '3px',
+      height: '20px',
+      transform: 'translateX(-50%) rotate(-20deg)',
       background: `linear-gradient(to bottom, #fff, ${colour})`,
       borderRadius: '9999px',
-      opacity: '0.9',
+      opacity: '0.95',
       pointerEvents: 'none',
       animation: reducedMotion ? 'none' : 'pulse 0.6s ease-in-out infinite',
     })
@@ -128,6 +190,51 @@ function applyBeamEmbellishments(
   }
 }
 
+function applyConeStyles(
+  cone: HTMLElement,
+  colour: string,
+  beamH: number,
+  baseW: number,
+  opacity: number,
+  hybrid: boolean,
+): void {
+  Object.assign(cone.style, {
+    width: `${baseW}px`,
+    height: `${beamH}px`,
+    clipPath: 'polygon(50% 0%, 4% 100%, 96% 100%)',
+    background: beamGradient(colour),
+    opacity: String(Math.min(1, opacity)),
+    boxShadow: hybrid ? `0 0 14px ${colour}77, 0 0 28px ${colour}33` : `0 0 10px ${colour}55, 0 0 20px ${colour}22`,
+    pointerEvents: 'none',
+    transformOrigin: 'bottom center',
+    animation: 'none',
+    flexShrink: '0',
+  })
+}
+
+function ensureApexConnector(hit: HTMLElement, colour: string, glyphSize: number, opacity: number): void {
+  let apex = hit.querySelector('[data-layer="beam-apex"]') as HTMLElement | null
+  if (!apex) {
+    apex = document.createElement('div')
+    apex.dataset.layer = 'beam-apex'
+    hit.appendChild(apex)
+  }
+  const size = Math.max(8, Math.round(glyphSize * 0.35))
+  Object.assign(apex.style, {
+    position: 'absolute',
+    top: `-${Math.round(size * 0.35)}px`,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    width: `${size}px`,
+    height: `${size}px`,
+    borderRadius: '50%',
+    background: `radial-gradient(circle, ${colour} 0%, ${colour}88 45%, transparent 72%)`,
+    opacity: String(Math.min(1, opacity + 0.1)),
+    pointerEvents: 'none',
+    filter: `blur(${Math.max(1, size * 0.08)}px)`,
+  })
+}
+
 function resolveBeamOpacity(state: NodeState, options?: BeamVisualOptions): number {
   let opacity = BEAM_OPACITY[state]
   if (options?.brushed) opacity = Math.min(1, opacity + 0.2)
@@ -135,17 +242,17 @@ function resolveBeamOpacity(state: NodeState, options?: BeamVisualOptions): numb
 }
 
 /**
- * Append the beam column and hit target inside {@link scaleLayer}.
+ * Append the cone beam and hit target inside {@link stackParent}.
  * Idempotent if layers already exist.
  */
 export function ensureBeamLayers(
-  scaleLayer: HTMLElement,
+  stackParent: HTMLElement,
   colour: string,
   state: NodeState,
   onTap: () => void,
   options: BeamVisualOptions = {},
 ): void {
-  let hit = scaleLayer.querySelector(`[data-layer="${BEAM_HIT_LAYER}"]`) as HTMLElement | null
+  let hit = stackParent.querySelector(`[data-layer="${BEAM_HIT_LAYER}"]`) as HTMLElement | null
   if (!hit) {
     hit = document.createElement('div')
     hit.dataset.layer = BEAM_HIT_LAYER
@@ -155,112 +262,118 @@ export function ensureBeamLayers(
       e.stopPropagation()
       onTap()
     })
-    scaleLayer.appendChild(hit)
+    stackParent.insertBefore(hit, stackParent.firstChild)
   }
 
-  let column = scaleLayer.querySelector(`[data-layer="${BEAM_COLUMN_LAYER}"]`) as HTMLElement | null
-  if (!column) {
-    column = document.createElement('div')
-    column.dataset.layer = BEAM_COLUMN_LAYER
-    column.setAttribute('aria-hidden', 'true')
-    hit.appendChild(column)
+  let cone = hit.querySelector(`[data-layer="${BEAM_COLUMN_LAYER}"]`) as HTMLElement | null
+  if (!cone) {
+    cone = document.createElement('div')
+    cone.dataset.layer = BEAM_COLUMN_LAYER
+    cone.setAttribute('aria-hidden', 'true')
+    hit.appendChild(cone)
   }
 
   const pitchScale = options.pitchScale ?? 1
+  const tierScale = options.tierBaseScale ?? 1
   const hybrid = options.hybridStrength !== undefined && options.hybridStrength < 0.98
-  const beamH = scaledBeamHeight(state, pitchScale * (hybrid ? 1.15 : 1))
-  const opacity = resolveBeamOpacity(state, options) * (hybrid ? 1.1 : 1)
-  const anim = BEAM_ANIM[state]
-  const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  const beamH = scaledBeamHeight(state, pitchScale * (hybrid ? 1.12 : 1))
+  const baseW = coneBaseWidth(state, tierScale, hybrid)
+  const opacity = resolveBeamOpacity(state, options) * (hybrid ? 1.08 : 1)
+  const glyphSize = options.glyphSize ?? 24
+  const reducedMotion = prefersReducedMotion()
 
   Object.assign(hit.style, {
-    position: 'absolute',
-    left: '50%',
-    bottom: '0',
-    transform: 'translateX(-50%)',
-    width: `${BEAM_HIT_WIDTH_PX}px`,
-    height: `${beamH + 8}px`,
+    position: 'relative',
+    width: `${Math.max(BEAM_HIT_WIDTH_PX, baseW + 12)}px`,
+    height: `${beamH + 6}px`,
     cursor: 'pointer',
     pointerEvents: 'auto',
     display: 'flex',
     alignItems: 'flex-end',
     justifyContent: 'center',
+    flexShrink: '0',
   })
 
-  Object.assign(column.style, {
-    width: '10px',
-    height: `${beamH}px`,
-    borderRadius: '9999px',
-    background: beamGradient(colour),
-    opacity: String(opacity),
-    boxShadow: `0 0 12px ${colour}66, 0 0 24px ${colour}33`,
-    pointerEvents: 'none',
-    transformOrigin: 'bottom center',
-    animation: reducedMotion ? 'none' : `${anim.animation} ${anim.speed} ease-in-out infinite`,
-  })
+  applyConeStyles(cone, colour, beamH, baseW, opacity, hybrid)
 
   let glow = hit.querySelector('[data-layer="beam-glow"]') as HTMLElement | null
   if (!glow) {
     glow = document.createElement('div')
     glow.dataset.layer = 'beam-glow'
-    hit.insertBefore(glow, column)
+    hit.insertBefore(glow, cone)
   }
+  const glowPx = Math.round(baseW * (hybrid ? 1.15 : 1))
   Object.assign(glow.style, {
     position: 'absolute',
     bottom: '0',
     left: '50%',
     transform: 'translateX(-50%)',
-    width: '20px',
-    height: '20px',
+    width: `${glowPx}px`,
+    height: `${Math.round(glowPx * 0.55)}px`,
     borderRadius: '50%',
-    background: `radial-gradient(circle, ${colour} 0%, transparent 70%)`,
-    opacity: String(Math.min(1, opacity + 0.15)),
+    background: `radial-gradient(ellipse, ${colour} 0%, ${colour}66 40%, transparent 72%)`,
+    opacity: String(Math.min(1, opacity + 0.12)),
     pointerEvents: 'none',
   })
 
-  applyBeamEmbellishments(hit, colour, options, reducedMotion)
+  ensureApexConnector(hit, colour, glyphSize, opacity)
+  applyBeamEmbellishments(hit, colour, beamH, options, reducedMotion)
 }
 
 export function updateBeamLayers(
-  scaleLayer: HTMLElement,
+  stackParent: HTMLElement,
   colour: string,
   state: NodeState,
   options: BeamVisualOptions = {},
 ): void {
-  const hit = scaleLayer.querySelector(`[data-layer="${BEAM_HIT_LAYER}"]`) as HTMLElement | null
+  const hit = stackParent.querySelector(`[data-layer="${BEAM_HIT_LAYER}"]`) as HTMLElement | null
   if (!hit) return
-  const column = hit.querySelector(`[data-layer="${BEAM_COLUMN_LAYER}"]`) as HTMLElement | null
+  const cone = hit.querySelector(`[data-layer="${BEAM_COLUMN_LAYER}"]`) as HTMLElement | null
   const glow = hit.querySelector('[data-layer="beam-glow"]') as HTMLElement | null
   const pitchScale = options.pitchScale ?? 1
+  const tierScale = options.tierBaseScale ?? 1
   const hybrid = options.hybridStrength !== undefined && options.hybridStrength < 0.98
-  const beamH = scaledBeamHeight(state, pitchScale * (hybrid ? 1.15 : 1))
-  const opacity = resolveBeamOpacity(state, options) * (hybrid ? 1.1 : 1)
-  const anim = BEAM_ANIM[state]
-  const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  const beamH = scaledBeamHeight(state, pitchScale * (hybrid ? 1.12 : 1))
+  const baseW = coneBaseWidth(state, tierScale, hybrid)
+  const opacity = resolveBeamOpacity(state, options) * (hybrid ? 1.08 : 1)
+  const glyphSize = options.glyphSize ?? 24
+  const reducedMotion = prefersReducedMotion()
 
-  Object.assign(hit.style, { height: `${beamH + 8}px` })
-  if (column) {
-    const colW = hybrid ? '12px' : '10px'
-    const shadow = hybrid ? `0 0 16px ${colour}88, 0 0 32px ${colour}44` : `0 0 12px ${colour}66, 0 0 24px ${colour}33`
-    Object.assign(column.style, {
-      width: colW,
-      height: `${beamH}px`,
-      background: beamGradient(colour),
-      opacity: String(Math.min(1, opacity)),
-      boxShadow: shadow,
-      animation: reducedMotion ? 'none' : `${anim.animation} ${anim.speed} ease-in-out infinite`,
-    })
-  }
+  Object.assign(hit.style, {
+    width: `${Math.max(BEAM_HIT_WIDTH_PX, baseW + 12)}px`,
+    height: `${beamH + 6}px`,
+  })
+  if (cone) applyConeStyles(cone, colour, beamH, baseW, opacity, hybrid)
   if (glow) {
-    const glowPx = hybrid ? 32 : 20
+    const glowPx = Math.round(baseW * (hybrid ? 1.15 : 1))
     Object.assign(glow.style, {
       width: `${glowPx}px`,
-      height: `${glowPx}px`,
-      background: `radial-gradient(circle, ${colour} 0%, transparent 70%)`,
-      opacity: String(Math.min(1, opacity + (hybrid ? 0.25 : 0.15))),
+      height: `${Math.round(glowPx * 0.55)}px`,
+      background: `radial-gradient(ellipse, ${colour} 0%, ${colour}66 40%, transparent 72%)`,
+      opacity: String(Math.min(1, opacity + 0.12)),
     })
   }
-  applyBeamEmbellishments(hit, colour, options, reducedMotion)
+  ensureApexConnector(hit, colour, glyphSize, opacity)
+  applyBeamEmbellishments(hit, colour, beamH, options, reducedMotion)
+}
+
+/** Pulse the glyph and cone together when beams are visible. */
+export function syncBeaconAnimation(scaleLayer: HTMLElement, state: NodeState, beamVisible: boolean): void {
+  const stack = scaleLayer.querySelector(`[data-layer="${BEACON_STACK}"]`) as HTMLElement | null
+  const glyph = scaleLayer.querySelector('[data-layer="glyph-wrapper"]') as HTMLElement | null
+  const halo = scaleLayer.querySelector('[data-layer="halo"]') as HTMLElement | null
+  if (!stack || !glyph) return
+
+  const anim = animationForState(state)
+  if (beamVisible) {
+    Object.assign(stack.style, { animation: anim, transformOrigin: 'bottom center' })
+    glyph.style.animation = 'none'
+    if (halo) halo.style.animation = 'none'
+  } else {
+    stack.style.animation = 'none'
+    glyph.style.animation = anim
+    if (halo) halo.style.animation = anim
+  }
 }
 
 /**
@@ -273,6 +386,7 @@ export function applyPresentationTier(
   isActive: boolean,
   dimInactive: boolean,
   beamBlend = 1,
+  pulseState: NodeState = 'active',
 ): void {
   const scaleLayer = el.querySelector('[data-layer="scale-layer"]') as HTMLElement | null
   if (!scaleLayer) return
@@ -289,7 +403,6 @@ export function applyPresentationTier(
     let beamOpacity = beamBlend
     if (tier === 'beam' && dimInactive && !isActive) beamOpacity *= 0.4
     beamHit.style.opacity = String(beamOpacity)
-    // Decorative beams when zoomed in — glyph/dot owns taps.
     beamHit.style.pointerEvents = tier === 'beam' && beamBlend >= 0.85 ? 'auto' : 'none'
   }
   if (glyphWrapper) {
@@ -305,5 +418,6 @@ export function applyPresentationTier(
     }
   }
 
+  syncBeaconAnimation(scaleLayer, pulseState, showBeam && beamBlend > 0.15)
   scaleLayer.style.opacity = '1'
 }

@@ -13,6 +13,7 @@ import { vibeRank } from '../lib/carouselRanking'
 import { getNodeState, getCategoryColour } from '../lib/mapHelpers'
 import {
   beamContainerSize,
+  ensureBeaconStack,
   ensureBeamLayers,
   updateBeamLayers,
   applyPresentationTier,
@@ -146,7 +147,8 @@ function buildMarkerElement(
 ): HTMLDivElement {
   void node
   const cfg = STATE_CONFIG[state]
-  const beamBox = beamContainerSize(state)
+  const tierScale = beamOptions.tierBaseScale ?? 1
+  const beamBox = beamContainerSize(state, tierScale, glyphSize)
   const glyphFootprint = glyphSize * 3
   const totalSize = Math.max(glyphFootprint, beamBox.height)
   const totalWidth = Math.max(glyphFootprint, beamBox.width)
@@ -176,96 +178,18 @@ function buildMarkerElement(
     position: 'absolute',
     inset: '0',
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'center',
     overflow: 'visible',
     pointerEvents: 'none',
   })
   container.appendChild(scaleLayer)
 
-  // ── Halo (Pulse_State channel) ──
-  const haloSize = glyphSize * 2.2
-  const blurRadius = state === 'popping' ? 16 : state === 'buzzing' ? 12 : 8
-  const halo = document.createElement('div')
-  Object.assign(halo.style, {
-    position: 'absolute',
-    width: `${haloSize}px`,
-    height: `${haloSize}px`,
-    borderRadius: '50%',
-    background: `radial-gradient(circle, ${colour} 0%, transparent 70%)`,
-    opacity: String(cfg.haloOpacity),
-    filter: `blur(${blurRadius}px)`,
-    animation: `${cfg.animation} ${cfg.speed} ease-in-out infinite`,
-    pointerEvents: 'none',
-  })
-  halo.dataset.layer = 'halo'
-  scaleLayer.appendChild(halo)
-
-  // ── Popping ripple ──
-  if (cfg.ripple) {
-    const ripple = document.createElement('div')
-    Object.assign(ripple.style, {
-      position: 'absolute',
-      width: `${glyphSize * 1.8}px`,
-      height: `${glyphSize * 1.8}px`,
-      borderRadius: '50%',
-      border: `1.5px solid ${colour}`,
-      opacity: '0.3',
-      animation: 'ripple 2s ease-out infinite',
-      pointerEvents: 'none',
-    })
-    ripple.dataset.layer = 'ripple'
-    scaleLayer.appendChild(ripple)
-  }
-
-  // ── Glyph wrapper (the marker itself) ──
-  // Owns the breathe / pulse animation that the old core dot used to
-  // own, so the glyph's scale curve drives identity + alive-ness in one
-  // element. Tap target is here - the glyph silhouette is what the user
-  // is actually pointing at.
-  const glyphWrapper = document.createElement('div')
-  Object.assign(glyphWrapper.style, {
-    position: 'relative',
-    width: `${glyphSize}px`,
-    height: `${glyphSize}px`,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    animation: `${cfg.animation} ${cfg.speed} ease-in-out infinite`,
-    cursor: 'pointer',
-    pointerEvents: 'auto',
-    // Soft drop-shadow so the silhouette reads on light tiles. Not a
-    // glow per se - the halo handles glow. This is just edge separation.
-    filter: state === 'dormant' ? 'none' : `drop-shadow(0 0 ${glyphSize * 0.25}px ${colour}66)`,
-    // Smooth size transition so a mid-session tier upgrade (e.g.
-    // starter → growth) rescales the glyph over 400ms rather than
-    // snapping instantly (R8.6 crossfade / smooth transitions).
-    transition: 'width 400ms ease, height 400ms ease',
-  })
-  glyphWrapper.dataset.layer = 'glyph-wrapper'
-  glyphWrapper.addEventListener('mousedown', (e) => e.stopPropagation())
-  glyphWrapper.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true })
-  glyphWrapper.addEventListener('click', (e) => {
-    e.stopPropagation()
-    onTap()
-  })
-
-  // The React mount target. ArchetypeGlyph fills 100% of this host.
-  const glyphHost = document.createElement('div')
-  Object.assign(glyphHost.style, {
-    position: 'absolute',
-    inset: '0',
-    width: '100%',
-    height: '100%',
-    pointerEvents: 'none',
-  })
-  glyphHost.dataset.layer = GLYPH_HOST_LAYER
-  glyphWrapper.appendChild(glyphHost)
-  scaleLayer.appendChild(glyphWrapper)
+  const beaconStack = ensureBeaconStack(scaleLayer)
 
   let lastBeamTapAt = 0
   ensureBeamLayers(
-    scaleLayer,
+    beaconStack,
     colour,
     state,
     () => {
@@ -278,8 +202,88 @@ function buildMarkerElement(
       lastBeamTapAt = now
       onTap()
     },
-    beamOptions,
+    { ...beamOptions, glyphSize },
   )
+
+  // ── Glyph wrapper (sits on the cone apex) ──
+  const glyphWrapper = document.createElement('div')
+  Object.assign(glyphWrapper.style, {
+    position: 'relative',
+    width: `${glyphSize}px`,
+    height: `${glyphSize}px`,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: '-2px',
+    cursor: 'pointer',
+    pointerEvents: 'auto',
+    filter: state === 'dormant' ? 'none' : `drop-shadow(0 0 ${glyphSize * 0.25}px ${colour}66)`,
+    transition: 'width 400ms ease, height 400ms ease',
+    zIndex: '2',
+  })
+  glyphWrapper.dataset.layer = 'glyph-wrapper'
+  glyphWrapper.addEventListener('mousedown', (e) => e.stopPropagation())
+  glyphWrapper.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true })
+  glyphWrapper.addEventListener('click', (e) => {
+    e.stopPropagation()
+    onTap()
+  })
+
+  const glyphHost = document.createElement('div')
+  Object.assign(glyphHost.style, {
+    position: 'absolute',
+    inset: '0',
+    width: '100%',
+    height: '100%',
+    pointerEvents: 'none',
+    zIndex: '2',
+  })
+  glyphHost.dataset.layer = GLYPH_HOST_LAYER
+  glyphWrapper.appendChild(glyphHost)
+
+  // ── Halo (Pulse_State channel, frames the glyph) ──
+  const haloSize = glyphSize * 2.2
+  const blurRadius = state === 'popping' ? 16 : state === 'buzzing' ? 12 : 8
+  const halo = document.createElement('div')
+  Object.assign(halo.style, {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: `${haloSize}px`,
+    height: `${haloSize}px`,
+    borderRadius: '50%',
+    background: `radial-gradient(circle, ${colour} 0%, transparent 70%)`,
+    opacity: String(cfg.haloOpacity),
+    filter: `blur(${blurRadius}px)`,
+    animation: `${cfg.animation} ${cfg.speed} ease-in-out infinite`,
+    pointerEvents: 'none',
+    zIndex: '0',
+  })
+  halo.dataset.layer = 'halo'
+  glyphWrapper.appendChild(halo)
+
+  if (cfg.ripple) {
+    const ripple = document.createElement('div')
+    Object.assign(ripple.style, {
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      width: `${glyphSize * 1.8}px`,
+      height: `${glyphSize * 1.8}px`,
+      borderRadius: '50%',
+      border: `1.5px solid ${colour}`,
+      opacity: '0.3',
+      animation: 'ripple 2s ease-out infinite',
+      pointerEvents: 'none',
+      zIndex: '1',
+    })
+    ripple.dataset.layer = 'ripple'
+    glyphWrapper.appendChild(ripple)
+  }
+
+  beaconStack.appendChild(glyphWrapper)
 
   // ── Live count badge (buzzing / popping only) ──
   // The badge shows the venue's Live_Check_In_Count (`mapStore.checkInCounts`),
@@ -289,8 +293,8 @@ function buildMarkerElement(
     const badge = document.createElement('div')
     Object.assign(badge.style, {
       position: 'absolute',
-      top: `${totalSize * 0.18}px`,
-      right: `${totalSize * 0.18}px`,
+      top: `${Math.max(0, totalSize - glyphSize - 6)}px`,
+      right: `${totalWidth * 0.12}px`,
       background: '#1e1e2e',
       border: '1px solid rgba(255,255,255,0.08)',
       borderRadius: '9999px',
@@ -379,17 +383,16 @@ function updateMarkerElement(
   beamOptions: BeamVisualOptions = {},
 ): void {
   const cfg = STATE_CONFIG[state]
-  const beamBox = beamContainerSize(state)
+  const tierScale = beamOptions.tierBaseScale ?? 1
+  const beamBox = beamContainerSize(state, tierScale, glyphSize)
   const glyphFootprint = glyphSize * 3
   const totalSize = Math.max(glyphFootprint, beamBox.height)
   const totalWidth = Math.max(glyphFootprint, beamBox.width)
   el.style.width = `${totalWidth}px`
   el.style.height = `${totalSize}px`
-  // The scale-layer mirrors the container box so its centre stays on the
-  // geo-anchor; new ripple/badge nodes are mounted here, not on the root.
   const scaleLayer = (el.querySelector(`[data-layer="${SCALE_LAYER}"]`) as HTMLElement | null) ?? el
+  const glyphWrapper = el.querySelector('[data-layer="glyph-wrapper"]') as HTMLElement | null
 
-  // Halo
   const haloSize = glyphSize * 2.2
   const blurRadius = state === 'popping' ? 16 : state === 'buzzing' ? 12 : 8
   const halo = el.querySelector('[data-layer="halo"]') as HTMLElement | null
@@ -404,13 +407,15 @@ function updateMarkerElement(
     })
   }
 
-  // Ripple - add when entering popping, remove otherwise.
   let ripple = el.querySelector('[data-layer="ripple"]') as HTMLElement | null
   if (cfg.ripple) {
-    if (!ripple) {
+    if (!ripple && glyphWrapper) {
       ripple = document.createElement('div')
       Object.assign(ripple.style, {
         position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
         width: `${glyphSize * 1.8}px`,
         height: `${glyphSize * 1.8}px`,
         borderRadius: '50%',
@@ -418,16 +423,11 @@ function updateMarkerElement(
         opacity: '0.3',
         animation: 'ripple 2s ease-out infinite',
         pointerEvents: 'none',
+        zIndex: '1',
       })
       ripple.dataset.layer = 'ripple'
-      // Insert before the glyph wrapper so it renders behind it.
-      const glyphWrapper = scaleLayer.querySelector('[data-layer="glyph-wrapper"]')
-      if (glyphWrapper) {
-        scaleLayer.insertBefore(ripple, glyphWrapper)
-      } else {
-        scaleLayer.appendChild(ripple)
-      }
-    } else {
+      glyphWrapper.appendChild(ripple)
+    } else if (ripple) {
       Object.assign(ripple.style, {
         width: `${glyphSize * 1.8}px`,
         height: `${glyphSize * 1.8}px`,
@@ -438,13 +438,10 @@ function updateMarkerElement(
     ripple.remove()
   }
 
-  // Glyph wrapper
-  const glyphWrapper = el.querySelector('[data-layer="glyph-wrapper"]') as HTMLElement | null
   if (glyphWrapper) {
     Object.assign(glyphWrapper.style, {
       width: `${glyphSize}px`,
       height: `${glyphSize}px`,
-      animation: `${cfg.animation} ${cfg.speed} ease-in-out infinite`,
       filter: state === 'dormant' ? 'none' : `drop-shadow(0 0 ${glyphSize * 0.25}px ${colour}66)`,
     })
   }
@@ -457,8 +454,8 @@ function updateMarkerElement(
       badge = document.createElement('div')
       Object.assign(badge.style, {
         position: 'absolute',
-        top: `${totalSize * 0.18}px`,
-        right: `${totalSize * 0.18}px`,
+        top: `${Math.max(0, totalSize - glyphSize - 6)}px`,
+        right: `${totalWidth * 0.12}px`,
         background: '#1e1e2e',
         border: '1px solid rgba(255,255,255,0.08)',
         borderRadius: '9999px',
@@ -479,7 +476,8 @@ function updateMarkerElement(
   }
 
   const scaleLayerForBeam = (el.querySelector(`[data-layer="${SCALE_LAYER}"]`) as HTMLElement | null) ?? el
-  updateBeamLayers(scaleLayerForBeam, colour, state, beamOptions)
+  const beaconStack = ensureBeaconStack(scaleLayerForBeam)
+  updateBeamLayers(beaconStack, colour, state, { ...beamOptions, glyphSize })
 
   applyActiveStyling(el, isActive, colour)
 }
@@ -528,16 +526,19 @@ export function useMapMarkers(
   onCommitZoomRef.current = onCommitZoom
 
   const beamOptionsFor = useCallback(
-    (nodeId: string, zoom: number): BeamVisualOptions => {
+    (nodeId: string, zoom: number, glyphSize: number): BeamVisualOptions => {
       const node = nodes[nodeId]
       const venueArchetype = archetypeIds[nodeId] ?? node?.defaultArchetypeId ?? null
       const blend = beamBlendForZoom(zoom)
+      const tierScale = TIER_SIZE_MULTIPLIER[node?.businessTier ?? 'starter']
       return {
         pitchScale: is3D ? BEAM_PITCH_SCALE_3D : 1,
         tasteMatch: !!(consumerArchetypeId && venueArchetype && consumerArchetypeId === venueArchetype),
         hasLiveGet: !!hasLiveGets[nodeId],
         brushed: brushedNodeId === nodeId,
         hybridStrength: blend < 0.98 ? blend : undefined,
+        tierBaseScale: tierScale,
+        glyphSize,
       }
     },
     [nodes, archetypeIds, consumerArchetypeId, hasLiveGets, is3D, brushedNodeId],
@@ -569,15 +570,21 @@ export function useMapMarkers(
         const el = marker.getElement()
         applyZoomScale(el, zoom)
         const isActive = el.dataset.active === 'true'
-        applyPresentationTier(el, tier, isActive, dimInactive, blend)
+        const score = useMapStore.getState().pulseScores[nodeId] ?? 0
+        const pulseState = getNodeState(score)
+        applyPresentationTier(el, tier, isActive, dimInactive, blend, pulseState)
 
         const node = useMapStore.getState().nodes[nodeId]
         if (node && blend < 0.98) {
-          const score = useMapStore.getState().pulseScores[nodeId] ?? 0
-          const state = getNodeState(score)
+          const state = pulseState
           const colour = getCategoryColour(node.category)
+          const tierMultiplier = TIER_SIZE_MULTIPLIER[node.businessTier ?? 'starter']
+          const glyphSize = getGlyphSize(state, score) * tierMultiplier
           const scaleLayer = el.querySelector(`[data-layer="${SCALE_LAYER}"]`) as HTMLElement | null
-          if (scaleLayer) updateBeamLayers(scaleLayer, colour, state, beamOptionsFor(nodeId, zoom))
+          if (scaleLayer) {
+            const beaconStack = ensureBeaconStack(scaleLayer)
+            updateBeamLayers(beaconStack, colour, state, beamOptionsFor(nodeId, zoom, glyphSize))
+          }
         }
       }
 
@@ -675,7 +682,7 @@ export function useMapMarkers(
             state,
             liveCount,
             active,
-            beamOptionsFor(node.id, curZoom),
+            beamOptionsFor(node.id, curZoom, glyphSize),
           )
           renderGlyph(
             glyphRootsRef.current,
@@ -686,7 +693,7 @@ export function useMapMarkers(
             node.category,
             showIcon,
           )
-          applyPresentationTier(existing.getElement(), tier, active, dimInactive, beamBlend)
+          applyPresentationTier(existing.getElement(), tier, active, dimInactive, beamBlend, state)
           applyZoomScale(existing.getElement(), curZoom)
           continue
         }
@@ -699,13 +706,13 @@ export function useMapMarkers(
           liveCount,
           active,
           () => onNodeTapRef.current(node),
-          beamOptionsFor(node.id, curZoom),
+          beamOptionsFor(node.id, curZoom, glyphSize),
           () => onCommitZoomRef.current?.(node),
         )
 
         const marker = new mapboxgl.Marker({
           element: el,
-          anchor: 'center',
+          anchor: 'bottom',
           // 'horizon' keeps the marker oriented relative to the globe's
           // horizon during bearing drift. Without this, markers can appear
           // to spin or drift visually as the globe rotates.
@@ -715,7 +722,7 @@ export function useMapMarkers(
           .addTo(map)
 
         applyZoomScale(el, curZoom)
-        applyPresentationTier(el, tier, active, dimInactive, beamBlend)
+        applyPresentationTier(el, tier, active, dimInactive, beamBlend, state)
 
         markersRef.current.set(node.id, marker)
         renderGlyph(glyphRootsRef.current, el, node.id, archetypeId, state, node.category, showIcon)
