@@ -127,6 +127,27 @@ bugs we already fixed.
   details. Swipe-down dismisses; horizontal swipe steps the carousel.
 - **Map tab re-tap toggles the carousel** via `selectionStore.toggleOpen`,
   wired through `BottomNav` `onReselect`.
+- **Constellation scope lock.** While `zoom < MIN_MARKER_ZOOM`, browse scope
+  stays `recommended`; never flip to `area`. See `.kiro/steering/constellation-mode.md`.
+
+## Constellation Mode (Consumer Web, country zoom)
+
+Hard rules for zoom below `MIN_MARKER_ZOOM` (4–8). Supersedes the old
+Globe_Zoom = hidden behavior. Full spec: `.kiro/steering/constellation-mode.md`.
+
+- **Four zoom tiers:** Constellation (beams) → Embers (dots) → Glyphs. Crossfade
+  on zoom; never detach from coordinates.
+- **Beam brightness = aliveness only.** Pulse_State drives height/brightness/
+  animation. Business tier may affect cap/tiebreak, never raw brightness.
+- **Calm by default, magic on intent.** No ambient sound. Trails/haptics only
+  during active touch. Full `prefers-reduced-motion` fallback (static beams).
+- **Segmented cold open.** First-time: stay at country zoom, beams visible,
+  carousel closed (hint only). Returning (`lastVenueId`) or Focus_Signal: may
+  land closer. Do not auto-fly every session to `MAP_ARRIVAL_ZOOM`.
+- **Three interactions:** sweep (play, no selection), tap (select + peek +
+  "Zoom in" CTA), commit zoom (enter normal carousel/glyph flow).
+- **Success metric:** beam tap → zoom in → check in. Not time spent sweeping.
+- **Top-20 beam cap** at country zoom (`RECOMMENDED_LIMIT` by `vibeRank`).
 
 ## Gets (Rewards)
 

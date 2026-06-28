@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The map is the front door of Area Code and the primary discovery surface for the product's mission — "the city is alive." Today the map opens on a full-country overview, drops archetype-glyph markers coloured by category and animated by Pulse_State, and lets a user tap a marker to open a `NodeDetailSheet` with rewards, a crowd-vibe section, and a check-in CTA. A first prototype of multi-venue browsing already exists: prev/next chevrons inside the detail sheet fly the map to a neighbouring venue and fire a live check-in-count toast.
+The map is the front door of Area Code and the primary discovery surface for the product's mission — "the city is alive." The map opens on a full-country overview with **Constellation mode** (pulse-driven sky beams at country zoom), crossfades to category dots and archetype glyphs as the consumer zooms in, and uses a hybrid Peek_Carousel for vibe-ranked browse-and-compare. See `.kiro/steering/constellation-mode.md` for country-zoom rules.
 
 This spec has two connected goals.
 
@@ -37,10 +37,11 @@ Some decisions in this document warranted confirmation and are written as explic
 - **Recenter_Control**: the map control that flies the Map_Canvas to the Last_Known_Position (`recenterUser` in `useMapInit`, surfaced via `MapControls`).
 - **Location_Banner**: the non-blocking "Enable location" banner shown on Map_Screen when location permission is denied.
 - **Geo_Status**: the geolocation state machine value, one of `requesting`, `denied`, `poorAccuracy`, `timeout`, or a success state, exposed by `useGeolocation`.
-- **Marker_Layer**: the set of Mapbox HTML markers managed by `useMapMarkers`, each rendering an archetype glyph (or a dot at lower zoom) plus halo/ripple.
+- **Marker_Layer**: the set of Mapbox HTML markers managed by `useMapMarkers`, each rendering a Constellation beam, category dot, or archetype glyph (plus halo/ripple) depending on zoom.
+- **Constellation_Zoom**: zoom below `MIN_MARKER_ZOOM` (8) where the Marker_Layer renders pulse-driven sky beams (Constellation mode). Replaces the former Globe_Zoom hidden tier.
 - **Glyph_Zoom**: zoom at or above `GLYPH_ZOOM_THRESHOLD` (12.5) where markers render the detailed archetype glyph.
-- **Dot_Zoom**: zoom in `[MIN_MARKER_ZOOM, GLYPH_ZOOM_THRESHOLD)` (8 to 12.5) where markers render a simple category dot.
-- **Globe_Zoom**: zoom below `MIN_MARKER_ZOOM` (8) where markers are hidden.
+- **Dot_Zoom** (Embers): zoom in `[MIN_MARKER_ZOOM, GLYPH_ZOOM_THRESHOLD)` (8 to 12.5) where markers render a simple category dot.
+- **Globe_Zoom**: deprecated alias for Constellation_Zoom. Markers are **not** hidden at country zoom.
 - **Category_Filter**: the active `NodeCategory` filter from `CategoryFilterBar`, or none.
 - **Search_Sheet**: the venue search surface (`SearchSheet`) that can select a node and fly to it.
 - **Focus_Signal**: the cross-screen focus request `mapStore.focusNodeId`, set by surfaces like the Gets list to ask the map to fly to a node and open it.
@@ -126,19 +127,20 @@ Some decisions in this document warranted confirmation and are written as explic
 4. WHEN the active Category_Filter changes, THE Carousel_Order SHALL be recomputed to include only venues matching the filter.
 5. IF two venues have equal rank under Proximity_Biased_Ranking, THEN THE ordering between them SHALL be broken deterministically by venue id so the order is stable.
 
-### Requirement 6: Browse_Mode default scope (in-viewport)
+### Requirement 6: Browse_Mode scope (recommended vs area)
 
-**User Story:** As a consumer, I want the browse strip to start with the venues I am currently looking at on the map, so that browsing stays spatially grounded in what is on screen.
+**User Story:** As a consumer, I want the browse strip to lead with the best venues in the city, and only narrow to what is on screen when I deliberately explore an area, so that discovery stays vibe-first without feeling like a nearest-neighbour list.
 
-> **Resolved decision:** Browse_Mode defaults to IN-VIEWPORT scope — the strip is scoped to venues within the current Map_Canvas bounds, ordered by Proximity_Biased_Ranking. (The alternative nearest-to-me-regardless-of-viewport behavior was considered and rejected.)
+> **Resolved decision (2026):** Browse_Mode uses **hybrid scope**. Default is citywide `recommended` (top venues by `vibeRank`, viewport-independent). Scope switches to `area` (in-viewport) only after a **meaningful** user pan or zoom (>= 400 m or >= 0.35 zoom levels). While `zoom < MIN_MARKER_ZOOM` (Constellation mode), scope **never** flips to `area`. See `CLAUDE.md` Map Carousel and `.kiro/steering/constellation-mode.md`.
 
 #### Acceptance Criteria
 
-1. THE Carousel_Order SHALL include only venues whose coordinates fall within the current Map_Canvas bounds, ordered by Proximity_Biased_Ranking.
-2. WHEN the consumer pans or zooms the Map_Canvas, THE Carousel_Order SHALL recompute to reflect the venues within the new Map_Canvas bounds.
-3. IF no venue falls within the current Map_Canvas bounds, THEN THE Peek_Carousel SHALL render an empty Browse_Mode state inviting the consumer to zoom out or move the map.
-4. WHEN the consumer selects a venue outside the current Map_Canvas bounds via marker tap, Search_Sheet, or a Focus_Signal, THE Selection_Model SHALL set that venue as the Active_Venue AND THE Map_Canvas SHALL fly to it so it falls within bounds and is included in the recomputed Carousel_Order.
-5. WHILE the Active_Venue is set, THE recomputed Carousel_Order SHALL continue to include the Active_Venue even if a pan or zoom would otherwise exclude it, so the Active_Venue is never silently dropped mid-selection.
+1. THE default Carousel_Order SHALL be the citywide `vibeRank` list capped to `RECOMMENDED_LIMIT`, independent of Map_Canvas bounds.
+2. WHEN the consumer meaningfully pans or zooms the Map_Canvas at Embers zoom or above, THE Carousel_Order MAY recompute to in-viewport venues (area scope), still ordered by `vibeRank`.
+3. WHILE the Map_Canvas zoom is below `MIN_MARKER_ZOOM`, THE browse scope SHALL remain `recommended` regardless of pan or zoom.
+4. IF no venue falls within the current Map_Canvas bounds in area scope, THEN THE Peek_Carousel SHALL render an empty Browse_Mode state with a path back to recommended scope.
+5. WHEN the consumer selects a venue outside the current Map_Canvas bounds via marker/beam tap, Search_Sheet, or a Focus_Signal, THE Selection_Model SHALL set that venue as the Active_Venue AND THE Map_Canvas SHALL fly or pan to it per Constellation vs Embers/Glyphs rules.
+6. WHILE the Active_Venue is set, THE recomputed Carousel_Order SHALL continue to include the Active_Venue even if a pan or zoom would otherwise exclude it.
 
 ### Requirement 7: Gesture-conflict resolution
 
@@ -177,12 +179,14 @@ Some decisions in this document warranted confirmation and are written as explic
 
 1. WHEN the consumer first opens Map_Screen, THE Map_Canvas SHALL initialise on a full-country overview centred on South Africa at the configured country zoom.
 2. WHILE the Map_Canvas is initialising and not yet interactive, THE Map_Screen SHALL render a loading overlay.
-3. WHEN the Map_Canvas finishes loading and becomes interactive, THE Map_Screen SHALL remove the loading overlay and render the Marker_Layer for the available venues.
+3. WHEN the Map_Canvas finishes loading and becomes interactive, THE Map_Screen SHALL remove the loading overlay and render the Marker_Layer (Constellation beams at country zoom when venues exist).
 4. IF the Map_Canvas fails to initialise, THEN THE Map_Screen SHALL render a map-unavailable state with a retry control AND SHALL NOT crash the surrounding app.
 5. WHEN the consumer activates the retry control, THE Map_Screen SHALL tear down and re-initialise the Map_Canvas.
 6. IF the Map_Canvas does not become interactive within the configured load-timeout window, THEN THE Map_Screen SHALL render the map-unavailable state with a retry control.
-7. WHILE no venues are available for the current city, THE Map_Screen SHALL render an empty map (no markers) without raising an error.
+7. WHILE no venues are available for the current city, THE Map_Screen SHALL render an honest empty Constellation state (e.g. "Quiet right now") without raising an error AND SHALL NOT auto-open the carousel.
 8. IF the venue list request fails, THEN THE Map_Screen SHALL keep the Map_Canvas interactive AND SHALL render the map without markers rather than blocking the surface.
+9. WHEN the consumer opens Map_Screen for the first time in a session AND has no `lastVenueId`, THE Map_Canvas SHALL remain at country zoom showing Constellation beams AND SHALL NOT auto-fly to `MAP_ARRIVAL_ZOOM` or auto-open the full Peek_Carousel.
+10. WHEN the consumer returns with a retained `lastVenueId` or a pending Focus_Signal, THE Map_Screen MAY land closer and open the carousel per existing focus/reopen rules.
 
 ### Requirement 10: Location permission lifecycle
 
@@ -213,14 +217,32 @@ Some decisions in this document warranted confirmation and are written as explic
 
 **User Story:** As a consumer zooming in and out, I want markers to stay legible at every zoom, so that the map never reads as clutter or empty space.
 
+> **Resolved decision (2026):** Country zoom uses **Constellation mode** (sky beams), not hidden markers. See `.kiro/steering/constellation-mode.md`.
+
 #### Acceptance Criteria
 
 1. WHILE the Map_Canvas zoom is at Glyph_Zoom, THE Marker_Layer SHALL render each venue as its detailed archetype glyph.
 2. WHILE the Map_Canvas zoom is at Dot_Zoom, THE Marker_Layer SHALL render each venue as a simple category-coloured dot.
-3. WHILE the Map_Canvas zoom is at Globe_Zoom, THE Marker_Layer SHALL hide venue markers.
-4. WHEN the Map_Canvas zoom crosses a marker-rendering threshold, THE Marker_Layer SHALL transition marker presentation without detaching markers from their coordinates.
-5. WHILE markers overlap at a packed zoom, THE Marker_Layer SHALL keep the Active_Venue's marker and its tap target reachable.
-6. WHILE the Active_Venue is set, THE Marker_Layer SHALL visually distinguish the Active_Venue's marker from non-active markers.
+3. WHILE the Map_Canvas zoom is at Constellation_Zoom, THE Marker_Layer SHALL render each visible venue as a pulse-driven sky beam anchored at its coordinates, capped to the top `RECOMMENDED_LIMIT` venues by `vibeRank`.
+4. THE beam brightness, height, and animation speed SHALL reflect Pulse_State / aliveness only; business tier SHALL NOT increase beam brightness over a more-alive unpaid venue.
+5. WHEN the Map_Canvas zoom crosses a marker-rendering threshold, THE Marker_Layer SHALL crossfade presentation without detaching markers from their coordinates.
+6. WHILE markers overlap at a packed zoom, THE Marker_Layer SHALL keep the Active_Venue's marker/beam and its tap target reachable.
+7. WHILE the Active_Venue is set, THE Marker_Layer SHALL visually distinguish the Active_Venue from non-active venues (brightest beam or active ring at higher zoom).
+8. WHERE the consumer has Reduced_Motion set, Constellation beams SHALL remain visible and tappable without sweep trails or motion-heavy effects.
+
+### Requirement 12A: Constellation interactions (country zoom)
+
+**User Story:** As a consumer at country zoom, I want to play with the lights and tap one to explore, so that the city feels alive before I commit to zooming in.
+
+#### Acceptance Criteria
+
+1. WHEN the consumer sweeps a finger near beams without selecting, THE Map_Screen SHALL brighten nearby beams and MAY show a one-line magnet whisper AND SHALL NOT change the Active_Venue or open the full Peek_Carousel.
+2. WHEN the consumer taps a beam, THE Selection_Model SHALL set that venue as the Active_Venue, THE Map_Canvas SHALL pan gently toward it without forcing `MAP_ARRIVAL_ZOOM`, AND THE Map_Screen SHALL open a minimal Constellation peek with primary CTA "Zoom in".
+3. WHEN the consumer activates "Zoom in" or zooms past `MIN_MARKER_ZOOM`, THE Map_Screen SHALL enter the standard Embers/Glyphs discovery flow including full Peek_Carousel Browse_Mode.
+4. THE Constellation peek SHALL NOT offer check-in (proximity required); check-in remains available only after commit zoom.
+5. WHEN the Active_Venue changes via carousel step, search, or focus while at Constellation zoom, THE Marker_Layer SHALL update active beam styling on the map.
+6. THE product success metric for Constellation SHALL be beam tap → zoom in → check in, not time spent sweeping without conversion.
+7. THE Map_Screen SHALL NOT play ambient sound for Constellation interactions.
 
 ### Requirement 13: Category filtering and search coherence
 

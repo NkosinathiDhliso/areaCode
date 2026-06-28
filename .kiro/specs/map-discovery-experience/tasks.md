@@ -180,7 +180,7 @@ All test sub-tasks are marked optional with `*` and may be skipped for a faster 
 
 - [x] 13. Marker layer legibility and active distinction
   - [x] 13.1 Extend `useMapMarkers` presentation and active styling
-    - Update `apps/web/src/hooks/useMapMarkers.ts` to apply glyph/dot/hidden tiers by zoom, distinguish the Active_Venue marker, keep markers geo-anchored across threshold crossings, and update live-count badge on `node:pulse_update` without detaching
+    - Update `apps/web/src/hooks/useMapMarkers.ts` to apply glyph/dot/constellation-beam tiers by zoom, distinguish the Active_Venue marker/beam, keep markers geo-anchored across threshold crossings, and update live-count badge on `node:pulse_update` without detaching
     - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 18.1_
 
   - [x]\* 13.2 Write property test for presentation tier by zoom

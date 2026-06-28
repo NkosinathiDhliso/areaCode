@@ -90,6 +90,11 @@ Always. If your ranking can ever produce the opposite, it is wrong.
   Proximity is structurally incapable of outranking any higher signal.
   Spec: `.kiro/specs/vibe-ranked-browse/requirements.md`
 
+- **Constellation mode (country zoom).** Below `MIN_MARKER_ZOOM`, venues
+  render as pulse-driven sky beams, not hidden markers. Beam brightness =
+  aliveness only; tier never brightens a quiet paid venue over an alive free
+  one. Spec: `.kiro/steering/constellation-mode.md`
+
 ## The pull: answer "why go THERE, right now?"
 
 Showing what is alive is necessary but not sufficient. Every discovery surface
