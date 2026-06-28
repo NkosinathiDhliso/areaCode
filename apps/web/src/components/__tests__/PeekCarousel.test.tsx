@@ -103,16 +103,21 @@ describe('PeekCarousel', () => {
     expect(status.textContent).toContain('7')
   })
 
-  it('tapping the active card enters Commit_Mode; tapping another card selects it', () => {
+  it('cards are selection-only: tapping any card selects it and never enters Commit_Mode', () => {
     const enterCommit = vi.fn()
     const selectVenue = vi.fn()
     const { container } = renderCarousel({ activeVenueId: 'a', enterCommit, selectVenue })
 
+    // Tapping the active card selects (does not open details).
     fireEvent.click(container.querySelector('[data-venue-card="a"]')!)
-    expect(enterCommit).toHaveBeenCalledTimes(1)
+    expect(selectVenue).toHaveBeenCalledWith('a', 'swipe')
 
+    // Tapping another card selects it.
     fireEvent.click(container.querySelector('[data-venue-card="b"]')!)
     expect(selectVenue).toHaveBeenCalledWith('b', 'swipe')
+
+    // Card taps never enter Commit_Mode.
+    expect(enterCommit).not.toHaveBeenCalled()
   })
 
   it('the "View details" control enters Commit_Mode', () => {

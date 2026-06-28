@@ -248,10 +248,10 @@ export function PeekCarousel({
             showMore={showMore}
             nodeCategoryOf={(id) => nodes[id]?.category ?? null}
             onCardSelect={(id) => {
-              // Tapping the active card enters Commit_Mode (R2.2); tapping any
-              // other card makes it the Active_Venue (swipe-equivalent).
-              if (id === activeVenueId) enterCommit()
-              else selectVenue(id, 'swipe')
+              // Cards are selection-only: tapping any card sets the Active_Venue
+              // (which flies the camera to it). Details/Commit_Mode open only via
+              // the dedicated "View details" control, never from a card tap.
+              selectVenue(id, 'swipe')
             }}
             onTapMore={() => browseDispatch({ type: 'TAP_MORE' })}
             onEnterCommit={enterCommit}
