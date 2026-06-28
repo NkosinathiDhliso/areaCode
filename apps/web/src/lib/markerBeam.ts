@@ -24,11 +24,11 @@ export interface BeamVisualOptions {
 
 /** Pillar height (px) by Pulse_State — aliveness only, not business tier. */
 const BEAM_HEIGHT: Record<NodeState, number> = {
-  dormant: 44,
-  quiet: 56,
-  active: 72,
-  buzzing: 92,
-  popping: 112,
+  dormant: 62,
+  quiet: 78,
+  active: 98,
+  buzzing: 128,
+  popping: 158,
 }
 
 function scaledBeamHeight(state: NodeState, pitchScale: number): number {
@@ -185,7 +185,7 @@ export function ensureBeamLayers(
   })
 
   Object.assign(column.style, {
-    width: '8px',
+    width: '10px',
     height: `${beamH}px`,
     borderRadius: '9999px',
     background: beamGradient(colour),
@@ -254,14 +254,15 @@ export function updateBeamLayers(
 }
 
 /**
- * Toggle beam vs glyph/dot visibility and inactive dimming (40% when another
- * venue is active at Constellation zoom).
+ * Toggle beam vs glyph/dot visibility. Beams can persist as a hybrid layer at
+ * reduced opacity when zoomed in ({@link beamBlend} < 1).
  */
 export function applyPresentationTier(
   el: HTMLElement,
   tier: MarkerPresentationTier,
   isActive: boolean,
   dimInactive: boolean,
+  beamBlend = 1,
 ): void {
   const scaleLayer = el.querySelector('[data-layer="scale-layer"]') as HTMLElement | null
   if (!scaleLayer) return
@@ -270,24 +271,25 @@ export function applyPresentationTier(
   const glyphWrapper = scaleLayer.querySelector('[data-layer="glyph-wrapper"]') as HTMLElement | null
   const halo = scaleLayer.querySelector('[data-layer="halo"]') as HTMLElement | null
 
-  const showBeam = tier === 'beam'
-  const showGlyphDot = tier !== 'beam'
+  const showBeam = beamBlend > 0.02
+  const showGlyphDot = tier !== 'beam' || beamBlend < 0.98
 
   if (beamHit) {
     beamHit.style.display = showBeam ? 'flex' : 'none'
-    beamHit.style.pointerEvents = showBeam ? 'auto' : 'none'
+    let beamOpacity = beamBlend
+    if (tier === 'beam' && dimInactive && !isActive) beamOpacity *= 0.4
+    beamHit.style.opacity = String(beamOpacity)
+    // Decorative beams when zoomed in — glyph/dot owns taps.
+    beamHit.style.pointerEvents = tier === 'beam' && beamBlend >= 0.85 ? 'auto' : 'none'
   }
   if (glyphWrapper) {
-    glyphWrapper.style.opacity = showGlyphDot ? '1' : '0'
-    glyphWrapper.style.pointerEvents = showGlyphDot ? 'auto' : 'none'
+    const glyphOpacity = tier === 'beam' ? Math.min(1, Math.max(0, 1 - beamBlend)) : 1
+    glyphWrapper.style.opacity = String(glyphOpacity)
+    glyphWrapper.style.pointerEvents = showGlyphDot && glyphOpacity > 0.15 ? 'auto' : 'none'
   }
   if (halo) {
     halo.style.display = showGlyphDot ? 'block' : 'none'
   }
 
-  let opacity = '1'
-  if (tier === 'beam' && dimInactive && !isActive) {
-    opacity = '0.4'
-  }
-  scaleLayer.style.opacity = opacity
+  scaleLayer.style.opacity = '1'
 }

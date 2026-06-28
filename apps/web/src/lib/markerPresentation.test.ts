@@ -8,7 +8,14 @@ import {
   MIN_MARKER_ZOOM,
   RECOMMENDED_LIMIT,
 } from './carouselConstants'
-import { constellationVisibleIds, presentationTierForZoom, scaleForZoom } from './markerPresentation'
+import {
+  constellationVisibleIds,
+  presentationTierForZoom,
+  scaleForZoom,
+  beamBlendForZoom,
+  BEAM_BLEND_FLOOR,
+} from './markerPresentation'
+import { MAP_ARRIVAL_ZOOM, MIN_MARKER_ZOOM } from './carouselConstants'
 
 function node(id: string, lat = -26.2, lng = 28.04): Node {
   return { id, name: id, category: 'nightlife', lat, lng } as Node
@@ -54,5 +61,12 @@ describe('markerPresentation', () => {
 
   it('returns null cap at Embers zoom and above', () => {
     expect(constellationVisibleIds([node('a')], MIN_MARKER_ZOOM, null, {})).toBeNull()
+  })
+
+  it('keeps beam blend at full below z8 and at floor when zoomed in', () => {
+    expect(beamBlendForZoom(5)).toBe(1)
+    expect(beamBlendForZoom(MIN_MARKER_ZOOM + 0.5)).toBeLessThan(1)
+    expect(beamBlendForZoom(MAP_ARRIVAL_ZOOM)).toBe(BEAM_BLEND_FLOOR)
+    expect(beamBlendForZoom(MAP_ARRIVAL_ZOOM + 5)).toBe(BEAM_BLEND_FLOOR)
   })
 })

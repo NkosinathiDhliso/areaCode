@@ -9,6 +9,7 @@ import {
   CONSTELLATION_DORMANT_CUTOFF_ZOOM,
   CONSTELLATION_MIN_ZOOM,
   GLYPH_ZOOM_THRESHOLD,
+  MAP_ARRIVAL_ZOOM,
   MIN_MARKER_ZOOM,
   RECOMMENDED_LIMIT,
 } from './carouselConstants'
@@ -34,6 +35,20 @@ export function presentationTierForZoom(zoom: number): MarkerPresentationTier {
   if (zoom >= GLYPH_ZOOM_THRESHOLD) return 'glyph'
   if (zoom < MIN_MARKER_ZOOM) return 'beam'
   return 'dot'
+}
+
+/** Beam opacity floor once zoomed past {@link MAP_ARRIVAL_ZOOM} (hybrid with glyphs). */
+export const BEAM_BLEND_FLOOR = 0.38
+
+/**
+ * Beam pillar opacity by zoom. Full at Constellation, crossfades with dots/glyphs
+ * from z8→13, then stays at {@link BEAM_BLEND_FLOOR} indefinitely when zoomed in.
+ */
+export function beamBlendForZoom(zoom: number): number {
+  if (zoom < MIN_MARKER_ZOOM) return 1
+  if (zoom >= MAP_ARRIVAL_ZOOM) return BEAM_BLEND_FLOOR
+  const t = (zoom - MIN_MARKER_ZOOM) / (MAP_ARRIVAL_ZOOM - MIN_MARKER_ZOOM)
+  return BEAM_BLEND_FLOOR + (1 - BEAM_BLEND_FLOOR) * (1 - t)
 }
 
 /**

@@ -20,6 +20,7 @@ import {
 } from '../lib/markerBeam'
 import {
   BASE_PRESENTATION_ZOOM,
+  beamBlendForZoom,
   constellationVisibleIds,
   isActiveMarker,
   presentationTierForZoom,
@@ -30,6 +31,7 @@ import {
 
 export {
   BASE_PRESENTATION_ZOOM,
+  beamBlendForZoom,
   isActiveMarker,
   presentationTierForZoom,
   scaleForZoom,
@@ -556,13 +558,14 @@ export function useMapMarkers(
       setMapZoom(zoom)
 
       const tier = presentationTierForZoom(zoom)
-      const dimInactive = tier === 'beam' && activeVenueId !== null
+      const blend = beamBlendForZoom(zoom)
+      const dimInactive = blend >= 0.98 && activeVenueId !== null
 
       for (const [, marker] of markersRef.current) {
         const el = marker.getElement()
         applyZoomScale(el, zoom)
         const isActive = el.dataset.active === 'true'
-        applyPresentationTier(el, tier, isActive, dimInactive)
+        applyPresentationTier(el, tier, isActive, dimInactive, blend)
       }
 
       setPresentationTier((prev) => (prev === tier ? prev : tier))
@@ -598,8 +601,9 @@ export function useMapMarkers(
       }
 
       const tier = presentationTierForZoom(curZoom)
+      const beamBlend = beamBlendForZoom(curZoom)
       const showIcon = tier === 'glyph'
-      const dimInactive = tier === 'beam' && activeVenueId !== null
+      const dimInactive = beamBlend >= 0.98 && activeVenueId !== null
 
       const nodeArray = Object.values(nodes)
       const filtered = categoryFilter ? nodeArray.filter((n) => n.category === categoryFilter) : nodeArray
@@ -669,7 +673,7 @@ export function useMapMarkers(
             node.category,
             showIcon,
           )
-          applyPresentationTier(existing.getElement(), tier, active, dimInactive)
+          applyPresentationTier(existing.getElement(), tier, active, dimInactive, beamBlend)
           applyZoomScale(existing.getElement(), curZoom)
           continue
         }
@@ -698,7 +702,7 @@ export function useMapMarkers(
           .addTo(map)
 
         applyZoomScale(el, curZoom)
-        applyPresentationTier(el, tier, active, dimInactive)
+        applyPresentationTier(el, tier, active, dimInactive, beamBlend)
 
         markersRef.current.set(node.id, marker)
         renderGlyph(glyphRootsRef.current, el, node.id, archetypeId, state, node.category, showIcon)

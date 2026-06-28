@@ -293,30 +293,12 @@ export function useMapInit() {
   const [mapError, setMapError] = useState<string | null>(null)
   const [is3D, setIs3D] = useState(true)
   const [bearing, setBearing] = useState(BEARING_3D)
-  const driftRafRef = useRef<number | null>(null)
-  /**
-   * Timestamp (Date.now()) until which the idle bearing-drift should remain
-   * paused. The drift `tick` reads this on every frame, and `pauseIdleDrift`
-   * (plus the existing mousedown/touchstart/wheel handlers) extends it.
-   *
-   * R1.5 requires at least 4000ms of pause after a Compass/Recenter tap, so
-   * callers pass `pauseIdleDrift(4000)`.
-   */
-  const driftPausedUntilRef = useRef<number>(0)
 
   /**
-   * Pause idle bearing-drift for at least `ms` milliseconds.
-   *
-   * Used by Map_Sidebar (R1.5) so that a compass or recenter tap doesn't
-   * have the city slowly counter-rotating against the user's intent for the
-   * next animation frame. Idempotent and monotonic: calling it with a
-   * smaller `ms` while a longer pause is already pending is a no-op.
+   * No-op retained for MapControls API compatibility (drift removed).
    */
   const pauseIdleDrift = useCallback((ms: number) => {
-    const until = Date.now() + Math.max(0, ms)
-    if (until > driftPausedUntilRef.current) {
-      driftPausedUntilRef.current = until
-    }
+    void ms
   }, [])
 
   const setPitch3D = useCallback((on: boolean) => {
@@ -558,82 +540,7 @@ export function useMapInit() {
     }
   }, [resolved, mapReadyKey])
 
-  // ── Idle bearing drift ──
-  // A near-imperceptible rotation (≈ 0.3°/sec) while the user is idle.
-  // Mission-aligned: the city is alive, even when the user is still.
-  // Pauses on user interaction and respects prefers-reduced-motion.
-  //
-  // The pause is shared with `pauseIdleDrift(ms)` (R1.5) via
-  // `driftPausedUntilRef`, so a Compass/Recenter tap can extend the pause
-  // independently of the mousedown/touchstart/wheel handlers below.
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || !loadedRef.current || !is3D) return
-    if (prefersReducedMotion()) return
-
-    let lastTime = performance.now()
-    let interactionTimer: ReturnType<typeof setTimeout> | null = null
-
-    const markInteraction = () => {
-      // Resume drift 4s after the last interaction.
-      driftPausedUntilRef.current = Date.now() + 4000
-      if (interactionTimer) clearTimeout(interactionTimer)
-      interactionTimer = setTimeout(() => {
-        // No-op timer: kept so we still clear it on cleanup. The drift loop
-        // checks `driftPausedUntilRef` directly each frame.
-      }, 4000)
-    }
-
-    map.on('mousedown', markInteraction)
-    map.on('touchstart', markInteraction)
-    map.on('wheel', markInteraction)
-
-    const tick = (now: number) => {
-      const delta = now - lastTime
-      lastTime = now
-
-      const paused = Date.now() < driftPausedUntilRef.current
-      // Never drift while a camera move is animating. setBearing is an
-      // instantaneous jump that aborts any in-flight flyTo/easeTo, so drifting
-      // during the carousel's fly-to-active-venue would cancel it every frame
-      // (the "no-snap" bug: the flyTo fires but the camera never arrives).
-      let animating = false
-      try {
-        animating = map.isMoving()
-      } catch {
-        /* isMoving unavailable (e.g. test mock) - treat as not animating */
-      }
-      if (!paused && !animating && mapRef.current === map) {
-        try {
-          const current = map.getBearing()
-          // 0.3 degrees per second, wraps cleanly through 360
-          const next = (((current + (0.3 * delta) / 1000) % 360) + 360) % 360
-          map.setBearing(next > 180 ? next - 360 : next)
-        } catch {
-          /* ignore */
-        }
-      }
-
-      driftRafRef.current = requestAnimationFrame(tick)
-    }
-
-    driftRafRef.current = requestAnimationFrame(tick)
-
-    return () => {
-      if (driftRafRef.current !== null) {
-        cancelAnimationFrame(driftRafRef.current)
-        driftRafRef.current = null
-      }
-      if (interactionTimer) clearTimeout(interactionTimer)
-      try {
-        map.off('mousedown', markInteraction)
-        map.off('touchstart', markInteraction)
-        map.off('wheel', markInteraction)
-      } catch {
-        /* ignore */
-      }
-    }
-  }, [is3D, mapReadyKey])
+  // Idle bearing drift removed — continuous rotation caused dizziness.
 
   return {
     containerRef,
