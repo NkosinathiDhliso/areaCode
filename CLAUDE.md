@@ -107,10 +107,11 @@ bugs we already fixed.
 - **Two scopes, one order.** `vibeRank` decides order (taste, aliveness, tier,
   live gets, distance, id). Scope decides membership only, never re-sorts by
   nearness. Default scope is `recommended` (citywide top venues, viewport
-  independent). Switch to `area` (viewport-scoped) only on a real user pan or
-  zoom. See `.kiro/steering/discovery-dna-vibe-over-convenience.md`.
+  independent). Switch to `area` (viewport-scoped) only on a meaningful user
+  pan or zoom (>= 400 m or >= 0.35 zoom levels), not micro-drags or control
+  jitter. See `.kiro/steering/discovery-dna-vibe-over-convenience.md`.
 - **Recompute order from user moves only.** Wire `notifyViewportChanged` to map
-  `moveend`/`zoom` only when `e.originalEvent` is present. Never recompute on
+  `moveend` only (not `zoom`), and only when `e.originalEvent` is present. Never recompute on
   programmatic camera moves (the selection fly-to), or the order collapses to
   the active venue and the browse arrows gray out.
 - **Idle bearing-drift pauses during camera moves.** `map.setBearing` is an

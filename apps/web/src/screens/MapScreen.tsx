@@ -187,26 +187,26 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   useMapMarkers(mapRef, categoryFilter, handleMarkerTap, mapReady, activeVenueId)
 
   // ── Viewport-change recompute ──
-  // Pan/zoom recomputes the in-viewport Carousel_Order (R6.2). The selection
-  // hook debounces internally, so wiring both `moveend` and `zoom` is safe.
+  // User pan/zoom recomputes the Carousel_Order in `area` scope (R6.2). Only
+  // wire `moveend` (not `zoom`): zoom fires continuously during programmatic
+  // fly-to, and a meaningful pan always ends with moveend anyway. The selection
+  // hook debounces internally and ignores micro-moves while still in the
+  // citywide `recommended` scope.
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReady) return
-    // Only recompute the in-viewport order for user-driven pan/zoom. The
-    // camera's own flyTo (when stepping to the Active_Venue) fires moveend/zoom
-    // with no `originalEvent`; recomputing on those would rescope the order to
-    // whatever is near the venue we just centered, progressively shrinking the
-    // browse strip until it collapses to the single active venue and the
-    // Flick_Controls gray out (R6.2 applies to user navigation, not self-moves).
+    // Only recompute for user-driven pan/zoom. The camera's own flyTo (when
+    // stepping to the Active_Venue) fires moveend with no `originalEvent`;
+    // recomputing on those would rescope the order to whatever is near the venue
+    // we just centered, progressively shrinking the browse strip until it
+    // collapses to the single active venue and the Flick_Controls gray out.
     const handler = (e: object) => {
       if ((e as { originalEvent?: unknown }).originalEvent) notifyViewportChanged()
     }
     map.on('moveend', handler)
-    map.on('zoom', handler)
     return () => {
       try {
         map.off('moveend', handler)
-        map.off('zoom', handler)
       } catch {
         /* map already torn down */
       }
@@ -214,10 +214,10 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   }, [mapRef, mapReady, notifyViewportChanged])
 
   // ── First-paint open into Browse_Mode (R1.1) ──
-  // Once the map is ready and the Carousel_Order has at least one in-viewport
-  // venue, open the carousel in Browse_Mode on the first (highest-ranked)
-  // venue. Skipped when a Focus_Signal is pending (it opens the carousel on its
-  // own target) or when the carousel is already open.
+  // Once the map is ready and the Carousel_Order has at least one venue, open
+  // the carousel in Browse_Mode on the first (highest-ranked) citywide pick.
+  // Skipped when a Focus_Signal is pending (it opens the carousel on its own
+  // target) or when the carousel is already open.
   const autoOpenedRef = useRef(false)
   useEffect(() => {
     if (autoOpenedRef.current || !mapReady) return

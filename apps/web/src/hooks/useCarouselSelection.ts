@@ -14,10 +14,12 @@ import {
   MAP_ARRIVAL_ZOOM,
   MIN_MARKER_ZOOM,
   RECOMMENDED_LIMIT,
+  AREA_SCOPE_MIN_MOVE_M,
+  AREA_SCOPE_MIN_ZOOM_DELTA,
   toVenueCardVM,
   type VenueCardVM,
 } from '../lib/carouselConstants'
-import { vibeRank, scopeToViewport, type ViewportBounds } from '../lib/carouselRanking'
+import { vibeRank, scopeToViewport, haversineMeters, type ViewportBounds } from '../lib/carouselRanking'
 
 /**
  * Browse scope for the Peek_Carousel strip:
@@ -37,9 +39,8 @@ export type BrowseScope = 'recommended' | 'area'
  * coherent.
  *
  * It is deliberately thin over the pure cores it composes:
- *   - `vibeRank` ∘ `scopeToViewport` produce the `Carousel_Order`
- *     (recomputed, debounced, on `moveend`/`zoom` and store changes; recomputed
- *     synchronously on a `Category_Filter` change).
+ *   - `vibeRank` produces the order; scope decides membership (`recommended`
+ *     = citywide top-N, `area` = viewport-scoped after a meaningful user pan).
  *   - `moveCameraToActive` issues exactly one camera move per Active_Venue
  *     change, honouring Reduced_Motion.
  *   - `toVenueCardVM` derives the Venue_Card view models the render shells need.
@@ -161,6 +162,33 @@ function readBounds(map: MapInstance | null): ViewportBounds | null {
   }
 }
 
+/** Map centre + zoom snapshot used to detect meaningful user exploration. */
+interface ViewportSnapshot {
+  lat: number
+  lng: number
+  zoom: number
+}
+
+function readViewportSnapshot(map: MapInstance | null): ViewportSnapshot | null {
+  if (!map) return null
+  try {
+    const [[west, south], [east, north]] = map.getBounds().toArray()
+    const zoom = map.getZoom()
+    if (![west, south, east, north, zoom].every((n) => Number.isFinite(n))) return null
+    return { lat: (south + north) / 2, lng: (west + east) / 2, zoom }
+  } catch {
+    return null
+  }
+}
+
+function isMeaningfulViewportChange(from: ViewportSnapshot, to: ViewportSnapshot): boolean {
+  const movedM = haversineMeters(from, to)
+  return movedM >= AREA_SCOPE_MIN_MOVE_M || Math.abs(to.zoom - from.zoom) >= AREA_SCOPE_MIN_ZOOM_DELTA
+}
+
+/** Mapbox map instances expose `once`; the abstract {@link MapInstance} does not. */
+type MapWithOnce = MapInstance & { once?: (event: string, handler: () => void) => void }
+
 /** Order-equality check to avoid redundant `setOrder` writes (and render churn). */
 function sameOrder(a: string[], b: string[]): boolean {
   if (a.length !== b.length) return false
@@ -214,6 +242,15 @@ export function useCarouselSelection({
   const setBrowseScope = useCallback((scope: BrowseScope) => {
     browseScopeRef.current = scope
     setBrowseScopeState(scope)
+  }, [])
+
+  // Baseline viewport for distinguishing accidental micro-drags from real
+  // exploration. Updated on map ready, after programmatic fly-to, and when
+  // returning to the recommended scope.
+  const lastViewportRef = useRef<ViewportSnapshot | null>(null)
+  const snapshotViewport = useCallback(() => {
+    const snap = readViewportSnapshot(useMapStore.getState().mapInstance)
+    if (snap) lastViewportRef.current = snap
   }, [])
 
   // ── Order recompute core ────────────────────────────────────────────────
@@ -300,8 +337,9 @@ export function useCarouselSelection({
   // synchronous effect below; viewport changes by `notifyViewportChanged`.
   useEffect(() => {
     if (!mapReady) return
+    snapshotViewport()
     debouncedRecompute()
-  }, [nodes, pulseScores, checkInCounts, lastKnownPosition, capturedAt, mapReady, debouncedRecompute])
+  }, [nodes, pulseScores, checkInCounts, lastKnownPosition, capturedAt, mapReady, debouncedRecompute, snapshotViewport])
 
   // ── Filter change: recompute synchronously and reassign the Active_Venue ──
   //
@@ -378,7 +416,10 @@ export function useCarouselSelection({
       reducedMotion: reducedMotionValue,
       ...(arrivalZoom !== undefined ? { zoom: arrivalZoom } : {}),
     })
-  }, [activeVenueId, reducedMotionValue, mapReady])
+    // Refresh the exploration baseline after the fly-to settles so a later
+    // micro-drag is not measured against the pre-selection viewport.
+    ;(map as MapWithOnce).once?.('moveend', snapshotViewport)
+  }, [activeVenueId, reducedMotionValue, mapReady, snapshotViewport])
 
   // ── Focus_Signal consumption ──────────────────────────────────────────────
   //
@@ -446,19 +487,30 @@ export function useCarouselSelection({
   )
 
   const notifyViewportChanged = useCallback(() => {
-    // A real user pan/zoom means "show me what's here": switch to area scope so
-    // the strip reflects the place the user is exploring. (Programmatic camera
-    // moves from selection do not call this - MapScreen only wires user-driven
-    // moveend/zoom - so flying to the Active_Venue never narrows the scope.)
-    setBrowseScope('area')
+    const current = readViewportSnapshot(useMapStore.getState().mapInstance)
+    if (!current) return
+
+    const previous = lastViewportRef.current
+    lastViewportRef.current = current
+
+    if (browseScopeRef.current === 'recommended') {
+      // First event after a baseline snapshot: record only, stay citywide.
+      if (previous === null) return
+      // Ignore micro-moves and control jitter until the user meaningfully
+      // explores a new part of the map.
+      if (!isMeaningfulViewportChange(previous, current)) return
+      setBrowseScope('area')
+    }
+
     debouncedRecompute()
   }, [setBrowseScope, debouncedRecompute])
 
   // Return to the citywide recommended scope (the "Back to recommended" cue).
   const showRecommended = useCallback(() => {
     setBrowseScope('recommended')
+    snapshotViewport()
     recomputeOrder()
-  }, [setBrowseScope, recomputeOrder])
+  }, [setBrowseScope, snapshotViewport, recomputeOrder])
 
   // Reset to the recommended scope whenever the carousel closes, so each fresh
   // open leads with the citywide recommendations rather than a stale area view.
@@ -466,8 +518,9 @@ export function useCarouselSelection({
   useEffect(() => {
     if (mode !== 'closed') return
     setBrowseScope('recommended')
+    snapshotViewport()
     recomputeOrder()
-  }, [mode, setBrowseScope, recomputeOrder])
+  }, [mode, setBrowseScope, snapshotViewport, recomputeOrder])
 
   // Re-open the carousel on the last dismissed venue and ensure it is present
   // in the recomputed order so Browse_Mode surfaces it immediately.

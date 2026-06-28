@@ -262,21 +262,28 @@ describe('Feature: live-vibe-on-map, cold-open arrival zoom', () => {
 describe('Feature: vibe-ranked-browse, hybrid browse scope (recommended vs area)', () => {
   // A map whose bounds tightly enclose only venue "a"; "b" and "c" sit far
   // outside, so area scope drops them while recommended scope keeps them.
-  function tightMap() {
+  function mutableTightMap(initialLat = -26.2, initialLng = 28.04, zoom = 13) {
+    let centerLat = initialLat
+    let centerLng = initialLng
+    const delta = 0.05
     return {
-      getZoom: () => 13,
+      setCenter(lat: number, lng: number) {
+        centerLat = lat
+        centerLng = lng
+      },
+      getZoom: () => zoom,
       getBounds: () => ({
-        // [[west, south], [east, north]]
         toArray: () => [
-          [28.0, -26.3],
-          [28.1, -26.1],
+          [centerLng - delta, centerLat - delta],
+          [centerLng + delta, centerLat + delta],
         ],
       }),
       flyTo: vi.fn(),
+      once: vi.fn(),
     }
   }
 
-  function seedTight() {
+  function seedTight(map: ReturnType<typeof mutableTightMap>) {
     useMapStore.setState({
       nodes: {
         a: node('a', 'nightlife', -26.2, 28.04),
@@ -287,7 +294,7 @@ describe('Feature: vibe-ranked-browse, hybrid browse scope (recommended vs area)
       checkInCounts: {},
       archetypeIds: {},
       focusNodeId: null,
-      mapInstance: tightMap() as never,
+      mapInstance: map as never,
     })
     useLocationStore.setState({ lastKnownPosition: null, capturedAt: null })
     useSelectionStore.setState({
@@ -300,7 +307,7 @@ describe('Feature: vibe-ranked-browse, hybrid browse scope (recommended vs area)
   }
 
   it('defaults to citywide recommended scope, independent of the viewport', () => {
-    seedTight()
+    seedTight(mutableTightMap())
     const { result } = renderHook(() => useCarouselSelection({ ...baseParams, recomputeDebounceMs: 100_000 }))
 
     act(() => result.current.selectVenue('a', 'marker'))
@@ -310,13 +317,36 @@ describe('Feature: vibe-ranked-browse, hybrid browse scope (recommended vs area)
     expect([...result.current.carouselOrder].sort()).toEqual(['a', 'b', 'c'])
   })
 
-  it('switches to area scope on a user pan/zoom, then restores recommended', () => {
-    seedTight()
+  it('does not flip to area scope on a micro pan while recommended', () => {
+    const map = mutableTightMap()
+    seedTight(map)
     const { result } = renderHook(() => useCarouselSelection({ ...baseParams, recomputeDebounceMs: 100_000 }))
     act(() => result.current.selectVenue('a', 'marker'))
 
-    // User pans/zooms: scope flips to area and the order narrows to the viewport.
+    // Establish baseline, then nudge the centre by ~100 m (well under the 400 m
+    // threshold) - scope must stay citywide.
     act(() => result.current.notifyViewportChanged())
+    act(() => {
+      map.setCenter(-26.2009, 28.04)
+      result.current.notifyViewportChanged()
+    })
+
+    expect(result.current.browseScope).toBe('recommended')
+    expect([...result.current.carouselOrder].sort()).toEqual(['a', 'b', 'c'])
+  })
+
+  it('switches to area scope on a meaningful pan, then restores recommended', () => {
+    const map = mutableTightMap()
+    seedTight(map)
+    const { result } = renderHook(() => useCarouselSelection({ ...baseParams, recomputeDebounceMs: 100_000 }))
+    act(() => result.current.selectVenue('a', 'marker'))
+
+    // Baseline snapshot, then a ~1.1 km pan - meaningful enough to enter area scope.
+    act(() => result.current.notifyViewportChanged())
+    act(() => {
+      map.setCenter(-26.21, 28.04)
+      result.current.notifyViewportChanged()
+    })
     act(() => result.current.recomputeOrder())
     expect(result.current.browseScope).toBe('area')
     expect(result.current.carouselOrder).toEqual(['a'])

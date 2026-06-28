@@ -74,6 +74,20 @@ export const SHEET_FOCUS_OFFSET_RATIO = 0.3
 export const RECOMMENDED_LIMIT = 20
 
 /**
+ * Minimum map-center movement (metres) before a user pan/zoom flips the browse
+ * scope from `recommended` to `area`. Filters out accidental micro-drags and
+ * control-induced jitter so stepping through citywide recommendations does not
+ * collapse the strip to the current viewport.
+ */
+export const AREA_SCOPE_MIN_MOVE_M = 400
+
+/**
+ * Minimum zoom-level change before a user zoom flips the browse scope from
+ * `recommended` to `area`. Paired with {@link AREA_SCOPE_MIN_MOVE_M}.
+ */
+export const AREA_SCOPE_MIN_ZOOM_DELTA = 0.35
+
+/**
  * Live_Archetype id used when no live value has arrived for a node and the node
  * carries no `defaultArchetypeId`. Mirrors R7.8's eclectic-fallback rule so the
  * Venue_Card glyph is never blank.
