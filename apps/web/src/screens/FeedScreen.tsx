@@ -113,7 +113,7 @@ export function FeedScreen({ onNavigate }: FeedScreenProps) {
     staleTime: 30_000,
   })
 
-  // Live gets near the consumer (R11.4). Shares RewardsScreen's query cache.
+  // Live gets near the consumer (R11.4). Shares the near-me query cache.
   const { data: rewards } = useQuery({
     queryKey: ['rewards', 'near-me', pos?.lat, pos?.lng],
     queryFn: () =>

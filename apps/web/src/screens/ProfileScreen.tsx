@@ -7,11 +7,13 @@ import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore
 import { useUserStore } from '@area-code/shared/stores/userStore'
 import { useTheme } from '@area-code/shared/hooks/useTheme'
 import type { ThemePreference } from '@area-code/shared/hooks/useTheme'
+import { useUnclaimedRewards } from '@area-code/shared/hooks'
 import { TierBadge } from '@area-code/shared/components/TierBadge'
 import { TierProgressBar } from '@area-code/shared/components/TierProgressBar'
 import { StreakDisplay } from '@area-code/shared/components/StreakDisplay'
 import { Avatar } from '@area-code/shared/components/Avatar'
 import { PrivacyIndicator } from '@area-code/shared/components/PrivacyIndicator'
+import { RedemptionCodeCard } from '@area-code/shared/components/RedemptionCodeCard'
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { TIER_PERMANENCE_SHORT } from '@area-code/shared/constants/legal'
 import type { User, PrivacyLevel } from '@area-code/shared/types'
@@ -34,6 +36,10 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   const streakCount = useUserStore((s) => s.streakCount)
   const setUser = useUserStore((s) => s.setUser)
   const { preference, setPreference } = useTheme()
+  // The consumer's wallet of earned-but-unredeemed get codes. Lives here now
+  // that the standalone gets tab is gone; it is pure utility (a code to show
+  // staff), not a discovery surface.
+  const { rewards: earnedCodes } = useUnclaimedRewards()
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false)
   const [deletingAccount, setDeletingAccount] = useState(false)
@@ -139,6 +145,25 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
         <StatCard value={streakCount} label={t('profile.currentStreak')} />
         <StatCard value={tier} label={t('profile.currentTier')} capitalize />
       </div>
+
+      {earnedCodes.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-[var(--text-primary)] font-bold text-lg font-[Syne] mb-1">{t('rewards.yourCodes')}</h2>
+          <p className="text-[var(--text-muted)] text-xs mb-3">{t('rewards.yourCodesHint')}</p>
+          <div className="flex flex-col gap-3">
+            {earnedCodes.map((c) => (
+              <RedemptionCodeCard
+                key={c.id}
+                rewardTitle={c.rewardTitle}
+                redemptionCode={c.redemptionCode}
+                nodeName={c.nodeName}
+                codeExpiresAt={c.codeExpiresAt}
+                hint={t('rewards.codeHint')}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {tierProgress && (
         <div className="mb-3">

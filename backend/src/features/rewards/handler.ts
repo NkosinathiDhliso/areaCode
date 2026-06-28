@@ -54,28 +54,10 @@ export async function rewardRoutes(app: FastifyInstance) {
     },
   )
 
-  // GET /v1/rewards/claims/recent — anonymised "just claimed near you" feed.
-  app.get(
-    '/v1/rewards/claims/recent',
-    {
-      preHandler: [requireAuth('consumer'), validate({ query: nearMeQuerySchema })],
-    },
-    async (request) => {
-      const query = request.query as z.infer<typeof nearMeQuerySchema>
-      return service.getRecentClaimsNearMe(query.lat, query.lng)
-    },
-  )
-
   // GET /v1/users/me/unclaimed-rewards
   app.get('/v1/users/me/unclaimed-rewards', { preHandler: [requireAuth('consumer')] }, async (request) => {
     const auth = getAuth(request)
     return service.getUnclaimedRewards(auth.userId)
-  })
-
-  // GET /v1/users/me/claimed-rewards — the viewer's own redeemed get history.
-  app.get('/v1/users/me/claimed-rewards', { preHandler: [requireAuth('consumer')] }, async (request) => {
-    const auth = getAuth(request)
-    return service.getClaimedRewards(auth.userId)
   })
 
   // POST /v1/rewards/:rewardId/redeem (staff auth)

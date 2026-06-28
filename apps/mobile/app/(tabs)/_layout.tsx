@@ -26,7 +26,6 @@ export default function TabsLayout() {
         }}
       >
         <Tabs.Screen name="index" options={{ title: t('nav.map'), tabBarLabel: t('nav.map') }} />
-        <Tabs.Screen name="rewards" options={{ title: t('nav.rewards'), tabBarLabel: t('nav.rewards') }} />
         <Tabs.Screen name="leaderboard" options={{ title: t('nav.leaderboard'), tabBarLabel: t('nav.leaderboard') }} />
         <Tabs.Screen name="feed" options={{ title: t('nav.feed'), tabBarLabel: t('nav.feed') }} />
         <Tabs.Screen name="profile" options={{ title: t('nav.profile'), tabBarLabel: t('nav.profile') }} />

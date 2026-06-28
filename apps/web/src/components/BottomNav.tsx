@@ -1,10 +1,10 @@
 import { useTranslation } from 'react-i18next'
 import { useNavigationStore } from '@area-code/shared/stores/navigationStore'
-import { Map, Gift, Trophy, Activity, User } from 'lucide-react'
+import { Map, Trophy, Activity, User } from 'lucide-react'
 import type { AppRoute } from '../types'
 import type { LucideIcon } from 'lucide-react'
 
-type NavRoute = 'map' | 'gets' | 'ranks' | 'feed' | 'profile'
+type NavRoute = 'map' | 'ranks' | 'feed' | 'profile'
 
 interface BottomNavProps {
   active: string
@@ -21,7 +21,6 @@ interface BottomNavProps {
 
 const NAV_ITEMS: ReadonlyArray<{ route: NavRoute; labelKey: string; Icon: LucideIcon }> = [
   { route: 'map', labelKey: 'nav.map', Icon: Map },
-  { route: 'gets', labelKey: 'nav.rewards', Icon: Gift },
   { route: 'ranks', labelKey: 'nav.leaderboard', Icon: Trophy },
   { route: 'feed', labelKey: 'nav.feed', Icon: Activity },
   { route: 'profile', labelKey: 'nav.profile', Icon: User },

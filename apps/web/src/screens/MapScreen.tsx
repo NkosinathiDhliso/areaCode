@@ -123,7 +123,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   useMapSockets(citySlug, accessToken ?? undefined, userId)
 
   // Populate the live-gets ranking signal from rewards-near-me (R5.1, R15.2).
-  // Shares RewardsScreen's query cache so this adds no extra network call.
+  // Shares the near-me query cache so this adds no extra network call.
   useHasLiveGets()
 
   // Live archetype delivery is gated by the `live_vibe_on_map` flag (R12.4,

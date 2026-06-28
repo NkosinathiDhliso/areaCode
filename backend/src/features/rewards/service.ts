@@ -432,60 +432,6 @@ export async function getUnclaimedRewards(userId: string) {
   return repo.getUnclaimedRewards(userId)
 }
 
-/**
- * Anonymised "just claimed near you" social proof for the Gets page. Returns
- * recent claims at nearby venues without ever revealing who claimed them. Gets
- * are the motivating factor to go out, so seeing live claim activity nearby is
- * the nudge — identity is deliberately stripped (POPIA / honest-presence).
- */
-export async function getRecentClaimsNearMe(lat: number, lng: number) {
-  if (DEV_MODE) {
-    const ago = (mins: number) => new Date(Date.now() - mins * 60 * 1000).toISOString()
-    return [
-      {
-        id: 'claim-near-1',
-        rewardTitle: 'Free Coffee',
-        nodeId: 'dev-1',
-        nodeName: 'Father Coffee',
-        distance: 150,
-        claimedAt: ago(4),
-      },
-      {
-        id: 'claim-near-2',
-        rewardTitle: '20% Off Cocktails',
-        nodeId: 'dev-3',
-        nodeName: "Kitchener's Bar",
-        distance: 800,
-        claimedAt: ago(12),
-      },
-      {
-        id: 'claim-near-3',
-        rewardTitle: 'Buy 1 Get 1 Free',
-        nodeId: 'dev-9',
-        nodeName: 'The Grillhouse',
-        distance: 600,
-        claimedAt: ago(28),
-      },
-    ]
-  }
-  return repo.getRecentClaimsNearMe(lat, lng)
-}
-
-/**
- * The viewer's own claimed-and-redeemed get history (gets they have already
- * used), newest first. Complements the wallet of active codes.
- */
-export async function getClaimedRewards(userId: string) {
-  if (DEV_MODE) {
-    const ago = (mins: number) => new Date(Date.now() - mins * 60 * 1000).toISOString()
-    return [
-      { id: 'hist-1', rewardTitle: 'Free Starter', nodeName: "Nando's Rosebank", redeemedAt: ago(60) },
-      { id: 'hist-2', rewardTitle: 'Free Day Pass', nodeName: 'Virgin Active Sandton', redeemedAt: ago(1500) },
-    ]
-  }
-  return repo.getClaimedRewards(userId)
-}
-
 export async function redeemReward(code: string, staffId?: string) {
   if (DEV_MODE) {
     return { success: true, rewardTitle: 'Free Coffee', redeemedAt: new Date().toISOString() }

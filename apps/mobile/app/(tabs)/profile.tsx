@@ -2,6 +2,7 @@ import { TIER_PERMANENCE_SHORT } from '@area-code/shared/constants/legal'
 import { TIER_LEVELS } from '@area-code/shared/constants/tier-levels'
 import type { TierLevel } from '@area-code/shared/constants/tier-levels'
 import { api } from '@area-code/shared/lib/api'
+import { useUnclaimedRewards } from '@area-code/shared/hooks'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useUserStore } from '@area-code/shared/stores/userStore'
 import type { User } from '@area-code/shared/types'
@@ -15,6 +16,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Share } fr
 import { ArchetypeReveal } from '../../src/components/ArchetypeReveal'
 import { AvatarCircle } from '../../src/components/AvatarCircle'
 import { NativeTierBadge } from '../../src/components/NativeTierBadge'
+import { RedemptionCodeCard } from '../../src/components/RedemptionCodeCard'
 import { colors } from '../../src/theme'
 
 export default function ProfileScreen() {
@@ -23,6 +25,10 @@ export default function ProfileScreen() {
   const queryClient = useQueryClient()
   const { isAuthenticated, logout } = useConsumerAuthStore()
   const { user, tier, totalCheckIns, streakCount, setUser } = useUserStore()
+  // Wallet of earned-but-unredeemed get codes. Lives in Profile now that the
+  // standalone gets tab is gone; it is utility (a code to show staff), not a
+  // discovery surface.
+  const { rewards: earnedCodes } = useUnclaimedRewards()
   const [busy, setBusy] = useState(false)
 
   const { data: profile } = useQuery({
@@ -190,6 +196,23 @@ export default function ProfileScreen() {
 
       <Text style={styles.tierPermanence}>{TIER_PERMANENCE_SHORT}</Text>
 
+      {earnedCodes.length > 0 && (
+        <View style={styles.walletSection}>
+          <Text style={styles.walletTitle}>{t('rewards.yourCodes')}</Text>
+          <Text style={styles.walletHint}>{t('rewards.yourCodesHint')}</Text>
+          {earnedCodes.map((c) => (
+            <RedemptionCodeCard
+              key={c.id}
+              rewardTitle={c.rewardTitle}
+              redemptionCode={c.redemptionCode}
+              nodeName={c.nodeName}
+              codeExpiresAt={c.codeExpiresAt}
+              hint={t('rewards.codeHint')}
+            />
+          ))}
+        </View>
+      )}
+
       <ArchetypeReveal archetypeId={displayUser?.archetypeId ?? 'archetype-uncharted'} />
 
       <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/friends')}>
@@ -266,6 +289,9 @@ const styles = StyleSheet.create({
   statValue: { color: colors.textPrimary, fontWeight: '700', fontSize: 20 },
   statLabel: { color: colors.textMuted, fontSize: 11, marginTop: 4 },
   tierPermanence: { color: colors.textMuted, fontSize: 12, marginTop: -4, marginBottom: 4 },
+  walletSection: { gap: 12, marginBottom: 4 },
+  walletTitle: { color: colors.textPrimary, fontWeight: '700', fontSize: 16 },
+  walletHint: { color: colors.textMuted, fontSize: 12, marginTop: -8 },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',

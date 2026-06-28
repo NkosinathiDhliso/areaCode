@@ -13,7 +13,7 @@ interface NearbyReward {
   lifecycle?: 'upcoming' | 'live' | 'ended'
 }
 
-/** JHB downtown fallback, matching RewardsScreen so the query key is shared. */
+/** JHB downtown fallback, matching the feed query so the cache key is shared. */
 const DEFAULT_LAT = -26.2041
 const DEFAULT_LNG = 28.0473
 
@@ -22,10 +22,10 @@ const DEFAULT_LNG = 28.0473
  * from the rewards-near-me feed.
  *
  * Without this the signal is always empty during browse and R5 / Property 5
- * have no observable effect on ranking. The query key and URL are identical to
- * RewardsScreen's so React Query serves both from one cached fetch (no extra
- * network call, R14.2). The signal degrades gracefully to `false` (no effect)
- * when unauthenticated or when the fetch has not resolved.
+ * have no observable effect on ranking. The query key and URL are shared with
+ * the feed's live-gets fetch so React Query serves both from one cached fetch
+ * (no extra network call, R14.2). The signal degrades gracefully to `false`
+ * (no effect) when unauthenticated or when the fetch has not resolved.
  *
  * Requirements: 5.1, 5.2, 15.2
  */

@@ -17,7 +17,6 @@ import { OnboardingFlow } from '@area-code/shared/components/OnboardingFlow'
 
 import { useFriendsPresence } from './hooks/useFriendsPresence'
 import { MapScreen } from './screens/MapScreen'
-import { RewardsScreen } from './screens/RewardsScreen'
 import { LeaderboardScreen } from './screens/LeaderboardScreen'
 import { FeedScreen } from './screens/FeedScreen'
 import { FriendsScreen } from './screens/FriendsScreen'
@@ -60,7 +59,6 @@ const ROUTE_PATHS: Record<AppRoute, string> = {
   'forgot-password': '/forgot-password',
   'first-get-prompt': '/first-get-prompt',
   map: '/map',
-  gets: '/gets',
   ranks: '/ranks',
   feed: '/feed',
   friends: '/friends',
@@ -79,7 +77,9 @@ function pathToRoute(path: string): AppRoute {
   if (path === '/forgot-password') return 'forgot-password'
   if (path === '/first-get-prompt') return 'first-get-prompt'
   if (path === '/map') return 'map'
-  if (path === '/gets') return 'gets'
+  // The standalone gets/deals tab was removed; keep old links working by
+  // redirecting them to the map, where gets now surface as a reward layer.
+  if (path === '/gets') return 'map'
   if (path === '/ranks') return 'ranks'
   if (path === '/feed') return 'feed'
   if (path === '/friends') return 'friends'
@@ -270,7 +270,6 @@ function AppContent() {
 
   // Gated routes for unauthenticated users fall back to the auth landing
   const GATED: ReadonlyArray<AppRoute> = [
-    'gets',
     'ranks',
     'feed',
     'friends',
@@ -297,7 +296,6 @@ function AppContent() {
             {activeRoute === 'forgot-password' && <ForgotPassword onNavigate={setRoute} />}
             {activeRoute === 'first-get-prompt' && <FirstGetPrompt onNavigate={setRoute} />}
             {activeRoute === 'map' && <MapScreen onNavigate={setRoute} />}
-            {activeRoute === 'gets' && <RewardsScreen onNavigate={setRoute} />}
             {activeRoute === 'ranks' && <LeaderboardScreen onNavigate={setRoute} />}
             {activeRoute === 'feed' && <FeedScreen onNavigate={setRoute} />}
             {activeRoute === 'friends' && <FriendsScreen />}

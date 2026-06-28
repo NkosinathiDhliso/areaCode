@@ -10,11 +10,9 @@ import { rewardRoutes } from '../handler.js'
  * The monetization invariant (Requirement 5) is that a get is a free
  * engagement tool and reach is the paid product. Concretely, the rewards
  * router must NOT expose any consumer-facing route that lists or searches
- * events/offers independent of proximity. The consumer discovery read paths are
- * the proximity-gated `GET /v1/rewards/near-me` and the proximity-gated
- * `GET /v1/rewards/claims/recent` (anonymised "just claimed near you"), plus the
- * user's own non-discovery surfaces (`GET /v1/users/me/unclaimed-rewards` wallet
- * and `GET /v1/users/me/claimed-rewards` history). The operator-scoped
+ * events/offers independent of proximity. The only consumer read path is the
+ * existing proximity-gated `GET /v1/rewards/near-me` (plus the user's own
+ * `GET /v1/users/me/unclaimed-rewards` wallet). The operator-scoped
  * `GET /v1/business/rewards` lives in the business feature router, not here.
  *
  * This test registers ONLY the rewards router and inspects every route it
@@ -63,36 +61,26 @@ describe('rewards router — no new reach surface (R5.1, R5.2)', () => {
       'POST /v1/business/rewards',
       'PUT /v1/business/rewards/:id',
       'GET /v1/rewards/near-me',
-      'GET /v1/rewards/claims/recent',
       'GET /v1/users/me/unclaimed-rewards',
-      'GET /v1/users/me/claimed-rewards',
       'POST /v1/rewards/:id/redeem',
     ])
 
     expect(signatures).toEqual(expected)
   })
 
-  it('exposes only proximity-gated discovery feeds and the user-own surfaces', async () => {
+  it('exposes the proximity-gated near-me feed as the only consumer events read path', async () => {
     const routes = await collectRewardRoutes()
     const getUrls = routes.filter((r) => r.method === 'GET').map((r) => r.url)
 
-    // Positive guard: the proximity-gated feed MUST exist. It is the primary
-    // path through which a consumer discovers gets, bounded by the near-me
-    // radius — so events inherit that bound (R5.1).
+    // Positive guard: the proximity-gated feed MUST exist. It is the only
+    // path through which a consumer discovers gets, and it is bounded by the
+    // near-me radius — so events inherit that bound (R5.1).
     expect(getUrls).toContain('/v1/rewards/near-me')
 
-    // The other consumer GETs are: the proximity-gated "just claimed near you"
-    // social-proof feed (also lat/lng-bounded, so it adds no unbounded reach),
-    // and the user's own wallet + claimed history (not discovery/listing).
+    // The only other consumer GET is the user's own wallet of unclaimed
+    // rewards — not a discovery/listing surface.
     const consumerGetUrls = getUrls.filter((url) => !url.startsWith('/v1/business/'))
-    expect(new Set(consumerGetUrls)).toEqual(
-      new Set([
-        '/v1/rewards/near-me',
-        '/v1/rewards/claims/recent',
-        '/v1/users/me/unclaimed-rewards',
-        '/v1/users/me/claimed-rewards',
-      ]),
-    )
+    expect(new Set(consumerGetUrls)).toEqual(new Set(['/v1/rewards/near-me', '/v1/users/me/unclaimed-rewards']))
   })
 
   it('exposes no consumer-facing events list/search route', async () => {
