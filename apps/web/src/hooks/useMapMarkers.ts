@@ -185,6 +185,11 @@ function buildMarkerElement(
     justifyContent: 'center',
     overflow: 'visible',
     pointerEvents: 'none',
+    // Pivot the zoom scale at the bottom-centre - the cone tip / geo-anchor -
+    // so scaling grows the marker upward from its coordinate and never lifts
+    // the tip off the ground point. (Default 'center' origin would shift the
+    // tip by (height/2)·(scale-1) at any zoom where scale != 1.)
+    transformOrigin: 'bottom center',
   })
   container.appendChild(scaleLayer)
 
@@ -730,10 +735,16 @@ export function useMapMarkers(
         const marker = new mapboxgl.Marker({
           element: el,
           anchor: 'bottom',
-          // 'horizon' keeps the marker oriented relative to the globe's
-          // horizon during bearing drift. Without this, markers can appear
-          // to spin or drift visually as the globe rotates.
-          rotationAlignment: 'horizon' as mapboxgl.MarkerOptions['rotationAlignment'],
+          // Keep the beam upright and screen-locked so ONLY the bottom anchor
+          // (the cone tip) is pinned to the venue coordinate. 'horizon' tilts
+          // the marker toward the globe horizon and re-orients it every frame
+          // as you pan, which swings a tall beam so its tip visibly wanders off
+          // the ground point. 'viewport' alignment renders the marker in screen
+          // space (always upright, no per-pan rotation/tilt), so the tip tracks
+          // its coordinate rigidly through pan and pitch - the honest "vertical
+          // light pillar anchored at the venue" the constellation spec calls for.
+          rotationAlignment: 'viewport' as mapboxgl.MarkerOptions['rotationAlignment'],
+          pitchAlignment: 'viewport' as mapboxgl.MarkerOptions['pitchAlignment'],
         })
           .setLngLat([node.lng, node.lat])
           .addTo(map)
