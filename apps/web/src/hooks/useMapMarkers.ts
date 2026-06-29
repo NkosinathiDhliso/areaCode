@@ -205,7 +205,10 @@ function buildMarkerElement(
     { ...beamOptions, glyphSize },
   )
 
-  // ── Glyph wrapper (sits on the wide cone mouth) ──
+  // ── Glyph wrapper (rides the apex at the TOP of the beam) ──
+  // Bat-Signal: the beam's tip is pinned to the venue coordinate at the bottom
+  // and widens upward into the sky; the glyph sits on the wide cone mouth at
+  // the top of that light pillar — NOT down on the ground coordinate.
   const glyphWrapper = document.createElement('div')
   Object.assign(glyphWrapper.style, {
     position: 'relative',
@@ -283,7 +286,11 @@ function buildMarkerElement(
     glyphWrapper.appendChild(ripple)
   }
 
-  beaconStack.appendChild(glyphWrapper)
+  // Place the glyph at the TOP of the flex column (before the beam hit) so the
+  // beam descends from it to the venue coordinate. Appending it would stack the
+  // glyph *below* the beam — back on the ground coordinate, which is the bug
+  // this fixes.
+  beaconStack.insertBefore(glyphWrapper, beaconStack.firstChild)
 
   // ── Live count badge (buzzing / popping only) ──
   // The badge shows the venue's Live_Check_In_Count (`mapStore.checkInCounts`),
@@ -293,8 +300,8 @@ function buildMarkerElement(
     const badge = document.createElement('div')
     Object.assign(badge.style, {
       position: 'absolute',
-      top: `${Math.max(0, totalSize - glyphSize - 6)}px`,
-      right: `${totalWidth * 0.12}px`,
+      top: '-6px',
+      right: '-6px',
       background: '#1e1e2e',
       border: '1px solid rgba(255,255,255,0.08)',
       borderRadius: '9999px',
@@ -308,7 +315,9 @@ function buildMarkerElement(
     })
     badge.textContent = liveCount > 99 ? '99+' : String(liveCount)
     badge.dataset.layer = 'badge'
-    scaleLayer.appendChild(badge)
+    // Pin the count to the glyph (top of the beam) so it rides the apex with
+    // the symbol rather than floating near the ground coordinate.
+    glyphWrapper.appendChild(badge)
   }
 
   applyActiveStyling(container, isActive, colour)
@@ -450,12 +459,12 @@ function updateMarkerElement(
   // place on each `node:pulse_update` without detaching the marker (R18.1).
   let badge = el.querySelector('[data-layer="badge"]') as HTMLElement | null
   if ((state === 'buzzing' || state === 'popping') && liveCount > 0) {
-    if (!badge) {
+    if (!badge && glyphWrapper) {
       badge = document.createElement('div')
       Object.assign(badge.style, {
         position: 'absolute',
-        top: `${Math.max(0, totalSize - glyphSize - 6)}px`,
-        right: `${totalWidth * 0.12}px`,
+        top: '-6px',
+        right: '-6px',
         background: '#1e1e2e',
         border: '1px solid rgba(255,255,255,0.08)',
         borderRadius: '9999px',
@@ -468,9 +477,10 @@ function updateMarkerElement(
         pointerEvents: 'none',
       })
       badge.dataset.layer = 'badge'
-      scaleLayer.appendChild(badge)
+      // Pin to the glyph (top of the beam), matching buildMarkerElement.
+      glyphWrapper.appendChild(badge)
     }
-    badge.textContent = liveCount > 99 ? '99+' : String(liveCount)
+    if (badge) badge.textContent = liveCount > 99 ? '99+' : String(liveCount)
   } else if (badge) {
     badge.remove()
   }

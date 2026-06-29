@@ -40,11 +40,11 @@ const BEAM_HEIGHT: Record<NodeState, number> = {
 
 /** Cone top width (px) by Pulse_State before tier multiplier — wide mouth under glyph. */
 const CONE_TOP: Record<NodeState, number> = {
-  dormant: 16,
-  quiet: 20,
-  active: 28,
-  buzzing: 36,
-  popping: 48,
+  dormant: 26,
+  quiet: 34,
+  active: 46,
+  buzzing: 62,
+  popping: 82,
 }
 
 /** Wide at top (glyph), tip pinned to venue coordinate at bottom. */

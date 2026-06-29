@@ -6,6 +6,7 @@ import { useSelectionStore } from '@area-code/shared/stores/selectionStore'
 import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
 import { useUserStore } from '@area-code/shared/stores/userStore'
 import { useTheme } from '@area-code/shared/hooks/useTheme'
+import { useAppHeight } from '@area-code/shared/hooks/useAppHeight'
 import { useRewardSocket } from '@area-code/shared/hooks/useRewardSocket'
 import { useNotificationSocket } from '@area-code/shared/hooks/useNotificationSocket'
 import { api } from '@area-code/shared/lib/api'
@@ -112,6 +113,9 @@ function AppContent() {
 
   // Activate SAST time-based theme (06:00-18:00 light, 18:00-06:00 dark)
   useTheme()
+
+  // Pin the shell to the real visible viewport height (iOS Safari dvh/vh gap).
+  useAppHeight()
 
   // App-wide live subscriptions: reward codes land in the wallet and
   // notification/tier events feed the notification center from any screen,
@@ -226,8 +230,7 @@ function AppContent() {
 
   // The route the shell will actually render. Authenticated users landing on
   // root are routed to their time-based default tab.
-  const resolvedRoute: AppRoute =
-    isAuthenticated && route === 'landing' ? (activeDefaultTab as AppRoute) : route
+  const resolvedRoute: AppRoute = isAuthenticated && route === 'landing' ? (activeDefaultTab as AppRoute) : route
 
   // Keep the Map mounted once it has first been shown. Switching tabs hides it
   // with CSS instead of unmounting it, so Mapbox is never torn down and

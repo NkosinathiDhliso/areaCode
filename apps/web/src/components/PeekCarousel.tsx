@@ -6,7 +6,7 @@ import { useEffect, useReducer, useRef, type CSSProperties, type PointerEvent as
 import { useTranslation } from 'react-i18next'
 
 import type { UseCarouselSelectionResult } from '../hooks/useCarouselSelection'
-import { DRAG_AXIS_THRESHOLD } from '../lib/carouselConstants'
+import { DRAG_AXIS_THRESHOLD, INITIAL_BROWSE_COUNT } from '../lib/carouselConstants'
 import { browseReducer, deriveBrowseStrip } from '../lib/carouselRanking'
 import { classifyDrag } from '../lib/gestureClassifier'
 
@@ -118,11 +118,11 @@ export function PeekCarousel({
     showRecommended,
   } = selection
 
-  // ── Browse strip expansion state (Top 2 + More) ──────────────────────────
+  // ── Browse strip progressive reveal state (Top N + More) ─────────────────
   // Managed via the pure `browseReducer` from carouselRanking.ts. The reducer
-  // resets to collapsed (top 2) on OPEN, FILTER_CHANGE, and DISMISS, and
-  // expands on TAP_MORE (R4.3, R4.4).
-  const [browseState, browseDispatch] = useReducer(browseReducer, { isExpanded: false })
+  // resets to the initial top-N view on OPEN, FILTER_CHANGE, and DISMISS, and
+  // reveals one more venue per TAP_MORE (R4.3, R4.4).
+  const [browseState, browseDispatch] = useReducer(browseReducer, { visibleCount: INITIAL_BROWSE_COUNT })
 
   // Dispatch OPEN when the carousel transitions from closed to browse/commit,
   // and DISMISS when it transitions to closed (R4.4).
@@ -147,14 +147,14 @@ export function PeekCarousel({
   }, [categoryFilter])
 
   // Derive visible venues and "showMore" from the full carousel order and the
-  // expansion state. The selector is pure and property-tested (Property 6).
+  // current reveal depth. The selector is pure and property-tested.
   // We resolve the full Node[] from the VMs' ids to pass to deriveBrowseStrip,
   // then map back to VMs for rendering.
   const { visibleVMs, showMore } = (() => {
     const allNodes = carouselOrderVMs
       .map((vm) => nodes[vm.id])
       .filter((n): n is NonNullable<typeof n> => n !== undefined)
-    const { visible, showMore } = deriveBrowseStrip(allNodes, browseState.isExpanded)
+    const { visible, showMore } = deriveBrowseStrip(allNodes, browseState.visibleCount)
     const visibleIds = new Set(visible.map((n) => n.id))
     return {
       visibleVMs: carouselOrderVMs.filter((vm) => visibleIds.has(vm.id)),

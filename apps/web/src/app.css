@@ -12,10 +12,17 @@
   html,
   body,
   #root {
-    /* 100vh first as a fallback for browsers without dvh support; modern
-       iOS 15.4+/Chrome then override with 100dvh (true dynamic viewport). */
+    /* Height resolution, most-robust last:
+       1. 100vh   — universal fallback (older WebKit without dvh).
+       2. 100dvh  — true dynamic viewport on modern iOS 15.4+/Chrome.
+       3. --app-height — JS-pinned window.innerHeight (see useAppHeight); the
+          only value that reliably matches the visible area in an iOS Safari
+          standalone PWA, where dvh/vh can leave a strip below the bottom nav.
+       Each later line overrides the previous only if it computes to a valid
+       length, so unsupported units gracefully degrade. */
     height: 100vh;
     height: 100dvh;
+    height: var(--app-height, 100dvh);
     margin: 0;
     padding: 0;
     /* Solid backstop so the home-indicator strip can never flash the

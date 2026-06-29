@@ -207,73 +207,84 @@ describe('Feature: map-discovery-experience, Property 11: Active_Venue is never 
 // ─── Browse Strip State Machine (browseReducer) ─────────────────────────────
 
 describe('Feature: vibe-ranked-browse, browseReducer unit tests', () => {
-  it('OPEN resets to collapsed', () => {
-    expect(browseReducer({ isExpanded: true }, { type: 'OPEN' })).toEqual({ isExpanded: false })
-    expect(browseReducer({ isExpanded: false }, { type: 'OPEN' })).toEqual({ isExpanded: false })
+  it('OPEN resets to the initial top-2 reveal', () => {
+    expect(browseReducer({ visibleCount: 7 }, { type: 'OPEN' })).toEqual({ visibleCount: 2 })
+    expect(browseReducer({ visibleCount: 2 }, { type: 'OPEN' })).toEqual({ visibleCount: 2 })
   })
 
-  it('TAP_MORE expands', () => {
-    expect(browseReducer({ isExpanded: false }, { type: 'TAP_MORE' })).toEqual({ isExpanded: true })
+  it('TAP_MORE reveals one more venue', () => {
+    expect(browseReducer({ visibleCount: 2 }, { type: 'TAP_MORE' })).toEqual({ visibleCount: 3 })
+    expect(browseReducer({ visibleCount: 3 }, { type: 'TAP_MORE' })).toEqual({ visibleCount: 4 })
   })
 
-  it('DISMISS resets to collapsed', () => {
-    expect(browseReducer({ isExpanded: true }, { type: 'DISMISS' })).toEqual({ isExpanded: false })
+  it('DISMISS resets to the initial top-2 reveal', () => {
+    expect(browseReducer({ visibleCount: 5 }, { type: 'DISMISS' })).toEqual({ visibleCount: 2 })
   })
 
-  it('FILTER_CHANGE resets to collapsed', () => {
-    expect(browseReducer({ isExpanded: true }, { type: 'FILTER_CHANGE' })).toEqual({ isExpanded: false })
+  it('FILTER_CHANGE resets to the initial top-2 reveal', () => {
+    expect(browseReducer({ visibleCount: 5 }, { type: 'FILTER_CHANGE' })).toEqual({ visibleCount: 2 })
   })
 
   it('STEP does not change state', () => {
-    const expanded: BrowseState = { isExpanded: true }
-    const collapsed: BrowseState = { isExpanded: false }
-    expect(browseReducer(expanded, { type: 'STEP' })).toBe(expanded)
-    expect(browseReducer(collapsed, { type: 'STEP' })).toBe(collapsed)
+    const revealed: BrowseState = { visibleCount: 4 }
+    const initial: BrowseState = { visibleCount: 2 }
+    expect(browseReducer(revealed, { type: 'STEP' })).toBe(revealed)
+    expect(browseReducer(initial, { type: 'STEP' })).toBe(initial)
   })
 })
 
-// ─── Top 2 + More Selector (deriveBrowseStrip) ─────────────────────────────
+// ─── Progressive reveal selector (deriveBrowseStrip) ────────────────────────
 
 describe('Feature: vibe-ranked-browse, deriveBrowseStrip unit tests', () => {
   const nodes = [makeNode('a', 0, 0), makeNode('b', 1, 1), makeNode('c', 2, 2), makeNode('d', 3, 3)]
 
-  it('shows top 2 + showMore when >= 3 venues and collapsed', () => {
-    const result = deriveBrowseStrip(nodes, false)
+  it('shows the top 2 + showMore at the initial reveal when >= 3 venues', () => {
+    const result = deriveBrowseStrip(nodes, 2)
     expect(result.visible).toHaveLength(2)
     expect(result.visible[0]!.id).toBe('a')
     expect(result.visible[1]!.id).toBe('b')
     expect(result.showMore).toBe(true)
   })
 
-  it('shows all venues with showMore=false when expanded', () => {
-    const result = deriveBrowseStrip(nodes, true)
+  it('reveals one more venue per step, keeping showMore until the list is exhausted', () => {
+    const step3 = deriveBrowseStrip(nodes, 3)
+    expect(step3.visible.map((n) => n.id)).toEqual(['a', 'b', 'c'])
+    expect(step3.showMore).toBe(true)
+
+    const step4 = deriveBrowseStrip(nodes, 4)
+    expect(step4.visible.map((n) => n.id)).toEqual(['a', 'b', 'c', 'd'])
+    expect(step4.showMore).toBe(false)
+  })
+
+  it('clamps an over-reveal to the list length with no showMore', () => {
+    const result = deriveBrowseStrip(nodes, 99)
     expect(result.visible).toHaveLength(4)
     expect(result.showMore).toBe(false)
   })
 
-  it('shows all venues with showMore=false when < 3 venues (collapsed)', () => {
+  it('shows all venues with showMore=false when there are fewer than the initial reveal', () => {
     const twoNodes = [makeNode('x', 0, 0), makeNode('y', 1, 1)]
-    const result = deriveBrowseStrip(twoNodes, false)
+    const result = deriveBrowseStrip(twoNodes, 2)
     expect(result.visible).toHaveLength(2)
     expect(result.showMore).toBe(false)
   })
 
   it('returns empty visible and showMore=false for empty list', () => {
-    const result = deriveBrowseStrip([], false)
+    const result = deriveBrowseStrip([], 2)
     expect(result.visible).toHaveLength(0)
     expect(result.showMore).toBe(false)
   })
 
-  it('exactly 3 venues collapsed shows top 2 + showMore', () => {
+  it('exactly 3 venues at initial reveal shows top 2 + showMore', () => {
     const threeNodes = [makeNode('a', 0, 0), makeNode('b', 1, 1), makeNode('c', 2, 2)]
-    const result = deriveBrowseStrip(threeNodes, false)
+    const result = deriveBrowseStrip(threeNodes, 2)
     expect(result.visible).toHaveLength(2)
     expect(result.showMore).toBe(true)
   })
 
-  it('1 venue collapsed shows all with no showMore', () => {
+  it('1 venue at initial reveal shows all with no showMore', () => {
     const one = [makeNode('z', 5, 5)]
-    const result = deriveBrowseStrip(one, false)
+    const result = deriveBrowseStrip(one, 2)
     expect(result.visible).toHaveLength(1)
     expect(result.showMore).toBe(false)
   })

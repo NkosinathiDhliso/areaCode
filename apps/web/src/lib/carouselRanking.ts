@@ -1,6 +1,8 @@
 import type { Node } from '@area-code/shared/types'
 import { TIER_SIZE_MULTIPLIER } from '@area-code/shared/constants'
 
+import { BROWSE_STEP, INITIAL_BROWSE_COUNT } from './carouselConstants'
+
 /**
  * Pure vibe-first ranking and viewport scoping for the Peek-Carousel.
  *
@@ -274,9 +276,9 @@ export function scopeToViewport(ranked: Node[], bounds: ViewportBounds | null, a
 /**
  * Actions that drive the browse strip state transitions.
  *
- *   - `OPEN` / `FILTER_CHANGE` -> reset to collapsed (top 2 view)
- *   - `TAP_MORE` -> expand to full list
- *   - `DISMISS` -> reset to collapsed
+ *   - `OPEN` / `FILTER_CHANGE` / `DISMISS` -> reset to the initial top-N view
+ *     ({@link INITIAL_BROWSE_COUNT})
+ *   - `TAP_MORE` -> reveal one more venue ({@link BROWSE_STEP})
  *   - `STEP` -> no expansion change (stepping through venues)
  *
  * Design: .kiro/specs/vibe-ranked-browse/design.md § Browse Strip State Reducer
@@ -291,25 +293,30 @@ export type BrowseAction =
 
 /**
  * State of the browse strip expansion.
- *   - `isExpanded = false`: shows top 2 + "More" (collapsed view)
- *   - `isExpanded = true`: shows all ranked venues (expanded view)
+ *
+ * `visibleCount` is how many ranked venues the strip currently reveals. It
+ * starts at {@link INITIAL_BROWSE_COUNT} and grows by {@link BROWSE_STEP} with
+ * every "Keep exploring" tap - a progressive, one-at-a-time reveal rather than a
+ * binary collapsed/expanded flip.
  */
 export interface BrowseState {
-  isExpanded: boolean
+  visibleCount: number
 }
 
 /**
- * Pure state reducer for the browse strip expansion state machine.
- *
- * This is the **Property 7 (Browse Expansion State Machine)** target.
+ * Pure state reducer for the browse strip reveal state machine.
  *
  * Transitions:
- *   - `OPEN`, `DISMISS`, `FILTER_CHANGE` → `isExpanded: false` (reset to top 2)
- *   - `TAP_MORE` → `isExpanded: true` (unlock full list)
- *   - `STEP` → no change (stepping doesn't affect expansion)
+ *   - `OPEN`, `DISMISS`, `FILTER_CHANGE` → reset to {@link INITIAL_BROWSE_COUNT}
+ *     (back to the top 2)
+ *   - `TAP_MORE` → reveal one more venue (`visibleCount + BROWSE_STEP`)
+ *   - `STEP` → no change (stepping doesn't affect how many are revealed)
  *
- * Once expanded via TAP_MORE, the strip remains expanded until DISMISS or
- * FILTER_CHANGE resets it. This is the key invariant for Property 7.
+ * Each `TAP_MORE` drips in the next-best venue and the strip stays at that depth
+ * until `DISMISS` or `FILTER_CHANGE` resets it. The reveal is intentionally
+ * unbounded here; {@link deriveBrowseStrip} clamps it to the ranked list length
+ * (itself capped at `RECOMMENDED_LIMIT` in the recommended scope), so the strip
+ * can never reveal more venues than actually exist.
  *
  * Design: .kiro/specs/vibe-ranked-browse/design.md § Browse Strip State Reducer
  * Requirements: 4.3, 4.4
@@ -319,39 +326,37 @@ export function browseReducer(state: BrowseState, action: BrowseAction): BrowseS
     case 'OPEN':
     case 'DISMISS':
     case 'FILTER_CHANGE':
-      return { isExpanded: false }
+      return { visibleCount: INITIAL_BROWSE_COUNT }
     case 'TAP_MORE':
-      return { isExpanded: true }
+      return { visibleCount: state.visibleCount + BROWSE_STEP }
     case 'STEP':
       return state
   }
 }
 
-// ─── Top 2 + More Selector ──────────────────────────────────────────────────
+// ─── Progressive reveal selector ────────────────────────────────────────────
 
 /**
- * Derive the visible venues and "More" affordance for the browse strip.
+ * Derive the visible venues and "More" affordance for the browse strip from the
+ * ranked list and the current `visibleCount`.
  *
- * This is the **Property 6 (Top 2 Initial Display)** target — a pure selector
- * kept separate from the reducer so it can be property-tested independently.
+ * This is a pure selector kept separate from the reducer so it can be
+ * property-tested independently.
  *
  * Rules:
- *   - When `ranked` has >= 3 venues AND `isExpanded` is false:
- *     show the first 2 venues and `showMore = true`.
- *   - When `ranked` has < 3 venues:
- *     show all venues, `showMore = false` (no "More" needed; collapsed and
- *     expanded views are identical).
- *   - When `isExpanded` is true:
- *     show all venues, `showMore = false` (already expanded).
+ *   - Show the first `visibleCount` ranked venues (clamped to the list length so
+ *     it never over-reads).
+ *   - `showMore = true` whenever there are still un-revealed venues
+ *     (`visible.length < ranked.length`), so the "Keep exploring" card keeps
+ *     appearing until the whole ranked list is shown, then disappears.
  *
- * Design: .kiro/specs/vibe-ranked-browse/design.md § Top 2 + More Entry Point
+ * Design: .kiro/specs/vibe-ranked-browse/design.md § Top N + More Entry Point
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
  */
-export function deriveBrowseStrip(ranked: Node[], isExpanded: boolean): { visible: Node[]; showMore: boolean } {
-  if (ranked.length < 3 || isExpanded) {
-    return { visible: ranked, showMore: false }
-  }
-  return { visible: ranked.slice(0, 2), showMore: true }
+export function deriveBrowseStrip(ranked: Node[], visibleCount: number): { visible: Node[]; showMore: boolean } {
+  const count = Math.max(0, visibleCount)
+  const visible = ranked.slice(0, count)
+  return { visible, showMore: visible.length < ranked.length }
 }
 
 // ─── Viewport Scoping (unchanged) ──────────────────────────────────────────

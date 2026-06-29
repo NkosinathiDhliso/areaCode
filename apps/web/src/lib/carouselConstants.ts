@@ -86,6 +86,24 @@ export const SHEET_FOCUS_OFFSET_RATIO = 0.3
 export const RECOMMENDED_LIMIT = 20
 
 /**
+ * Number of venues the Browse strip reveals before any "Keep exploring" tap -
+ * the strongest two magnets only, so the consumer is not flooded with choice on
+ * open (vibe-first, not a long list to scroll). See
+ * `.kiro/steering/discovery-dna-vibe-over-convenience.md`.
+ */
+export const INITIAL_BROWSE_COUNT = 2
+
+/**
+ * Number of extra venues revealed per "Keep exploring" tap. Progressive,
+ * one-at-a-time disclosure: each tap drips in the next-best venue rather than
+ * dumping the whole ranked list. This keeps the lead on the most alive,
+ * taste-matched venues while letting curiosity pull the consumer deeper - the
+ * reveal never exceeds the ranked list, which is itself capped at
+ * {@link RECOMMENDED_LIMIT} in the citywide recommended scope.
+ */
+export const BROWSE_STEP = 1
+
+/**
  * Minimum map-center movement (metres) before a user pan/zoom flips the browse
  * scope from `recommended` to `area`. Filters out accidental micro-drags and
  * control-induced jitter so stepping through citywide recommendations does not
