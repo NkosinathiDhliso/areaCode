@@ -67,7 +67,8 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           What do you listen to?
         </h1>
         <p className="text-[var(--text-secondary)] text-[13px] text-center mb-6 leading-relaxed">
-          Pick up to 5 genres. This powers the crowd vibe at venues you visit.
+          Pick up to 5 genres. This powers the crowd vibe at venues you visit. You can connect Spotify later for a
+          sharper read.
         </p>
 
         <div className="flex flex-wrap gap-2 justify-center mb-6">

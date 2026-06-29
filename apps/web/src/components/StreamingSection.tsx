@@ -44,6 +44,9 @@ export function StreamingSection() {
   const [showConsent, setShowConsent] = useState<StreamingProvider | null>(null)
   const [spotifySuccess, setSpotifySuccess] = useState(false)
   const [syncingSpotify, setSyncingSpotify] = useState(false)
+  // Manual genres are the fallback when Spotify isn't connected. Hidden behind
+  // a toggle so the section leads with one choice at a time (Spotify first).
+  const [showManual, setShowManual] = useState(false)
 
   const connected = user?.streamingProvider ?? null
   // Look up the catalog entry by id so the rename module (R9.6) is the only
@@ -233,13 +236,24 @@ export function StreamingSection() {
                   : 'Connected. Add listening history or pick genres manually to shape your archetype.'}
               </p>
             </div>
-            <button
-              onClick={handleDisconnect}
-              disabled={loading}
-              className="text-[var(--danger)] text-sm disabled:opacity-50"
-            >
-              {t('profile.streaming.disconnect')}
-            </button>
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              {connected === 'spotify' && (
+                <button
+                  onClick={() => handleConnect('spotify')}
+                  disabled={loading}
+                  className="text-[var(--accent)] text-sm disabled:opacity-50"
+                >
+                  {t('profile.streaming.refresh', 'Refresh')}
+                </button>
+              )}
+              <button
+                onClick={handleDisconnect}
+                disabled={loading}
+                className="text-[var(--danger)] text-sm disabled:opacity-50"
+              >
+                {t('profile.streaming.disconnect')}
+              </button>
+            </div>
           </div>
         </div>
       ) : (
@@ -263,8 +277,8 @@ export function StreamingSection() {
             </div>
 
             <p className="text-[var(--text-secondary)] text-xs mb-3">
-              Connect Spotify to read your top artists, map them into Area Code genres, and update your archetype
-              automatically.
+              Connect Spotify to read your top artists, map them into Area Code genres, and set your music personality.
+              Reconnect anytime to refresh it.
             </p>
 
             <div className="flex flex-row flex-wrap gap-2 mb-3">
@@ -275,7 +289,7 @@ export function StreamingSection() {
                 Top artists
               </span>
               <span className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl px-2 py-1 text-[var(--text-secondary)] text-[11px]">
-                Archetype sync
+                Instant archetype read
               </span>
             </div>
 
@@ -292,13 +306,28 @@ export function StreamingSection() {
             </button>
           </div>
 
-          <div className="flex flex-row items-center justify-between gap-3 mb-3">
-            <p className="text-[var(--text-muted)] text-xs">Prefer manual setup? Pick up to 5 genres below.</p>
-            <span className="text-[var(--text-muted)] text-xs whitespace-nowrap">
-              {t('profile.streaming.connectApple')} soon
-            </span>
-          </div>
-          <ManualGenreSelector />
+          {showManual ? (
+            <>
+              <div className="flex flex-row items-center justify-between gap-3 mb-2">
+                <p className="text-[var(--text-muted)] text-xs">
+                  Fallback: pick up to 5 genres. Connecting Spotify later replaces these.
+                </p>
+                <span className="text-[var(--text-muted)] text-xs whitespace-nowrap">
+                  {t('profile.streaming.connectApple')} soon
+                </span>
+              </div>
+              <ManualGenreSelector />
+            </>
+          ) : (
+            <button
+              onClick={() => setShowManual(true)}
+              className="w-full text-center text-[var(--text-secondary)] text-xs font-medium py-2 transition-all active:scale-95"
+            >
+              {genres.length > 0
+                ? t('profile.streaming.editGenres', 'Edit your genres instead')
+                : t('profile.streaming.pickManually', 'Prefer not to connect? Pick your genres')}
+            </button>
+          )}
         </>
       )}
 

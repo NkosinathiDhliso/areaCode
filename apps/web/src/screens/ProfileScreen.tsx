@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
 import { useErrorStore } from '@area-code/shared/stores/errorStore'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
@@ -40,7 +40,6 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   // that the standalone gets tab is gone; it is pure utility (a code to show
   // staff), not a discovery surface.
   const { rewards: earnedCodes } = useUnclaimedRewards()
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false)
   const [deletingAccount, setDeletingAccount] = useState(false)
 
@@ -55,11 +54,6 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
       return u
     },
     staleTime: 60_000,
-  })
-
-  const deleteHistoryMutation = useMutation({
-    mutationFn: () => api.delete('/v1/users/me/check-in-history'),
-    onSuccess: () => setShowDeleteConfirm(false),
   })
 
   const { data: privacyData } = useQuery({
@@ -255,30 +249,6 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
       </div>
 
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 mb-3">
-        {/* Export as CSV (Issue #39) */}
-        <button
-          onClick={() => {
-            void api.get<{ items: unknown[] }>('/v1/users/me/check-in-history?limit=50').then((data) => {
-              const items = data.items as Array<Record<string, unknown>>
-              if (!items.length) return
-              const headers = Object.keys(items[0]!)
-              const csv = [
-                headers.join(','),
-                ...items.map((row) => headers.map((h) => JSON.stringify(row[h] ?? '')).join(',')),
-              ].join('\n')
-              const blob = new Blob([csv], { type: 'text/csv' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = 'check-in-history.csv'
-              a.click()
-              URL.revokeObjectURL(url)
-            })
-          }}
-          className="w-full text-left text-[var(--text-primary)] text-sm py-2"
-        >
-          {t('profile.exportHistory')}
-        </button>
         {/* Full data export (POPIA compliance) */}
         <button
           onClick={() => {
@@ -301,14 +271,6 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
         >
           {t('profile.downloadData', 'Download my data')}
         </button>
-        {/* Delete history with confirmation (Issue #4) */}
-        <button
-          onClick={() => setShowDeleteConfirm(true)}
-          disabled={deleteHistoryMutation.isPending}
-          className="w-full text-left text-[var(--danger)] text-sm py-2"
-        >
-          {t('profile.deleteHistory')}
-        </button>
       </div>
 
       <button
@@ -324,42 +286,6 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
       >
         {t('profile.deleteAccount', 'Delete my account')}
       </button>
-
-      {/* Delete confirmation dialog (Issue #4) */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-5">
-          <div className="bg-[var(--bg-modal)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
-            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
-              {t('profile.deleteHistoryConfirmTitle', 'Delete check-in history?')}
-            </h3>
-            <p className="text-[var(--text-secondary)] text-sm mb-4">
-              {t(
-                'profile.deleteHistoryConfirmBody',
-                'This will permanently delete all your check-in history. This action cannot be undone.',
-              )}
-            </p>
-            <div className="flex flex-row gap-3">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
-              >
-                {t('common.cancel', 'Cancel')}
-              </button>
-              <button
-                onClick={() => deleteHistoryMutation.mutate()}
-                disabled={deleteHistoryMutation.isPending}
-                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2"
-              >
-                {deleteHistoryMutation.isPending ? (
-                  <Spinner size="sm" className="border-white border-t-transparent" />
-                ) : (
-                  t('profile.deleteHistory')
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Delete account confirmation dialog */}
       {showDeleteAccountConfirm && (
