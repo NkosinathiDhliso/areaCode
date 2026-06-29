@@ -54,6 +54,34 @@ export async function setPaymentGrace(id: string, until: string | null) {
   return updateBusiness(id, { paymentGraceUntil: until } as any)
 }
 
+/**
+ * Business ids whose payment grace window has lapsed - `paymentGraceUntil` is
+ * a past ISO timestamp at `nowIso`. Absent or null grace never matches: a
+ * successful payment clears it to NULL (`setPaymentGrace(id, null)`), and the
+ * `<` string comparison excludes the NULL type. Paginated Scan; projects only
+ * the id the lapsed-payment sweep needs (business/service.ts).
+ */
+export async function listBusinessesWithLapsedGrace(nowIso: string): Promise<string[]> {
+  const ids: string[] = []
+  let cursor: Record<string, unknown> | undefined
+  do {
+    const params: Record<string, unknown> = {
+      TableName: TableNames.businesses,
+      FilterExpression: 'attribute_exists(paymentGraceUntil) AND paymentGraceUntil < :now',
+      ExpressionAttributeValues: { ':now': nowIso },
+      ProjectionExpression: 'businessId',
+    }
+    if (cursor) params['ExclusiveStartKey'] = cursor
+    const result = await documentClient.send(new ScanCommand(params as any))
+    for (const item of result.Items ?? []) {
+      const id = item['businessId']
+      if (typeof id === 'string') ids.push(id)
+    }
+    cursor = result.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (cursor)
+  return ids
+}
+
 export async function deactivateBusiness(id: string) {
   return updateBusiness(id, { tier: 'free', isActive: false } as any)
 }

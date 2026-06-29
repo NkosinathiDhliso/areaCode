@@ -42,6 +42,20 @@ export async function getNodesByBusinessId(businessId: string): Promise<Node[]> 
   return (result.Items || []) as Node[]
 }
 
+/**
+ * Deactivate (`isActive = false`) every node owned by a business and return
+ * how many were touched. The single home for "take a business's venues off
+ * the map" - reused by the admin disable-business flow and the billing
+ * non-payment enforcement (business/service.ts) so the loop is not duplicated.
+ */
+export async function deactivateNodesForBusiness(businessId: string): Promise<number> {
+  const nodes = await getNodesByBusinessId(businessId)
+  for (const node of nodes) {
+    await updateNode(node.nodeId, { isActive: false })
+  }
+  return nodes.length
+}
+
 export async function createNode(data: Omit<Node, 'nodeId' | 'createdAt'>): Promise<Node> {
   const nodeId = generateId()
   const now = new Date().toISOString()

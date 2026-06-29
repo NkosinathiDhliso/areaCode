@@ -124,7 +124,7 @@ export function BottomSheet({ isOpen, onClose, children, transparentBackdrop = f
           overflowY: 'auto',
           animation: 'slideUp 300ms cubic-bezier(0.2,0.8,0.2,1) forwards',
         }}
-        className="bg-[var(--bg-raised)] rounded-t-3xl px-5 pt-5 pb-6 shadow-[0_-4px_30px_rgba(0,0,0,0.5)] border-t border-[rgba(255,255,255,0.1)]"
+        className="bg-[var(--bg-modal)] rounded-t-3xl px-5 pt-5 pb-6 shadow-[0_-4px_30px_rgba(0,0,0,0.5)] border-t border-[rgba(255,255,255,0.1)]"
       >
         <Box className="flex justify-center mb-4">
           <Box className="w-10 h-1 rounded-full bg-[var(--border-strong)]" />

@@ -251,11 +251,24 @@ export async function handler() {
     console.warn(`[cleanup] idempotency-marker retention sweep failed: ${String(err)}`)
   }
 
+  // ─── Lapsed-payment enforcement ─────────────────────────────────────────
+  // Demote businesses whose 7-day payment grace has lapsed: their nodes go
+  // isActive=false and tier→'free' so they drop off the paid-only map.
+  let lapsedPaymentsProcessed = 0
+  try {
+    const { enforceLapsedPayments } = await import('../features/business/service.js')
+    const result = await enforceLapsedPayments()
+    lapsedPaymentsProcessed = result.processed
+  } catch (err) {
+    console.warn(`[cleanup] lapsed-payment enforcement failed: ${String(err)}`)
+  }
+
   console.log(
     `[cleanup] Erased: ${erasedCount}, orphaned locks deleted: ${orphanedLocks}, ` +
       `booster purchases deleted: ${boosterPurchasesDeleted}, ` +
       `floor audits deleted: ${floorAuditsDeleted}, ` +
-      `idempotency markers deleted: ${idempotencyMarkersDeleted}`,
+      `idempotency markers deleted: ${idempotencyMarkersDeleted}, ` +
+      `lapsed payments processed: ${lapsedPaymentsProcessed}`,
   )
   return {
     erasedCount,
@@ -265,5 +278,6 @@ export async function handler() {
     boosterPurchasesDeleted,
     floorAuditsDeleted,
     idempotencyMarkersDeleted,
+    lapsedPaymentsProcessed,
   }
 }

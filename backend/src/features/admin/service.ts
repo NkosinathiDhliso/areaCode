@@ -832,11 +832,8 @@ export async function disableBusiness(adminId: string, adminRole: AdminRole, bus
   if (!biz) throw AppError.notFound('Business not found')
 
   // Set isActive = false on all nodes owned by this business
-  const { getNodesByBusinessId, updateNode } = await import('../nodes/dynamodb-repository.js')
-  const nodes = await getNodesByBusinessId(businessId)
-  for (const node of nodes) {
-    await updateNode(node.nodeId, { isActive: false })
-  }
+  const { deactivateNodesForBusiness } = await import('../nodes/dynamodb-repository.js')
+  const nodesDeactivated = await deactivateNodesForBusiness(businessId)
 
   // Create audit log
   await repo.createAuditLog({
@@ -845,8 +842,8 @@ export async function disableBusiness(adminId: string, adminRole: AdminRole, bus
     action: 'disable_business',
     entityType: 'business',
     entityId: businessId,
-    afterState: { isActive: false, nodesDeactivated: nodes.length },
+    afterState: { isActive: false, nodesDeactivated },
   })
 
-  return { success: true, businessId, nodesDeactivated: nodes.length }
+  return { success: true, businessId, nodesDeactivated }
 }

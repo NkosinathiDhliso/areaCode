@@ -2,6 +2,7 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { AppError } from '../../shared/errors/AppError.js'
 import { decideBoostFloorWithMetric, type BoostMetricInput } from './floor-decision.js'
 import { classifyLifecycle, type Lifecycle } from '../rewards/lifecycle.js'
+import { deactivateNodesForBusiness } from '../nodes/dynamodb-repository.js'
 import * as repo from './repository.js'
 import {
   BUSINESS_PLANS,
@@ -997,12 +998,61 @@ export async function getCurrentNodeQr(businessId: string) {
   return { url: `https://areacode.co.za/qr/${nodeId}/${token}`, token, nodeId }
 }
 
-// ─── Downgrade / Cancel Subscription ────────────────────────────────────────
+// ─── Downgrade / Cancel Subscription & non-payment enforcement ──────────────
+//
+// Map presence is paid-only (see nodes/repository.ts `getNodesByCitySlug`). To
+// actually remove a business that stops paying, we must demote them in storage
+// - a read-time filter alone cannot set their nodes inactive. `handlePayment
+// Failed` sets a 7-day `paymentGraceUntil`; once that lapses the daily cleanup
+// worker calls `enforceLapsedPayments`, which routes through the single home
+// below.
+//
+// `deactivateForNonPayment` is that single home for "take a business off the
+// map":
+//   - business → tier 'free' + isActive false (`repo.deactivateBusiness`)
+//   - every owned node → isActive false (`deactivateNodesForBusiness`), so both
+//     the map's `isActive` filter and its paid-tier filter exclude them, and
+//     rewards on those nodes stop surfacing (rewards skip inactive nodes)
+//   - `paymentGraceUntil` cleared so the next sweep does not re-process it
+// Idempotent: re-running on an already-demoted business just re-asserts state.
 
+export async function deactivateForNonPayment(
+  businessId: string,
+): Promise<{ businessId: string; nodesDeactivated: number }> {
+  if (DEV_MODE) return { businessId, nodesDeactivated: 0 }
+  await repo.deactivateBusiness(businessId)
+  const nodesDeactivated = await deactivateNodesForBusiness(businessId)
+  await repo.setPaymentGrace(businessId, null)
+  return { businessId, nodesDeactivated }
+}
+
+/**
+ * Daily sweep (invoked by the cleanup worker): demote every business whose
+ * payment grace window has lapsed so their venues drop off the paid-only map.
+ * Per-business failures are logged and skipped so one bad row never aborts the
+ * sweep. Returns how many businesses were processed.
+ */
+export async function enforceLapsedPayments(nowMs: number = Date.now()): Promise<{ processed: number }> {
+  if (DEV_MODE) return { processed: 0 }
+  const businessIds = await repo.listBusinessesWithLapsedGrace(new Date(nowMs).toISOString())
+  let processed = 0
+  for (const businessId of businessIds) {
+    try {
+      await deactivateForNonPayment(businessId)
+      processed++
+    } catch (err) {
+      console.warn(`[business] enforceLapsedPayments: failed to deactivate ${businessId}: ${String(err)}`)
+    }
+  }
+  return { processed }
+}
+
+// A self-serve cancel is the same policy as a lapsed payment: the business is
+// no longer paying, so their venues come off the map and go inactive.
 export async function downgradeToFree(businessId: string) {
-  if (DEV_MODE) return { success: true, tier: 'starter' }
-  await repo.updateBusinessTier(businessId, 'starter', null)
-  return { success: true, tier: 'starter' }
+  if (DEV_MODE) return { success: true, tier: 'free' }
+  await deactivateForNonPayment(businessId)
+  return { success: true, tier: 'free' }
 }
 
 // ─── Admin Boost Floor Management (R4, R5) ──────────────────────────────────

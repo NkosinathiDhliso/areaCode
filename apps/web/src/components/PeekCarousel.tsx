@@ -1,7 +1,7 @@
 import { BottomSheet } from '@area-code/shared/components/BottomSheet'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import type { NodeCategory, NodeState, Reward } from '@area-code/shared/types'
-import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
+import { ChevronDown, ChevronUp, Compass, Sparkles } from 'lucide-react'
 import { useEffect, useReducer, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -432,7 +432,7 @@ function BrowseMode({
               aria-label={t('map.keepExploringLabel', 'Keep exploring - show all venues')}
               className="glass-raised flex flex-col items-center justify-center gap-2 rounded-2xl px-4 py-3 w-full h-full min-h-[80px] text-center border-2 border-dashed border-[var(--accent)] transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] hover:bg-[var(--accent)]/10"
             >
-              <Sparkles size={20} className="text-[var(--accent)]" strokeWidth={1.75} />
+              <Compass size={20} className="text-[var(--accent)]" strokeWidth={1.75} />
               <span className="text-[var(--accent)] text-xs font-semibold">
                 {t('map.keepExploring', 'Keep exploring')}
               </span>
