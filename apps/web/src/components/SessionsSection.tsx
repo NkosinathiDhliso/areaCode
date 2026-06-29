@@ -1,6 +1,11 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
+
+// How many sessions to show before collapsing the rest behind a toggle. Keeps
+// the profile screen from being swamped by a long device list.
+const COLLAPSED_LIMIT = 4
 
 interface Session {
   sessionId: string
@@ -21,6 +26,7 @@ interface SessionsSectionProps {
 export function SessionsSection({ currentSessionId }: SessionsSectionProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const [showAll, setShowAll] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['sessions', currentSessionId],
@@ -48,6 +54,16 @@ export function SessionsSection({ currentSessionId }: SessionsSectionProps) {
   const sessions = data?.sessions ?? []
   const hasOtherSessions = sessions.some((s) => !s.isCurrent)
 
+  // Current device first, then most-recently-active. The backend query order is
+  // not meaningful (sessionId-based), so order here for a stable, useful list.
+  const orderedSessions = [...sessions].sort((a, b) => {
+    if (a.isCurrent !== b.isCurrent) return a.isCurrent ? -1 : 1
+    return new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime()
+  })
+
+  const visibleSessions = showAll ? orderedSessions : orderedSessions.slice(0, COLLAPSED_LIMIT)
+  const hiddenCount = orderedSessions.length - visibleSessions.length
+
   if (isLoading) {
     return (
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 mb-3">
@@ -70,7 +86,7 @@ export function SessionsSection({ currentSessionId }: SessionsSectionProps) {
       </h3>
 
       <div className="flex flex-col gap-2">
-        {sessions.map((session) => (
+        {visibleSessions.map((session) => (
           <div
             key={session.sessionId}
             className="flex flex-row items-center justify-between bg-[var(--bg-raised)] rounded-xl px-3 py-2.5"
@@ -101,6 +117,17 @@ export function SessionsSection({ currentSessionId }: SessionsSectionProps) {
           </div>
         ))}
       </div>
+
+      {(hiddenCount > 0 || showAll) && orderedSessions.length > COLLAPSED_LIMIT && (
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className="w-full text-[var(--text-secondary)] text-xs font-medium py-2 mt-2 transition-all active:scale-95"
+        >
+          {showAll
+            ? t('profile.showFewerSessions', 'Show fewer')
+            : t('profile.showAllSessions', 'Show all ({{count}})', { count: orderedSessions.length })}
+        </button>
+      )}
 
       {hasOtherSessions && currentSessionId && (
         <button
