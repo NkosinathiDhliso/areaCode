@@ -145,7 +145,6 @@ function buildMarkerElement(
   beamOptions: BeamVisualOptions = {},
   onCommitZoom?: () => void,
 ): HTMLDivElement {
-  void node
   const cfg = STATE_CONFIG[state]
   const tierScale = beamOptions.tierBaseScale ?? 1
   const beamBox = beamContainerSize(state, tierScale, glyphSize)
@@ -154,6 +153,10 @@ function buildMarkerElement(
   const totalWidth = Math.max(glyphFootprint, beamBox.width)
   const container = document.createElement('div')
   container.className = 'node-marker'
+  // Tag the marker with its node id so the camera can locate this exact marker
+  // and frame its glyph apex (not just the geo-anchored beam tip) when flying
+  // the Active_Venue into the band above the carousel (see `cameraControl`).
+  container.dataset.nodeId = node.id
   Object.assign(container.style, {
     width: `${totalWidth}px`,
     height: `${totalSize}px`,

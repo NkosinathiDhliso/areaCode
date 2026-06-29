@@ -26,6 +26,41 @@ import { POSITION_FRESHNESS_WINDOW, SHEET_FOCUS_OFFSET_RATIO } from './carouselC
 const TOP_CHROME_PX = 88
 
 /**
+ * Pixel distance from a venue's geo-anchor - the beam tip pinned to the
+ * coordinate at the *bottom* of the marker (`anchor: 'bottom'`) - up to the
+ * centre of its glyph + selector ring at the beam apex.
+ *
+ * At browse zoom the beam stays partly lit (`BEAM_BLEND_FLOOR`), so the glyph
+ * rides ~beam-height (62-158px) above the coordinate. Framing only the
+ * coordinate therefore pushes the glyph and its ring off the top of the band
+ * above the carousel - the venue reads as "cut off at the top" while flicking
+ * through the strip. Measuring the *rendered* marker makes this adapt to pulse
+ * state, business tier, and the live zoom scale without duplicating the marker
+ * sizing math (which lives in `useMapMarkers`/`markerBeam`).
+ *
+ * Returns 0 off-DOM, when the marker is not mounted, or when the glyph sits at
+ * the anchor (beam hidden), so the offset degrades cleanly to geo-anchor
+ * framing.
+ */
+function markerApexOffset(nodeId: string): number {
+  if (typeof document === 'undefined') return 0
+  let marker: Element | null = null
+  try {
+    const sel = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(nodeId) : nodeId.replace(/["\\]/g, '\\$&')
+    marker = document.querySelector(`.node-marker[data-node-id="${sel}"]`)
+  } catch {
+    return 0
+  }
+  if (!marker) return 0
+  const glyph = marker.querySelector('[data-layer="glyph-wrapper"]')
+  if (!glyph) return 0
+  const m = marker.getBoundingClientRect()
+  const g = glyph.getBoundingClientRect()
+  const apex = m.bottom - (g.top + g.height / 2)
+  return Number.isFinite(apex) && apex > 0 ? apex : 0
+}
+
+/**
  * Vertical screen offset (in pixels) applied to `flyTo` so the Active_Venue
  * lands in the visible band above the open Peek_Carousel rather than hidden
  * behind it.
@@ -44,21 +79,27 @@ const TOP_CHROME_PX = 88
  * alike, so tapping a Venue_Card always frames its node in view instead of
  * jamming it under the top chrome (short sheet) or behind the sheet (tall one).
  *
+ * `markerApexPx` shifts the framed point up from the geo-anchor (the beam tip)
+ * to the glyph + selector ring at the beam apex, so the part of the marker the
+ * consumer actually reads is centred in the band rather than cut off above it.
+ * The beam tail is allowed to descend behind the carousel - the glyph is the
+ * hero. Defaults to 0 (frame the geo-anchor) when the apex is unknown.
+ *
  * Falls back to the legacy {@link SHEET_FOCUS_OFFSET_RATIO} of the viewport
  * height when the sheet is not mounted or the DOM/window is unavailable
  * (SSR / test environments).
  */
-export function sheetFocusOffset(): [number, number] {
+export function sheetFocusOffset(markerApexPx = 0): [number, number] {
   if (typeof document !== 'undefined') {
     const carousel = document.querySelector('[data-peek-carousel]')
     const sheet = carousel?.closest('[role="dialog"]') as HTMLElement | null
     const sheetHeight = sheet ? sheet.getBoundingClientRect().height : 0
     if (sheetHeight > 0) {
-      return [0, Math.round((TOP_CHROME_PX - sheetHeight) / 2)]
+      return [0, Math.round((TOP_CHROME_PX - sheetHeight) / 2 + markerApexPx)]
     }
   }
   const h = typeof window !== 'undefined' ? window.innerHeight : 800
-  return [0, -Math.round(h * SHEET_FOCUS_OFFSET_RATIO)]
+  return [0, Math.round(-h * SHEET_FOCUS_OFFSET_RATIO + markerApexPx)]
 }
 
 /** Options governing how the camera moves to the Active_Venue. */
@@ -92,7 +133,7 @@ export interface MoveCameraOptions {
 export function moveCameraToActive(map: MapInstance, node: Node, { reducedMotion, zoom }: MoveCameraOptions): void {
   map.flyTo({
     center: [node.lng, node.lat],
-    offset: sheetFocusOffset(),
+    offset: sheetFocusOffset(markerApexOffset(node.id)),
     // Reduced_Motion → zero-duration jump; otherwise let the map use its
     // default animated fly-to easing.
     ...(reducedMotion ? { duration: 0 } : {}),
