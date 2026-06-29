@@ -57,7 +57,7 @@ export function BottomNav({ active, onNavigate, onReselect }: BottomNavProps) {
           <button
             key={item.route}
             onClick={() => handleTap(item.route)}
-            className={`flex flex-col items-center justify-center flex-1 py-2 transition-colors duration-150 ${
+            className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors duration-150 ${
               isActive ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'
             }`}
             aria-current={isActive ? 'page' : undefined}

@@ -8,7 +8,7 @@ import { createRoot, type Root } from 'react-dom/client'
 
 import { ArchetypeGlyph } from '../components/ArchetypeGlyph'
 import { canRecenter } from '../lib/cameraControl'
-import { DEFAULT_ARCHETYPE_ID, GLYPH_ZOOM_THRESHOLD } from '../lib/carouselConstants'
+import { DEFAULT_ARCHETYPE_ID, GLYPH_ZOOM_THRESHOLD, PULSE_TEMPO } from '../lib/carouselConstants'
 import { vibeRank } from '../lib/carouselRanking'
 import { getNodeState, getCategoryColour } from '../lib/mapHelpers'
 import {
@@ -108,11 +108,11 @@ const GLYPH_HOST_LAYER = 'glyph-host'
  * glyph for identity.
  */
 const STATE_CONFIG: Record<NodeState, { animation: string; speed: string; haloOpacity: number; ripple: boolean }> = {
-  dormant: { animation: 'breathe', speed: '4s', haloOpacity: 0.12, ripple: false },
-  quiet: { animation: 'breathe', speed: '3s', haloOpacity: 0.2, ripple: false },
-  active: { animation: 'pulse', speed: '1.5s', haloOpacity: 0.3, ripple: false },
-  buzzing: { animation: 'pulse', speed: '0.8s', haloOpacity: 0.4, ripple: false },
-  popping: { animation: 'pulse', speed: '0.4s', haloOpacity: 0.5, ripple: true },
+  dormant: { ...PULSE_TEMPO.dormant, haloOpacity: 0.12, ripple: false },
+  quiet: { ...PULSE_TEMPO.quiet, haloOpacity: 0.2, ripple: false },
+  active: { ...PULSE_TEMPO.active, haloOpacity: 0.3, ripple: false },
+  buzzing: { ...PULSE_TEMPO.buzzing, haloOpacity: 0.4, ripple: false },
+  popping: { ...PULSE_TEMPO.popping, haloOpacity: 0.5, ripple: true },
 }
 
 /**

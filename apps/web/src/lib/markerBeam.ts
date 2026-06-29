@@ -4,7 +4,7 @@
 
 import type { NodeState } from '@area-code/shared/types'
 
-import { BEAM_HIT_WIDTH_PX } from './carouselConstants'
+import { BEAM_HIT_WIDTH_PX, PULSE_TEMPO } from './carouselConstants'
 import type { MarkerPresentationTier } from './markerPresentation'
 
 export const BEACON_STACK = 'beacon-stack'
@@ -40,23 +40,15 @@ const BEAM_HEIGHT: Record<NodeState, number> = {
 
 /** Cone top width (px) by Pulse_State before tier multiplier — wide mouth under glyph. */
 const CONE_TOP: Record<NodeState, number> = {
-  dormant: 26,
-  quiet: 34,
-  active: 46,
-  buzzing: 62,
-  popping: 82,
+  dormant: 16,
+  quiet: 20,
+  active: 28,
+  buzzing: 36,
+  popping: 48,
 }
 
 /** Wide at top (glyph), tip pinned to venue coordinate at bottom. */
 const CONE_CLIP = 'polygon(4% 0%, 96% 0%, 50% 100%)'
-
-const BEAM_ANIM: Record<NodeState, { animation: string; speed: string }> = {
-  dormant: { animation: 'breathe', speed: '4s' },
-  quiet: { animation: 'breathe', speed: '3s' },
-  active: { animation: 'pulse', speed: '1.5s' },
-  buzzing: { animation: 'pulse', speed: '0.8s' },
-  popping: { animation: 'pulse', speed: '0.4s' },
-}
 
 const BEAM_OPACITY: Record<NodeState, number> = {
   dormant: 0.35,
@@ -94,7 +86,7 @@ function prefersReducedMotion(): boolean {
 }
 
 function animationForState(state: NodeState): string {
-  const anim = BEAM_ANIM[state]
+  const anim = PULSE_TEMPO[state]
   return prefersReducedMotion() ? 'none' : `${anim.animation} ${anim.speed} ease-in-out infinite`
 }
 
@@ -182,7 +174,7 @@ function applyBeamEmbellishments(
       borderRadius: '9999px',
       opacity: '0.95',
       pointerEvents: 'none',
-      animation: reducedMotion ? 'none' : 'pulse 0.6s ease-in-out infinite',
+      animation: reducedMotion ? 'none' : 'breathe 2.5s ease-in-out infinite',
     })
   } else if (comet) {
     comet.remove()

@@ -64,7 +64,7 @@
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
   --shadow-glow: 0 0 20px rgba(169, 203, 224, 0.12);
   --noise-opacity: 0.03;
-  --nav-height: 56px;
+  --nav-height: 48px;
   --bottom-sheet-radius: 20px;
 }
 
@@ -227,6 +227,30 @@
   }
   50% {
     transform: scale(1.15);
+  }
+}
+/**
+ * Heartbeat: a calm lub-dub double-thump followed by a long rest, scale-only
+ * (no opacity flicker). Two gentle bumps early in the cycle, then the marker
+ * settles and holds — reads as a living pulse, never a strobe. Aliveness is
+ * expressed by the cycle duration (see PULSE_TEMPO), not by a faster flash.
+ */
+@keyframes heartbeat {
+  0% {
+    transform: scale(1);
+  }
+  14% {
+    transform: scale(1.08);
+  }
+  28% {
+    transform: scale(1);
+  }
+  42% {
+    transform: scale(1.06);
+  }
+  70%,
+  100% {
+    transform: scale(1);
   }
 }
 @keyframes ripple {

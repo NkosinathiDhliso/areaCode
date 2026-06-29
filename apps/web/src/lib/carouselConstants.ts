@@ -58,6 +58,30 @@ export const CONSTELLATION_DORMANT_CUTOFF_ZOOM = 6
 export const BEAM_HIT_WIDTH_PX = 48
 
 /**
+ * Per-Pulse_State marker/beam animation. Aliveness is encoded as TEMPO within a
+ * deliberately calm band — a true lub-dub heartbeat (see the `heartbeat`
+ * keyframe in `packages/shared/tokens.css`), never a strobe. Every state uses
+ * the same double-thump curve; a busier venue simply beats a little faster. The
+ * fastest state (popping) completes a full beat-and-rest cycle in 1.6s, and the
+ * rest phase between thumps means it never reads as flashing. The rest of the
+ * aliveness signal is carried by beam height and opacity (see `markerBeam`
+ * BEAM_HEIGHT / BEAM_OPACITY) so motion can stay calm without weakening the
+ * "this venue is alive" read — aliveness still leads (discovery-DNA), just
+ * calmly (constellation-mode "calm by default").
+ *
+ * Single source of truth: imported by both the Constellation beam layer
+ * (`markerBeam.ts`) and the glyph/dot marker layer (`useMapMarkers.ts`) so the
+ * two surfaces never drift apart.
+ */
+export const PULSE_TEMPO: Record<NodeState, { animation: string; speed: string }> = {
+  dormant: { animation: 'heartbeat', speed: '5s' },
+  quiet: { animation: 'heartbeat', speed: '4s' },
+  active: { animation: 'heartbeat', speed: '3s' },
+  buzzing: { animation: 'heartbeat', speed: '2.2s' },
+  popping: { animation: 'heartbeat', speed: '1.6s' },
+}
+
+/**
  * Zoom the camera flies to on the first cold-open move, when the map is still
  * sitting on the country-wide overview (below {@link MIN_MARKER_ZOOM}, where
  * markers are hidden). Landing here means the consumer opens straight onto a
@@ -69,9 +93,11 @@ export const BEAM_HIT_WIDTH_PX = 48
 export const MAP_ARRIVAL_ZOOM = 13
 
 /**
- * Fraction of the viewport height used as the vertical fly-to offset
- * (Sheet_Focus_Offset) so the Active_Venue lands in the visible strip above the
- * open Peek_Carousel.
+ * Fallback fraction of the viewport height used as the vertical fly-to offset
+ * (Sheet_Focus_Offset) when the live Peek_Carousel sheet cannot be measured
+ * (SSR / tests / sheet not yet mounted). When the sheet is mounted,
+ * `sheetFocusOffset` measures it directly and frames the venue in the band
+ * above it instead of using this fixed ratio.
  */
 export const SHEET_FOCUS_OFFSET_RATIO = 0.3
 

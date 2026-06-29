@@ -47,11 +47,11 @@ function computeGlyphSize(state: NodeState, score: number, tier: BusinessTier): 
 
 // ─── Halo config (replicated from useMapMarkers.ts STATE_CONFIG) ────────────
 const STATE_CONFIG: Record<NodeState, { animation: string; speed: string; haloOpacity: number; ripple: boolean }> = {
-  dormant: { animation: 'breathe', speed: '4s', haloOpacity: 0.12, ripple: false },
-  quiet: { animation: 'breathe', speed: '3s', haloOpacity: 0.2, ripple: false },
-  active: { animation: 'pulse', speed: '1.5s', haloOpacity: 0.3, ripple: false },
-  buzzing: { animation: 'pulse', speed: '0.8s', haloOpacity: 0.4, ripple: false },
-  popping: { animation: 'pulse', speed: '0.4s', haloOpacity: 0.5, ripple: true },
+  dormant: { animation: 'heartbeat', speed: '5s', haloOpacity: 0.12, ripple: false },
+  quiet: { animation: 'heartbeat', speed: '4s', haloOpacity: 0.2, ripple: false },
+  active: { animation: 'heartbeat', speed: '3s', haloOpacity: 0.3, ripple: false },
+  buzzing: { animation: 'heartbeat', speed: '2.2s', haloOpacity: 0.4, ripple: false },
+  popping: { animation: 'heartbeat', speed: '1.6s', haloOpacity: 0.5, ripple: true },
 }
 
 // ─── Tier rank ordering ─────────────────────────────────────────────────────

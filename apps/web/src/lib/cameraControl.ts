@@ -18,16 +18,45 @@ import type { MapInstance, Node } from '@area-code/shared/types'
 import { POSITION_FRESHNESS_WINDOW, SHEET_FOCUS_OFFSET_RATIO } from './carouselConstants'
 
 /**
+ * Estimated height (px) of the top chrome that overlays the map - the search
+ * button row plus the Category_Filter bar, anchored near the top safe-area
+ * inset. The Active_Venue is framed *below* this band so a selected venue is
+ * never pushed up behind the search/filter controls.
+ */
+const TOP_CHROME_PX = 88
+
+/**
  * Vertical screen offset (in pixels) applied to `flyTo` so the Active_Venue
- * lands in the visible strip above the open Peek_Carousel rather than hidden
- * behind it. Mirrors the legacy `sheetFocusOffset()` in `MapScreen`, but sourced
- * from the shared {@link SHEET_FOCUS_OFFSET_RATIO} so the carousel, camera, and
- * marker layers all agree on the same fraction of viewport height.
+ * lands in the visible band above the open Peek_Carousel rather than hidden
+ * behind it.
  *
- * Computed per-call so it adapts to the current device viewport. Falls back to
- * an 800px viewport when `window` is unavailable (SSR / test environments).
+ * The offset is measured from the *actual* open carousel sheet rather than a
+ * fixed fraction of the viewport. The sheet's bottom edge aligns with the top
+ * of the bottom-nav (its `margin-bottom` is the nav height), which is also the
+ * bottom edge of the Map_Canvas container, so the sheet always covers the
+ * bottom `sheetHeight` pixels of the map. Centring the venue in the band
+ * between {@link TOP_CHROME_PX} and the sheet's top edge gives, relative to the
+ * map-container centre:
+ *
+ *     dy = (TOP_CHROME_PX - sheetHeight) / 2
+ *
+ * This adapts to a short Browse_Mode strip and a tall Commit_Mode detail body
+ * alike, so tapping a Venue_Card always frames its node in view instead of
+ * jamming it under the top chrome (short sheet) or behind the sheet (tall one).
+ *
+ * Falls back to the legacy {@link SHEET_FOCUS_OFFSET_RATIO} of the viewport
+ * height when the sheet is not mounted or the DOM/window is unavailable
+ * (SSR / test environments).
  */
 export function sheetFocusOffset(): [number, number] {
+  if (typeof document !== 'undefined') {
+    const carousel = document.querySelector('[data-peek-carousel]')
+    const sheet = carousel?.closest('[role="dialog"]') as HTMLElement | null
+    const sheetHeight = sheet ? sheet.getBoundingClientRect().height : 0
+    if (sheetHeight > 0) {
+      return [0, Math.round((TOP_CHROME_PX - sheetHeight) / 2)]
+    }
+  }
   const h = typeof window !== 'undefined' ? window.innerHeight : 800
   return [0, -Math.round(h * SHEET_FOCUS_OFFSET_RATIO)]
 }
