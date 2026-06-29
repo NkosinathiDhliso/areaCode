@@ -100,6 +100,24 @@ function prefersReducedMotion(): boolean {
 }
 
 /**
+ * Mapbox GL renders its attribution and logo as real `<a>` links in the map
+ * control corners. By default they are in the keyboard tab order, so a user
+ * tabbing through the page lands on them and Enter navigates the whole app
+ * away to mapbox.com — a focus trap that ejects keyboard users from the app.
+ *
+ * We pull these anchors out of the tab order (`tabindex="-1"`) while leaving
+ * them visible and mouse-clickable, which keeps Mapbox attribution compliant
+ * with their TOS. The attribution control re-renders its inner HTML whenever a
+ * source's attribution changes, so we re-apply on every control-corner
+ * mutation rather than once.
+ */
+function suppressCtrlLinkFocus(container: HTMLElement): void {
+  container.querySelectorAll<HTMLAnchorElement>('.mapboxgl-ctrl a').forEach((a) => {
+    a.setAttribute('tabindex', '-1')
+  })
+}
+
+/**
  * Re-applies every custom layer/source we manage. Called on initial style
  * load and on every subsequent style swap (theme switch).
  */
@@ -258,13 +276,16 @@ function buildMapInstance(map: mapboxgl.Map): MapInstance {
 /**
  * Initialises Mapbox GL JS for the lifetime of the MapScreen mount.
  *
- * The MapScreen is conditionally rendered in App.tsx (`activeRoute === 'map'`),
- * so it unmounts when the user switches tabs and mounts fresh on return. This
- * hook therefore owns a **per-mount** map: it creates the map on mount and
+ * MapScreen is kept mounted across tab switches in App.tsx (it is hidden with
+ * `display:none`, not unmounted), so this map is created once and persists
+ * while the user moves between tabs — no re-init flash on every navigation.
+ * It is only torn down on a genuine unmount (logout / auth gate) or via
+ * `retryMap`. This hook owns that lifecycle: it creates the map on mount and
  * fully removes it on unmount. (A previous module-level singleton tried to
- * persist the map across navigation, but because each remount gets a brand-new
+ * persist the map across navigation, but because each remount got a brand-new
  * container DOM node the singleton could be left detached and the map would
- * "refuse to reopen". A clean create/destroy per mount is deterministic.)
+ * "refuse to reopen". Keeping the component — and therefore its container —
+ * mounted is the deterministic version of the same goal.)
  *
  * mapRef is only set AFTER the map fires 'load', ensuring markers added via
  * useMapMarkers are properly geo-anchored.
@@ -471,7 +492,23 @@ export function useMapInit() {
     // sky, fog, and 3D buildings every time.
     map.on('style.load', () => {
       applyCustomLayers(map, themeRef.current ?? 'dark')
+      suppressCtrlLinkFocus(container)
     })
+
+    // Keep Mapbox's attribution/logo links out of the keyboard tab order.
+    // Observe only the control corners (not the whole container) so the
+    // frequent marker DOM churn from socket updates never triggers this.
+    const ctrlEl: HTMLElement = container!
+    const ctrlObserver = new MutationObserver(() => suppressCtrlLinkFocus(ctrlEl))
+    const watchCtrlCorners = () => {
+      suppressCtrlLinkFocus(ctrlEl)
+      ctrlEl
+        .querySelectorAll(
+          '.mapboxgl-ctrl-bottom-left, .mapboxgl-ctrl-bottom-right, .mapboxgl-ctrl-top-right, .mapboxgl-ctrl-top-left',
+        )
+        .forEach((corner) => ctrlObserver.observe(corner, { childList: true, subtree: true }))
+    }
+    watchCtrlCorners()
 
     // Only expose the map ref AFTER it's fully loaded.
     map.on('load', () => {
@@ -479,6 +516,7 @@ export function useMapInit() {
       mapRef.current = map
       setMapInstance(buildMapInstance(map))
       setMapReadyKey((k) => k + 1)
+      suppressCtrlLinkFocus(container)
     })
 
     map.scrollZoom.enable()
@@ -504,6 +542,7 @@ export function useMapInit() {
     return () => {
       clearTimeout(loadTimeout)
       ro.disconnect()
+      ctrlObserver.disconnect()
       // Fully tear down the map on unmount so a stale, detached instance can
       // never block re-initialisation when the Map tab is reopened.
       try {

@@ -224,6 +224,21 @@ function AppContent() {
   // Must be called before any conditional returns to satisfy Rules of Hooks
   const activeDefaultTab = useNavigationStore((s) => s.activeDefaultTab)
 
+  // The route the shell will actually render. Authenticated users landing on
+  // root are routed to their time-based default tab.
+  const resolvedRoute: AppRoute =
+    isAuthenticated && route === 'landing' ? (activeDefaultTab as AppRoute) : route
+
+  // Keep the Map mounted once it has first been shown. Switching tabs hides it
+  // with CSS instead of unmounting it, so Mapbox is never torn down and
+  // re-initialised — this removes the "Loading map…" flash that appeared on
+  // every tab change. `display:none` also drops it out of the keyboard tab
+  // order while inactive.
+  const [mapMounted, setMapMounted] = useState(false)
+  useEffect(() => {
+    if (resolvedRoute === 'map') setMapMounted(true)
+  }, [resolvedRoute])
+
   // OAuth callback is the only screen rendered without the shell
   if (window.location.pathname.startsWith('/auth/callback')) {
     return <ConsumerOAuthCallback onNavigate={setRoute} />
@@ -263,10 +278,7 @@ function AppContent() {
   }
 
   // Authenticated users landing on root: route them to their time-based default tab
-  let activeRoute = route
-  if (isAuthenticated && route === 'landing') {
-    activeRoute = activeDefaultTab as AppRoute
-  }
+  const activeRoute = resolvedRoute
 
   // Gated routes for unauthenticated users fall back to the auth landing
   const GATED: ReadonlyArray<AppRoute> = [
@@ -282,7 +294,7 @@ function AppContent() {
   const showAuthGate = !isAuthenticated && GATED.includes(activeRoute)
 
   return (
-    <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
+    <div className="flex flex-col h-full bg-[var(--bg-base)]">
       <ConnectivityBanner />
       {isAuthenticated && !showAuthGate && <VerifyEmailBanner />}
       <div ref={contentRef} className="flex-1 relative overflow-x-hidden overflow-y-auto overscroll-y-contain">
@@ -290,12 +302,20 @@ function AppContent() {
           <AuthLanding onNavigate={setRoute} />
         ) : (
           <>
+            {/* Persisted Map. Mounted once first shown and then only hidden
+                (never unmounted) on tab switch, so Mapbox is not torn down and
+                re-initialised. `display:none` keeps it out of the tab order and
+                interaction while another tab is active. */}
+            {mapMounted && (
+              <div className="absolute inset-0" style={{ display: activeRoute === 'map' ? undefined : 'none' }}>
+                <MapScreen onNavigate={setRoute} />
+              </div>
+            )}
             {activeRoute === 'landing' && !isAuthenticated && <AuthLanding onNavigate={setRoute} />}
             {activeRoute === 'login' && <ConsumerLogin onNavigate={setRoute} />}
             {activeRoute === 'signup' && <ConsumerSignup onNavigate={setRoute} />}
             {activeRoute === 'forgot-password' && <ForgotPassword onNavigate={setRoute} />}
             {activeRoute === 'first-get-prompt' && <FirstGetPrompt onNavigate={setRoute} />}
-            {activeRoute === 'map' && <MapScreen onNavigate={setRoute} />}
             {activeRoute === 'ranks' && <LeaderboardScreen onNavigate={setRoute} />}
             {activeRoute === 'feed' && <FeedScreen onNavigate={setRoute} />}
             {activeRoute === 'friends' && <FriendsScreen />}

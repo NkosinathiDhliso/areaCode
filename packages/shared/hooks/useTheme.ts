@@ -38,6 +38,18 @@ function applyTheme(theme: ResolvedTheme): void {
   if (typeof document === 'undefined') return
   document.documentElement.setAttribute('data-theme', theme)
 
+  // Repaint the <html> backstop to match the active (time-based) theme.
+  //
+  // index.html sets a pre-hydration <html> background via an *unlayered* inline
+  // <style> that follows the OS `prefers-color-scheme`. That rule outranks the
+  // theme-aware `html { background-color: var(--bg-base) }` in app.css (which
+  // lives in Tailwind's low-priority @layer base), so the backstop would stay
+  // stuck on the OS colour. When the OS is light but our time-based theme is
+  // dark (evening), the home-indicator / safe-area strip below the 100dvh app
+  // shell then shows a beige band under the bottom nav. An inline element style
+  // outranks both rules, keeping the backstop honest to the live theme.
+  document.documentElement.style.backgroundColor = THEME_COLORS[theme]
+
   // Update all theme-color meta tags so browser chrome / status bar matches
   const metas = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')
   metas.forEach((meta) => {

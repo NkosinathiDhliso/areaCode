@@ -95,7 +95,7 @@ This plan implements the full lexicographic ranking with taste-match (archetype 
     - When a check-in expires or user checks out, emit `friend:checkout` to their mutual friends with payload `{ userId: string; nodeId: string }`; add this event to both `ServerToClientEvents` type definitions
     - _Requirements: 3.1, 3.4, 3.5_
 
-  - [ ]\* 4.4 Write integration tests for friends presence API
+  - [x]\* 4.4 Write integration tests for friends presence API
     - Test returns only active (non-expired) friends
     - Test returns empty for unauthenticated users
     - Test socket event triggers store update
@@ -116,19 +116,19 @@ This plan implements the full lexicographic ranking with taste-match (archetype 
     - Map still snaps/flies to Active_Venue in top 2 view
     - _Requirements: 4.1, 4.2, 4.3, 4.6, 4.7, 6.1, 6.2, 6.3_
 
-  - [ ]\* 5.3 Write property test: Top 2 Initial Display (Property 6)
+  - [x]\* 5.3 Write property test: Top 2 Initial Display (Property 6)
     - **Property 6: Top 2 Initial Display**
     - Generate ranked lists of 0-20 venues
     - Assert: >=3 venues -> show exactly first 2 + "More"; <3 venues -> show all, no "More"
     - **Validates: Requirements 4.1, 4.2, 4.5**
 
-  - [ ]\* 5.4 Write property test: Browse Expansion State Machine (Property 7)
+  - [x]\* 5.4 Write property test: Browse Expansion State Machine (Property 7)
     - **Property 7: Browse Expansion State Machine**
     - Generate random action sequences
     - Assert: after TAP_MORE, remains expanded until DISMISS or FILTER_CHANGE resets
     - **Validates: Requirements 4.4**
 
-- [~] 6. Checkpoint - Browse ranking and Top 2 complete
+- [x] 6. Checkpoint - Browse ranking and Top 2 complete
   - Ensure all tests pass, ask the user if questions arise.
 
 - [x] 7. City Ranks - Leaderboard evolution
@@ -145,19 +145,19 @@ This plan implements the full lexicographic ranking with taste-match (archetype 
     - Respect privacy settings - only show venues where user's privacy allows
     - _Requirements: 10.2.1, 10.2.3_
 
-  - [-] 7.3 Update `LeaderboardScreen` UI for archetype-segmented ranks
+  - [x] 7.3 Update `LeaderboardScreen` UI for archetype-segmented ranks
     - Default view: consumer's archetype rank (e.g. "Top Nomads this week in Joburg")
     - Secondary toggle/tab for city-wide view
     - When consumer has no `archetypeId`, default to city-wide with prompt to complete preferences
     - Each entry shows: rank, avatar/badge, display name (friend) or "Anonymous Explorer", tier badge, weekly count, venue streak callout
     - _Requirements: 10.1.1, 10.1.2, 10.1.3, 10.1.4, 10.2.1, 10.2.2_
 
-  - [-] 7.4 Implement tier progression nudge on consumer's rank card
+  - [x] 7.4 Implement tier progression nudge on consumer's rank card
     - Show compact progress indicator: "7 more to Fixture"
     - At highest tier (Legend): show celebratory label
     - _Requirements: 10.4.1, 10.4.2_
 
-  - [ ]\* 7.5 Write property test: Venue Streak Derivation (Property 8)
+  - [x]\* 7.5 Write property test: Venue Streak Derivation (Property 8)
     - **Property 8: Venue Streak Derivation**
     - Generate random check-in histories
     - Assert `topVenueId` is the venue with max check-ins (tie: most recent wins)
@@ -188,7 +188,7 @@ This plan implements the full lexicographic ranking with taste-match (archetype 
     - Assert card content contains only the generating consumer's own data
     - **Validates: Requirements 10.3.4, 13.1**
 
-- [~] 9. Checkpoint - City Ranks complete
+- [x] 9. Checkpoint - City Ranks complete
   - Ensure all tests pass, ask the user if questions arise.
 
 - [x] 10. City Feed - Vibe enrichment and "Join them?" CTA
@@ -208,7 +208,7 @@ This plan implements the full lexicographic ranking with taste-match (archetype 
     - Tapping "Join them?" -> Focus_Signal to venue (fly map there, open carousel)
     - _Requirements: 11.1.1, 11.1.2, 11.2.1, 11.2.2, 11.2.3, 12.1_
 
-  - [ ]\* 10.3 Write property test: "Join Them?" Eligibility (Property 10)
+  - [x]\* 10.3 Write property test: "Join Them?" Eligibility (Property 10)
     - **Property 10: "Join Them?" Eligibility**
     - Generate random (friendPresent, pulseState) tuples
     - Assert CTA shown iff friendStillPresent=true AND pulseState in {active, buzzing, popping}
@@ -235,19 +235,19 @@ This plan implements the full lexicographic ranking with taste-match (archetype 
     - Remaining items reverse-chronological
     - _Requirements: 11.6.1, 11.6.2_
 
-  - [ ]\* 11.4 Write property test: Archetype Cluster Membership (Property 11)
+  - [x]\* 11.4 Write property test: Archetype Cluster Membership (Property 11)
     - **Property 11: Archetype Cluster Membership**
     - Generate feed items with mixed archetypes
     - Assert every item in the cluster matches the consumer's archetypeId
     - **Validates: Requirements 11.3.2**
 
-  - [ ]\* 11.5 Write property test: Feed Excludes Ended Gets (Property 12)
+  - [x]\* 11.5 Write property test: Feed Excludes Ended Gets (Property 12)
     - **Property 12: Feed Excludes Ended Gets**
     - Generate reward arrays with random lifecycles
     - Assert no feed item has lifecycle 'ended' or 'upcoming'
     - **Validates: Requirements 11.4.4**
 
-  - [ ]\* 11.6 Write property test: Feed Ordering Invariant (Property 14)
+  - [x]\* 11.6 Write property test: Feed Ordering Invariant (Property 14)
     - **Property 14: Feed Ordering Invariant**
     - Generate random feed items with mixed types/timestamps
     - Assert: cluster at position 0, then happening-now, then reverse-chronological rest
@@ -271,7 +271,7 @@ This plan implements the full lexicographic ranking with taste-match (archetype 
     - Use Web Share API with clipboard fallback
     - _Requirements: 11.5.2, 11.5.3, 11.5.4, 12.3_
 
-  - [ ]\* 12.3 Write property test: Milestone Idempotency (Property 13)
+  - [x]\* 12.3 Write property test: Milestone Idempotency (Property 13)
     - **Property 13: Milestone Idempotency**
     - Generate repeated milestone triggers for the same type+qualifier
     - Assert exactly one feed entry per unique milestone
@@ -306,7 +306,7 @@ This plan implements the full lexicographic ranking with taste-match (archetype 
     - _Requirements: 13.2, 13.3_
 
 - [x] 15. Update existing property tests and final wiring
-  - [~] 15.1 Update existing `carouselRanking.test.ts` property tests for new signal order
+  - [x] 15.1 Update existing `carouselRanking.test.ts` property tests for new signal order
     - Update Properties 8-11 to use the extended `RankInput` interface (provide default values for new fields)
     - Old "buzz then distance then id" properties are superseded by the new lexicographic tests
     - Ensure `scopeToViewport` tests remain unchanged

@@ -1,7 +1,11 @@
 {
+  "id": "/",
   "name": "Area Code",
   "short_name": "Area Code",
   "description": "Live venue discovery and rewards for South Africa.",
+  "lang": "en-ZA",
+  "dir": "ltr",
+  "categories": ["lifestyle", "social", "food", "navigation"],
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -12,5 +16,21 @@
     { "src": "/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
     { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
     { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/narrow.png",
+      "type": "image/png",
+      "sizes": "1080x1920",
+      "form_factor": "narrow",
+      "label": "Area Code — the city is alive"
+    },
+    {
+      "src": "/screenshots/wide.png",
+      "type": "image/png",
+      "sizes": "1920x1080",
+      "form_factor": "wide",
+      "label": "Area Code — live venue map for South Africa"
+    }
   ]
 }

@@ -12,6 +12,9 @@
   html,
   body,
   #root {
+    /* 100vh first as a fallback for browsers without dvh support; modern
+       iOS 15.4+/Chrome then override with 100dvh (true dynamic viewport). */
+    height: 100vh;
     height: 100dvh;
     margin: 0;
     padding: 0;
