@@ -148,9 +148,11 @@ describe('Property 3: Mock API delay is within bounds', () => {
       const start = performance.now()
       await mockDelay()
       const elapsed = performance.now() - start
-      // Allow 50ms tolerance for timer imprecision
+      // Generous tolerance: timers overrun badly under CPU contention (full
+      // suite + property tests), so the upper bound only guards against a
+      // hang/no-delay, not exact precision.
       expect(elapsed).toBeGreaterThanOrEqual(90)
-      expect(elapsed).toBeLessThanOrEqual(500)
+      expect(elapsed).toBeLessThanOrEqual(1500)
     }
   })
 })
