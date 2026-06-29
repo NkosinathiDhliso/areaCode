@@ -38,10 +38,9 @@ export default function ConsumerSignup() {
       const res = await api.post<{
         accessToken: string
         refreshToken: string
-        sessionId?: string
         user: { id: string }
       }>('/v1/auth/consumer/email-signup', { email, password })
-      setAuth(res.accessToken, res.refreshToken, res.user.id, res.sessionId)
+      setAuth(res.accessToken, res.refreshToken, res.user.id)
       await maybeRedeemFirstGetToken()
       router.replace('/')
     } catch {
@@ -56,7 +55,7 @@ export default function ConsumerSignup() {
     setError(null)
     try {
       const res = await signInWithGoogleConsumerMobile()
-      setAuth(res.accessToken, res.refreshToken, res.userId, res.sessionId)
+      setAuth(res.accessToken, res.refreshToken, res.userId)
       router.replace(res.isNewUser ? '/auth/first-get' : '/')
     } catch {
       setError(t('auth.oauth.failed'))

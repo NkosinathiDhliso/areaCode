@@ -1,6 +1,7 @@
 import { getArchetypeIcon, FALLBACK_ARCHETYPE_ICON } from '@area-code/shared/constants'
 import { ARCHETYPE_CATALOG } from '@area-code/shared/constants/archetype-catalog'
 import { api } from '@area-code/shared/lib/api'
+import { useMapStore } from '@area-code/shared/stores/mapStore'
 import type { CrowdVibeSnapshot, MusicGenre } from '@area-code/shared/types'
 import * as PhosphorIcons from '@phosphor-icons/react'
 import type { Icon } from '@phosphor-icons/react'
@@ -41,6 +42,13 @@ export function CrowdVibeSection({ nodeId }: CrowdVibeSectionProps) {
   const { t } = useTranslation()
   const [data, setData] = useState<CrowdVibeSnapshot | null>(null)
 
+  // Source the Resolution_Branch from the SAME live map data the glyph rides
+  // (`mapStore`, written by the `node:archetype_change` socket event). Because
+  // the branch and the rendered archetype id are stored together, this label
+  // can never disagree with the glyph (live-vibe-declaration R6.1–R6.3). We do
+  // not recompute the branch here.
+  const branch = useMapStore((s) => s.archetypeBranches[nodeId])
+
   useEffect(() => {
     let cancelled = false
     api
@@ -68,11 +76,21 @@ export function CrowdVibeSection({ nodeId }: CrowdVibeSectionProps) {
 
   if (archetypeEntries.length === 0 && genreEntries.length === 0) return null
 
+  // Honest promise-vs-now framing keyed on the resolved branch (R6.2, R6.3).
+  // `declared_promise` (below the Presence_Floor) is the venue's expectation,
+  // never a claim about the crowd in the room; `crowd_live` (at/above the
+  // floor) is the real crowd now. Any other branch or missing data falls back
+  // to the neutral "Crowd Vibe" heading and asserts no reading.
+  const heading =
+    branch === 'declared_promise'
+      ? t('crowdVibe.expectedTonight')
+      : branch === 'crowd_live'
+        ? t('crowdVibe.inTheRoomNow')
+        : t('crowdVibe.title')
+
   return (
     <div className="mb-4">
-      <h3 className="text-[var(--text-secondary)] text-xs font-medium uppercase tracking-wider mb-2">
-        {t('crowdVibe.title')}
-      </h3>
+      <h3 className="text-[var(--text-secondary)] text-xs font-medium uppercase tracking-wider mb-2">{heading}</h3>
 
       {archetypeEntries.length > 0 && (
         <div className="flex flex-row flex-wrap gap-2 mb-3">

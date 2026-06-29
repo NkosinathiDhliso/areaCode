@@ -13,10 +13,11 @@ const TIER_ORDER: Tier[] = ['local', 'regular', 'fixture', 'institution', 'legen
 // try/catch so a malformed override or missing env subsystem can never
 // crash callers - the default value wins.
 
-export type FeatureFlagName = 'live_vibe_on_map'
+export type FeatureFlagName = 'live_vibe_on_map' | 'live_vibe_declaration'
 
 const FEATURE_FLAG_DEFAULTS: Readonly<Record<FeatureFlagName, boolean>> = Object.freeze({
   live_vibe_on_map: false,
+  live_vibe_declaration: false,
 })
 
 const featureFlagOverrides = new Map<FeatureFlagName, boolean>()
@@ -107,6 +108,24 @@ export function getFeatureFlag(name: FeatureFlagName): boolean {
  */
 export function useLiveVibeOnMap(): boolean {
   return getFeatureFlag('live_vibe_on_map')
+}
+
+/**
+ * Typed helper for the `live_vibe_declaration` flag (live-vibe-declaration
+ * Requirement 10).
+ *
+ * Gates the presence-is-truth precedence in which honest present crowd beats
+ * the declared promise once the Presence_Floor is crossed. Returns `false` by
+ * default and whenever the flag store is unreachable (R10.1, R10.2), so the
+ * feature ships dark and the resolver keeps the legacy live-vibe-on-map
+ * precedence until the flag is flipped per environment.
+ *
+ * Safe to call from web, business, and backend contexts. Despite the `use*`
+ * naming convention, this is a plain function - it does not subscribe to
+ * React state and may be called outside a component.
+ */
+export function useLiveVibeDeclaration(): boolean {
+  return getFeatureFlag('live_vibe_declaration')
 }
 
 function tierAtLeast(tier: Tier | null, minTier: Tier): boolean {

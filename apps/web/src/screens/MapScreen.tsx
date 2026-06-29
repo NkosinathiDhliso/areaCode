@@ -96,6 +96,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const addNode = useMapStore((s) => s.addNode)
   const pulseScores = useMapStore((s) => s.pulseScores)
   const focusNodeId = useMapStore((s) => s.focusNodeId)
+  const setFocusNodeId = useMapStore((s) => s.setFocusNodeId)
   const accessToken = useConsumerAuthStore((s) => s.accessToken)
   const userId = useConsumerAuthStore((s) => s.userId)
   const lastKnownPosition = useLocationStore((s) => s.lastKnownPosition)
@@ -122,7 +123,6 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     activeVenueId,
     notifyViewportChanged,
     carouselOrder,
-    selectVenue,
     onMarkerTap,
     onSearchSelect,
     dismiss,
@@ -258,10 +258,18 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     }
   }, [mapRef, mapReady, notifyViewportChanged])
 
-  // ── First-paint open (segmented Constellation cold open) ──
-  // First-time users stay at country zoom with beams visible (carousel closed).
-  // Returning users with a retained lastVenueId reopen on that venue. Skipped
-  // when a Focus_Signal is pending or the carousel is already open.
+  // ── First-paint open (cold open → recommended Browse carousel) ──
+  // On open we dive straight into the recommended Browse_Mode strip at
+  // MAP_ARRIVAL_ZOOM so the consumer immediately sees the top recommended
+  // venues, instead of the single-venue Constellation peek + "Zoom in" button.
+  // Returning users resume on their retained venue; everyone else leads with
+  // the most alive / taste-matched venue (carouselOrder[0] per vibeRank).
+  // Skipped when a real Focus_Signal is pending or the carousel is already open.
+  //
+  // Reuses the Focus_Signal dive (setFocusNodeId): its consumer flies the
+  // camera to MAP_ARRIVAL_ZOOM, opens Browse_Mode, and recomputes the order -
+  // exactly the "open straight into the recommended venues" behaviour we want,
+  // and structurally never the country-zoom peek. See constellation-mode.md.
   const autoOpenedRef = useRef(false)
   useEffect(() => {
     if (autoOpenedRef.current || !mapReady) return
@@ -271,17 +279,11 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     }
     if (focusNodeId) return
 
-    const storedLast = useSelectionStore.getState().lastVenueId
-    if (!storedLast) {
-      autoOpenedRef.current = true
-      return
-    }
-
-    const target = storedLast ?? carouselOrder[0]
+    const target = useSelectionStore.getState().lastVenueId ?? carouselOrder[0]
     if (!target) return
     autoOpenedRef.current = true
-    selectVenue(target, 'swipe')
-  }, [mapReady, carouselOrder, focusNodeId, selectVenue])
+    setFocusNodeId(target)
+  }, [mapReady, carouselOrder, focusNodeId, setFocusNodeId])
 
   // Fetch rewards for the Active_Venue (Commit_Mode body).
   const { data: nodeRewards } = useQuery({

@@ -1,4 +1,5 @@
 /* eslint-disable no-restricted-globals */
+/* global URL */
 // Service worker for Area Code: Web Push + offline app shell.
 //
 // Two responsibilities:
@@ -44,6 +45,14 @@ self.addEventListener('activate', (event) => {
       .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
       .then(() => self.clients.claim()),
   )
+})
+
+// Lets the app trigger an immediate takeover by a newly-installed worker that
+// is parked in "waiting" (see useAppUpdate). No-op when nothing is waiting.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    void self.skipWaiting()
+  }
 })
 
 // Cache-first for same-origin static assets; falls back to network and stores

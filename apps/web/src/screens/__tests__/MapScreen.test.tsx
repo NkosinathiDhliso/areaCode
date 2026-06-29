@@ -191,11 +191,13 @@ async function renderScreen() {
 }
 
 describe('MapScreen - 17.2 render and state coverage', () => {
-  it('first paint stays closed with no prior venue (Constellation cold open)', async () => {
+  it('first paint dives into the recommended Browse carousel (no prior venue)', async () => {
     const { container } = await renderScreen()
     const carousel = container.querySelector('[data-peek-carousel]')!
-    expect(carousel.getAttribute('data-mode')).toBe('closed')
-    expect(carousel.getAttribute('data-active')).toBe('')
+    // Cold open now leads with the top recommended venue in Browse_Mode rather
+    // than the single-venue Constellation peek (see constellation-mode.md).
+    expect(carousel.getAttribute('data-mode')).toBe('browse')
+    expect(['a', 'b']).toContain(carousel.getAttribute('data-active'))
   })
 
   it('returning users reopen on lastVenueId in Browse_Mode (R1.1 segmented)', async () => {

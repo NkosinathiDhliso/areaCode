@@ -35,6 +35,7 @@
 import { GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 
 import { documentClient, TableNames } from '../shared/db/dynamodb.js'
+import { getCounter } from '../features/presence/repository.js'
 import { cityRoom } from '../shared/socket/rooms.js'
 import { getIO } from '../shared/socket/server.js'
 
@@ -82,6 +83,11 @@ const LOOKBACK_WINDOW_MS = 90 * 60 * 1000
 /** Hard ceiling on the CheckIns query (R7.10). On timeout we treat the
  *  result as an empty array and let the resolver fall through. */
 const CHECKIN_QUERY_TIMEOUT_MS = 500
+
+/** Hard ceiling on the honest present-count read. Mirrors the CheckIns query
+ *  timeout: on timeout we treat the room as not proven (count 0) and let the
+ *  resolver fall back to the declared promise / default. */
+const PRESENCE_COUNT_TIMEOUT_MS = 500
 
 /** Production log sampling rate (R7.11: at least 1-in-100). */
 const PROD_LOG_SAMPLE_RATE = 0.01
@@ -206,35 +212,75 @@ async function queryRecentCheckIns(nodeId: string, nowMs: number): Promise<LiveA
   }
 }
 
-/** Read the Node row's cached `lastArchetypeId` and `defaultArchetypeId`.
- *  Both fields are optional; absent values are treated as `null`. */
+/**
+ * Read the venue's HONEST present count — the number of `present`
+ * Presence_Records (check-in − check-out − expiry) maintained by the
+ * presence-integrity spec. This is the same aggregate that backs the
+ * `node:presence_update` event and `mapStore.checkInCounts`.
+ *
+ * Reuses the presence-integrity read path: `getCounter` is a single `GetItem`
+ * against the cached present-count aggregate (the `app-data` KV row that
+ * check-in / check-out / expiry maintain and the expiry sweep reconciles to the
+ * authoritative record-derived count). It does NOT recompute presence from raw
+ * check-ins and does NOT introduce a parallel aggregate (R7.1, R7.2).
+ *
+ * On any failure (timeout, throttle, missing item) it resolves to `0` — the room
+ * is "not proven", so the resolver falls back to the declared promise / default —
+ * and NEVER throws, mirroring `queryRecentCheckIns`' timeout-race fall-through
+ * contract.
+ *
+ * Wired into the resolver call in task 4.1; exported so it is reachable from the
+ * evaluator unit tests and the wiring step.
+ */
+export async function readHonestPresenceCount(nodeId: string): Promise<number> {
+  const countPromise = getCounter(nodeId).catch(() => 0)
+  const timeoutPromise = new Promise<number>((resolve) => {
+    setTimeout(() => resolve(0), PRESENCE_COUNT_TIMEOUT_MS)
+  })
+
+  try {
+    return await Promise.race([countPromise, timeoutPromise])
+  } catch {
+    return 0
+  }
+}
+
+/** Read the Node row's cached `lastArchetypeId`, `lastBranch`, and
+ *  `defaultArchetypeId`. All three fields are optional; absent values are
+ *  treated as `null`. `lastBranch` feeds the resolver's `previousBranch`
+ *  input for downward presence-grace (wired in task 4.1). */
 async function readNodeArchetypeFields(nodeId: string): Promise<{
   lastArchetypeId: string | null
+  lastBranch: LiveArchetypeBranch | null
   defaultArchetypeId: string | null
 }> {
   const result = await documentClient.send(
     new GetCommand({
       TableName: TableNames.nodes,
       Key: { nodeId },
-      ProjectionExpression: 'lastArchetypeId, defaultArchetypeId',
+      ProjectionExpression: 'lastArchetypeId, lastBranch, defaultArchetypeId',
     }),
   )
   const item = result.Item ?? {}
   return {
     lastArchetypeId: (item['lastArchetypeId'] as string | undefined) ?? null,
+    lastBranch: (item['lastBranch'] as LiveArchetypeBranch | undefined) ?? null,
     defaultArchetypeId: (item['defaultArchetypeId'] as string | undefined) ?? null,
   }
 }
 
-/** Persist the new `lastArchetypeId` on the Node row. */
-async function writeLastArchetypeId(nodeId: string, archetypeId: string): Promise<void> {
+/** Persist the new `lastArchetypeId` and `lastBranch` on the Node row in a
+ *  single atomic UpdateCommand (one write). `lastBranch` is the companion
+ *  field that feeds `previousBranch` for downward presence-grace. */
+async function writeLastArchetype(nodeId: string, archetypeId: string, branch: LiveArchetypeBranch): Promise<void> {
   await documentClient.send(
     new UpdateCommand({
       TableName: TableNames.nodes,
       Key: { nodeId },
-      UpdateExpression: 'SET lastArchetypeId = :a, updatedAt = :u',
+      UpdateExpression: 'SET lastArchetypeId = :a, lastBranch = :b, updatedAt = :u',
       ExpressionAttributeValues: {
         ':a': archetypeId,
+        ':b': branch,
         ':u': new Date().toISOString(),
       },
     }),
@@ -344,7 +390,7 @@ export async function evaluateLiveArchetype(event: EvaluationTickEvent): Promise
   // ── Step 6: update cache regardless (R11.6) ──────────────────────────────
   if (changed) {
     try {
-      await writeLastArchetypeId(event.nodeId, newArchetypeId)
+      await writeLastArchetype(event.nodeId, newArchetypeId, branch)
     } catch (err) {
       // Cache write failure is recoverable — the next tick re-derives the
       // same value and tries again. Don't crash the Lambda; a stuck Node

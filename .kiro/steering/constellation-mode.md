@@ -89,15 +89,31 @@ All inputs still write the single `selectionStore` Active_Venue. See
 - Crossfade beams → dots → glyphs; camera may fly to `MAP_ARRIVAL_ZOOM` (13).
 - Full Peek_Carousel Browse_Mode from here. Existing selection/camera rules apply.
 
-## Cold open (segmented)
+## Cold open (recommended-first)
 
-Do **not** auto-fly to `MAP_ARRIVAL_ZOOM` for every session.
+On open, **dive straight into the recommended Browse_Mode carousel** at
+`MAP_ARRIVAL_ZOOM` so the consumer immediately sees the top recommended venues,
+not the single-venue Constellation peek. This is a deliberate product decision:
+the first thing a consumer should see is the alive, taste-matched venues they
+can act on, not a one-card peek behind a "Zoom in" gate.
 
-| Session                       | Map on open                                    | Carousel                                          |
-| ----------------------------- | ---------------------------------------------- | ------------------------------------------------- |
-| First-ever / no `lastVenueId` | Stay at country zoom; show Constellation beams | Closed or one-line hint: "Tap a light to explore" |
-| Returning (`lastVenueId` set) | May land closer (respect intent)               | May reopen on last venue                          |
-| Focus_Signal pending          | Fly to target per existing focus rules         | Opens on focus target                             |
+| Session                       | Map on open                             | Carousel                                       |
+| ----------------------------- | --------------------------------------- | ---------------------------------------------- |
+| First-ever / no `lastVenueId` | Fly to `MAP_ARRIVAL_ZOOM` on top venue  | Open in Browse_Mode, led by `carouselOrder[0]` |
+| Returning (`lastVenueId` set) | Fly to `MAP_ARRIVAL_ZOOM` on last venue | Open in Browse_Mode, resumed on the last venue |
+| Focus_Signal pending          | Fly to target per existing focus rules  | Opens on focus target                          |
+
+Implemented by reusing the Focus_Signal dive: `MapScreen.tsx`'s first-paint
+effect calls `setFocusNodeId(target)` (target = `lastVenueId ?? carouselOrder[0]`),
+whose consumer in `useCarouselSelection.ts` flies to `MAP_ARRIVAL_ZOOM`, opens
+Browse_Mode, and recomputes the recommended order — structurally never the
+country-zoom peek. Ranking still leads with aliveness and taste, never proximity
+(see `discovery-dna-vibe-over-convenience.md`).
+
+The Constellation beam tier, sweep/peek interactions, and `enterConstellation()`
+remain for users who zoom back out to country level — country zoom is still a
+designed discovery mode. What changed is only that we no longer _land_ a cold
+open there.
 
 Power users: optional fast path (e.g. double-tap globe / Recenter) to dive into
 their city without forced play.
@@ -148,5 +164,5 @@ more spectacle (trails, auroras, comets) until the core pull works.
 - `apps/web/src/hooks/useMapMarkers.ts` — presentation tiers, beam DOM, hit targets
 - `apps/web/src/hooks/useMapInit.ts` — country zoom, globe, sky layer
 - `apps/web/src/hooks/useCarouselSelection.ts` — scope lock, cold-open camera rules
-- `apps/web/src/screens/MapScreen.tsx` — auto-open segmentation, Constellation peek
+- `apps/web/src/screens/MapScreen.tsx` — recommended-first cold open, Constellation peek
 - `apps/web/src/lib/carouselConstants.ts` — zoom thresholds, `RECOMMENDED_LIMIT`

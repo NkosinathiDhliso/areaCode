@@ -26,10 +26,9 @@ export default function ConsumerLogin() {
       const res = await api.post<{
         accessToken: string
         refreshToken: string
-        sessionId?: string
         user: { id: string }
       }>('/v1/auth/consumer/email-login', { email, password })
-      setAuth(res.accessToken, res.refreshToken, res.user.id, res.sessionId)
+      setAuth(res.accessToken, res.refreshToken, res.user.id)
       router.replace('/')
     } catch {
       setError(t('auth.login.emailFailed', 'Invalid email or password.'))
@@ -43,7 +42,7 @@ export default function ConsumerLogin() {
     setError(null)
     try {
       const res = await signInWithGoogleConsumerMobile()
-      setAuth(res.accessToken, res.refreshToken, res.userId, res.sessionId)
+      setAuth(res.accessToken, res.refreshToken, res.userId)
       router.replace(res.isNewUser ? '/auth/first-get' : '/')
     } catch {
       setError(t('auth.oauth.failed'))

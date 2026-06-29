@@ -118,10 +118,33 @@ function toLocalParts(date: Date, timezone: string): LocalParts {
   return { dayOfWeek, minutesSinceMidnight: hour * 60 + minute }
 }
 
+/**
+ * Public, observably-pure accessor for the schedule-local clock: given a
+ * timestamp and an IANA timezone, return the `(dayOfWeek, minutesSinceMidnight)`
+ * a Music_Schedule is evaluated against. Surfaces that need to seed a new slot
+ * "for right now" (e.g. the staff declaration surface) reuse this instead of
+ * re-deriving the timezone arithmetic.
+ *
+ * Returns `null` for an invalid timestamp or unresolvable timezone rather than
+ * throwing, so UI callers can fall back safely.
+ */
+export function resolveScheduleClock(
+  timestampIso: string,
+  timezone: string,
+): { dayOfWeek: ScheduleDayOfWeek; minutesSinceMidnight: number } | null {
+  if (typeof timestampIso !== 'string' || timestampIso.length === 0) return null
+  const date = new Date(timestampIso)
+  if (Number.isNaN(date.getTime())) return null
+  try {
+    return toLocalParts(date, timezone)
+  } catch {
+    return null
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // resolveActiveSlot
 // ─────────────────────────────────────────────────────────────────────────────
-
 /**
  * Resolve the unique Active_Slot (and, in lineup mode, the covering
  * LineupEntry) for a given Music_Schedule and timestamp.

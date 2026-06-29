@@ -69,6 +69,8 @@
   "biz.musicSchedule.denied.body": "Sign in with the operator account that owns this venue, or ask the owner to invite you.",
   "biz.musicSchedule.loadFailed": "Couldn't load the schedule. Please try again.",
   "biz.musicSchedule.retry": "Retry",
+  "biz.musicSchedule.status.promise": "Map is showing your expected vibe",
+  "biz.musicSchedule.status.crowd": "The crowd has taken over",
   "biz.musicSchedule.day.MON": "Mon",
   "biz.musicSchedule.day.TUE": "Tue",
   "biz.musicSchedule.day.WED": "Wed",

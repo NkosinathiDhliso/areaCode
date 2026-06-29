@@ -20,10 +20,9 @@ export function StaffLogin() {
       const res = await api.post<{
         accessToken: string
         refreshToken: string
-        sessionId?: string
         staff: { id: string; name: string; businessId: string }
       }>('/v1/auth/staff/email-login', { email, password })
-      setAuth(res.accessToken, res.refreshToken, res.staff.id, res.staff.businessId, res.staff.name, res.sessionId)
+      setAuth(res.accessToken, res.refreshToken, res.staff.id, res.staff.businessId, res.staff.name)
     } catch (err: unknown) {
       const apiErr = err as { statusCode?: number } | undefined
       if (apiErr?.statusCode === 429) {

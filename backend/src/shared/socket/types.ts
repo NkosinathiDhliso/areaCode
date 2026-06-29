@@ -18,6 +18,8 @@ export type LiveArchetypeBranch =
   | 'checkin_mode'
   | 'default'
   | 'eclectic_fallback'
+  | 'declared_promise' // below Presence_Floor, showing the venue's declared intent (live-vibe-declaration)
+  | 'crowd_live' // at/above Presence_Floor, showing the real crowd vibe (live-vibe-declaration)
 
 export interface BusinessCheckinPayload {
   nodeId: string

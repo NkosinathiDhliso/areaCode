@@ -45,9 +45,11 @@ vi.mock('@area-code/shared/stores/businessAuthStore', () => ({
     selector({ businessId: mockJwtBusinessId }),
 }))
 
-let mockBusinessNodes: Array<{ businessId: string }> = [{ businessId: 'biz-1' }]
+let mockBusinessNodes: Array<{ businessId: string; lastBranch?: string; liveArchetypeId?: string }> = [
+  { businessId: 'biz-1' },
+]
 vi.mock('@area-code/shared/stores/businessStore', () => ({
-  useBusinessStore: (selector: (s: { nodes: Array<{ businessId: string }> }) => unknown) =>
+  useBusinessStore: (selector: (s: { nodes: typeof mockBusinessNodes }) => unknown) =>
     selector({ nodes: mockBusinessNodes }),
 }))
 
@@ -155,6 +157,48 @@ describe('MusicSchedulePanel - Cross_Midnight_Pair split on save (R3.12, R4.13)'
     const halfB = persisted.slots.find((s) => /^pair-.+-b$/.test(s.slotId))!
     expect(halfA.endTime).toBe('23:59')
     expect(halfB.startTime).toBe('00:00')
+  })
+})
+
+describe('MusicSchedulePanel - promise-vs-crowd status line (R5.1, R5.2)', () => {
+  it('shows the "expected vibe" promise line when the resolved branch is declared_promise', async () => {
+    mockBusinessNodes = [{ businessId: 'biz-1', lastBranch: 'declared_promise' }]
+    apiGet.mockResolvedValue({ schedule: null })
+    render(<MusicSchedulePanel />)
+    await waitForLoad()
+    const status = screen.getByTestId('music-schedule-vibe-status')
+    expect(status.getAttribute('data-branch')).toBe('declared_promise')
+    expect(status.textContent).toContain('biz.musicSchedule.status.promise')
+  })
+
+  it('shows "the crowd has taken over" with the Crowd_Vibe display name when branch is crowd_live', async () => {
+    mockBusinessNodes = [
+      { businessId: 'biz-1', lastBranch: 'crowd_live', liveArchetypeId: 'archetype-festival-spirit' },
+    ]
+    apiGet.mockResolvedValue({ schedule: null })
+    render(<MusicSchedulePanel />)
+    await waitForLoad()
+    const status = screen.getByTestId('music-schedule-vibe-status')
+    expect(status.getAttribute('data-branch')).toBe('crowd_live')
+    expect(status.textContent).toContain('biz.musicSchedule.status.crowd')
+    // The crowd archetype display name the map is rendering is shown.
+    expect(status.textContent).toContain('The Festival Spirit')
+  })
+
+  it('renders no status line for a neutral branch (asserts nothing false)', async () => {
+    mockBusinessNodes = [{ businessId: 'biz-1', lastBranch: 'default' }]
+    apiGet.mockResolvedValue({ schedule: null })
+    render(<MusicSchedulePanel />)
+    await waitForLoad()
+    expect(screen.queryByTestId('music-schedule-vibe-status')).toBeNull()
+  })
+
+  it('renders no status line when the venue has no resolved branch data', async () => {
+    mockBusinessNodes = [{ businessId: 'biz-1' }]
+    apiGet.mockResolvedValue({ schedule: null })
+    render(<MusicSchedulePanel />)
+    await waitForLoad()
+    expect(screen.queryByTestId('music-schedule-vibe-status')).toBeNull()
   })
 })
 

@@ -8,6 +8,7 @@ import { useUserStore } from '@area-code/shared/stores/userStore'
 import { useTheme } from '@area-code/shared/hooks/useTheme'
 import type { ThemePreference } from '@area-code/shared/hooks/useTheme'
 import { useUnclaimedRewards } from '@area-code/shared/hooks'
+import { useAppUpdate } from '@area-code/shared/hooks'
 import { TierBadge } from '@area-code/shared/components/TierBadge'
 import { TierProgressBar } from '@area-code/shared/components/TierProgressBar'
 import { StreakDisplay } from '@area-code/shared/components/StreakDisplay'
@@ -19,7 +20,6 @@ import { TIER_PERMANENCE_SHORT } from '@area-code/shared/constants/legal'
 import type { User, PrivacyLevel } from '@area-code/shared/types'
 import type { AppRoute } from '../types'
 import { StreamingSection } from '../components/StreamingSection'
-import { SessionsSection } from '../components/SessionsSection'
 
 interface ProfileScreenProps {
   onNavigate: (route: AppRoute) => void
@@ -29,13 +29,13 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   const { t } = useTranslation()
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
   const logout = useConsumerAuthStore((s) => s.logout)
-  const sessionId = useConsumerAuthStore((s) => s.sessionId)
   const user = useUserStore((s) => s.user)
   const tier = useUserStore((s) => s.tier)
   const totalCheckIns = useUserStore((s) => s.totalCheckIns)
   const streakCount = useUserStore((s) => s.streakCount)
   const setUser = useUserStore((s) => s.setUser)
   const { preference, setPreference } = useTheme()
+  const { updating, updateApp } = useAppUpdate()
   // The consumer's wallet of earned-but-unredeemed get codes. Lives here now
   // that the standalone gets tab is gone; it is pure utility (a code to show
   // staff), not a discovery surface.
@@ -96,8 +96,7 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   })
 
   function handleLogout() {
-    const currentSessionId = useConsumerAuthStore.getState().sessionId
-    void api.post('/v1/auth/logout', { sessionId: currentSessionId ?? undefined }).catch(() => {})
+    void api.post('/v1/auth/logout', {}).catch(() => {})
     logout()
     onNavigate('map')
   }
@@ -189,8 +188,6 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
 
       <StreamingSection />
 
-      {isAuthenticated && <SessionsSection currentSessionId={sessionId} />}
-
       {/* Navigation links with proper chevron icons (Issue #24) */}
       <NavLink label={t('profile.checkInHistory', 'Check-in History')} onClick={() => onNavigate('history')} />
       <NavLink label={t('profile.notifications', 'Notifications')} onClick={() => onNavigate('notifications')} />
@@ -220,6 +217,41 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 mb-3">
+        <h3 className="text-[var(--text-secondary)] text-xs font-medium uppercase tracking-wider mb-3">
+          {t('profile.app', 'App')}
+        </h3>
+        <button
+          onClick={() => void updateApp()}
+          disabled={updating}
+          className="w-full flex flex-row items-center justify-between text-left disabled:opacity-60"
+        >
+          <span className="text-[var(--text-primary)] text-sm font-medium">
+            {updating ? t('profile.updating', 'Updating…') : t('profile.checkForUpdates', 'Check for updates')}
+          </span>
+          {updating ? (
+            <Spinner size="sm" />
+          ) : (
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--text-muted)"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+          )}
+        </button>
+        <p className="text-[var(--text-muted)] text-xs mt-2">
+          {t('profile.updateHint', 'Reloads the app with the latest version.')}
+        </p>
       </div>
 
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 mb-3">

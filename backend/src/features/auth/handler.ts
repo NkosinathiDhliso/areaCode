@@ -567,15 +567,6 @@ export async function authRoutes(app: FastifyInstance) {
     { preHandler: [requireAuth('consumer', 'business', 'staff', 'admin')] },
     async (request, reply) => {
       const auth = getAuth(request)
-      // Delete session record if sessionId provided
-      const sessionId = (request.body as Record<string, unknown>)?.sessionId as string | undefined
-      if (sessionId) {
-        try {
-          await service.deleteLoginSession(auth.userId, sessionId)
-        } catch {
-          // Best-effort
-        }
-      }
       // Revoke all tokens for this user in Cognito
       try {
         await service.revokeUserTokens(auth.role, auth.cognitoSub)
@@ -585,9 +576,6 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.status(200).send({ success: true })
     },
   )
-
-  // ─── Session Management ─────────────────────────────────────────────────
-  // Session routes are in session-handler.ts
 
   // Staff invite and remaining routes
 

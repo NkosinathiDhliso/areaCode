@@ -80,7 +80,6 @@ export function StaffInvite({ token }: StaffInviteProps) {
       const res = await api.post<{
         accessToken: string
         refreshToken: string
-        sessionId?: string
         staff: { id: string; name: string; businessId: string }
       }>('/v1/staff-invite/email-accept', {
         token,
@@ -88,7 +87,7 @@ export function StaffInvite({ token }: StaffInviteProps) {
         email: email.trim(),
         password,
       })
-      setAuth(res.accessToken, res.refreshToken, res.staff.id, res.staff.businessId, res.staff.name, res.sessionId)
+      setAuth(res.accessToken, res.refreshToken, res.staff.id, res.staff.businessId, res.staff.name)
       setStatus('success')
     } catch (err: unknown) {
       setStatus('error')

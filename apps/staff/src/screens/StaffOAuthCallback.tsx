@@ -95,19 +95,11 @@ export function StaffOAuthCallback() {
 
         const sync = (await syncRes.json()) as {
           staff: { id: string; name: string; businessId: string }
-          sessionId?: string
         }
 
         if (cancelled) return
 
-        setAuth(
-          tokens.access_token,
-          tokens.refresh_token,
-          sync.staff.id,
-          sync.staff.businessId,
-          sync.staff.name,
-          sync.sessionId,
-        )
+        setAuth(tokens.access_token, tokens.refresh_token, sync.staff.id, sync.staff.businessId, sync.staff.name)
         window.history.replaceState({}, '', '/')
       } catch {
         if (!cancelled) setError(t('auth.oauth.failed', 'Google sign-in failed. Try again.'))

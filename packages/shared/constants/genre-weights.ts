@@ -15,6 +15,24 @@ export const MUSIC_GENRES: MusicGenre[] = [
   'maskandi',
 ]
 
+// Human-readable display labels for each MusicGenre. Single source of truth
+// reused by every surface that renders a genre name (business Schedule_Editor,
+// staff declaration surface, etc.) so the labels can never drift apart.
+export const GENRE_LABELS: Record<MusicGenre, string> = {
+  amapiano: 'Amapiano',
+  deep_house: 'Deep House',
+  afrobeats: 'Afrobeats',
+  hip_hop: 'Hip Hop',
+  rnb: 'R&B',
+  kwaito: 'Kwaito',
+  gqom: 'Gqom',
+  jazz: 'Jazz',
+  rock: 'Rock',
+  pop: 'Pop',
+  gospel: 'Gospel',
+  maskandi: 'Maskandi',
+}
+
 export const PERSONALITY_DIMENSIONS: PersonalityDimension[] = [
   'energy',
   'cultural_rootedness',

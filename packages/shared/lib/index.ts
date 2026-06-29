@@ -30,7 +30,12 @@ export {
   type GenresToArchetypeResult,
   type GenresToArchetypeWarning,
 } from './genreToArchetype'
-export { resolveActiveSlot, ScheduleResolverInternalError, type ResolvedSlot } from './scheduleResolver'
+export {
+  resolveActiveSlot,
+  resolveScheduleClock,
+  ScheduleResolverInternalError,
+  type ResolvedSlot,
+} from './scheduleResolver'
 export {
   resolveLiveArchetype,
   LiveArchetypeInternalError,

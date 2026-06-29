@@ -59,7 +59,7 @@ export function useNodeArchetype(token?: string, opts?: { citySlug?: string }) {
 
     const handleArchetypeChange = (payload: ArchetypeChangePayload) => {
       if (!payload?.nodeId || typeof payload.liveArchetypeId !== 'string') return
-      setArchetypeId(payload.nodeId, payload.liveArchetypeId)
+      setArchetypeId(payload.nodeId, payload.liveArchetypeId, payload.branch)
       armRetentionTimer(payload.nodeId)
     }
 

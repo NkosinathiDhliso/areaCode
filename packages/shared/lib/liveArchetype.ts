@@ -34,6 +34,37 @@ export interface LiveArchetypeInputs {
   recentCheckIns: LiveArchetypeCheckIn[]
   /** Resolving timestamp, RFC 3339 with explicit timezone offset. */
   timestampIso: string
+  // ── Presence-gate inputs (live-vibe-declaration) ──────────────────────────
+  // All four are OPTIONAL by design so the flag-off path is byte-for-byte the
+  // pre-feature resolver (design R10.3, R4.1). When `presenceFloor` is
+  // undefined the resolver runs its existing precedence verbatim; only when it
+  // is defined does the presence-is-truth gate engage.
+  /**
+   * The minimum qualifying Live_Presence_Count at which the glyph switches
+   * from Declared_Vibe to Crowd_Vibe. When `undefined` the resolver runs its
+   * existing (pre-feature) precedence verbatim - this is the flag-off path
+   * (R10.3). Founder-confirmed candidate value: 3.
+   */
+  presenceFloor?: number
+  /**
+   * Small count below the Presence_Floor that holds the `crowd_live` branch to
+   * prevent boundary oscillation. Applied downward only (see `previousBranch`).
+   * Defaults to 0 when absent. Founder-confirmed candidate value: 1.
+   */
+  presenceGrace?: number
+  /**
+   * The honest present count gating the floor - honest present check-ins
+   * inside the Lookback_Window carrying a catalog `archetypeId`. Never a
+   * cumulative or decayed historical tally (R2.3). Treated as 0 when absent.
+   */
+  qualifyingPresenceCount?: number
+  /**
+   * The previously-resolved branch for this venue, used solely to apply the
+   * downward Presence_Grace: the grace lowers the effective floor only while
+   * `previousBranch === 'crowd_live'`. Sourced from the Node row's `lastBranch`
+   * companion to `lastArchetypeId`. Absent/`null` ⇒ no grace applied.
+   */
+  previousBranch?: LiveArchetypeBranch | null
 }
 
 export interface LiveArchetypeResult {
@@ -151,6 +182,71 @@ function pickCheckInMode(recentCheckIns: LiveArchetypeCheckIn[]): PersonalityArc
   return candidates[0]!.archetype
 }
 
+/**
+ * Resolve the schedule branch (steps 1 & 2 of the precedence table) for a
+ * venue's Active_Slot, if one exists.
+ *
+ * Returns `{ archetype, branch: 'schedule_lineup' | 'schedule_blanket' }` when
+ * an Active_Slot resolves to a catalog archetype, or `null` when there is no
+ * schedule, no Active_Slot, or the matched slot is in an unexpected mode.
+ *
+ * This is the single home for the schedule-resolution logic. Both the
+ * flag-off path (which surfaces the `schedule_*` branch verbatim) and the
+ * flag-on path (which re-labels the same archetype as `declared_promise`)
+ * call it, so the lineup/blanket genre-to-archetype mapping and the R7.4
+ * `ScheduleResolverInternalError` fall-through are never duplicated.
+ */
+function resolveScheduleBranch(schedule: MusicSchedule | undefined, timestampIso: string): LiveArchetypeResult | null {
+  if (!schedule) return null
+
+  let resolved: ReturnType<typeof resolveActiveSlot> | null = null
+  try {
+    resolved = resolveActiveSlot(schedule, timestampIso)
+  } catch (err) {
+    // Per R7.4: the unreachable lineup branch must not crash the resolver.
+    // Catch the well-known internal error and fall through. Any other
+    // error (e.g. `ScheduleValidationError` for a malformed schedule)
+    // propagates so the caller can decide whether to treat it as a
+    // programmer error or to swallow it at the I/O boundary.
+    if (err instanceof ScheduleResolverInternalError) {
+      resolved = null
+    } else {
+      throw err
+    }
+  }
+
+  if (resolved) {
+    if (resolved.slot.mode === 'lineup' && resolved.lineupEntry) {
+      const { archetype } = genresToArchetype(resolved.lineupEntry.genres)
+      return { archetype, branch: 'schedule_lineup' }
+    }
+    if (resolved.slot.mode === 'blanket') {
+      const { archetype } = genresToArchetype(resolved.slot.genres ?? [])
+      return { archetype, branch: 'schedule_blanket' }
+    }
+    // Defensive: any other mode (validator should reject) falls through.
+  }
+
+  return null
+}
+
+/**
+ * Resolve the tail of the precedence table (steps 4 & 5): the Node default
+ * archetype if present in the catalog, otherwise the eclectic fallback. Shared
+ * by both the flag-off path and the flag-on fall-through so the default →
+ * eclectic logic has one home.
+ */
+function resolveDefaultTail(node: LiveArchetypeInputs['node']): LiveArchetypeResult {
+  const defaultId = node?.defaultArchetypeId
+  if (typeof defaultId === 'string' && defaultId.length > 0) {
+    const fromCatalog = getCatalogArchetype(defaultId)
+    if (fromCatalog) {
+      return { archetype: fromCatalog, branch: 'default' }
+    }
+  }
+  return { archetype: getEclecticArchetype(), branch: 'eclectic_fallback' }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // resolveLiveArchetype
 // ─────────────────────────────────────────────────────────────────────────────
@@ -179,56 +275,74 @@ function pickCheckInMode(recentCheckIns: LiveArchetypeCheckIn[]): PersonalityArc
  * if `resolveActiveSlot` raises `ScheduleResolverInternalError`, the
  * resolver catches it internally and falls through to step 3, mirroring the
  * Lambda's behaviour and ensuring no runtime observably-incorrect crash.
+ *
+ * ── Presence-is-truth precedence (live-vibe-declaration) ────────────────────
+ * When `inputs.presenceFloor` is defined the resolver evaluates the
+ * presence-is-truth gate BEFORE the schedule branch (design "The precedence
+ * flip"):
+ *
+ *   effectiveFloor = previousBranch === 'crowd_live'
+ *     ? presenceFloor − (presenceGrace ?? 0)   // downward grace only
+ *     : presenceFloor
+ *   count = qualifyingPresenceCount ?? 0
+ *
+ *   if count >= effectiveFloor and a catalog crowd mode exists → `crowd_live`
+ *   elif an Active_Slot resolves                               → `declared_promise`
+ *   else                                                       → default → eclectic
+ *
+ * When `count >= effectiveFloor` but no qualifying crowd mode exists the
+ * resolver does NOT fabricate a vibe - it falls through to the declared
+ * promise / default tail (R2, design). When `presenceFloor` is `undefined`
+ * (flag off, R10.3) the original live-vibe-on-map body runs verbatim and the
+ * presence inputs are ignored entirely.
  */
 export function resolveLiveArchetype(inputs: LiveArchetypeInputs): LiveArchetypeResult {
   const { schedule, recentCheckIns, timestampIso, node } = inputs
 
-  // ── Steps 1 & 2: schedule branches ───────────────────────────────────────
-  if (schedule) {
-    let resolved: ReturnType<typeof resolveActiveSlot> | null = null
-    try {
-      resolved = resolveActiveSlot(schedule, timestampIso)
-    } catch (err) {
-      // Per R7.4: the unreachable lineup branch must not crash the resolver.
-      // Catch the well-known internal error and fall through. Any other
-      // error (e.g. `ScheduleValidationError` for a malformed schedule)
-      // propagates so the caller can decide whether to treat it as a
-      // programmer error or to swallow it at the I/O boundary.
-      if (err instanceof ScheduleResolverInternalError) {
-        resolved = null
-      } else {
-        throw err
+  // ── Flag-on path: presence-is-truth precedence (R1, R2, R3) ──────────────
+  // Engaged only when `presenceFloor` is defined. Evaluated BEFORE the
+  // schedule branch so a real crowd beats the declaration outright (R2.1).
+  if (inputs.presenceFloor !== undefined) {
+    const effectiveFloor =
+      inputs.previousBranch === 'crowd_live'
+        ? inputs.presenceFloor - (inputs.presenceGrace ?? 0) // downward grace only (R3.1, R3.2)
+        : inputs.presenceFloor
+    const count = inputs.qualifyingPresenceCount ?? 0
+
+    if (count >= effectiveFloor) {
+      const crowd = pickCheckInMode(recentCheckIns ?? [])
+      if (crowd) {
+        return { archetype: crowd, branch: 'crowd_live' }
       }
+      // The room is real but no check-in carries a catalog archetype mode -
+      // do NOT fabricate a vibe; fall through to the declared promise /
+      // default tail below (R2, design).
     }
 
-    if (resolved) {
-      if (resolved.slot.mode === 'lineup' && resolved.lineupEntry) {
-        const { archetype } = genresToArchetype(resolved.lineupEntry.genres)
-        return { archetype, branch: 'schedule_lineup' }
-      }
-      if (resolved.slot.mode === 'blanket') {
-        const { archetype } = genresToArchetype(resolved.slot.genres ?? [])
-        return { archetype, branch: 'schedule_blanket' }
-      }
-      // Defensive: any other mode (validator should reject) falls through.
+    // Below the floor (or no qualifying crowd above it): the declaration is a
+    // promise about a not-yet-full room (R1.1).
+    const declared = resolveScheduleBranch(schedule, timestampIso)
+    if (declared) {
+      return { archetype: declared.archetype, branch: 'declared_promise' }
     }
+
+    // No Active_Slot → existing default → eclectic tail, unchanged (R1.2).
+    return resolveDefaultTail(node)
   }
 
-  // ── Step 3: check-in mode ────────────────────────────────────────────────
+  // ── Flag-off path: existing live-vibe-on-map precedence, verbatim ────────
+  // Steps 1 & 2: schedule branches.
+  const scheduleResult = resolveScheduleBranch(schedule, timestampIso)
+  if (scheduleResult) {
+    return scheduleResult
+  }
+
+  // Step 3: check-in mode.
   const checkInMode = pickCheckInMode(recentCheckIns ?? [])
   if (checkInMode) {
     return { archetype: checkInMode, branch: 'checkin_mode' }
   }
 
-  // ── Step 4: Node default ─────────────────────────────────────────────────
-  const defaultId = node?.defaultArchetypeId
-  if (typeof defaultId === 'string' && defaultId.length > 0) {
-    const fromCatalog = getCatalogArchetype(defaultId)
-    if (fromCatalog) {
-      return { archetype: fromCatalog, branch: 'default' }
-    }
-  }
-
-  // ── Step 5: eclectic fallback ────────────────────────────────────────────
-  return { archetype: getEclecticArchetype(), branch: 'eclectic_fallback' }
+  // Steps 4 & 5: Node default → eclectic fallback.
+  return resolveDefaultTail(node)
 }

@@ -88,7 +88,6 @@ export function ConsumerOAuthCallback({ onNavigate }: ConsumerOAuthCallbackProps
 
         const sync = (await syncRes.json()) as {
           userId: string
-          sessionId?: string
           username: string
           displayName: string
           isNewUser?: boolean
@@ -96,7 +95,7 @@ export function ConsumerOAuthCallback({ onNavigate }: ConsumerOAuthCallbackProps
 
         if (cancelled) return
 
-        setAuth(tokens.access_token, tokens.refresh_token, sync.userId, sync.sessionId)
+        setAuth(tokens.access_token, tokens.refresh_token, sync.userId)
         // Route new users through the First-Get prompt; everyone else lands on the map.
         if (sync.isNewUser) {
           window.history.replaceState({}, '', '/first-get-prompt')

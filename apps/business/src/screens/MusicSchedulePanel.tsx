@@ -3,14 +3,17 @@ import { useTranslation } from 'react-i18next'
 
 import { api, type ApiError } from '@area-code/shared/lib/api'
 import { Spinner } from '@area-code/shared/components/Spinner'
-import { MUSIC_GENRES } from '@area-code/shared/constants/genre-weights'
+import { ARCHETYPE_CATALOG } from '@area-code/shared/constants/archetype-catalog'
+import { MUSIC_GENRES, GENRE_LABELS } from '@area-code/shared/constants/genre-weights'
 import { validateMusicSchedule, type ScheduleValidationCode } from '@area-code/shared/lib/schedule-validator'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 import type {
   LineupEntry,
+  LiveArchetypeBranch,
   MusicGenre,
   MusicSchedule,
+  Node,
   ScheduleDayOfWeek,
   ScheduleSlot,
   ScheduleSlotMode,
@@ -23,21 +26,6 @@ const MINUTES_IN_DAY = 24 * 60
 // Default IANA timezone for new schedules. The validator will reject anything
 // the runtime can't resolve; this default matches the South African market.
 const DEFAULT_TIMEZONE = 'Africa/Johannesburg'
-
-const GENRE_LABELS: Record<MusicGenre, string> = {
-  amapiano: 'Amapiano',
-  deep_house: 'Deep House',
-  afrobeats: 'Afrobeats',
-  hip_hop: 'Hip Hop',
-  rnb: 'R&B',
-  kwaito: 'Kwaito',
-  gqom: 'Gqom',
-  jazz: 'Jazz',
-  rock: 'Rock',
-  pop: 'Pop',
-  gospel: 'Gospel',
-  maskandi: 'Maskandi',
-}
 
 // Pretty colours for slot bands. Lineup-mode slots get a slightly different
 // hue from blanket so the operator can scan modes at a glance. We pick by
@@ -53,6 +41,69 @@ const BAND_PALETTE: Array<{ bg: string; border: string }> = [
 
 function bandColour(index: number): { bg: string; border: string } {
   return BAND_PALETTE[index % BAND_PALETTE.length]!
+}
+
+// ── Promise-vs-crowd status line (live-vibe-declaration R5.1, R5.2) ─────────
+//
+// Honest read-only reflection of whatever Resolution_Branch the backend
+// resolved for this venue. We do NOT recompute the branch here: it rides on
+// the same Node payload the map renders from (`node.lastBranch` is the
+// last-emitted Resolution_Branch, written beside `node.liveArchetypeId` by
+// the live-archetype-evaluator Lambda). Reusing that single source keeps this
+// surface incapable of disagreeing with the glyph on the map.
+//
+//   declared_promise → "Map is showing your expected vibe"
+//   crowd_live       → "The crowd has taken over · {Crowd_Vibe display name}"
+//   any other branch / no data → render nothing (assert nothing false)
+//
+// The Crowd_Vibe display name is the catalog name for the venue's currently
+// rendered `liveArchetypeId`; if that id is absent or unknown we omit the
+// name rather than invent one.
+function archetypeDisplayName(archetypeId: string | null | undefined): string | null {
+  if (!archetypeId) return null
+  return ARCHETYPE_CATALOG.find((a) => a.id === archetypeId)?.name ?? null
+}
+
+interface VibeStatusLineProps {
+  branch: LiveArchetypeBranch | null | undefined
+  liveArchetypeId: string | null | undefined
+  t: (key: string) => string
+}
+
+function VibeStatusLine({ branch, liveArchetypeId, t }: VibeStatusLineProps) {
+  if (branch === 'declared_promise') {
+    return (
+      <div
+        className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-raised)] px-3 py-2"
+        data-testid="music-schedule-vibe-status"
+        data-branch="declared_promise"
+      >
+        <span aria-hidden className="h-2 w-2 rounded-full bg-[var(--accent)]" />
+        <span className="text-[var(--text-secondary)] text-xs">{t('biz.musicSchedule.status.promise')}</span>
+      </div>
+    )
+  }
+
+  if (branch === 'crowd_live') {
+    const crowdName = archetypeDisplayName(liveArchetypeId)
+    return (
+      <div
+        className="flex items-center gap-2 rounded-xl border border-[var(--success,#22c55e)]/40 bg-[var(--bg-raised)] px-3 py-2"
+        data-testid="music-schedule-vibe-status"
+        data-branch="crowd_live"
+      >
+        <span aria-hidden className="h-2 w-2 rounded-full bg-[var(--success,#22c55e)]" />
+        <span className="text-[var(--text-secondary)] text-xs">
+          {t('biz.musicSchedule.status.crowd')}
+          {crowdName ? ` · ${crowdName}` : ''}
+        </span>
+      </div>
+    )
+  }
+
+  // Any other branch (default / eclectic_fallback / schedule_* under the
+  // flag-off legacy path) or no resolved data ⇒ neutral, assert nothing.
+  return null
 }
 
 // ── Cross_Midnight_Pair plumbing (R3.12, R4.13, R4.14) ─────────────────────
@@ -189,7 +240,15 @@ export function MusicSchedulePanel() {
   // The Schedule_Editor scopes a Music_Schedule to a venue's businessId.
   // The operator's JWT must include the same businessId per R4.11/R4.12;
   // otherwise we render a denial state and issue zero schedule API calls.
-  const venueBusinessId = nodes[0]?.businessId ?? null
+  const venueNode: Node | null = nodes[0] ?? null
+  const venueBusinessId = venueNode?.businessId ?? null
+
+  // Promise-vs-crowd branch the map is currently rendering for this venue,
+  // read straight off the Node payload (live-vibe-declaration R5.2). No
+  // recomputation: the evaluator writes `lastBranch`/`liveArchetypeId` and the
+  // consumer map reads the same fields, so this stays in lock-step.
+  const liveBranch = venueNode?.lastBranch ?? null
+  const liveArchetypeId = venueNode?.liveArchetypeId ?? null
 
   const accessAllowed = useMemo(() => {
     if (!jwtBusinessId) return false
@@ -337,6 +396,7 @@ export function MusicSchedulePanel() {
         <span className="text-[var(--text-muted)] text-sm text-center max-w-sm">
           {t('biz.musicSchedule.empty.body')}
         </span>
+        <VibeStatusLine branch={liveBranch} liveArchetypeId={liveArchetypeId} t={t} />
         <button
           type="button"
           onClick={openEditorForNewSlot}
@@ -385,6 +445,8 @@ export function MusicSchedulePanel() {
           {t('biz.musicSchedule.addSlot')}
         </button>
       </div>
+
+      <VibeStatusLine branch={liveBranch} liveArchetypeId={liveArchetypeId} t={t} />
 
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 overflow-x-auto">
         <WeekTimeline

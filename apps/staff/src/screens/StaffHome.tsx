@@ -8,6 +8,7 @@ import { StaffValidator } from '../components/StaffValidator'
 import { RecentRedemptions } from '../components/RecentRedemptions'
 import { MyRank } from '../components/MyRank'
 import { FirstGetIssuer } from '../components/FirstGetIssuer'
+import { VibeDeclaration } from '../components/VibeDeclaration'
 
 export function StaffHome() {
   const { t } = useTranslation()
@@ -83,6 +84,7 @@ export function StaffHome() {
       >
         <StaffValidator />
         <FirstGetIssuer />
+        <VibeDeclaration />
         <MyRank />
         <RecentRedemptions />
       </div>

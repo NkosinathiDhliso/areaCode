@@ -135,8 +135,7 @@ function rehydrateAuthFromStorage(): void {
   const accessToken = storage.get('consumer:accessToken')
   const refreshToken = storage.get('consumer:refreshToken')
   const userId = storage.get('consumer:userId')
-  const sessionId = storage.get('consumer:sessionId')
   if (accessToken && refreshToken && userId) {
-    useConsumerAuthStore.getState().setAuth(accessToken, refreshToken, userId, sessionId ?? undefined)
+    useConsumerAuthStore.getState().setAuth(accessToken, refreshToken, userId)
   }
 }

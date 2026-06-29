@@ -18,7 +18,6 @@ export async function signInWithGoogleConsumerMobile(): Promise<{
   accessToken: string
   refreshToken: string
   userId: string
-  sessionId?: string
   isNewUser?: boolean
 }> {
   const extra = Constants.expoConfig?.extra as {
@@ -70,13 +69,12 @@ export async function signInWithGoogleConsumerMobile(): Promise<{
   })
 
   if (!syncRes.ok) throw new Error(`sync_${syncRes.status}`)
-  const sync = (await syncRes.json()) as { userId: string; sessionId?: string; isNewUser?: boolean }
+  const sync = (await syncRes.json()) as { userId: string; isNewUser?: boolean }
 
   return {
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
     userId: sync.userId,
-    sessionId: sync.sessionId,
     isNewUser: sync.isNewUser,
   }
 }

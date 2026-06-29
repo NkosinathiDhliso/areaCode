@@ -27,10 +27,9 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
       const res = await api.post<{
         accessToken: string
         refreshToken: string
-        sessionId?: string
         user: { id: string }
       }>('/v1/auth/consumer/email-login', { email, password })
-      setAuth(res.accessToken, res.refreshToken, res.user.id, res.sessionId)
+      setAuth(res.accessToken, res.refreshToken, res.user.id)
       onNavigate('map')
     } catch (err) {
       const status = (err as { statusCode?: number } | null)?.statusCode

@@ -24,7 +24,6 @@ import type { FastifyInstance } from 'fastify'
  * 13. Notifications (push token, preferences, history)
  * 14. Music & Crowd Vibe (genres, streaming, crowd-vibe)
  * 15. Privacy & Blocking (settings, block/unblock, reports)
- * 16. Session Management (list, revoke)
  * 17. Profile & Tier Progress
  * 18. POPIA Compliance (consent, account deletion, data erasure)
  * 19. Validation & Error Handling (bad payloads, missing auth)
@@ -145,7 +144,6 @@ describe('2. Consumer Auth Flow', () => {
     const body = res.json()
     expect(body.accessToken).toBeDefined()
     expect(body.refreshToken).toBeDefined()
-    expect(body.sessionId).toBeDefined()
     expect(body.user).toBeDefined()
     expect(body.user.id).toBeDefined()
   })
@@ -221,7 +219,6 @@ describe('3. Business Auth Flow', () => {
     const body = res.json()
     expect(body.accessToken).toBeDefined()
     expect(body.refreshToken).toBeDefined()
-    expect(body.sessionId).toBeDefined()
     expect(body.businessId).toBeDefined()
   })
 })
@@ -912,50 +909,6 @@ describe('15. Privacy & Blocking', () => {
       },
     })
     expect([201, 500]).toContain(res.statusCode)
-  })
-})
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 16. SESSION MANAGEMENT
-// ═════════════════════════════════════════════════════════════════════════════
-
-describe('16. Session Management', () => {
-  it('GET /v1/users/me/sessions returns active sessions', async () => {
-    const res = await app.inject({
-      method: 'GET',
-      url: '/v1/users/me/sessions',
-      headers: consumerAuth(),
-    })
-    expect([200, 500]).toContain(res.statusCode)
-  })
-
-  it('DELETE /v1/users/me/sessions/:sessionId revokes a session', async () => {
-    const res = await app.inject({
-      method: 'DELETE',
-      url: '/v1/users/me/sessions/session-to-revoke',
-      headers: consumerAuth(),
-    })
-    expect([200, 500]).toContain(res.statusCode)
-  })
-
-  it('POST /v1/users/me/sessions/revoke-all revokes all other sessions', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/v1/users/me/sessions/revoke-all',
-      headers: consumerAuth(),
-      payload: { currentSessionId: 'keep-this-session' },
-    })
-    expect([200, 500]).toContain(res.statusCode)
-  })
-
-  it('POST /v1/users/me/sessions/revoke-all rejects missing currentSessionId', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/v1/users/me/sessions/revoke-all',
-      headers: consumerAuth(),
-      payload: {},
-    })
-    expect(res.statusCode).toBe(400)
   })
 })
 

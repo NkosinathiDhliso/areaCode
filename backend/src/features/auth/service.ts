@@ -7,7 +7,6 @@ import { findBusinessByCognitoSub } from '../business/repository.js'
 import { updateBusiness } from './dynamodb-repository.js'
 
 import * as repo from './repository.js'
-import { createLoginSession } from './session-service.js'
 
 import { LEGAL_CLAUSES_VERSION } from '@area-code/shared/constants/legal'
 
@@ -153,10 +152,8 @@ export async function consumerOAuthSync(opts: { cognitoSub: string; email?: stri
 
   if (DEV_MODE) {
     const userId = `dev-user-google-${Date.now()}`
-    const session = await createLoginSession(userId, userAgent)
     return {
       userId,
-      sessionId: session.sessionId,
       username: 'dev_google',
       displayName: 'Dev Google User',
       tier: 'explorer',
@@ -229,11 +226,8 @@ export async function consumerOAuthSync(opts: { cognitoSub: string; email?: stri
     citySlug: 'johannesburg',
   })
 
-  const session = await createLoginSession(user.userId, userAgent)
-
   return {
     userId: user.userId,
-    sessionId: session.sessionId,
     username: user.username,
     displayName: user.displayName,
     tier: user.tier ?? 'explorer',
@@ -244,11 +238,9 @@ export async function consumerOAuthSync(opts: { cognitoSub: string; email?: stri
 export async function consumerVerifyOtp(phone: string, code: string, userAgent?: string) {
   if (DEV_MODE) {
     const userId = `dev-user-${Date.now()}`
-    const session = await createLoginSession(userId, userAgent ?? '')
     return {
       accessToken: `dev-access-${userId}`,
       refreshToken: `dev-refresh-${userId}`,
-      sessionId: session.sessionId,
       user: { id: userId, username: phone, displayName: 'Dev User', tier: 'explorer' },
     }
   }
@@ -266,9 +258,6 @@ export async function consumerVerifyOtp(phone: string, code: string, userAgent?:
     const user = await repo.findUserByPhone(phone)
     if (!user) throw AppError.unauthorized('Invalid credentials')
 
-    // Create device session record
-    const loginSession = await createLoginSession(user.userId, userAgent ?? '')
-
     // Convert any open guest claims now that this phone is a real account.
     // (Churn-defences spec, Requirement 6.4) — non-fatal on failure.
     // NOTE: This call is dead code in prod (phone-OTP path is disabled).
@@ -277,7 +266,6 @@ export async function consumerVerifyOtp(phone: string, code: string, userAgent?:
     return {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
-      sessionId: loginSession.sessionId,
       user: { id: user.userId, username: user.username, displayName: user.displayName, tier: user.tier },
     }
   } catch (err) {
@@ -369,11 +357,9 @@ export async function consumerEmailSignup(data: {
 }) {
   if (DEV_MODE) {
     const userId = `dev-user-${Date.now()}`
-    const session = await createLoginSession(userId, data.userAgent ?? '')
     return {
       accessToken: `dev-access-${userId}`,
       refreshToken: `dev-refresh-${userId}`,
-      sessionId: session.sessionId,
       user: { id: userId, username: 'dev_user', displayName: 'Dev User', tier: 'explorer' },
     }
   }
@@ -435,7 +421,6 @@ export async function consumerEmailSignup(data: {
   }
 
   const tokens = await cognito.passwordAuth('consumer', email, data.password)
-  const loginSession = await createLoginSession(user.userId, data.userAgent ?? '')
 
   // Fire off the (non-blocking) verification email. The account is already
   // usable; verification only unlocks gated actions like reward redemption.
@@ -444,7 +429,6 @@ export async function consumerEmailSignup(data: {
   return {
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
-    sessionId: loginSession.sessionId,
     user: {
       id: user.userId,
       username: user.username,
@@ -458,11 +442,9 @@ export async function consumerEmailSignup(data: {
 export async function consumerEmailLogin(emailRaw: string, password: string, userAgent?: string) {
   if (DEV_MODE) {
     const userId = `dev-user-${Date.now()}`
-    const session = await createLoginSession(userId, userAgent ?? '')
     return {
       accessToken: `dev-access-${userId}`,
       refreshToken: `dev-refresh-${userId}`,
-      sessionId: session.sessionId,
       user: { id: userId, username: 'dev_user', displayName: 'Dev User', tier: 'explorer' },
     }
   }
@@ -481,12 +463,9 @@ export async function consumerEmailLogin(emailRaw: string, password: string, use
     citySlug: 'johannesburg',
   })
 
-  const loginSession = await createLoginSession(user.userId, userAgent ?? '')
-
   return {
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
-    sessionId: loginSession.sessionId,
     user: {
       id: user.userId,
       username: user.username,
@@ -554,11 +533,9 @@ export async function businessLogin(phone: string) {
 export async function businessVerifyOtp(phone: string, code: string, userAgent?: string) {
   if (DEV_MODE) {
     const bizId = `dev-biz-${Date.now()}`
-    const session = await createLoginSession(bizId, userAgent ?? '')
     return {
       accessToken: `biz-access-${Date.now()}`,
       refreshToken: `biz-refresh-${Date.now()}`,
-      sessionId: session.sessionId,
       businessId: bizId,
     }
   }
@@ -578,13 +555,9 @@ export async function businessVerifyOtp(phone: string, code: string, userAgent?:
     const businessId = cognitoUser?.attributes['custom:businessId']
     if (!businessId) throw AppError.internal('Business ID not found in user attributes')
 
-    // Create device session record
-    const loginSession = await createLoginSession(businessId, userAgent ?? '')
-
     return {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
-      sessionId: loginSession.sessionId,
       businessId,
     }
   } catch (err) {
@@ -603,11 +576,9 @@ export async function businessEmailSignup(data: {
 }) {
   if (DEV_MODE) {
     const businessId = `dev-biz-${Date.now()}`
-    const session = await createLoginSession(businessId, data.userAgent ?? '')
     return {
       accessToken: `dev-business-access-${Date.now()}`,
       refreshToken: `dev-business-refresh-${Date.now()}`,
-      sessionId: session.sessionId,
       businessId,
     }
   }
@@ -630,12 +601,10 @@ export async function businessEmailSignup(data: {
   })
 
   const tokens = await cognito.passwordAuth('business', email, data.password)
-  const loginSession = await createLoginSession(business.businessId, data.userAgent ?? '')
 
   return {
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
-    sessionId: loginSession.sessionId,
     businessId: business.businessId,
   }
 }
@@ -643,11 +612,9 @@ export async function businessEmailSignup(data: {
 export async function businessEmailLogin(emailRaw: string, password: string, userAgent?: string) {
   if (DEV_MODE) {
     const businessId = `dev-biz-${Date.now()}`
-    const session = await createLoginSession(businessId, userAgent ?? '')
     return {
       accessToken: `dev-business-access-${Date.now()}`,
       refreshToken: `dev-business-refresh-${Date.now()}`,
-      sessionId: session.sessionId,
       businessId,
     }
   }
@@ -658,12 +625,9 @@ export async function businessEmailLogin(emailRaw: string, password: string, use
   const businessId = cognitoUser?.attributes['custom:businessId']
   if (!businessId) throw AppError.unauthorized('Business account is not linked.')
 
-  const loginSession = await createLoginSession(businessId, userAgent ?? '')
-
   return {
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
-    sessionId: loginSession.sessionId,
     businessId,
   }
 }
@@ -671,8 +635,7 @@ export async function businessEmailLogin(emailRaw: string, password: string, use
 export async function businessOAuthSync(opts: { cognitoSub: string; userAgent: string }) {
   if (DEV_MODE) {
     const bizId = `dev-biz-google-${Date.now()}`
-    const session = await createLoginSession(bizId, opts.userAgent)
-    return { needsBusinessProfile: false, businessId: bizId, sessionId: session.sessionId }
+    return { needsBusinessProfile: false, businessId: bizId }
   }
 
   const row = await findBusinessByCognitoSub(opts.cognitoSub)
@@ -699,12 +662,9 @@ export async function businessOAuthSync(opts: { cognitoSub: string; userAgent: s
     businessId,
   })
 
-  const loginSession = await createLoginSession(businessId, opts.userAgent)
-
   return {
     needsBusinessProfile: false as const,
     businessId,
-    sessionId: loginSession.sessionId,
   }
 }
 
@@ -717,8 +677,7 @@ export async function businessOAuthCompleteProfile(opts: {
 }) {
   if (DEV_MODE) {
     const bizId = `dev-biz-${Date.now()}`
-    const session = await createLoginSession(bizId, opts.userAgent)
-    return { businessId: bizId, sessionId: session.sessionId }
+    return { businessId: bizId }
   }
 
   const existingRow = await findBusinessByCognitoSub(opts.cognitoSub)
@@ -748,18 +707,14 @@ export async function businessOAuthCompleteProfile(opts: {
     businessId: business.businessId,
   })
 
-  const loginSession = await createLoginSession(business.businessId, opts.userAgent)
-
-  return { businessId: business.businessId, sessionId: loginSession.sessionId }
+  return { businessId: business.businessId }
 }
 
 export async function staffOAuthSync(opts: { cognitoSub: string; userAgent: string }) {
   if (DEV_MODE) {
     const staffId = `dev-staff-google-${Date.now()}`
-    const session = await createLoginSession(staffId, opts.userAgent)
     return {
       staff: { id: staffId, name: 'Dev Staff', businessId: 'dev-biz-1' },
-      sessionId: session.sessionId,
     }
   }
 
@@ -776,22 +731,17 @@ export async function staffOAuthSync(opts: { cognitoSub: string; userAgent: stri
     businessId: staff.businessId,
   })
 
-  const loginSession = await createLoginSession(staff.staffId, opts.userAgent)
-
   return {
     staff: { id: staff.staffId, name: staff.name, businessId: staff.businessId },
-    sessionId: loginSession.sessionId,
   }
 }
 
 export async function staffEmailLogin(emailRaw: string, password: string, userAgent?: string) {
   if (DEV_MODE) {
     const staffId = `dev-staff-${Date.now()}`
-    const session = await createLoginSession(staffId, userAgent ?? '')
     return {
       accessToken: `dev-staff-access-${Date.now()}`,
       refreshToken: `dev-staff-refresh-${Date.now()}`,
-      sessionId: session.sessionId,
       staff: { id: staffId, name: 'Dev Staff', businessId: 'dev-biz-1' },
     }
   }
@@ -808,12 +758,9 @@ export async function staffEmailLogin(emailRaw: string, password: string, userAg
     throw AppError.forbidden('This staff account has been deactivated. Contact your manager.')
   }
 
-  const loginSession = await createLoginSession(staff.staffId, userAgent ?? '')
-
   return {
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
-    sessionId: loginSession.sessionId,
     staff: { id: staff.staffId, name: staff.name, businessId: staff.businessId },
   }
 }
@@ -827,11 +774,9 @@ export async function acceptStaffInviteEmail(opts: {
 }) {
   if (DEV_MODE) {
     const staffId = `dev-staff-${Date.now()}`
-    const session = await createLoginSession(staffId, opts.userAgent ?? '')
     return {
       accessToken: `dev-staff-access-${Date.now()}`,
       refreshToken: `dev-staff-refresh-${Date.now()}`,
-      sessionId: session.sessionId,
       staff: { id: staffId, name: opts.name, businessId: 'dev-biz-1' },
     }
   }
@@ -887,12 +832,10 @@ export async function acceptStaffInviteEmail(opts: {
   })
 
   const tokens = await cognito.passwordAuth('staff', email, opts.password)
-  const loginSession = await createLoginSession(staff.staffId, opts.userAgent ?? '')
 
   return {
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
-    sessionId: loginSession.sessionId,
     staff: { id: staff.staffId, name: staff.name, businessId: staff.businessId },
   }
 }
@@ -906,10 +849,8 @@ export async function staffOAuthAcceptInvite(opts: {
 }) {
   if (DEV_MODE) {
     const staffId = `dev-staff-${Date.now()}`
-    const session = await createLoginSession(staffId, opts.userAgent)
     return {
       staff: { id: staffId, name: opts.name, businessId: 'dev-biz-1' },
-      sessionId: session.sessionId,
     }
   }
 
@@ -975,11 +916,8 @@ export async function staffOAuthAcceptInvite(opts: {
     businessId,
   })
 
-  const loginSession = await createLoginSession(staff.staffId, opts.userAgent)
-
   return {
     staff: { id: staff.staffId, name: staff.name, businessId: staff.businessId },
-    sessionId: loginSession.sessionId,
   }
 }
 
@@ -1035,11 +973,9 @@ export async function staffLogin(phone: string) {
 export async function staffVerifyOtp(phone: string, code: string, userAgent?: string) {
   if (DEV_MODE) {
     const staffId = `dev-staff-${Date.now()}`
-    const session = await createLoginSession(staffId, userAgent ?? '')
     return {
       accessToken: `dev-staff-access-${Date.now()}`,
       refreshToken: `dev-staff-refresh-${Date.now()}`,
-      sessionId: session.sessionId,
       staff: { id: staffId, name: 'Dev Staff', businessId: 'dev-biz-1' },
     }
   }
@@ -1057,13 +993,9 @@ export async function staffVerifyOtp(phone: string, code: string, userAgent?: st
     const staff = await repo.findStaffByPhone(phone)
     if (!staff) throw AppError.unauthorized('Invalid credentials')
 
-    // Create device session record
-    const loginSession = await createLoginSession(staff.staffId, userAgent ?? '')
-
     return {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
-      sessionId: loginSession.sessionId,
       staff: { id: staff.staffId, name: staff.name, businessId: staff.businessId },
     }
   } catch (err) {
@@ -1335,11 +1267,3 @@ export async function confirmPasswordReset(email: string, code: string, newPassw
 
 // Staff invite and token revocation in auth-utils-service.ts
 export { acceptStaffInvite, revokeUserTokens } from './auth-utils-service.js'
-// Session management in session-service.ts
-export {
-  createLoginSession,
-  getUserSessions,
-  revokeSession,
-  revokeAllOtherSessions,
-  deleteLoginSession,
-} from './session-service.js'

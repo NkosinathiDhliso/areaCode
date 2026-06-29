@@ -67,8 +67,7 @@ export default function ProfileScreen() {
   })
 
   function handleLogout() {
-    const currentSessionId = useConsumerAuthStore.getState().sessionId
-    void api.post('/v1/auth/logout', { sessionId: currentSessionId ?? undefined }).catch(() => {})
+    void api.post('/v1/auth/logout', {}).catch(() => {})
     logout()
     router.replace('/')
   }

@@ -6,7 +6,6 @@ import { getUserById } from './features/auth/dynamodb-repository.js'
 import { checkInRoutes } from './features/check-in/handler.js'
 import { checkOutRoutes } from './features/check-out/handler.js'
 import { authRoutes } from './features/auth/handler.js'
-import { sessionRoutes } from './features/auth/session-handler.js'
 import { profileRoutes } from './features/auth/profile-handler.js'
 import { businessRoutes } from './features/business/handler.js'
 import { campaignRoutes, campaignConsumerRoutes } from './features/campaigns/handler.js'
@@ -165,7 +164,6 @@ export async function buildApp() {
 
   // Register all feature routes , await to catch registration errors
   await app.register(authRoutes)
-  await app.register(sessionRoutes)
   await app.register(profileRoutes)
   await app.register(nodeRoutes)
   await app.register(nodeImageRoutes)

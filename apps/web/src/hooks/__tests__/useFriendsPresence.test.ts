@@ -70,7 +70,6 @@ beforeEach(() => {
     accessToken: null,
     refreshToken: null,
     userId: null,
-    sessionId: null,
   })
   setSocketOverride(undefined)
 })

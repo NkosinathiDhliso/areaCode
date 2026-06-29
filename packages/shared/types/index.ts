@@ -124,6 +124,8 @@ export type LiveArchetypeBranch =
   | 'checkin_mode'
   | 'default'
   | 'eclectic_fallback'
+  | 'declared_promise' // below Presence_Floor, showing the venue's declared intent (live-vibe-declaration)
+  | 'crowd_live' // at/above Presence_Floor, showing the real crowd vibe (live-vibe-declaration)
 
 // Personality archetype , stored in DB, managed by admins
 export interface PersonalityArchetype {
@@ -207,6 +209,17 @@ export interface Node {
    * source of truth for the cache.
    */
   lastArchetypeId?: string | null
+  /**
+   * Cache of the previously emitted Resolution_Branch, written by the
+   * `live-archetype-evaluator` Lambda alongside `lastArchetypeId` so the
+   * evaluator can feed `previousBranch` into `resolveLiveArchetype` for
+   * downward presence-grace (stay `crowd_live` until the qualifying
+   * count drops below `Presence_Floor − Presence_Grace`)
+   * (live-vibe-declaration design § Presence-grace, R3.1). Not used by
+   * the pure resolver directly - kept here so the Node row is the single
+   * source of truth for the cache. Absent ⇒ treated as `null`.
+   */
+  lastBranch?: LiveArchetypeBranch | null
   /**
    * Current Live_Archetype id carried on the live nodes payload (R11.1).
    * Populated by the backend on the read path (initial REST fetch and

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
-import type { Node, MapInstance } from '../types'
+import type { Node, MapInstance, LiveArchetypeBranch } from '../types'
 
 interface MapStore {
   nodes: Record<string, Node>
@@ -19,6 +19,16 @@ interface MapStore {
    * reconnect from the next live nodes payload (R11.6, R11.7).
    */
   archetypeIds: Record<string, string>
+  /**
+   * Live Resolution_Branch per node, written by the SAME `node:archetype_change`
+   * socket event that fills `archetypeIds` (see `useNodeArchetype`). Because the
+   * branch and the archetype id arrive together and are stored together, a
+   * consumer surface (e.g. `CrowdVibeSection`) can label the live glyph as a
+   * `declared_promise` ("expected tonight") versus `crowd_live` ("in the room
+   * now") without ever disagreeing with the rendered glyph (live-vibe-declaration
+   * R6.1–R6.3). Absent ⇒ the surface falls back to neutral presentation.
+   */
+  archetypeBranches: Record<string, LiveArchetypeBranch>
   /**
    * Friends currently checked in at each venue. Keyed by nodeId, value is an
    * array of mutual-friend userIds (deduplicated on insert). Seeded from
@@ -51,7 +61,15 @@ interface MapStore {
    * precedence over the cumulative `node:pulse_update.checkInCount` (R7.1, R8.3).
    */
   setLivePresenceCount: (nodeId: string, livePresenceCount: number) => void
-  setArchetypeId: (nodeId: string, id: string) => void
+  /**
+   * Store the live-resolved Archetype id and (optionally) its Resolution_Branch
+   * for a node. The branch is written alongside the id from the same
+   * `node:archetype_change` payload so the two can never disagree. When `branch`
+   * is omitted (e.g. the reconnect nodes payload carries only `liveArchetypeId`),
+   * any cached branch is cleared so a surface falls back to neutral presentation
+   * rather than showing a stale promise/now label.
+   */
+  setArchetypeId: (nodeId: string, id: string, branch?: LiveArchetypeBranch) => void
   /**
    * Drop the cached Live_Archetype id for a node. Called by
    * `useNodeArchetype` after the 5-minute retention window (R11.6) so the
@@ -82,6 +100,7 @@ export const useMapStore = create<MapStore>()(
     nodes: {},
     pulseScores: {},
     archetypeIds: {},
+    archetypeBranches: {},
     checkInCounts: {},
     friendsAtVenue: {},
     hasLiveGets: {},
@@ -114,13 +133,19 @@ export const useMapStore = create<MapStore>()(
       set((state) => {
         state.checkInCounts[nodeId] = livePresenceCount
       }),
-    setArchetypeId: (nodeId, id) =>
+    setArchetypeId: (nodeId, id, branch) =>
       set((state) => {
         state.archetypeIds[nodeId] = id
+        if (branch !== undefined) {
+          state.archetypeBranches[nodeId] = branch
+        } else {
+          delete state.archetypeBranches[nodeId]
+        }
       }),
     clearArchetypeId: (nodeId) =>
       set((state) => {
         delete state.archetypeIds[nodeId]
+        delete state.archetypeBranches[nodeId]
       }),
     setMapInstance: (instance) =>
       set((state) => {
