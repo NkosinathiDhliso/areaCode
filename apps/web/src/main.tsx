@@ -5,10 +5,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
 import { installPreloadErrorHandler } from '@area-code/shared/lib/preloadErrorHandler'
+import { installDomReconciliationGuard } from '@area-code/shared/lib/domReconciliationGuard'
 import { App } from './App'
 import './i18n'
 import './app.css'
 
+// Make DOM mutation resilient to browser translation / extensions that move
+// text nodes out from under React, which otherwise crashes the whole tree with
+// a NotFoundError in insertBefore. Must run before the React root renders.
+installDomReconciliationGuard()
 installPreloadErrorHandler()
 
 const queryClient = new QueryClient({
