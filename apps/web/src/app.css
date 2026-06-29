@@ -13,9 +13,9 @@
   body,
   #root {
     /* Height resolution, most-robust last:
-       1. 100vh   — universal fallback (older WebKit without dvh).
-       2. 100dvh  — true dynamic viewport on modern iOS 15.4+/Chrome.
-       3. --app-height — JS-pinned window.innerHeight (see useAppHeight); the
+       1. 100vh   - universal fallback (older WebKit without dvh).
+       2. 100dvh  - true dynamic viewport on modern iOS 15.4+/Chrome.
+       3. --app-height - JS-pinned window.innerHeight (see useAppHeight); the
           only value that reliably matches the visible area in an iOS Safari
           standalone PWA, where dvh/vh can leave a strip below the bottom nav.
        Each later line overrides the previous only if it computes to a valid

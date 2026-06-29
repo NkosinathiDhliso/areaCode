@@ -23,14 +23,14 @@
       "type": "image/png",
       "sizes": "1080x1920",
       "form_factor": "narrow",
-      "label": "Area Code — the city is alive"
+      "label": "Area Code - the city is alive"
     },
     {
       "src": "/screenshots/wide.png",
       "type": "image/png",
       "sizes": "1920x1080",
       "form_factor": "wide",
-      "label": "Area Code — live venue map for South Africa"
+      "label": "Area Code - live venue map for South Africa"
     }
   ]
 }

@@ -429,7 +429,7 @@ function BrowseMode({
               type="button"
               data-keep-exploring
               onClick={onTapMore}
-              aria-label={t('map.keepExploringLabel', 'Keep exploring — show all venues')}
+              aria-label={t('map.keepExploringLabel', 'Keep exploring - show all venues')}
               className="glass-raised flex flex-col items-center justify-center gap-2 rounded-2xl px-4 py-3 w-full h-full min-h-[80px] text-center border-2 border-dashed border-[var(--accent)] transition-all duration-150 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] hover:bg-[var(--accent)]/10"
             >
               <Sparkles size={20} className="text-[var(--accent)]" strokeWidth={1.75} />

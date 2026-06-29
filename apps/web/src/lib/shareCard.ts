@@ -1,9 +1,9 @@
 /**
- * Share card generator — client-side canvas rendering (R14.4: no Lambda).
+ * Share card generator - client-side canvas rendering (R14.4: no Lambda).
  *
  * `buildShareCardData` is pure: it distils only the generating consumer's own
  * stats into the card payload. This is the Property 9 (Share Card Privacy)
- * target — it must never copy a foreign user's id/name/avatar/history into its
+ * target - it must never copy a foreign user's id/name/avatar/history into its
  * output, even when such data is available in the calling scope.
  *
  * `generateShareCard` renders from its output into an HTML5 Canvas and returns
@@ -17,7 +17,7 @@ import type { Tier } from '@area-code/shared/types'
 
 /**
  * Input from the consumer's own profile/stats. May contain more fields than
- * needed — `buildShareCardData` distils only the safe subset.
+ * needed - `buildShareCardData` distils only the safe subset.
  */
 export interface ConsumerStats {
   rank: number
@@ -68,7 +68,7 @@ const ARCHETYPE_GLYPHS: Record<string, string> = {
 
 const DEFAULT_GLYPH = '💿'
 
-/** Tier colours (resolved hex values for canvas — cannot use CSS vars). */
+/** Tier colours (resolved hex values for canvas - cannot use CSS vars). */
 const TIER_COLOURS: Record<Tier, string> = {
   local: '#94a3b8',
   regular: '#60a5fa',
@@ -91,7 +91,7 @@ const TIER_LABELS: Record<Tier, string> = {
  * Distils only the generating consumer's own stats into the card payload.
  *
  * This function is intentionally minimal and takes a single `ConsumerStats`
- * object — it never accepts other users' data as input, making it structurally
+ * object - it never accepts other users' data as input, making it structurally
  * impossible for foreign PII to leak into the output.
  */
 export function buildShareCardData(stats: ConsumerStats): ShareCardData {
@@ -335,7 +335,7 @@ export async function shareOrCopy(blob: Blob, text: string, url: string = APP_SH
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Draw a rounded rectangle path (does not fill/stroke — caller does that). */
+/** Draw a rounded rectangle path (does not fill/stroke - caller does that). */
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath()
   ctx.moveTo(x + r, y)

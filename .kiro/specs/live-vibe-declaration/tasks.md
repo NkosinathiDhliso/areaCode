@@ -18,11 +18,11 @@ Implements the silver-bullet "presence is truth" model as a contained change to 
   - Reuse `pickCheckInMode`, `resolveActiveSlot`, and the catalog helpers; do not duplicate them.
   - _Requirements: 1.1, 1.2, 2.1, 2.2, 3.1, 3.2, 4.1_
 
-- [ ] 2. Property-based tests for the resolver
-- [-] 2.1 Add properties P1–P5 to the existing `liveArchetype.test.ts` harness
+- [x] 2. Property-based tests for the resolver
+- [x] 2.1 Add properties P1–P5 to the existing `liveArchetype.test.ts` harness
   - One catalog archetype always; idempotence; never `crowd_live` below `effectiveFloor`; never `declared_promise` at/above floor with a qualifying crowd; presence-grace holds branch within `[floor − grace, floor)`.
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5_
-- [-] 2.2 Add the flag-off regression lock (P6) and glyph-identity assertion (P7)
+- [x] 2.2 Add the flag-off regression lock (P6) and glyph-identity assertion (P7)
   - With `presenceFloor === undefined`, output equals the pre-feature resolver across the generated input space; assert the resolver reads/writes no beam visual field.
   - _Requirements: 10.3, 4.3_
 
@@ -34,12 +34,12 @@ Implements the silver-bullet "presence is truth" model as a contained change to 
   - Extend `readNodeArchetypeFields` to also read `lastBranch`; add a `lastBranch` write beside `writeLastArchetypeId` on change.
   - _Requirements: 3.1, 3.3_
 
-- [ ] 4. Wire the evaluator to the resolver behind the flag
-- [-] 4.1 Read flag + config and pass the new inputs
+- [x] 4. Wire the evaluator to the resolver behind the flag
+- [x] 4.1 Read flag + config and pass the new inputs
   - Read `live_vibe_declaration` and the `Presence_Floor` (3) / `Presence_Grace` (1) config; pass `presenceFloor`/`presenceGrace` only when the flag is on (else `undefined`), plus `qualifyingPresenceCount` and `previousBranch`, into `resolveLiveArchetype`.
   - Keep the existing only-on-change `node:archetype_change` emission and coalescing (≤ 1 / 10 000 ms).
   - _Requirements: 4.2, 9.1, 9.2, 9.3, 10.1, 10.2, 10.4_
-- [~] 4.2 Evaluator unit tests (mocked I/O)
+- [x] 4.2 Evaluator unit tests (mocked I/O)
   - Present-count maps to the resolver input; emission only on archetype change; `lastBranch` persisted; bounded read count; failure paths fall through without throwing.
   - _Requirements: 2.4, 9.3_
 
@@ -68,8 +68,8 @@ Implements the silver-bullet "presence is truth" model as a contained change to 
   - Default `false` in every environment; unreachable flag store ⇒ `false`; flip-on applies the new precedence for visible venues within one socket reconnect cycle (≤ 10 000 ms).
   - _Requirements: 10.1, 10.2, 10.4_
 
-- [ ] 10. End-to-end verification
-- [~] 10.1 Cold-start → fill → empty path test
+- [x] 10. End-to-end verification
+- [x] 10.1 Cold-start → fill → empty path test
   - Empty room shows `declared_promise`; crossing 3 present flips to `crowd_live`; dropping to 1 reverts; assert only glyph identity changed and the `node:archetype_change` payload carries no consumer identity.
   - _Requirements: 1.1, 2.1, 2.4, 3.1, 4.3, 11.2, 11.3, 11.4_
 

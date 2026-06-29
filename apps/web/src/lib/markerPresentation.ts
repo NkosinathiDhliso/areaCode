@@ -52,7 +52,7 @@ export function beamBlendForZoom(zoom: number): number {
 }
 
 /**
- * Presence-channel scale: beam ramp (4–8), dot ramp (8–12.5), full at glyph+.
+ * Presence-channel scale: beam ramp (4-8), dot ramp (8-12.5), full at glyph+.
  */
 export function scaleForZoom(zoom: number): number {
   if (zoom >= GLYPH_ZOOM_THRESHOLD) return 1

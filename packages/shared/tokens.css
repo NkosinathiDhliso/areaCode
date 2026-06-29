@@ -232,7 +232,7 @@
 /**
  * Heartbeat: a calm lub-dub double-thump followed by a long rest, scale-only
  * (no opacity flicker). Two gentle bumps early in the cycle, then the marker
- * settles and holds — reads as a living pulse, never a strobe. Aliveness is
+ * settles and holds - reads as a living pulse, never a strobe. Aliveness is
  * expressed by the cycle duration (see PULSE_TEMPO), not by a faster flash.
  */
 @keyframes heartbeat {

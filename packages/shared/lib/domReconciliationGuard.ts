@@ -14,7 +14,7 @@
  * shell when a user's device language isn't English) or an extension such as
  * Grammarly swaps or relocates a text node. React then asks the DOM to insert a
  * node before a reference node that is no longer a child of the expected
- * parent, the native call throws, and the error escapes React's reconciler —
+ * parent, the native call throws, and the error escapes React's reconciler -
  * taking the entire tree down (a blank screen), not just the affected subtree.
  *
  * The fix, recommended on the long-running React issue

@@ -282,7 +282,7 @@ function resolveDefaultTail(node: LiveArchetypeInputs['node']): LiveArchetypeRes
  * flip"):
  *
  *   effectiveFloor = previousBranch === 'crowd_live'
- *     ? presenceFloor − (presenceGrace ?? 0)   // downward grace only
+ *     ? presenceFloor - (presenceGrace ?? 0)   // downward grace only
  *     : presenceFloor
  *   count = qualifyingPresenceCount ?? 0
  *

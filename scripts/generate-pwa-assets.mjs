@@ -117,7 +117,9 @@ async function main() {
 
   for (const [w, h] of SPLASH_SIZES) {
     const out = join(publicDir, 'splash', `splash-${w}x${h}.png`)
-    await sharp(Buffer.from(splashSvg(w, h))).png().toFile(out)
+    await sharp(Buffer.from(splashSvg(w, h)))
+      .png()
+      .toFile(out)
     console.log(`Wrote splash/splash-${w}x${h}.png`)
   }
 

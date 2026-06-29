@@ -93,6 +93,32 @@ const PRESENCE_COUNT_TIMEOUT_MS = 500
 const PROD_LOG_SAMPLE_RATE = 0.01
 
 /**
+ * Parse a non-negative integer from an environment variable, falling back to
+ * the supplied default when the var is unset or malformed. Mirrors the repo's
+ * `process.env[...] ?? default` config convention (see `nodes/service.ts`),
+ * but coerces and validates so a stray non-numeric override can never poison
+ * the floor/grace gate.
+ */
+function readNonNegativeIntEnv(key: string, fallback: number): number {
+  const raw = process.env[key]
+  if (raw === undefined || raw === '') return fallback
+  const n = Number(raw)
+  return Number.isInteger(n) && n >= 0 ? n : fallback
+}
+
+/**
+ * Presence_Floor / Presence_Grace (live-vibe-declaration R8, founder-confirmed
+ * 3 / 1). Sourced from env vars (`AREA_CODE_PRESENCE_FLOOR` /
+ * `AREA_CODE_PRESENCE_GRACE`) with the founder-confirmed defaults so the gate
+ * can be tuned per environment via Lambda configuration without a code deploy
+ * (design "Configuration values"). Only consulted on the flag-on path; the
+ * `live_vibe_declaration`-off path passes `presenceFloor` as `undefined` and
+ * never reads these.
+ */
+const PRESENCE_FLOOR = readNonNegativeIntEnv('AREA_CODE_PRESENCE_FLOOR', 3)
+const PRESENCE_GRACE = readNonNegativeIntEnv('AREA_CODE_PRESENCE_GRACE', 1)
+
+/**
  * Warm-context `Map<nodeId, lastEmitMs>` (R11.3). Lambdas reuse warm
  * contexts so a single hot Lambda handling consecutive ticks for the
  * same Node can dedupe emits within 10 s without round-tripping to
@@ -360,12 +386,29 @@ export async function evaluateLiveArchetype(event: EvaluationTickEvent): Promise
 
   // ── Read Node cache (single small projected GetItem) ─────────────────────
   // The R11.4 budget is "one GetItem (schedule) + one Query (CheckIns)";
-  // this third projected GetItem reads only `lastArchetypeId` and
-  // `defaultArchetypeId` and is the cache lookup the design names
-  // explicitly ("compare to the Node's cached `lastArchetypeId`"). It is
-  // not a fourth I/O — the budget counts data-plane reads, the cache
-  // lookup is the bookkeeping read every emit-vs-coalesce path needs.
+  // this third projected GetItem reads only `lastArchetypeId`,
+  // `lastBranch`, and `defaultArchetypeId` and is the cache lookup the
+  // design names explicitly ("compare to the Node's cached
+  // `lastArchetypeId`"). It is not a fourth data-plane read — the budget
+  // counts data-plane reads, the cache lookup is the bookkeeping read every
+  // emit-vs-coalesce path needs.
   const nodeFields = await readNodeArchetypeFields(event.nodeId)
+
+  // ── Presence-is-truth gate (live-vibe-declaration, flag-gated) ───────────
+  // Only when `live_vibe_declaration` is on do we (a) spend the one extra
+  // presence GetItem and (b) hand the resolver the presence-gate inputs.
+  // When the flag is off we pass NONE of them, so `presenceFloor` is
+  // `undefined` and the resolver runs the legacy live-vibe-on-map precedence
+  // verbatim (R10.3) — and we never pay the presence read (R9.3 read budget).
+  const liveVibeDeclaration = getFeatureFlag('live_vibe_declaration')
+  const presenceInputs = liveVibeDeclaration
+    ? {
+        presenceFloor: PRESENCE_FLOOR,
+        presenceGrace: PRESENCE_GRACE,
+        qualifyingPresenceCount: await readHonestPresenceCount(event.nodeId),
+        previousBranch: nodeFields.lastBranch,
+      }
+    : {}
 
   // ── Step 5: pure resolver call (R7) ──────────────────────────────────────
   const result = resolveLiveArchetype({
@@ -373,6 +416,7 @@ export async function evaluateLiveArchetype(event: EvaluationTickEvent): Promise
     schedule: schedule ?? undefined,
     recentCheckIns,
     timestampIso: event.timestampIso,
+    ...presenceInputs,
   })
 
   const newArchetypeId = result.archetype.id

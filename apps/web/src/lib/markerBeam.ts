@@ -1,5 +1,5 @@
 /**
- * Constellation beam DOM: inverted cone — tip at venue, wide mouth under glyph.
+ * Constellation beam DOM: inverted cone - tip at venue, wide mouth under glyph.
  */
 
 import type { NodeState } from '@area-code/shared/types'
@@ -21,7 +21,7 @@ export interface BeamVisualOptions {
   hasLiveGet?: boolean
   /** Finger sweep proximity brighten. */
   brushed?: boolean
-  /** Beam blend when hybrid with glyphs (0–1); boosts glow when < 1. */
+  /** Beam blend when hybrid with glyphs (0-1); boosts glow when < 1. */
   hybridStrength?: number
   /** Business tier footprint scale (width only, never opacity). */
   tierBaseScale?: number
@@ -29,7 +29,7 @@ export interface BeamVisualOptions {
   glyphSize?: number
 }
 
-/** Pillar height (px) by Pulse_State — aliveness only, not business tier. */
+/** Pillar height (px) by Pulse_State - aliveness only, not business tier. */
 const BEAM_HEIGHT: Record<NodeState, number> = {
   dormant: 62,
   quiet: 78,
@@ -38,7 +38,7 @@ const BEAM_HEIGHT: Record<NodeState, number> = {
   popping: 158,
 }
 
-/** Cone top width (px) by Pulse_State before tier multiplier — wide mouth under glyph. */
+/** Cone top width (px) by Pulse_State before tier multiplier - wide mouth under glyph. */
 const CONE_TOP: Record<NodeState, number> = {
   dormant: 16,
   quiet: 20,
@@ -411,8 +411,15 @@ export function applyPresentationTier(
     beamHit.style.pointerEvents = tier === 'beam' && beamBlend >= 0.85 ? 'auto' : 'none'
   }
   if (glyphWrapper) {
-    const glyphOpacity = tier === 'beam' ? Math.min(1, Math.max(0, 1 - beamBlend)) : 1
+    let glyphOpacity = tier === 'beam' ? Math.min(1, Math.max(0, 1 - beamBlend)) : 1
+    // When a venue is selected, fade back the non-selected glyphs at glyph/dot
+    // zoom so the active glyph (ring + elevated z-index) pops out of a cluster
+    // of overlapping neighbours. Without this, densely packed venues at glyph
+    // zoom are only disambiguated by stacking order, which reads as ambiguous.
+    // The active marker keeps full opacity. (Requirements 12.5, 12.6.)
+    if (tier !== 'beam' && dimInactive && !isActive) glyphOpacity *= 0.4
     glyphWrapper.style.opacity = String(glyphOpacity)
+    // Keep neighbours tappable even while dimmed so selection can still move.
     glyphWrapper.style.pointerEvents = showGlyphDot && glyphOpacity > 0.15 ? 'auto' : 'none'
   }
   if (halo) {

@@ -44,7 +44,7 @@ export const GLYPH_ZOOM_THRESHOLD = 12.5
 
 /**
  * Zoom below which the Marker_Layer renders Constellation beams instead of
- * dots/glyphs. Former Globe_Zoom "hidden" tier — see constellation-mode.md.
+ * dots/glyphs. Former Globe_Zoom "hidden" tier - see constellation-mode.md.
  */
 export const MIN_MARKER_ZOOM = 8
 
@@ -59,14 +59,14 @@ export const BEAM_HIT_WIDTH_PX = 48
 
 /**
  * Per-Pulse_State marker/beam animation. Aliveness is encoded as TEMPO within a
- * deliberately calm band — a true lub-dub heartbeat (see the `heartbeat`
+ * deliberately calm band - a true lub-dub heartbeat (see the `heartbeat`
  * keyframe in `packages/shared/tokens.css`), never a strobe. Every state uses
  * the same double-thump curve; a busier venue simply beats a little faster. The
  * fastest state (popping) completes a full beat-and-rest cycle in 1.6s, and the
  * rest phase between thumps means it never reads as flashing. The rest of the
  * aliveness signal is carried by beam height and opacity (see `markerBeam`
  * BEAM_HEIGHT / BEAM_OPACITY) so motion can stay calm without weakening the
- * "this venue is alive" read — aliveness still leads (discovery-DNA), just
+ * "this venue is alive" read - aliveness still leads (discovery-DNA), just
  * calmly (constellation-mode "calm by default").
  *
  * Single source of truth: imported by both the Constellation beam layer

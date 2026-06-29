@@ -4,12 +4,12 @@
  * Two properties are asserted directly against the single source of truth
  * (`PULSE_TEMPO`) and the `heartbeat` keyframe in `packages/shared/tokens.css`:
  *
- *   1. Uniform heartbeat — every Pulse_State drives the *same* `heartbeat`
+ *   1. Uniform heartbeat - every Pulse_State drives the *same* `heartbeat`
  *      curve. Aliveness is expressed only by tempo (cycle duration), never by a
  *      different/harsher animation. The curve itself is a scale-only lub-dub
  *      with a rest phase (no opacity flicker).
  *
- *   2. Not a strobe — the fastest state's beat frequency stays far below the
+ *   2. Not a strobe - the fastest state's beat frequency stays far below the
  *      ~3 Hz photosensitivity / flash threshold (WCAG 2.3.1 "three flashes").
  */
 import { readFileSync } from 'node:fs'
@@ -42,7 +42,7 @@ function toSeconds(speed: string): number {
 const STROBE_THRESHOLD_HZ = 3
 const THUMPS_PER_CYCLE = 2
 
-describe('venue pulse animation — uniform heartbeat, not a strobe', () => {
+describe('venue pulse animation - uniform heartbeat, not a strobe', () => {
   it('every Pulse_State uses the SAME heartbeat curve (uniform, not per-state animation)', () => {
     const animations = new Set(ALL_STATES.map((s) => PULSE_TEMPO[s].animation))
     expect(animations).toEqual(new Set(['heartbeat']))
@@ -56,10 +56,10 @@ describe('venue pulse animation — uniform heartbeat, not a strobe', () => {
     }
   })
 
-  it('popping — the busiest, fastest beat — is the worst case and still calm', () => {
+  it('popping - the busiest, fastest beat - is the worst case and still calm', () => {
     const fastest = Math.min(...ALL_STATES.map((s) => toSeconds(PULSE_TEMPO[s].speed)))
     expect(toSeconds(PULSE_TEMPO.popping.speed)).toBe(fastest)
-    // A single beat-event per 1.6s cycle ≈ 0.625 Hz — roughly a resting pulse.
+    // A single beat-event per 1.6s cycle ≈ 0.625 Hz - roughly a resting pulse.
     expect(THUMPS_PER_CYCLE / toSeconds(PULSE_TEMPO.popping.speed)).toBeLessThanOrEqual(1.25)
   })
 

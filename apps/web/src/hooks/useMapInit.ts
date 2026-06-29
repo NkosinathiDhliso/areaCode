@@ -103,7 +103,7 @@ function prefersReducedMotion(): boolean {
  * Mapbox GL renders its attribution and logo as real `<a>` links in the map
  * control corners. By default they are in the keyboard tab order, so a user
  * tabbing through the page lands on them and Enter navigates the whole app
- * away to mapbox.com — a focus trap that ejects keyboard users from the app.
+ * away to mapbox.com - a focus trap that ejects keyboard users from the app.
  *
  * We pull these anchors out of the tab order (`tabindex="-1"`) while leaving
  * them visible and mouse-clickable, which keeps Mapbox attribution compliant
@@ -278,13 +278,13 @@ function buildMapInstance(map: mapboxgl.Map): MapInstance {
  *
  * MapScreen is kept mounted across tab switches in App.tsx (it is hidden with
  * `display:none`, not unmounted), so this map is created once and persists
- * while the user moves between tabs — no re-init flash on every navigation.
+ * while the user moves between tabs - no re-init flash on every navigation.
  * It is only torn down on a genuine unmount (logout / auth gate) or via
  * `retryMap`. This hook owns that lifecycle: it creates the map on mount and
  * fully removes it on unmount. (A previous module-level singleton tried to
  * persist the map across navigation, but because each remount got a brand-new
  * container DOM node the singleton could be left detached and the map would
- * "refuse to reopen". Keeping the component — and therefore its container —
+ * "refuse to reopen". Keeping the component - and therefore its container -
  * mounted is the deterministic version of the same goal.)
  *
  * mapRef is only set AFTER the map fires 'load', ensuring markers added via
@@ -579,7 +579,7 @@ export function useMapInit() {
     }
   }, [resolved, mapReadyKey])
 
-  // Idle bearing drift removed — continuous rotation caused dizziness.
+  // Idle bearing drift removed - continuous rotation caused dizziness.
 
   return {
     containerRef,

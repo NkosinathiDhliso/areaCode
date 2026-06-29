@@ -1,6 +1,6 @@
 /**
  * Unit tests for `CrowdVibeSection` honest promise-vs-now labelling
- * (live-vibe-declaration R6.1–R6.4, R11.1).
+ * (live-vibe-declaration R6.1-R6.4, R11.1).
  *
  * The section heading is driven by the Resolution_Branch sourced from the SAME
  * live map data the glyph rides (`mapStore.archetypeBranches`), so the label

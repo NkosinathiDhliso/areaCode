@@ -16,7 +16,7 @@ export function TierProgressNudge({ checkInCount }: TierProgressNudgeProps) {
   const currentIndex = TIER_LEVELS.findIndex((l: TierLevel) => l.tier === currentTier)
   const nextLevel: TierLevel | undefined = TIER_LEVELS[currentIndex + 1]
 
-  // At Legend (highest tier) — celebratory label
+  // At Legend (highest tier) - celebratory label
   if (!nextLevel) {
     return <span className="text-[var(--tier-legend)] text-xs font-medium">Legend | top of the city</span>
   }

@@ -208,7 +208,7 @@ function buildMarkerElement(
   // ── Glyph wrapper (rides the apex at the TOP of the beam) ──
   // Bat-Signal: the beam's tip is pinned to the venue coordinate at the bottom
   // and widens upward into the sky; the glyph sits on the wide cone mouth at
-  // the top of that light pillar — NOT down on the ground coordinate.
+  // the top of that light pillar - NOT down on the ground coordinate.
   const glyphWrapper = document.createElement('div')
   Object.assign(glyphWrapper.style, {
     position: 'relative',
@@ -288,7 +288,7 @@ function buildMarkerElement(
 
   // Place the glyph at the TOP of the flex column (before the beam hit) so the
   // beam descends from it to the venue coordinate. Appending it would stack the
-  // glyph *below* the beam — back on the ground coordinate, which is the bug
+  // glyph *below* the beam - back on the ground coordinate, which is the bug
   // this fixes.
   beaconStack.insertBefore(glyphWrapper, beaconStack.firstChild)
 
@@ -335,10 +335,16 @@ function buildMarkerElement(
  */
 function applyActiveStyling(el: HTMLElement, isActive: boolean, colour: string): void {
   el.dataset.active = isActive ? 'true' : 'false'
-  // The ring lives inside the scale-layer alongside the glyph so it scales with
-  // the marker; fall back to the root only if the layer is somehow absent.
+  // The ring must be centred on the GLYPH at the beam apex, not on the middle
+  // of the tall marker container. The container is `beamHeight + glyphSize`
+  // tall and the glyph rides at its TOP, so a ring positioned at 50% of the
+  // container lands halfway down the beam stem. Mounting the ring INSIDE the
+  // glyph wrapper (the same anchor the halo uses) makes `top/left: 50%` resolve
+  // against the glyph box, so the circle always frames the glyph.
   const scaleLayer = (el.querySelector(`[data-layer="${SCALE_LAYER}"]`) as HTMLElement | null) ?? el
-  let ring = scaleLayer.querySelector(`[data-layer="${ACTIVE_RING_LAYER}"]`) as HTMLElement | null
+  const glyphWrapper = scaleLayer.querySelector('[data-layer="glyph-wrapper"]') as HTMLElement | null
+  const ringHost = glyphWrapper ?? scaleLayer
+  let ring = ringHost.querySelector(`[data-layer="${ACTIVE_RING_LAYER}"]`) as HTMLElement | null
 
   if (isActive) {
     if (!ring) {
@@ -350,19 +356,14 @@ function applyActiveStyling(el: HTMLElement, isActive: boolean, colour: string):
         transform: 'translate(-50%, -50%)',
         borderRadius: '50%',
         pointerEvents: 'none',
+        // Behind the glyph host (z-index 2) but above the halo (z-index 0) so
+        // the ring frames the glyph without covering the tap/identity layer.
+        zIndex: '1',
       })
       ring.dataset.layer = ACTIVE_RING_LAYER
-      // Behind the glyph wrapper so the ring frames the marker without
-      // covering the tap target.
-      const glyphWrapper = scaleLayer.querySelector('[data-layer="glyph-wrapper"]')
-      if (glyphWrapper) {
-        scaleLayer.insertBefore(ring, glyphWrapper)
-      } else {
-        scaleLayer.appendChild(ring)
-      }
+      ringHost.insertBefore(ring, ringHost.firstChild)
     }
     // Size the ring off the live glyph wrapper so it tracks tier/state sizing.
-    const glyphWrapper = scaleLayer.querySelector('[data-layer="glyph-wrapper"]') as HTMLElement | null
     const glyphSize = glyphWrapper ? parseFloat(glyphWrapper.style.width) || 0 : 0
     const ringSize = glyphSize * 1.5
     Object.assign(ring.style, {
@@ -574,7 +575,10 @@ export function useMapMarkers(
 
       const tier = presentationTierForZoom(zoom)
       const blend = beamBlendForZoom(zoom)
-      const dimInactive = blend >= 0.98 && activeVenueId !== null
+      // Dim non-selected markers whenever a venue is active. The beam tier
+      // gates this on `tier === 'beam'` itself; the glyph/dot tiers use it to
+      // fade neighbours so the selected glyph stands out in a cluster.
+      const dimInactive = activeVenueId !== null
 
       for (const [nodeId, marker] of markersRef.current) {
         const el = marker.getElement()
@@ -633,7 +637,7 @@ export function useMapMarkers(
       const tier = presentationTierForZoom(curZoom)
       const beamBlend = beamBlendForZoom(curZoom)
       const showIcon = tier === 'glyph'
-      const dimInactive = beamBlend >= 0.98 && activeVenueId !== null
+      const dimInactive = activeVenueId !== null
 
       const nodeArray = Object.values(nodes)
       const filtered = categoryFilter ? nodeArray.filter((n) => n.category === categoryFilter) : nodeArray

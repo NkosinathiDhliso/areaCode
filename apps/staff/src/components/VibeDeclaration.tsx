@@ -47,7 +47,7 @@ function genresOfActiveSlot(schedule: MusicSchedule, nowIso: string): MusicGenre
   try {
     resolved = resolveActiveSlot(schedule, nowIso)
   } catch {
-    // Malformed schedule on disk — treat as no active promise rather than crash.
+    // Malformed schedule on disk - treat as no active promise rather than crash.
     return null
   }
   if (!resolved) return null

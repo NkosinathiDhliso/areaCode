@@ -45,7 +45,7 @@ export function CrowdVibeSection({ nodeId }: CrowdVibeSectionProps) {
   // Source the Resolution_Branch from the SAME live map data the glyph rides
   // (`mapStore`, written by the `node:archetype_change` socket event). Because
   // the branch and the rendered archetype id are stored together, this label
-  // can never disagree with the glyph (live-vibe-declaration R6.1–R6.3). We do
+  // can never disagree with the glyph (live-vibe-declaration R6.1-R6.3). We do
   // not recompute the branch here.
   const branch = useMapStore((s) => s.archetypeBranches[nodeId])
 

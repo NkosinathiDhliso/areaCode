@@ -20,7 +20,7 @@ import * as fc from 'fast-check'
 
 import { ARCHETYPE_CATALOG } from '../../constants/archetype-catalog'
 import { MUSIC_GENRES } from '../../constants/genre-weights'
-import type { MusicGenre, MusicSchedule, ScheduleDayOfWeek } from '../../types'
+import type { LiveArchetypeBranch, MusicGenre, MusicSchedule, ScheduleDayOfWeek } from '../../types'
 import { resolveLiveArchetype, type LiveArchetypeCheckIn, type LiveArchetypeInputs } from '../liveArchetype'
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -325,6 +325,452 @@ describe('Property 8: Live_Archetype idempotence', () => {
         expect(second).toEqual(first)
       }),
       { numRuns: 200 },
+    )
+  })
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// live-vibe-declaration: presence-is-truth (flag-on) properties P1-P5
+//
+// These exercise the extended resolver path where `presenceFloor` is DEFINED
+// (the flag-on path, design "The precedence flip"). The flag-off path
+// (`presenceFloor === undefined`) is covered by Properties 7 / 8 above and the
+// dedicated regression lock P6 (task 2.2).
+//
+// effectiveFloor = previousBranch === 'crowd_live'
+//   ? presenceFloor - (presenceGrace ?? 0)   // downward grace only (R3.1, R3.2)
+//   : presenceFloor
+// ════════════════════════════════════════════════════════════════════════════
+
+// ─── Flag-on shared arbitraries ─────────────────────────────────────────────
+
+/** A check-in whose archetypeId is NOT in the catalog (or is null/absent). */
+const nonCatalogCheckInArb: fc.Arbitrary<LiveArchetypeCheckIn> = fc.constantFrom<LiveArchetypeCheckIn[]>(
+  { archetypeId: null },
+  { archetypeId: undefined },
+  { archetypeId: '' },
+  { archetypeId: 'not-a-catalog-archetype' },
+)
+
+/** A check-in that may or may not carry a catalog archetypeId. */
+const mixedCheckInArb: fc.Arbitrary<LiveArchetypeCheckIn> = fc.oneof(checkInArb, nonCatalogCheckInArb)
+
+/** Any prior Resolution_Branch, including `crowd_live` (the only one that engages grace) and `null`. */
+const previousBranchArb: fc.Arbitrary<LiveArchetypeBranch | null> = fc.constantFrom<(LiveArchetypeBranch | null)[]>(
+  'crowd_live',
+  'declared_promise',
+  'checkin_mode',
+  'default',
+  'eclectic_fallback',
+  'schedule_lineup',
+  'schedule_blanket',
+  null,
+)
+
+/** True iff at least one check-in carries an archetypeId present in the catalog. */
+const hasCatalogMode = (checkIns: LiveArchetypeCheckIn[]): boolean =>
+  checkIns.some((ci) => typeof ci.archetypeId === 'string' && CATALOG_IDS.has(ci.archetypeId))
+
+/** Schedule presence: sometimes absent, sometimes a blanket or lineup Active_Slot. */
+type ScheduleKind = 'none' | 'blanket' | 'lineup'
+const scheduleKindArb: fc.Arbitrary<ScheduleKind> = fc.constantFrom('none', 'blanket', 'lineup')
+
+const buildSchedule = (
+  kind: ScheduleKind,
+  dayOfWeek: ScheduleDayOfWeek,
+  genres: MusicGenre[],
+): MusicSchedule | undefined =>
+  kind === 'blanket'
+    ? makeBlanketSchedule(dayOfWeek, genres)
+    : kind === 'lineup'
+      ? makeLineupSchedule(dayOfWeek, genres)
+      : undefined
+
+interface FlagOnScenario {
+  inputs: LiveArchetypeInputs
+  /** Floor after applying the downward-only grace (the threshold the resolver actually compares against). */
+  effectiveFloor: number
+  /** Whether the generated check-ins yield a qualifying Crowd_Vibe (≥1 catalog archetypeId). */
+  hasQualifyingCrowd: boolean
+  label: string
+}
+
+/**
+ * General flag-on generator. `presenceFloor` is always defined (small positive
+ * int); `presenceGrace` spans 0..floor; `qualifyingPresenceCount` spans below,
+ * at, and above the floor; schedules are sometimes present; check-ins are a
+ * mix of catalog and non-catalog ids; `previousBranch` is any branch or null.
+ * Determinism: a fixed timestamp is passed in `timestampIso` (no Date.now()).
+ */
+const flagOnScenarioArb: fc.Arbitrary<FlagOnScenario> = fc
+  .record({
+    ts: localizedTimestampArb,
+    floor: fc.integer({ min: 1, max: 6 }),
+    graceRaw: fc.integer({ min: 0, max: 6 }),
+    count: fc.integer({ min: 0, max: 12 }),
+    scheduleKind: scheduleKindArb,
+    genres: distinctGenresArb,
+    checkIns: fc.array(mixedCheckInArb, { maxLength: 20 }),
+    previousBranch: previousBranchArb,
+  })
+  .map(({ ts, floor, graceRaw, count, scheduleKind, genres, checkIns, previousBranch }) => {
+    const presenceGrace = Math.min(graceRaw, floor) // grace in 0..floor
+    const inputs: LiveArchetypeInputs = {
+      node: { id: 'node-1' },
+      schedule: buildSchedule(scheduleKind, ts.dayOfWeek, genres),
+      recentCheckIns: checkIns,
+      timestampIso: ts.timestampIso,
+      presenceFloor: floor,
+      presenceGrace,
+      qualifyingPresenceCount: count,
+      previousBranch,
+    }
+    const effectiveFloor = previousBranch === 'crowd_live' ? floor - presenceGrace : floor
+    return {
+      inputs,
+      effectiveFloor,
+      hasQualifyingCrowd: hasCatalogMode(checkIns),
+      label: `floor=${floor} grace=${presenceGrace} count=${count} prev=${String(previousBranch)} sched=${scheduleKind} crowd=${hasCatalogMode(checkIns)}`,
+    }
+  })
+
+// ─── Property 1: flag-on resolver returns exactly one catalog Archetype ──────
+
+describe('Property 1: flag-on resolver returns one active-catalog archetype', () => {
+  /**
+   * For any generated `qualifyingPresenceCount` and `presenceFloor` (with the
+   * presence gate engaged), the resolver returns exactly one archetype whose
+   * `id` is in `ARCHETYPE_CATALOG`.
+   *
+   * Validates: Requirements 12.1
+   */
+  it('returns a catalog archetype id for any presenceFloor / qualifyingPresenceCount', () => {
+    fc.assert(
+      fc.property(flagOnScenarioArb, ({ inputs }) => {
+        const result = resolveLiveArchetype(inputs)
+        expect(result).toBeDefined()
+        expect(result.archetype).toBeDefined()
+        expect(typeof result.archetype.id).toBe('string')
+        expect(CATALOG_IDS.has(result.archetype.id)).toBe(true)
+      }),
+      { numRuns: 300 },
+    )
+  })
+})
+
+// ─── Property 2: flag-on idempotence ─────────────────────────────────────────
+
+describe('Property 2: flag-on idempotence', () => {
+  /**
+   * Two consecutive calls with identical flag-on inputs return the same
+   * archetype `id` and the same `branch`. The presence gate adds no hidden
+   * state - the resolver stays observably pure (R4.1).
+   *
+   * Validates: Requirements 12.2, 4.1
+   */
+  it('two consecutive calls return the same archetype id and branch', () => {
+    fc.assert(
+      fc.property(flagOnScenarioArb, ({ inputs }) => {
+        const first = resolveLiveArchetype(inputs)
+        const second = resolveLiveArchetype(inputs)
+        expect(second.archetype.id).toBe(first.archetype.id)
+        expect(second.branch).toBe(first.branch)
+      }),
+      { numRuns: 300 },
+    )
+  })
+})
+
+// ─── Property 3: no crowd_live below the effective floor ─────────────────────
+
+describe('Property 3: never crowd_live below the effective floor', () => {
+  /**
+   * Whenever `qualifyingPresenceCount < effectiveFloor` (accounting for the
+   * downward grace), the branch is never `crowd_live`. The room is not proven,
+   * so the glyph can only be a `declared_promise` or the default/eclectic tail.
+   *
+   * Validates: Requirements 1.1, 12.3
+   */
+  it('never returns crowd_live when count < effectiveFloor', () => {
+    fc.assert(
+      fc.property(flagOnScenarioArb, ({ inputs, effectiveFloor }) => {
+        fc.pre((inputs.qualifyingPresenceCount ?? 0) < effectiveFloor)
+        const result = resolveLiveArchetype(inputs)
+        expect(result.branch).not.toBe('crowd_live')
+      }),
+      { numRuns: 400 },
+    )
+  })
+})
+
+// ─── Property 4: no declared_promise at/above the floor with a real crowd ────
+
+/**
+ * Generator guaranteeing both (a) `count >= effectiveFloor` and (b) at least
+ * one catalog check-in (a qualifying Crowd_Vibe exists). Used by P4 so the
+ * precondition is structurally satisfied rather than filtered.
+ */
+const qualifyingCrowdAtOrAboveFloorArb: fc.Arbitrary<FlagOnScenario> = fc
+  .record({
+    ts: localizedTimestampArb,
+    floor: fc.integer({ min: 1, max: 6 }),
+    graceRaw: fc.integer({ min: 0, max: 6 }),
+    extra: fc.integer({ min: 0, max: 8 }),
+    scheduleKind: scheduleKindArb,
+    genres: distinctGenresArb,
+    guaranteedId: catalogIdArb,
+    rest: fc.array(mixedCheckInArb, { maxLength: 19 }),
+    previousBranch: previousBranchArb,
+  })
+  .map(({ ts, floor, graceRaw, extra, scheduleKind, genres, guaranteedId, rest, previousBranch }) => {
+    const presenceGrace = Math.min(graceRaw, floor)
+    const effectiveFloor = previousBranch === 'crowd_live' ? floor - presenceGrace : floor
+    const count = effectiveFloor + extra // guaranteed >= effectiveFloor (effectiveFloor >= 0)
+    const checkIns: LiveArchetypeCheckIn[] = [{ archetypeId: guaranteedId }, ...rest]
+    const inputs: LiveArchetypeInputs = {
+      node: { id: 'node-1' },
+      schedule: buildSchedule(scheduleKind, ts.dayOfWeek, genres),
+      recentCheckIns: checkIns,
+      timestampIso: ts.timestampIso,
+      presenceFloor: floor,
+      presenceGrace,
+      qualifyingPresenceCount: count,
+      previousBranch,
+    }
+    return {
+      inputs,
+      effectiveFloor,
+      hasQualifyingCrowd: true,
+      label: `floor=${floor} grace=${presenceGrace} count=${count} prev=${String(previousBranch)} sched=${scheduleKind}`,
+    }
+  })
+
+describe('Property 4: never declared_promise at/above floor with a qualifying crowd', () => {
+  /**
+   * Whenever `qualifyingPresenceCount >= effectiveFloor` AND the check-ins
+   * carry at least one catalog archetypeId (a qualifying Crowd_Vibe exists),
+   * the branch is never `declared_promise` - the real crowd wins outright,
+   * even when an Active_Slot declaration is present.
+   *
+   * Validates: Requirements 2.1, 12.4
+   */
+  it('never returns declared_promise when count >= effectiveFloor and a crowd mode exists', () => {
+    fc.assert(
+      fc.property(qualifyingCrowdAtOrAboveFloorArb, ({ inputs }) => {
+        const result = resolveLiveArchetype(inputs)
+        expect(result.branch).not.toBe('declared_promise')
+      }),
+      { numRuns: 400 },
+    )
+  })
+})
+
+// ─── Property 5: presence-grace prevents oscillation ─────────────────────────
+
+/**
+ * Generator pinning `previousBranch === 'crowd_live'` and holding the count
+ * strictly inside the grace band `[presenceFloor - presenceGrace, presenceFloor)`,
+ * with a guaranteed qualifying crowd. `presenceGrace >= 1` so the band is
+ * non-empty.
+ */
+const graceBandHoldArb: fc.Arbitrary<FlagOnScenario> = fc
+  .record({
+    ts: localizedTimestampArb,
+    floor: fc.integer({ min: 1, max: 6 }),
+    scheduleKind: scheduleKindArb,
+    genres: distinctGenresArb,
+    guaranteedId: catalogIdArb,
+    rest: fc.array(mixedCheckInArb, { maxLength: 19 }),
+  })
+  .chain((base) =>
+    fc.integer({ min: 1, max: base.floor }).chain((grace) =>
+      // count in [floor - grace, floor - 1]: strictly inside the grace band.
+      fc.integer({ min: base.floor - grace, max: base.floor - 1 }).map((count) => {
+        const checkIns: LiveArchetypeCheckIn[] = [{ archetypeId: base.guaranteedId }, ...base.rest]
+        const inputs: LiveArchetypeInputs = {
+          node: { id: 'node-1' },
+          schedule: buildSchedule(base.scheduleKind, base.ts.dayOfWeek, base.genres),
+          recentCheckIns: checkIns,
+          timestampIso: base.ts.timestampIso,
+          presenceFloor: base.floor,
+          presenceGrace: grace,
+          qualifyingPresenceCount: count,
+          previousBranch: 'crowd_live',
+        }
+        return {
+          inputs,
+          effectiveFloor: base.floor - grace,
+          hasQualifyingCrowd: true,
+          label: `floor=${base.floor} grace=${grace} count=${count} band=[${base.floor - grace},${base.floor})`,
+        }
+      }),
+    ),
+  )
+
+describe('Property 5: presence-grace holds crowd_live within the grace band', () => {
+  /**
+   * When `previousBranch === 'crowd_live'` and the count is held within
+   * `[presenceFloor - presenceGrace, presenceFloor)` (below the raw floor but
+   * inside the grace band), the branch stays `crowd_live` - it does not flip
+   * back to `declared_promise` or the default tail. This is the no-oscillation
+   * guarantee, given a qualifying crowd mode exists.
+   *
+   * Validates: Requirements 3.1, 3.3, 12.5
+   */
+  it('stays crowd_live when count is held inside the grace band', () => {
+    fc.assert(
+      fc.property(graceBandHoldArb, ({ inputs }) => {
+        // Precondition sanity: we really are below the raw floor.
+        fc.pre((inputs.qualifyingPresenceCount ?? 0) < (inputs.presenceFloor ?? 0))
+        const result = resolveLiveArchetype(inputs)
+        expect(result.branch).toBe('crowd_live')
+      }),
+      { numRuns: 300 },
+    )
+  })
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// live-vibe-declaration: P6 (flag-off regression lock) and P7 (glyph-identity)
+//
+// P6 locks the flag-off path (`presenceFloor === undefined`) to the pre-feature
+// resolver: the legacy branch set is preserved (never `crowd_live` /
+// `declared_promise`), and passing the presence fields explicitly as
+// `undefined` is byte-for-byte identical to omitting them. P7 is a structural
+// invariant over both flag-on and flag-off outputs: the result is exactly
+// `{ archetype, branch }` and the archetype carries no beam brightness / height
+// / animation (visual) field - glyph identity only (constellation-mode keeps
+// beam visuals a function of pulse alone).
+// ════════════════════════════════════════════════════════════════════════════
+
+/** The five pre-feature (legacy) Resolution_Branch values. */
+const LEGACY_BRANCHES: ReadonlySet<LiveArchetypeBranch> = new Set<LiveArchetypeBranch>([
+  'schedule_lineup',
+  'schedule_blanket',
+  'checkin_mode',
+  'default',
+  'eclectic_fallback',
+])
+
+/** Branches introduced by live-vibe-declaration - must never appear on the flag-off path. */
+const FEATURE_BRANCHES: ReadonlySet<LiveArchetypeBranch> = new Set<LiveArchetypeBranch>([
+  'crowd_live',
+  'declared_promise',
+])
+
+/**
+ * Beam / aliveness visual keys that the glyph-identity resolver must never
+ * read or write (constellation-mode: beam brightness, height, and animation
+ * speed are a function of pulse only, R4.3). The structural assertion in P7
+ * fails if any of these surface on the result or its archetype.
+ */
+const FORBIDDEN_VISUAL_KEYS: readonly string[] = [
+  'brightness',
+  'beamBrightness',
+  'height',
+  'beamHeight',
+  'animation',
+  'animationSpeed',
+  'beamAnimationSpeed',
+  'pulse',
+  'pulseScore',
+  'pulseState',
+  'beam',
+  'glow',
+  'opacity',
+]
+
+// ─── Property 6: flag-off regression lock ────────────────────────────────────
+
+describe('Property 6: flag-off path is locked to the pre-feature resolver', () => {
+  /**
+   * For any legacy scenario (no presence fields set), the resolver returns a
+   * branch from the pre-feature set and NEVER one of the feature branches
+   * (`crowd_live` / `declared_promise`). This characterises the flag-off path
+   * directly: with `presenceFloor` absent, the presence-is-truth gate is dead
+   * code and the original precedence runs verbatim.
+   *
+   * Validates: Requirements 10.3
+   */
+  it('returns only legacy branches and never a feature branch', () => {
+    fc.assert(
+      fc.property(anyBranchArb, ({ inputs }) => {
+        const result = resolveLiveArchetype(inputs)
+        expect(LEGACY_BRANCHES.has(result.branch)).toBe(true)
+        expect(FEATURE_BRANCHES.has(result.branch)).toBe(false)
+      }),
+      { numRuns: 300 },
+    )
+  })
+
+  /**
+   * Passing the presence-gate fields explicitly as `undefined` is identical to
+   * omitting them entirely: deep equality of the full result. This proves the
+   * flag-off contract is keyed on `presenceFloor === undefined` and not on the
+   * mere absence of the property, so a caller that always spreads `undefined`
+   * presence inputs (the flag-off code path in the evaluator) gets byte-for-byte
+   * the pre-feature behaviour.
+   *
+   * Validates: Requirements 10.3
+   */
+  it('explicit-undefined presence fields are deeply equal to omitting them', () => {
+    fc.assert(
+      fc.property(anyBranchArb, ({ inputs }) => {
+        const omitted = resolveLiveArchetype(inputs)
+        const explicitUndefined = resolveLiveArchetype({
+          ...inputs,
+          presenceFloor: undefined,
+          presenceGrace: undefined,
+          qualifyingPresenceCount: undefined,
+          previousBranch: undefined,
+        })
+        expect(explicitUndefined).toEqual(omitted)
+      }),
+      { numRuns: 300 },
+    )
+  })
+})
+
+// ─── Property 7: glyph-identity only (no beam / visual fields) ───────────────
+
+/** Inputs from both the flag-off (legacy) and flag-on (presence-gate) spaces. */
+const anyScenarioInputsArb: fc.Arbitrary<LiveArchetypeInputs> = fc.oneof(
+  anyBranchArb.map((s) => s.inputs),
+  flagOnScenarioArb.map((s) => s.inputs),
+)
+
+describe('Property 7: resolver result is glyph identity only', () => {
+  /**
+   * For any resolution outcome (flag-on or flag-off), the result object shape
+   * is exactly `{ archetype, branch }` and the archetype is a catalog
+   * PersonalityArchetype carrying no beam brightness / height / animation
+   * (visual) key. The resolver decides glyph identity only; beam visuals stay
+   * a function of pulse per constellation-mode (R4.3).
+   *
+   * Validates: Requirements 4.3
+   */
+  it('returns exactly { archetype, branch } with no beam/visual fields', () => {
+    fc.assert(
+      fc.property(anyScenarioInputsArb, (inputs) => {
+        const result = resolveLiveArchetype(inputs)
+
+        // Result shape is exactly the identity pair.
+        expect(Object.keys(result).sort()).toEqual(['archetype', 'branch'])
+        expect(typeof result.branch).toBe('string')
+
+        // Archetype is a catalog entry by id.
+        expect(CATALOG_IDS.has(result.archetype.id)).toBe(true)
+
+        // No forbidden visual key on the result or the archetype.
+        const resultKeys = Object.keys(result).map((k) => k.toLowerCase())
+        const archetypeKeys = Object.keys(result.archetype).map((k) => k.toLowerCase())
+        for (const forbidden of FORBIDDEN_VISUAL_KEYS) {
+          const f = forbidden.toLowerCase()
+          expect(resultKeys).not.toContain(f)
+          expect(archetypeKeys).not.toContain(f)
+        }
+      }),
+      { numRuns: 400 },
     )
   })
 })

@@ -4,7 +4,7 @@
 //
 // Two responsibilities:
 //   1. Web Push notifications (push / notificationclick handlers).
-//   2. Offline resilience for SA mobile networks — precache the app shell and
+//   2. Offline resilience for SA mobile networks - precache the app shell and
 //      serve same-origin static assets from cache, with a graceful offline
 //      fallback for navigations.
 //

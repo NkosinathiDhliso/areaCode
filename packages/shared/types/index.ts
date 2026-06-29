@@ -214,7 +214,7 @@ export interface Node {
    * `live-archetype-evaluator` Lambda alongside `lastArchetypeId` so the
    * evaluator can feed `previousBranch` into `resolveLiveArchetype` for
    * downward presence-grace (stay `crowd_live` until the qualifying
-   * count drops below `Presence_Floor − Presence_Grace`)
+   * count drops below `Presence_Floor - Presence_Grace`)
    * (live-vibe-declaration design § Presence-grace, R3.1). Not used by
    * the pure resolver directly - kept here so the Node row is the single
    * source of truth for the cache. Absent ⇒ treated as `null`.

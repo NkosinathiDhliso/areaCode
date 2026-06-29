@@ -4,7 +4,7 @@ import { useEffect } from 'react'
  * Pins a `--app-height` CSS variable to the actually-visible viewport height.
  *
  * Why this exists: on iOS Safari (and some Android browsers) `100vh` and even
- * `100dvh` do not reliably equal the visible area in every state — installed
+ * `100dvh` do not reliably equal the visible area in every state - installed
  * standalone PWAs, the toolbar mid-transition, and older WebKit can all leave
  * the app shell shorter than the screen, exposing a strip of the page backstop
  * below the bottom nav. `window.innerHeight` always reports the real visible

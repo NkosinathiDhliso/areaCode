@@ -111,7 +111,7 @@ export function tasteMatchScore(
  * friends, but the client re-applies the check in case of clock skew or
  * slightly stale rows from the `GET /v1/friends/presence` seed response.
  *
- * Pure function — no internal `Date.now()`; the caller supplies `nowMs`.
+ * Pure function - no internal `Date.now()`; the caller supplies `nowMs`.
  *
  * Design: .kiro/specs/vibe-ranked-browse/design.md § filterActiveFriends
  * Requirements: 2.8, 3.5
@@ -201,7 +201,7 @@ export function vibeRank(input: RankInput): Node[] {
   const useProximity = positionFresh && lastKnownPosition !== null
 
   return [...venues].sort((a, b) => {
-    // 1) Taste-match score (higher wins) — archetype affinity + friends count
+    // 1) Taste-match score (higher wins) - archetype affinity + friends count
     const tasteA = tasteMatchScore(
       consumerArchetypeId,
       resolveArchetype(a, venueArchetypeIds),
@@ -214,12 +214,12 @@ export function vibeRank(input: RankInput): Node[] {
     )
     if (tasteA !== tasteB) return tasteB - tasteA
 
-    // 2) Aliveness (higher wins) — pulse + check-in count
+    // 2) Aliveness (higher wins) - pulse + check-in count
     const aliveA = (pulseScores[a.id] ?? 0) + (checkInCounts[a.id] ?? 0)
     const aliveB = (pulseScores[b.id] ?? 0) + (checkInCounts[b.id] ?? 0)
     if (aliveA !== aliveB) return aliveB - aliveA
 
-    // 3) Business tier (higher multiplier wins) — paid lever among equals
+    // 3) Business tier (higher multiplier wins) - paid lever among equals
     const tierA = TIER_SIZE_MULTIPLIER[a.businessTier ?? 'starter']
     const tierB = TIER_SIZE_MULTIPLIER[b.businessTier ?? 'starter']
     if (tierA !== tierB) return tierB - tierA
@@ -229,14 +229,14 @@ export function vibeRank(input: RankInput): Node[] {
     const getsB = hasLiveGets[b.id] ? 1 : 0
     if (getsA !== getsB) return getsB - getsA
 
-    // 5) Distance (nearer wins) — only when position is fresh; skipped otherwise (R1.6)
+    // 5) Distance (nearer wins) - only when position is fresh; skipped otherwise (R1.6)
     if (useProximity) {
       const distA = haversineMeters(lastKnownPosition as { lat: number; lng: number }, { lat: a.lat, lng: a.lng })
       const distB = haversineMeters(lastKnownPosition as { lat: number; lng: number }, { lat: b.lat, lng: b.lng })
       if (distA !== distB) return distA - distB
     }
 
-    // 6) Venue ID ascending — deterministic tiebreaker (R1.7)
+    // 6) Venue ID ascending - deterministic tiebreaker (R1.7)
     if (a.id < b.id) return -1
     if (a.id > b.id) return 1
     return 0

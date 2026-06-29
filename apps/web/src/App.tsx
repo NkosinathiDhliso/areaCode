@@ -234,7 +234,7 @@ function AppContent() {
 
   // Keep the Map mounted once it has first been shown. Switching tabs hides it
   // with CSS instead of unmounting it, so Mapbox is never torn down and
-  // re-initialised — this removes the "Loading map…" flash that appeared on
+  // re-initialised - this removes the "Loading map…" flash that appeared on
   // every tab change. `display:none` also drops it out of the keyboard tab
   // order while inactive.
   const [mapMounted, setMapMounted] = useState(false)

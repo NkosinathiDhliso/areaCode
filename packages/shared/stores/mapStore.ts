@@ -26,7 +26,7 @@ interface MapStore {
    * consumer surface (e.g. `CrowdVibeSection`) can label the live glyph as a
    * `declared_promise` ("expected tonight") versus `crowd_live` ("in the room
    * now") without ever disagreeing with the rendered glyph (live-vibe-declaration
-   * R6.1–R6.3). Absent ⇒ the surface falls back to neutral presentation.
+   * R6.1-R6.3). Absent ⇒ the surface falls back to neutral presentation.
    */
   archetypeBranches: Record<string, LiveArchetypeBranch>
   /**
