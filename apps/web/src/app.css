@@ -20,33 +20,21 @@
     background-color: var(--bg-base);
   }
 
-  /* The app shell fills the dynamic viewport. With viewport-fit=cover, 100dvh
-     extends edge-to-edge INCLUDING under the home indicator, so the in-flow
-     bottom nav reaches the true screen bottom and its padding-bottom (the
-     safe-area inset) paints the nav's own background through the indicator
-     zone. (A position:fixed/inset:0 shell does the opposite - it clamps to the
-     safe area and leaves the home-indicator strip unpainted, i.e. a black gap.) */
-
-  /* Bottom safe-area inset for the home indicator. The bottom nav lives in the
-     flex flow at the base of the 100dvh app shell, so its bottom edge reaches
-     the true screen bottom. This inset pads the nav clear of the home
-     indicator: env() resolves to 0 when Safari's bottom toolbar is present and
-     to the indicator height otherwise. */
+  /* Bottom safe-area inset (iOS home indicator / Android gesture bar).
+     Resolves to 0 when no inset is present. */
   :root {
     --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   }
 
-  /* The bottom nav reads as one solid bar through the home-indicator safe-area
-     strip in standalone mode: paint a solid base under the translucent glass so
-     the page can't show through the inset and look like a gap. Slim the content
-     row to native iOS tab-bar proportions (~50px) so the solid bar plus the
-     safe-area strip doesn't read as an oversized block. */
-  :root {
-    --nav-height: 50px;
-  }
+  /* Native-feel bottom nav. A solid --bg-base surface, the same colour as the
+     OS system bar (driven by <meta name="theme-color">, see useTheme) and the
+     app shell background. The nav sits at the base of the 100dvh flex flow, so
+     its bottom edge meets the true screen bottom, and its padding-bottom bleeds
+     this colour into the safe-area strip. Nav and system bar share one colour,
+     so they read as a single continuous surface with no gap. */
   .app-bottom-nav {
     background-color: var(--bg-base);
-    background-image: linear-gradient(var(--bg-surface), var(--bg-surface));
+    border-top: 1px solid var(--glass-border);
   }
 
   /* iOS standalone PWA: kill the document-level rubber-band / scroll-chaining

@@ -43,7 +43,7 @@ export function BottomNav({ active, onNavigate, onReselect }: BottomNavProps) {
 
   return (
     <nav
-      className="app-bottom-nav flex-shrink-0 flex flex-row items-center justify-around glass border-t border-[var(--glass-border)] px-2 z-50"
+      className="app-bottom-nav flex-shrink-0 flex flex-row items-center justify-around px-2 z-50"
       style={{
         height: 'calc(var(--nav-height) + var(--safe-area-bottom))',
         paddingBottom: 'var(--safe-area-bottom)',
