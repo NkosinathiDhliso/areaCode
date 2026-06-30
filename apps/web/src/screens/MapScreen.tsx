@@ -22,7 +22,7 @@ import { PeekCarousel } from '../components/PeekCarousel'
 import { ProximityNudgeBanner } from '../components/ProximityNudgeBanner'
 import { QrScannerSheet } from '../components/QrScannerSheet'
 import { SearchSheet, type SearchResult } from '../components/SearchSheet'
-import { SignupSheet } from '../components/SignupSheet'
+import { SignInSheet } from '../components/SignInSheet'
 import { ToastOverlay } from '../components/ToastOverlay'
 import { useCarouselSelection } from '../hooks/useCarouselSelection'
 import { useConstellationSweep } from '../hooks/useConstellationSweep'
@@ -460,7 +460,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
         pulseScore={activeScore}
         state={getNodeState(activeScore)}
         onCheckIn={checkInFlow.activateCheckIn}
-        onSignup={checkInFlow.activateCheckIn}
+        onSignIn={checkInFlow.activateCheckIn}
         qrFallback={checkInFlow.qrFallback}
         isCheckingIn={checkInFlow.isPending}
         categoryFilter={categoryFilter}
@@ -468,8 +468,8 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
       {/* Auth + QR surfaces owned by the check-in flow. The only auth entry
           reachable from the map is the email/password + Google OAuth
-          SignupSheet - no phone-number or SMS surface (R20.1). */}
-      <SignupSheet isOpen={checkInFlow.signupOpen} onClose={checkInFlow.closeSignup} onNavigate={onNavigate} />
+          SignInSheet - no phone-number or SMS surface (R20.1). */}
+      <SignInSheet isOpen={checkInFlow.signInOpen} onClose={checkInFlow.closeSignIn} onNavigate={onNavigate} />
       <QrScannerSheet
         isOpen={checkInFlow.qrScannerOpen}
         onClose={checkInFlow.closeQrScanner}

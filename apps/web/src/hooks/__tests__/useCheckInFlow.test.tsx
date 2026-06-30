@@ -107,17 +107,17 @@ describe('Feature: map-discovery-experience, Property 30: Offline check-in fails
 })
 
 describe('Feature: map-discovery-experience, Property 31: No phone/SMS input on any map auth entry', () => {
-  it('opens the email/password + Google SignupSheet and submits nothing when unauthenticated', () => {
+  it('opens the email/password + Google SignInSheet and submits nothing when unauthenticated', () => {
     useConsumerAuthStore.setState({ isAuthenticated: false })
 
     const { result } = renderHook(() => useCheckInFlow())
-    expect(result.current.signupOpen).toBe(false)
+    expect(result.current.signInOpen).toBe(false)
 
     act(() => {
       result.current.activateCheckIn()
     })
 
-    expect(result.current.signupOpen).toBe(true)
+    expect(result.current.signInOpen).toBe(true)
     expect(result.current.qrScannerOpen).toBe(false)
     expect(mock.state.checkIn).not.toHaveBeenCalled()
   })

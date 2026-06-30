@@ -5,7 +5,6 @@ import { useErrorStore } from '@area-code/shared/stores/errorStore'
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import type { Node, Reward, NodeState } from '@area-code/shared/types'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState, memo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -38,14 +37,9 @@ const DEFAULT_ARCHETYPE_ID = 'archetype-eclectic'
  * display name, crowd-vibe section, directions, and the check-in CTA) for a
  * single venue, **without** the surrounding `BottomSheet`.
  *
- * It was extracted from `NodeDetailSheet` so the same detail content can be
- * hosted by two surfaces over a single sheet:
- *   - `NodeDetailSheet` wraps it in its own `BottomSheet` (legacy / standalone
- *     usage).
- *   - `PeekCarousel` renders it as the Commit_Mode body on the *same*
- *     `BottomSheet` it uses for Browse_Mode, so a Browse↔Commit transition is a
- *     state/height change on one sheet rather than a separate detail surface
- *     (Requirement 2.5).
+ * `PeekCarousel` renders it as the Commit_Mode body on the *same* `BottomSheet`
+ * it uses for Browse_Mode, so a Browse↔Commit transition is a state/height
+ * change on one sheet rather than a separate detail surface (Requirement 2.5).
  *
  * The component owns the detail-local interaction state (report/claim modals,
  * the QR scanner, the directions picker, reward chip expansion) so callers do
@@ -57,18 +51,9 @@ export interface NodeDetailContentProps {
   pulseScore: number
   state: NodeState
   onCheckIn: () => void
-  onSignup: () => void
+  onSignIn: () => void
   qrFallback?: boolean
   isCheckingIn?: boolean
-  /**
-   * Optional node-flick handlers. When provided, a prev/next control row is
-   * shown at the top of the content so the user can cycle through nearby
-   * venues. The Peek_Carousel does NOT pass these - it provides Browse_Mode
-   * `FlickControls` instead (R1.6) - they remain for the legacy standalone
-   * `NodeDetailSheet`.
-   */
-  onPrev?: () => void
-  onNext?: () => void
 }
 
 export const NodeDetailContent = memo(function NodeDetailContent({
@@ -76,11 +61,9 @@ export const NodeDetailContent = memo(function NodeDetailContent({
   rewards,
   state,
   onCheckIn,
-  onSignup,
+  onSignIn,
   qrFallback = false,
   isCheckingIn = false,
-  onPrev,
-  onNext,
 }: NodeDetailContentProps) {
   const { t } = useTranslation()
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
@@ -124,7 +107,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
 
   function handleCheckIn() {
     if (!isAuthenticated) {
-      onSignup()
+      onSignIn()
       return
     }
     if (qrFallback || geoStatus === 'denied' || geoStatus === 'timeout') {
@@ -229,28 +212,6 @@ export const NodeDetailContent = memo(function NodeDetailContent({
 
   return (
     <>
-      {/* Node-flick controls: cycle through nearby venues without closing. */}
-      {(onPrev || onNext) && (
-        <div className="flex flex-row items-center justify-center gap-4 mb-3">
-          <button
-            onClick={onPrev}
-            disabled={!onPrev}
-            aria-label={t('map.flickPrev', 'Previous venue')}
-            className="glass-raised rounded-full w-11 h-11 flex items-center justify-center text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] disabled:opacity-40"
-          >
-            <ChevronLeft size={18} strokeWidth={1.75} />
-          </button>
-          <button
-            onClick={onNext}
-            disabled={!onNext}
-            aria-label={t('map.flickNext', 'Next venue')}
-            className="glass-raised rounded-full w-11 h-11 flex items-center justify-center text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] disabled:opacity-40"
-          >
-            <ChevronRight size={18} strokeWidth={1.75} />
-          </button>
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex flex-row items-start justify-between mb-4">
         <div className="flex-1">

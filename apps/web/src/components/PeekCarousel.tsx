@@ -59,8 +59,8 @@ export interface PeekCarouselProps {
   state: NodeState
   /** Perform a check-in for the Active_Venue (wired from `useCheckInFlow`). */
   onCheckIn: () => void
-  /** Open the Signup_Surface (email/password + Google OAuth only). */
-  onSignup: () => void
+  /** Open the Sign_In_Surface (email/password + Google OAuth only). */
+  onSignIn: () => void
   /** GPS-too-far flag - drives the CTA into its QR-fallback label. */
   qrFallback?: boolean
   /** Whether a check-in request is in flight (CTA pending state). */
@@ -91,7 +91,7 @@ export function PeekCarousel({
   pulseScore,
   state,
   onCheckIn,
-  onSignup,
+  onSignIn,
   qrFallback = false,
   isCheckingIn = false,
   categoryFilter = null,
@@ -283,7 +283,7 @@ export function PeekCarousel({
               pulseScore={pulseScore}
               state={state}
               onCheckIn={onCheckIn}
-              onSignup={onSignup}
+              onSignIn={onSignIn}
               qrFallback={qrFallback}
               isCheckingIn={isCheckingIn}
             />

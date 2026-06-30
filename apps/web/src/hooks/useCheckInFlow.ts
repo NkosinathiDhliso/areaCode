@@ -12,9 +12,9 @@
  *   - the check-in CTA label/disabled state, derived from Geo_Status, the
  *     GPS-too-far QR fallback flag, and the in-flight pending flag (R14.1,
  *     R10.6, R10.7);
- *   - opening the existing email/password + Google OAuth `SignupSheet` when the
- *     consumer is unauthenticated - there is NO phone-number or SMS surface
- *     anywhere in this flow (R14.3, R20.1, and the no-SMS steering rule);
+ *   - opening the consumer auth `SignInSheet` (email/password + Google OAuth)
+ *     when the consumer is unauthenticated - there is NO phone-number or SMS
+ *     surface anywhere in this flow (R14.3, R20.1, and the no-SMS steering rule);
  *   - offering the in-app `QrScannerSheet` when GPS places the consumer too far
  *     to check in (R14.4);
  *   - routing a scanned QR through {@link parseVenueQr}: a valid Area Code venue
@@ -27,7 +27,7 @@
  *
  * This feature is strictly client-side UI: it adds no backend service and no
  * always-on resource (serverless-only rule), and the only auth entry it can
- * open is the existing `SignupSheet`.
+ * open is the `SignInSheet`.
  *
  * Feature: map-discovery-experience
  * Validates: Requirements 14.2, 14.3, 14.4, 14.5, 14.6, 14.8, 19.3, 20.1
@@ -62,16 +62,16 @@ export interface CheckInFlow {
   isPending: boolean
   /** Whether the GPS-too-far QR fallback is being offered. */
   qrFallback: boolean
-  /** Whether the `SignupSheet` should be open (unauthenticated check-in attempt). */
-  signupOpen: boolean
+  /** Whether the `SignInSheet` should be open (unauthenticated check-in attempt). */
+  signInOpen: boolean
   /** Whether the `QrScannerSheet` should be open. */
   qrScannerOpen: boolean
   /** Primary CTA handler. Routes to signup, QR scanner, or a check-in submission. */
   activateCheckIn: () => void
   /** Handler for a decoded QR string from `QrScannerSheet`. */
   onQrScanned: (raw: string) => void
-  /** Close the `SignupSheet`. */
-  closeSignup: () => void
+  /** Close the `SignInSheet`. */
+  closeSignIn: () => void
   /** Close the `QrScannerSheet`. */
   closeQrScanner: () => void
 }
@@ -100,7 +100,7 @@ export function useCheckInFlow(params: UseCheckInFlowParams = {}): CheckInFlow {
 
   const activeNode = useActiveNode()
 
-  const [signupOpen, setSignupOpen] = useState(false)
+  const [signInOpen, setSignInOpen] = useState(false)
   const [qrScannerOpen, setQrScannerOpen] = useState(false)
 
   /**
@@ -151,7 +151,7 @@ export function useCheckInFlow(params: UseCheckInFlowParams = {}): CheckInFlow {
 
   /**
    * Primary CTA handler. Precedence:
-   *   1. unauthenticated  → open the email/password + Google OAuth SignupSheet
+   *   1. unauthenticated  → open the email/password + Google OAuth SignInSheet
    *      (R14.3, R20.1). No phone/SMS surface is ever opened.
    *   2. QR fallback      → open the in-app QR scanner (R14.4).
    *   3. otherwise        → acquire location and submit a check-in (R14.2).
@@ -160,7 +160,7 @@ export function useCheckInFlow(params: UseCheckInFlowParams = {}): CheckInFlow {
     if (!activeNode) return
 
     if (!isAuthenticated) {
-      setSignupOpen(true)
+      setSignInOpen(true)
       return
     }
 
@@ -217,18 +217,18 @@ export function useCheckInFlow(params: UseCheckInFlowParams = {}): CheckInFlow {
     [showError, t, resetQrFallback, submitCheckIn],
   )
 
-  const closeSignup = useCallback(() => setSignupOpen(false), [])
+  const closeSignIn = useCallback(() => setSignInOpen(false), [])
   const closeQrScanner = useCallback(() => setQrScannerOpen(false), [])
 
   return {
     ctaInfo,
     isPending,
     qrFallback,
-    signupOpen,
+    signInOpen,
     qrScannerOpen,
     activateCheckIn,
     onQrScanned,
-    closeSignup,
+    closeSignIn,
     closeQrScanner,
   }
 }

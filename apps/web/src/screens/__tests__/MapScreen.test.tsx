@@ -98,8 +98,8 @@ vi.mock('../../components/QrScannerSheet', () => ({
 vi.mock('../../components/SearchSheet', () => ({
   SearchSheet: ({ isOpen }: { isOpen?: boolean }) => <div data-search-sheet data-open={String(!!isOpen)} />,
 }))
-vi.mock('../../components/SignupSheet', () => ({
-  SignupSheet: ({ isOpen }: { isOpen?: boolean }) => <div data-signup-sheet data-open={String(!!isOpen)} />,
+vi.mock('../../components/SignInSheet', () => ({
+  SignInSheet: ({ isOpen }: { isOpen?: boolean }) => <div data-signin-sheet data-open={String(!!isOpen)} />,
 }))
 vi.mock('../../components/NotificationPrimingSheet', () => ({
   NotificationPrimingSheet: ({ isOpen }: { isOpen?: boolean }) => (

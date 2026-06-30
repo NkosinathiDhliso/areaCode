@@ -86,7 +86,7 @@ function renderCarousel(over: Partial<UseCarouselSelectionResult> = {}) {
       pulseScore={30}
       state={'buzzing' as NodeState}
       onCheckIn={vi.fn()}
-      onSignup={vi.fn()}
+      onSignIn={vi.fn()}
     />,
   )
 }
