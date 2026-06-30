@@ -339,6 +339,26 @@ export function MusicSchedulePanel() {
     closeEditor()
   }
 
+  // ─── No venue yet ────────────────────────────────────────────────────────
+  // A legitimate owner who has not added a venue has no node to scope a
+  // schedule to. Show a "create a venue first" empty state rather than the
+  // access-denied branch (which wrongly implies a permissions problem).
+  if (!venueNode) {
+    return (
+      <div className="p-5 flex flex-col items-center justify-center h-full gap-3" data-testid="music-schedule-no-venue">
+        <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne] text-center">
+          {t('biz.musicSchedule.noVenue.title', 'No venue yet')}
+        </span>
+        <span className="text-[var(--text-muted)] text-sm text-center max-w-sm">
+          {t(
+            'biz.musicSchedule.noVenue.body',
+            'Add a venue in Settings first, then you can set its weekly music schedule here.',
+          )}
+        </span>
+      </div>
+    )
+  }
+
   // ─── Denial state (R4.11, R4.12) ────────────────────────────────────────────
   if (!accessAllowed) {
     return (

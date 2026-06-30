@@ -128,6 +128,12 @@ variable "enable_api_custom_domain" {
   default     = true
 }
 
+variable "alerts_email" {
+  description = "Email address that receives CloudWatch alarm notifications via the alerts SNS topic and budget alerts."
+  type        = string
+  default     = "alerts@areacode.co.za"
+}
+
 # --- Data sources for secrets ---
 data "aws_secretsmanager_secret" "qr_hmac" {
   name = "area-code/${local.env}/qr-hmac-secret"
@@ -719,18 +725,18 @@ module "lambda_api" {
   memory_size   = 512
   tracing_mode  = "Active"
   environment_variables = {
-    AREA_CODE_ENV                           = local.env
-    USERS_TABLE                             = aws_dynamodb_table.users.name
-    NODES_TABLE                             = aws_dynamodb_table.nodes.name
-    CHECKINS_TABLE                          = aws_dynamodb_table.checkins.name
-    REWARDS_TABLE                           = aws_dynamodb_table.rewards.name
-    BUSINESSES_TABLE                        = aws_dynamodb_table.businesses.name
-    APP_DATA_TABLE                          = aws_dynamodb_table.app_data.name
-    MUSIC_SCHEDULES_TABLE                   = aws_dynamodb_table.music_schedules.name
+    AREA_CODE_ENV         = local.env
+    USERS_TABLE           = aws_dynamodb_table.users.name
+    NODES_TABLE           = aws_dynamodb_table.nodes.name
+    CHECKINS_TABLE        = aws_dynamodb_table.checkins.name
+    REWARDS_TABLE         = aws_dynamodb_table.rewards.name
+    BUSINESSES_TABLE      = aws_dynamodb_table.businesses.name
+    APP_DATA_TABLE        = aws_dynamodb_table.app_data.name
+    MUSIC_SCHEDULES_TABLE = aws_dynamodb_table.music_schedules.name
     # Presence is provisioned by the presence-integrity spec. Env name follows the
     # per-env convention so the API references the prod table, never a dev one.
-    PRESENCE_TABLE                          = "area-code-${local.env}-presence"
-    AREA_CODE_REWARD_QUEUE_URL              = module.sqs_reward_eval.queue_url
+    PRESENCE_TABLE             = "area-code-${local.env}-presence"
+    AREA_CODE_REWARD_QUEUE_URL = module.sqs_reward_eval.queue_url
     # Pinned to the v2 pool that owns the live Hosted UI domain (see locals above).
     AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID = local.consumer_pool_id
     AREA_CODE_COGNITO_CONSUMER_CLIENT_ID    = local.consumer_client_id
@@ -741,9 +747,9 @@ module "lambda_api" {
     AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
     AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
     AREA_CODE_S3_MEDIA_BUCKET               = module.s3_media.bucket_name
-    AREA_CODE_SQS_PUSH_QUEUE_URL = module.sqs_push_sender.queue_url
-    AREA_CODE_CONSENT_VERSION    = "v1.0"
-    AREA_CODE_ANONYMIZATION_SALT = var.anonymization_salt
+    AREA_CODE_SQS_PUSH_QUEUE_URL            = module.sqs_push_sender.queue_url
+    AREA_CODE_CONSENT_VERSION               = "v1.0"
+    AREA_CODE_ANONYMIZATION_SALT            = var.anonymization_salt
     # HMAC secret used for QR codes AND Spotify OAuth state signing
     AREA_CODE_QR_HMAC_SECRET = data.aws_secretsmanager_secret_version.qr_hmac.secret_string
     # Spotify OAuth — supplied via TF variables (terraform.tfvars or TF_VAR_*)
@@ -1517,6 +1523,15 @@ resource "aws_sns_topic" "alerts" {
   name = "area-code-${local.env}-alerts"
 }
 
+# Email subscription so alarms reach a human instead of firing into the void.
+# Same address the budget already notifies. The subscription stays "pending
+# confirmation" until the confirmation link in the first email is clicked.
+resource "aws_sns_topic_subscription" "alerts_email" {
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = var.alerts_email
+}
+
 # Alarm: API Lambda errors > 5 in 5 minutes
 resource "aws_cloudwatch_metric_alarm" "api_errors" {
   alarm_name          = "area-code-${local.env}-api-errors"
@@ -1714,7 +1729,7 @@ resource "aws_budgets_budget" "monthly" {
     threshold                  = 80
     threshold_type             = "PERCENTAGE"
     notification_type          = "ACTUAL"
-    subscriber_email_addresses = ["alerts@areacode.co.za"]
+    subscriber_email_addresses = [var.alerts_email]
   }
 }
 

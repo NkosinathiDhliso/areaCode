@@ -24,6 +24,7 @@ export function BusinessManagement() {
   const [staffError, setStaffError] = useState<string | null>(null)
   const [revokeError, setRevokeError] = useState<string | null>(null)
   const [confirmDisable, setConfirmDisable] = useState<string | null>(null)
+  const [confirmDeactivateRewards, setConfirmDeactivateRewards] = useState<string | null>(null)
   const [extendTrialId, setExtendTrialId] = useState<string | null>(null)
   const [extendDays, setExtendDays] = useState('7')
   const [setTierId, setSetTierId] = useState<string | null>(null)
@@ -55,9 +56,11 @@ export function BusinessManagement() {
     setActionError(null)
     try {
       await api.post(`/v1/admin/businesses/${businessId}/${action}`)
+      setConfirmDeactivateRewards(null)
       void handleSearch()
-    } catch {
-      setActionError('Action failed. Please try again.')
+    } catch (err: unknown) {
+      setActionError((err as { message?: string })?.message ?? 'Action failed. Please try again.')
+      setConfirmDeactivateRewards(null)
     }
   }
 
@@ -207,39 +210,45 @@ export function BusinessManagement() {
                 >
                   {t('admin.businesses.extendTrial')}
                 </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setSetTierId(biz.id)
-                    setSelectedTier(
-                      (['starter', 'growth', 'pro'] as const).includes(biz.tier as 'starter' | 'growth' | 'pro')
-                        ? (biz.tier as 'starter' | 'growth' | 'pro')
-                        : 'starter',
-                    )
-                    setTierReason('')
-                  }}
-                  className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs"
-                >
-                  {t('admin.businesses.setTier', 'Set Tier')}
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    void handleAction('deactivate-rewards', biz.id)
-                  }}
-                  className="border border-[var(--danger)] text-[var(--danger)] rounded-xl px-3 py-1.5 text-xs"
-                >
-                  {t('admin.businesses.deactivateRewards')}
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    void handleAction('override-cipc', biz.id)
-                  }}
-                  className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs"
-                >
-                  {t('admin.businesses.overrideCipc')}
-                </button>
+                {role === 'super_admin' && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSetTierId(biz.id)
+                      setSelectedTier(
+                        (['starter', 'growth', 'pro'] as const).includes(biz.tier as 'starter' | 'growth' | 'pro')
+                          ? (biz.tier as 'starter' | 'growth' | 'pro')
+                          : 'starter',
+                      )
+                      setTierReason('')
+                    }}
+                    className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs"
+                  >
+                    {t('admin.businesses.setTier', 'Set Tier')}
+                  </button>
+                )}
+                {role === 'super_admin' && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setConfirmDeactivateRewards(biz.id)
+                    }}
+                    className="border border-[var(--danger)] text-[var(--danger)] rounded-xl px-3 py-1.5 text-xs"
+                  >
+                    {t('admin.businesses.deactivateRewards')}
+                  </button>
+                )}
+                {role === 'super_admin' && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      void handleAction('override-cipc', biz.id)
+                    }}
+                    className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs"
+                  >
+                    {t('admin.businesses.overrideCipc')}
+                  </button>
+                )}
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
@@ -332,6 +341,33 @@ export function BusinessManagement() {
         </div>
       )}
 
+      {/* Deactivate rewards confirmation dialog */}
+      {confirmDeactivateRewards && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-5">
+          <div className="bg-[var(--bg-modal)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">Deactivate Rewards?</h3>
+            <p className="text-[var(--text-secondary)] text-sm mb-4">
+              This deactivates every active reward across all of this business's venues. Consumers will no longer see or
+              claim them. This action creates an audit log entry.
+            </p>
+            <div className="flex flex-row gap-3">
+              <button
+                onClick={() => setConfirmDeactivateRewards(null)}
+                className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleAction('deactivate-rewards', confirmDeactivateRewards)}
+                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium"
+              >
+                Deactivate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Staff Members dialog */}
       {staffBizId && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-5">
@@ -367,7 +403,7 @@ export function BusinessManagement() {
                       <span className="text-[var(--text-primary)] text-sm truncate">{s.phone ?? s.email ?? s.id}</span>
                       {!s.isActive && <span className="text-[var(--danger)] text-xs">Revoked</span>}
                     </div>
-                    {s.isActive !== false && (
+                    {role === 'super_admin' && s.isActive !== false && (
                       <button
                         onClick={() => setConfirmRevokeId(s.id)}
                         className="border border-[var(--danger)] text-[var(--danger)] rounded-lg px-2.5 py-1 text-xs flex-shrink-0"

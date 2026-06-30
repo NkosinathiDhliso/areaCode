@@ -45,7 +45,14 @@ export function BoostPanel() {
         nodeId,
         duration,
       })
-      window.location.href = res.checkoutUrl
+      // Guard against a placeholder checkout URL (e.g. '#dev-boost' in dev or
+      // when the payment provider is not configured): navigating to it is a
+      // silent no-op, so surface a clear message instead.
+      if (res.checkoutUrl && !res.checkoutUrl.startsWith('#')) {
+        window.location.href = res.checkoutUrl
+      } else {
+        setError(t('biz.boost.unavailable', 'Boost checkout is not available right now. Please try again later.'))
+      }
     } catch {
       setError(t('biz.boost.error', 'Failed to start boost. Please try again.'))
     } finally {

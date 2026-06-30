@@ -157,7 +157,12 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   const liveVibeOnMap = useLiveVibeOnMap()
 
   // Fetch nodes for city
-  const { data: nodeList } = useQuery({
+  const {
+    data: nodeList,
+    isError: nodesError,
+    isLoading: nodesLoading,
+    refetch: refetchNodes,
+  } = useQuery({
     queryKey: ['nodes', citySlug],
     queryFn: () => api.get<Node[]>(`/v1/nodes/${citySlug}`),
     staleTime: 30_000,
@@ -322,6 +327,12 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
   const activeScore = activeVenueId ? (pulseScores[activeVenueId] ?? 0) : 0
 
+  // City-nodes fetch outcome banner: surface a retry on failure and an honest
+  // "quiet" message when a city genuinely has no venues yet, so the user is
+  // never left staring at a blank map with no carousel and no explanation.
+  const nodesFetchFailed = nodesError && !nodeList
+  const cityHasNoVenues = !nodesLoading && !nodesError && Array.isArray(nodeList) && nodeList.length === 0
+
   return (
     <div className="h-full w-full relative" style={{ background: 'var(--bg-map)' }}>
       <div ref={containerRef} className="absolute inset-0 w-full h-full" style={{ background: 'var(--bg-map)' }} />
@@ -415,6 +426,27 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
       <ToastOverlay />
       {overlay.showNudge && <ProximityNudgeBanner onNavigate={onNavigate} />}
+
+      {/* City venue-data states: failed fetch (retry) or genuinely empty city. */}
+      {(nodesFetchFailed || cityHasNoVenues) && (
+        <div className="absolute left-4 right-4 z-20" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 4.5rem)' }}>
+          <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+            <p className="text-[var(--text-primary)] text-xs font-medium flex-1">
+              {nodesFetchFailed
+                ? t('map.venuesLoadFailed', "Couldn't load venues. Check your connection and try again.")
+                : t('map.noVenues', 'Quiet right now. No venues here yet, check back soon.')}
+            </p>
+            {nodesFetchFailed && (
+              <button
+                onClick={() => void refetchNodes()}
+                className="bg-[var(--accent)] text-white text-xs font-semibold rounded-lg px-3 py-1.5 shrink-0"
+              >
+                {t('common.retry', 'Retry')}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {liveVibeOnMap && <LiveArchetypeSubscriber token={accessToken ?? undefined} citySlug={citySlug} />}
       <CityPulseToastMount mapReady={mapReady} />

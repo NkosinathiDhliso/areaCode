@@ -15,7 +15,7 @@
   "admin.nav.iam": "Admin Team",
   "admin.logout": "Log out",
   "admin.consumers.title": "Consumer Users",
-  "admin.consumers.search": "Search by phone or username",
+  "admin.consumers.search": "Search by email or username",
   "admin.consumers.disable": "Disable Account",
   "admin.consumers.enable": "Enable Account",
   "admin.consumers.resetFlags": "Reset Abuse Flags",

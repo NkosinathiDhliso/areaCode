@@ -122,6 +122,32 @@ export async function countActiveRewardsForBusiness(businessId: string) {
   return count
 }
 
+/**
+ * Deactivate every currently-active reward across all of a business's nodes.
+ * Used by the admin "Deactivate Rewards" enforcement action. Returns the
+ * number of rewards deactivated.
+ */
+export async function deactivateRewardsForBusiness(businessId: string) {
+  const nodesResult = await documentClient.send(
+    new QueryCommand({
+      TableName: TableNames.nodes,
+      IndexName: 'BusinessIndex',
+      KeyConditionExpression: 'businessId = :bid',
+      ExpressionAttributeValues: { ':bid': businessId },
+    }),
+  )
+  const nodeIds = (nodesResult.Items || []).map((n) => n['nodeId'] as string)
+  let deactivated = 0
+  for (const nid of nodeIds) {
+    const rewards = await dynamo.getActiveRewardsByNodeId(nid)
+    for (const reward of rewards) {
+      await dynamo.updateReward(reward.rewardId, { isActive: false })
+      deactivated++
+    }
+  }
+  return deactivated
+}
+
 export async function getRewardsNearMe(lat: number, lng: number, viewerId?: string) {
   // Scan active rewards, join with nodes, filter by distance (5km)
   const rewardsResult = await documentClient.send(

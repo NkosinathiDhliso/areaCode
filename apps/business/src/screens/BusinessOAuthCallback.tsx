@@ -1,5 +1,6 @@
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { exchangeCodeForTokens } from '@area-code/shared/lib/cognitoHostedUiOAuth'
+import { api } from '@area-code/shared/lib/api'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -14,6 +15,16 @@ function businessClientId(): string | undefined {
   return v?.trim() || undefined
 }
 
+function staffHostedUiDomain(): string | undefined {
+  const v = import.meta.env['VITE_COGNITO_HOSTED_UI_DOMAIN_STAFF'] as string | undefined
+  return v?.trim() || undefined
+}
+
+function staffClientId(): string | undefined {
+  const v = import.meta.env['VITE_COGNITO_CLIENT_ID_STAFF'] as string | undefined
+  return v?.trim() || undefined
+}
+
 function apiBase(): string {
   return (import.meta.env['VITE_API_URL'] as string | undefined)?.trim() || 'http://localhost:4000'
 }
@@ -21,6 +32,7 @@ function apiBase(): string {
 export function BusinessOAuthCallback() {
   const { t } = useTranslation()
   const setAuth = useBusinessAuthStore((s) => s.setAuth)
+  const setRole = useBusinessAuthStore((s) => s.setRole)
   const [error, setError] = useState<string | null>(null)
   const [needsProfile, setNeedsProfile] = useState(false)
   const [tokens, setTokens] = useState<{ access: string; refresh: string } | null>(null)
@@ -31,7 +43,77 @@ export function BusinessOAuthCallback() {
   useEffect(() => {
     let cancelled = false
 
+    async function runManager(): Promise<boolean> {
+      // Manager flow: the session lives in the STAFF Cognito pool. Sync against
+      // the staff pool and store the resulting session as a manager.
+      const domain = staffHostedUiDomain()
+      const clientId = staffClientId()
+      if (!domain || !clientId) {
+        setError(t('auth.oauth.misconfigured', 'Sign-in is not configured. Try again later.'))
+        return true
+      }
+
+      const params = new URLSearchParams(window.location.search)
+      const code = params.get('code')
+      const state = params.get('state')
+      const oauthErr = params.get('error_description') ?? params.get('error')
+      if (oauthErr) {
+        setError(oauthErr)
+        return true
+      }
+      if (!code || !state) {
+        setError(t('auth.oauth.missingParams', 'Missing sign-in response. Try again.'))
+        return true
+      }
+
+      const storedState = sessionStorage.getItem('business_oauth_state')
+      const verifier = sessionStorage.getItem('business_oauth_pkce')
+      if (!storedState || !verifier || state !== storedState) {
+        setError(t('auth.oauth.stateMismatch', 'Sign-in expired. Please try again.'))
+        return true
+      }
+
+      const redirectUri = `${window.location.origin}/auth/callback`
+      try {
+        const tok = await exchangeCodeForTokens({ domain, clientId, redirectUri, code, codeVerifier: verifier })
+        sessionStorage.removeItem('business_oauth_state')
+        sessionStorage.removeItem('business_oauth_pkce')
+        sessionStorage.removeItem('business_oauth_manager')
+        if (cancelled) return true
+
+        const syncRes = await fetch(`${apiBase()}/v1/auth/staff/oauth-sync`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${tok.access_token}` },
+        })
+        if (!syncRes.ok) {
+          const body = (await syncRes.json().catch(() => null)) as { message?: string } | null
+          throw new Error(body?.message ?? `sync_failed_${syncRes.status}`)
+        }
+        const sync = (await syncRes.json()) as { staff?: { businessId?: string } }
+        const businessId = sync.staff?.businessId
+        if (!businessId) throw new Error('missing_business_id')
+        if (cancelled) return true
+
+        // Managers refresh via the staff pool. Persist the manager role so the
+        // correct refresh path is selected on reload; the dashboard refetches
+        // full permissions on mount.
+        api.setRefreshPath('/v1/auth/staff/refresh')
+        setAuth(tok.access_token, tok.refresh_token, businessId)
+        setRole('manager', [])
+        window.history.replaceState({}, '', '/')
+      } catch {
+        if (!cancelled) setError(t('auth.oauth.failed', 'Google sign-in failed. Try again.'))
+      }
+      return true
+    }
+
     async function run() {
+      // Route managers (staff-pool) through the dedicated sync.
+      if (sessionStorage.getItem('business_oauth_manager') === '1') {
+        await runManager()
+        return
+      }
+
       const domain = hostedUiDomain()
       const clientId = businessClientId()
       if (!domain || !clientId) {

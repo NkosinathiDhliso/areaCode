@@ -4,7 +4,7 @@ import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { startBusinessGoogleOAuthWeb } from '../lib/businessHostedUiOAuth'
+import { startBusinessGoogleOAuthWeb, startManagerGoogleOAuthWeb } from '../lib/businessHostedUiOAuth'
 
 interface BusinessLoginProps {
   onSwitchToSignup: () => void
@@ -13,6 +13,8 @@ interface BusinessLoginProps {
 export function BusinessLogin({ onSwitchToSignup }: BusinessLoginProps) {
   const { t } = useTranslation()
   const setAuth = useBusinessAuthStore((s) => s.setAuth)
+  const setRole = useBusinessAuthStore((s) => s.setRole)
+  const [mode, setMode] = useState<'owner' | 'manager'>('owner')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -25,6 +27,20 @@ export function BusinessLogin({ onSwitchToSignup }: BusinessLoginProps) {
     setError(null)
     setShowEnvHint(false)
     try {
+      if (mode === 'manager') {
+        // Managers authenticate against the staff Cognito pool, then operate
+        // the business dashboard. Store the staff session and select the staff
+        // refresh path; the dashboard fetches the manager role + permissions.
+        const res = await api.post<{
+          accessToken: string
+          refreshToken: string
+          staff: { id: string; name: string; businessId: string }
+        }>('/v1/auth/staff/email-login', { email, password })
+        api.setRefreshPath('/v1/auth/staff/refresh')
+        setAuth(res.accessToken, res.refreshToken, res.staff.businessId)
+        setRole('manager', [])
+        return
+      }
       const res = await api.post<{
         accessToken: string
         refreshToken: string
@@ -43,7 +59,11 @@ export function BusinessLogin({ onSwitchToSignup }: BusinessLoginProps) {
     setError(null)
     setShowEnvHint(false)
     try {
-      await startBusinessGoogleOAuthWeb()
+      if (mode === 'manager') {
+        await startManagerGoogleOAuthWeb()
+      } else {
+        await startBusinessGoogleOAuthWeb()
+      }
     } catch {
       setGoogleLoading(false)
       setError(t('auth.oauth.misconfigured', 'Google sign-in is not configured for this deployment.'))
@@ -59,7 +79,9 @@ export function BusinessLogin({ onSwitchToSignup }: BusinessLoginProps) {
         paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
       }}
     >
-      <h1 className="text-[var(--text-primary)] font-bold text-2xl mb-8 font-[Syne]">{t('biz.login.title')}</h1>
+      <h1 className="text-[var(--text-primary)] font-bold text-2xl mb-8 font-[Syne]">
+        {mode === 'manager' ? t('biz.login.managerTitle', 'Manager sign in') : t('biz.login.title')}
+      </h1>
 
       <div className="flex flex-col gap-4 w-full max-w-xs">
         <button
@@ -119,9 +141,25 @@ export function BusinessLogin({ onSwitchToSignup }: BusinessLoginProps) {
         </div>
       )}
 
-      <button type="button" onClick={onSwitchToSignup} className="text-[var(--text-secondary)] text-sm mt-8">
-        {t('biz.login.noAccount')}
+      <button
+        type="button"
+        onClick={() => {
+          setMode(mode === 'owner' ? 'manager' : 'owner')
+          setError(null)
+          setShowEnvHint(false)
+        }}
+        className="text-[var(--text-secondary)] text-sm mt-6"
+      >
+        {mode === 'owner'
+          ? t('biz.login.managerPrompt', 'Invited as a manager? Sign in here')
+          : t('biz.login.ownerPrompt', 'Business owner? Sign in here')}
       </button>
+
+      {mode === 'owner' && (
+        <button type="button" onClick={onSwitchToSignup} className="text-[var(--text-secondary)] text-sm mt-3">
+          {t('biz.login.noAccount')}
+        </button>
+      )}
     </div>
   )
 }

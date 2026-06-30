@@ -84,6 +84,23 @@ export function LivePanel() {
         <span className="text-[var(--text-secondary)] text-sm">{t('biz.live.checkinsToday')}</span>
       </div>
 
+      {/* Live aliveness signals: pulse score (how buzzing right now) and the
+          all-time total. Pulse leads - it is the honest "how alive" readout. */}
+      {stats && (
+        <div className="flex flex-row items-stretch justify-center gap-3">
+          <div className="flex-1 max-w-[160px] bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3 flex flex-col items-center gap-1">
+            <span className="text-[var(--text-primary)] text-2xl font-bold font-[Syne]">
+              {Math.round(stats.pulseScore)}
+            </span>
+            <span className="text-[var(--text-secondary)] text-xs">{t('biz.live.pulse', 'Pulse')}</span>
+          </div>
+          <div className="flex-1 max-w-[160px] bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3 flex flex-col items-center gap-1">
+            <span className="text-[var(--text-primary)] text-2xl font-bold font-[Syne]">{stats.totalCheckIns}</span>
+            <span className="text-[var(--text-secondary)] text-xs">{t('biz.live.totalCheckIns', 'All-time')}</span>
+          </div>
+        </div>
+      )}
+
       {/* Live avatars */}
       {avatars.length > 0 && (
         <div className="flex flex-row items-center gap-2 justify-center">

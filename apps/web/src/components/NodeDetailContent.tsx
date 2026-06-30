@@ -3,7 +3,6 @@ import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useErrorStore } from '@area-code/shared/stores/errorStore'
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
-import type { GeoStatus } from '@area-code/shared/stores/locationStore'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import type { Node, Reward, NodeState } from '@area-code/shared/types'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
@@ -11,6 +10,7 @@ import { useState, memo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { resolveArchetypeDisplayName } from '../lib/archetypeDisplay'
+import { getCtaInfo } from '../lib/checkInCta'
 
 import { ArchetypeGlyph } from './ArchetypeGlyph'
 import { CrowdVibeSection } from './CrowdVibeSection'
@@ -127,9 +127,10 @@ export const NodeDetailContent = memo(function NodeDetailContent({
       onSignup()
       return
     }
-    if (qrFallback) {
-      // Out of GPS range - open the in-app scanner so the user can scan
-      // the venue's printed QR to prove presence.
+    if (qrFallback || geoStatus === 'denied' || geoStatus === 'timeout') {
+      // GPS is unusable (out of range, permission denied, or no fix) - open the
+      // in-app scanner so the user can scan the venue's printed QR to prove
+      // presence. This is the only check-in path that does not need GPS.
       setQrSheetOpen(true)
       return
     }
@@ -223,7 +224,8 @@ export const NodeDetailContent = memo(function NodeDetailContent({
     }
   }
 
-  const ctaInfo = getCtaInfo(geoStatus, qrFallback, isCheckingIn, t)
+  const ctaInfo = getCtaInfo({ geoStatus, qrFallback, pending: isCheckingIn })
+  const ctaLabel = t(ctaInfo.label)
 
   return (
     <>
@@ -453,7 +455,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
             : 'bg-[var(--accent)] text-white'
         }`}
       >
-        {ctaInfo.label}
+        {ctaLabel}
       </button>
 
       {/* Report Modal */}
@@ -578,31 +580,3 @@ export const NodeDetailContent = memo(function NodeDetailContent({
     </>
   )
 })
-
-function getCtaInfo(
-  geoStatus: GeoStatus,
-  qrFallback: boolean,
-  isCheckingIn: boolean,
-  t: (key: string) => string,
-): { label: string; disabled: boolean } {
-  if (isCheckingIn) {
-    return { label: t('checkin.checking'), disabled: true }
-  }
-  if (qrFallback) {
-    // Enabled so tapping opens the in-app QR scanner as a fallback to GPS.
-    return { label: t('checkin.scanQr'), disabled: false }
-  }
-
-  switch (geoStatus) {
-    case 'requesting':
-      return { label: t('checkin.locating'), disabled: true }
-    case 'denied':
-      return { label: t('checkin.button'), disabled: true }
-    case 'poorAccuracy':
-      return { label: t('checkin.weakSignal'), disabled: false }
-    case 'timeout':
-      return { label: t('checkin.locationUnavailable'), disabled: false }
-    default:
-      return { label: t('checkin.button'), disabled: false }
-  }
-}

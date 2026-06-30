@@ -283,7 +283,7 @@ export async function getUsersNeedingReconsent(currentVersion: string) {
       }),
     )
     if (!consent.Items?.length) {
-      needReconsent.push({ id: uid, username: u['username'], phone: u['phone'] })
+      needReconsent.push({ id: uid, username: u['username'], email: u['email'] })
     }
     if (needReconsent.length >= 100) break
   }
@@ -299,9 +299,9 @@ export async function searchConsumers(query: string) {
     ? allUsers.filter((u) => {
         const q = query.toLowerCase()
         const uname = ((u['username'] as string) || '').toLowerCase()
-        const phone = (u['phone'] as string) || ''
+        const email = ((u['email'] as string) || '').toLowerCase()
         const dname = ((u['displayName'] as string) || '').toLowerCase()
-        return uname.includes(q) || phone.includes(query) || dname.includes(q)
+        return uname.includes(q) || email.includes(q) || dname.includes(q)
       })
     : allUsers
   const sliced = filtered.slice(0, 50)

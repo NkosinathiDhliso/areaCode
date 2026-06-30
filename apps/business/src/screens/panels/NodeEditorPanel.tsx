@@ -205,7 +205,7 @@ export function NodeEditorPanel() {
       })
       if (!putRes.ok) throw new Error(`S3 upload failed (${putRes.status})`)
       // Sanitise the upload server-side (strip EXIF/GPS, resize, WebP) and use
-      // the returned final key. Non-fatal if processing is unavailable — the
+      // the returned final key. Non-fatal if processing is unavailable - the
       // backend keeps the raw upload and returns its key.
       let finalKey = presigned.objectKey
       try {

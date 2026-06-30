@@ -89,8 +89,10 @@ function AppContent() {
         }
       })
       .catch(() => {
-        // Fallback: assume owner if role endpoint fails (backward compat)
-        setRole('owner', [])
+        // Fail closed: do NOT assume owner (that would expose owner-only
+        // billing/plans to a manager or on a transient error). Leave any
+        // previously-resolved role/permissions untouched; if none were ever
+        // resolved, the dashboard shows a retry state rather than every panel.
       })
   }, [isAuthenticated, tokenReady, setRole])
 

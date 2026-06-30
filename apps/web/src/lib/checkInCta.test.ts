@@ -46,13 +46,13 @@ describe('Feature: map-discovery-experience, Property 15: Check-in CTA label is 
             expect(info).toEqual({ label: CTA_LABEL.locating, disabled: true })
             break
           case 'denied':
-            expect(info).toEqual({ label: CTA_LABEL.button, disabled: true })
+            expect(info).toEqual({ label: CTA_LABEL.scanQr, disabled: false })
             break
           case 'poorAccuracy':
             expect(info).toEqual({ label: CTA_LABEL.weakSignal, disabled: false })
             break
           case 'timeout':
-            expect(info).toEqual({ label: CTA_LABEL.locationUnavailable, disabled: false })
+            expect(info).toEqual({ label: CTA_LABEL.scanQr, disabled: false })
             break
           default:
             // acquired / idle → ready.

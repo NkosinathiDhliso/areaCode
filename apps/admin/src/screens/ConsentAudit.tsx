@@ -49,14 +49,14 @@ export function ConsentAudit() {
   async function handleExport() {
     setExportMsg(null)
     try {
-      const data = await api.get<Array<{ id: string; username: string; phone: string }>>(
+      const data = await api.get<Array<{ id: string; username: string; email: string }>>(
         '/v1/admin/consent/export-reconsent',
       )
       const items = Array.isArray(data) ? data : []
       // Build CSV from JSON response
-      const csvHeader = 'userId,username,phone'
+      const csvHeader = 'userId,username,email'
       const csvRows = items.map(
-        (item) => `${item.id ?? ''},${(item.username ?? '').replace(/,/g, '')},${(item.phone ?? '').replace(/,/g, '')}`,
+        (item) => `${item.id ?? ''},${(item.username ?? '').replace(/,/g, '')},${(item.email ?? '').replace(/,/g, '')}`,
       )
       const csvContent = [csvHeader, ...csvRows].join('\n')
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })

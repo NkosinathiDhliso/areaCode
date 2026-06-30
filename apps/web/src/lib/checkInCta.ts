@@ -17,9 +17,9 @@
  *   - pending        → checking / disabled
  *   - QR fallback    → scan / enabled
  *   - requesting     → locating / disabled
- *   - denied         → (default label) / disabled
+ *   - denied         → scan QR / enabled (GPS blocked; QR poster is the fallback)
  *   - poorAccuracy   → weak-signal / enabled
- *   - timeout        → unavailable / enabled
+ *   - timeout        → scan QR / enabled (no GPS fix; QR poster is the fallback)
  *   - acquired/idle  → ready (default label) / enabled
  *
  * Validates: Requirements 10.6, 10.7, 14.1
@@ -91,11 +91,13 @@ export function getCtaInfo({ geoStatus, qrFallback, pending }: CtaInput): CtaInf
     case 'requesting':
       return { label: CTA_LABEL.locating, disabled: true }
     case 'denied':
-      return { label: CTA_LABEL.button, disabled: true }
+    case 'timeout':
+      // GPS is unusable (permission blocked or no fix). The printed venue QR
+      // poster is the presence-proof fallback, so offer the scanner rather
+      // than a dead, disabled button.
+      return { label: CTA_LABEL.scanQr, disabled: false }
     case 'poorAccuracy':
       return { label: CTA_LABEL.weakSignal, disabled: false }
-    case 'timeout':
-      return { label: CTA_LABEL.locationUnavailable, disabled: false }
     case 'acquired':
     case 'idle':
     default:

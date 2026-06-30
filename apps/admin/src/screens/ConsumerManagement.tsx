@@ -22,6 +22,7 @@ export function ConsumerManagement() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionNote, setActionNote] = useState('')
   const [confirmDisable, setConfirmDisable] = useState<string | null>(null)
+  const [confirmErasure, setConfirmErasure] = useState<string | null>(null)
 
   async function handleSearch() {
     if (!query.trim()) return
@@ -45,6 +46,7 @@ export function ConsumerManagement() {
       })
       setActionNote('')
       setConfirmDisable(null)
+      setConfirmErasure(null)
       void handleSearch()
     } catch (err: unknown) {
       const e = err as { message?: string }
@@ -109,7 +111,7 @@ export function ConsumerManagement() {
             <div className="flex flex-row items-center justify-between">
               <div>
                 <span className="text-[var(--text-primary)] font-medium">{user.username}</span>
-                <span className="text-[var(--text-muted)] text-xs ml-2">{user.phone}</span>
+                <span className="text-[var(--text-muted)] text-xs ml-2">{user.email}</span>
               </div>
               <div className="flex flex-row items-center gap-2">
                 <TierLabel tier={user.tier} />
@@ -130,41 +132,48 @@ export function ConsumerManagement() {
                   className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-3 py-2 text-xs placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
                 />
                 <div className="flex flex-row flex-wrap gap-2">
-                  {!user.isDisabled && role === 'super_admin' && (
+                  {role === 'super_admin' && !user.isDisabled && (
                     <ActionButton
                       label={t('admin.consumers.disable', 'Disable Account')}
                       onClick={() => setConfirmDisable(user.id)}
                       danger
                     />
                   )}
-                  {user.isDisabled && (
+                  {role === 'super_admin' && user.isDisabled && (
                     <ActionButton
                       label={t('admin.consumers.enable', 'Enable Account')}
                       onClick={() => void handleAction('enable', user.id)}
                     />
                   )}
-                  <ActionButton
-                    label={t('admin.consumers.resetFlags')}
-                    onClick={() => void handleAction('reset-flags', user.id)}
-                  />
-                  <ActionButton
-                    label={t('admin.consumers.recalcTier')}
-                    onClick={() => void handleAction('recalc-tier', user.id)}
-                  />
-                  <ActionButton
-                    label={t('admin.consumers.overrideStreak')}
-                    onClick={() => void handleAction('override-streak', user.id)}
-                  />
+                  {role === 'super_admin' && (
+                    <ActionButton
+                      label={t('admin.consumers.resetFlags')}
+                      onClick={() => void handleAction('reset-flags', user.id)}
+                    />
+                  )}
+                  {role === 'super_admin' && (
+                    <ActionButton
+                      label={t('admin.consumers.recalcTier')}
+                      onClick={() => void handleAction('recalc-tier', user.id)}
+                    />
+                  )}
+                  {role === 'super_admin' && (
+                    <ActionButton
+                      label={t('admin.consumers.overrideStreak')}
+                      onClick={() => void handleAction('override-streak', user.id)}
+                    />
+                  )}
                   {role === 'super_admin' && (
                     <ActionButton
                       label={t('admin.consumers.processErasure')}
-                      onClick={() => void handleAction('process-erasure', user.id)}
+                      onClick={() => setConfirmErasure(user.id)}
                       danger
                     />
                   )}
                   <ActionButton
                     label={t('admin.consumers.sendMessage')}
                     onClick={() => void handleAction('send-message', user.id)}
+                    disabled={!actionNote.trim()}
                   />
                 </div>
               </div>
@@ -205,6 +214,33 @@ export function ConsumerManagement() {
           </div>
         </div>
       )}
+
+      {/* Erasure confirmation dialog (POPIA right-to-erasure) */}
+      {confirmErasure && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-5">
+          <div className="bg-[var(--bg-modal)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">Process Erasure?</h3>
+            <p className="text-[var(--text-secondary)] text-sm mb-4">
+              This queues the user's data for permanent erasure under POPIA. Their data will be erased within 30 days
+              and this cannot be undone. This action creates an audit log entry.
+            </p>
+            <div className="flex flex-row gap-3">
+              <button
+                onClick={() => setConfirmErasure(null)}
+                className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleAction('process-erasure', confirmErasure)}
+                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium"
+              >
+                Process Erasure
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -213,14 +249,25 @@ function TierLabel({ tier }: { tier: Tier }) {
   return <span className="text-[var(--text-muted)] text-xs capitalize">{tier}</span>
 }
 
-function ActionButton({ label, onClick, danger = false }: { label: string; onClick: () => void; danger?: boolean }) {
+function ActionButton({
+  label,
+  onClick,
+  danger = false,
+  disabled = false,
+}: {
+  label: string
+  onClick: () => void
+  danger?: boolean
+  disabled?: boolean
+}) {
   return (
     <button
+      disabled={disabled}
       onClick={(e) => {
         e.stopPropagation()
         onClick()
       }}
-      className={`border rounded-xl px-3 py-1.5 text-xs transition-all duration-150 active:scale-95 ${
+      className={`border rounded-xl px-3 py-1.5 text-xs transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:active:scale-100 ${
         danger
           ? 'border-[var(--danger)] text-[var(--danger)]'
           : 'border-[var(--border-strong)] text-[var(--text-primary)]'

@@ -11,6 +11,7 @@ interface Redemption {
 
 export function RecentRedemptions() {
   const [redemptions, setRedemptions] = useState<Redemption[]>([])
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -18,9 +19,14 @@ export function RecentRedemptions() {
     async function fetch() {
       try {
         const res = await api.get<{ items: Redemption[] }>('/v1/staff/recent-redemptions')
-        if (!cancelled) setRedemptions(res.items)
+        if (!cancelled) {
+          setRedemptions(res.items)
+          setLoadError(false)
+        }
       } catch {
-        // Fail silently , non-critical
+        // Surface a load error so an empty list is never mistaken for "no
+        // redemptions" when the poll actually failed.
+        if (!cancelled) setLoadError(true)
       }
     }
 
@@ -39,7 +45,11 @@ export function RecentRedemptions() {
       </Text>
 
       {redemptions.length === 0 ? (
-        <Text className="text-[var(--text-muted)] text-sm">No redemptions yet</Text>
+        loadError ? (
+          <Text className="text-[var(--danger)] text-sm">Couldn't load recent redemptions. Retrying…</Text>
+        ) : (
+          <Text className="text-[var(--text-muted)] text-sm">No redemptions yet</Text>
+        )
       ) : (
         <Box className="flex flex-col gap-2">
           {redemptions.map((r: Redemption) => (

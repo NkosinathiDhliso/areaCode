@@ -582,7 +582,9 @@ export async function consumerAction(
   action: string,
   note?: string,
 ) {
-  // Route to dedicated implementations where they exist
+  // Route to dedicated implementations. Every action does real work; there is
+  // no audit-log-only "success" path (the admin must never see success for a
+  // no-op).
   switch (action) {
     case 'reset-flags':
       return resetAbuseFlags(adminId, adminRole, userId)
@@ -591,26 +593,17 @@ export async function consumerAction(
       return sendMessage(adminId, adminRole, userId, note)
     case 'disable':
       return disableUser(adminId, adminRole, userId)
-    default: {
-      // For actions without dedicated implementations, create audit log
-      const destructiveActions = ['override-streak', 'recalculate-tier', 'process-erasure']
-      const requiredPermission =
-        action === 'process-erasure'
-          ? 'process_erasure'
-          : destructiveActions.includes(action)
-            ? 'manage_user'
-            : 'view_user'
-      checkPermission(adminRole, requiredPermission)
-      await repo.createAuditLog({
-        adminId,
-        adminRole,
-        action: `consumer_${action}`,
-        entityType: 'user',
-        entityId: userId,
-        afterState: { note },
-      })
-      return { success: true }
-    }
+    case 'enable':
+      return enableUser(adminId, adminRole, userId)
+    case 'recalc-tier':
+    case 'recalculate-tier':
+      return recalculateTier(adminId, adminRole, userId)
+    case 'override-streak':
+      return overrideStreak(adminId, adminRole, userId, note)
+    case 'process-erasure':
+      return processErasure(adminId, adminRole, userId)
+    default:
+      throw AppError.badRequest(`Unknown consumer action: ${action}`)
   }
 }
 
@@ -647,26 +640,18 @@ export async function searchBusinesses(adminRole: AdminRole, query: string) {
 }
 
 export async function businessAction(adminId: string, adminRole: AdminRole, businessId: string, action: string) {
-  // Route to dedicated implementations where they exist
+  // Route to dedicated implementations. Every action does real work.
   switch (action) {
     case 'extend-trial':
       return extendTrial(adminId, adminRole, businessId, 14) // default 14 days
     case 'disable':
       return disableBusiness(adminId, adminRole, businessId)
-    default: {
-      // For actions without dedicated implementations, create audit log
-      const destructiveActions = ['deactivate', 'revoke', 'delete', 'downgrade', 'deactivate-rewards']
-      const requiredPermission = destructiveActions.includes(action) ? 'manage_business' : 'view_business'
-      checkPermission(adminRole, requiredPermission)
-      await repo.createAuditLog({
-        adminId,
-        adminRole,
-        action: `business_${action}`,
-        entityType: 'business',
-        entityId: businessId,
-      })
-      return { success: true }
-    }
+    case 'deactivate-rewards':
+      return deactivateBusinessRewards(adminId, adminRole, businessId)
+    case 'override-cipc':
+      return overrideCipc(adminId, adminRole, businessId)
+    default:
+      throw AppError.badRequest(`Unknown business action: ${action}`)
   }
 }
 
@@ -825,6 +810,163 @@ export async function disableUser(adminId: string, adminRole: AdminRole, userId:
   })
 
   return { success: true, userId, isDisabled: true }
+}
+
+export async function enableUser(adminId: string, adminRole: AdminRole, userId: string) {
+  checkPermission(adminRole, 'disable_user')
+  const user = await repo.getUserById(userId)
+  if (!user) throw AppError.notFound('User not found')
+
+  const { updateUser } = await import('../auth/dynamodb-repository.js')
+  await updateUser(userId, {
+    isDisabled: false,
+    disabledAt: null,
+  } as any)
+
+  await repo.createAuditLog({
+    adminId,
+    adminRole,
+    action: 'enable_user',
+    entityType: 'user',
+    entityId: userId,
+    beforeState: { isDisabled: true },
+    afterState: { isDisabled: false },
+  })
+
+  return { success: true, userId, isDisabled: false }
+}
+
+export async function recalculateTier(adminId: string, adminRole: AdminRole, userId: string) {
+  checkPermission(adminRole, 'recalculate_tier')
+  const user = await repo.getUserById(userId)
+  if (!user) throw AppError.notFound('User not found')
+
+  const { getTier } = await import('@area-code/shared/constants/tier-levels')
+  const totalCheckIns = ((user as Record<string, unknown>)['totalCheckIns'] as number) ?? 0
+  const previousTier = (user as Record<string, unknown>)['tier'] as string | undefined
+  const recalculatedTier = getTier(totalCheckIns)
+
+  // updateUserTier enforces the tier-permanence guard; recalculating to the
+  // visit-count-implied tier is always allowed (it is the minimum tier).
+  await repo.updateUserTier(userId, recalculatedTier)
+
+  await repo.createAuditLog({
+    adminId,
+    adminRole,
+    action: 'recalculate_tier',
+    entityType: 'user',
+    entityId: userId,
+    beforeState: { tier: previousTier },
+    afterState: { tier: recalculatedTier, totalCheckIns },
+  })
+
+  return { success: true, userId, tier: recalculatedTier }
+}
+
+export async function overrideStreak(adminId: string, adminRole: AdminRole, userId: string, note?: string) {
+  checkPermission(adminRole, 'override_streak')
+  const user = await repo.getUserById(userId)
+  if (!user) throw AppError.notFound('User not found')
+
+  // The note may carry a target streak value; otherwise reset to 0. A
+  // non-numeric note is treated as a reason-only override (reset to 0).
+  const parsed = note ? Number.parseInt(note, 10) : 0
+  const newStreak = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+  const previousStreak = ((user as Record<string, unknown>)['streakCount'] as number) ?? 0
+
+  const { updateUser } = await import('../auth/dynamodb-repository.js')
+  await updateUser(userId, { streakCount: newStreak } as any)
+
+  await repo.createAuditLog({
+    adminId,
+    adminRole,
+    action: 'override_streak',
+    entityType: 'user',
+    entityId: userId,
+    beforeState: { streakCount: previousStreak },
+    afterState: { streakCount: newStreak, note },
+  })
+
+  return { success: true, userId, streakCount: newStreak }
+}
+
+export async function processErasure(adminId: string, adminRole: AdminRole, userId: string) {
+  checkPermission(adminRole, 'process_erasure')
+  const user = await repo.getUserById(userId)
+  if (!user) throw AppError.notFound('User not found')
+
+  // Enqueue the POPIA erasure request on the same path the consumer
+  // self-serve deletion uses (DELETE /v1/users/me). The cleanup worker
+  // performs the actual erasure within 30 days. This is the one correct path;
+  // there is no admin-only shadow erasure.
+  const { hasActiveErasureRequest, createErasureRequest } = await import('../auth/repository.js')
+  const alreadyQueued = await hasActiveErasureRequest(userId)
+  if (!alreadyQueued) {
+    await createErasureRequest(userId)
+  }
+
+  await repo.createAuditLog({
+    adminId,
+    adminRole,
+    action: 'process_erasure',
+    entityType: 'user',
+    entityId: userId,
+    afterState: { status: 'pending', alreadyQueued },
+  })
+
+  return { success: true, userId, status: 'pending', alreadyQueued }
+}
+
+export async function deactivateBusinessRewards(adminId: string, adminRole: AdminRole, businessId: string) {
+  checkPermission(adminRole, 'deactivate_rewards')
+  const biz = await repo.getBusinessById(businessId)
+  if (!biz) throw AppError.notFound('Business not found')
+
+  const { deactivateRewardsForBusiness } = await import('../rewards/repository.js')
+  const rewardsDeactivated = await deactivateRewardsForBusiness(businessId)
+
+  await repo.createAuditLog({
+    adminId,
+    adminRole,
+    action: 'deactivate_rewards',
+    entityType: 'business',
+    entityId: businessId,
+    afterState: { rewardsDeactivated },
+  })
+
+  return { success: true, businessId, rewardsDeactivated }
+}
+
+export async function overrideCipc(adminId: string, adminRole: AdminRole, businessId: string) {
+  checkPermission(adminRole, 'override_cipc')
+  const biz = await repo.getBusinessById(businessId)
+  if (!biz) throw AppError.notFound('Business not found')
+
+  // Manually validate the business's node claims, overriding CIPC
+  // verification (used when CIPC is unavailable or a registration was verified
+  // out of band). Marks each of the business's nodes as claimed.
+  const { getNodesByBusinessId, updateNode } = await import('../nodes/dynamodb-repository.js')
+  const nodes = await getNodesByBusinessId(businessId)
+  let nodesValidated = 0
+  for (const node of nodes) {
+    if (node.claimStatus === 'claimed' && node.claimCipcStatus === 'admin_override') continue
+    await updateNode(node.nodeId, {
+      claimStatus: 'claimed',
+      claimCipcStatus: 'admin_override',
+    } as any)
+    nodesValidated++
+  }
+
+  await repo.createAuditLog({
+    adminId,
+    adminRole,
+    action: 'override_cipc',
+    entityType: 'business',
+    entityId: businessId,
+    afterState: { nodesValidated, claimCipcStatus: 'admin_override' },
+  })
+
+  return { success: true, businessId, nodesValidated }
 }
 
 export async function disableBusiness(adminId: string, adminRole: AdminRole, businessId: string) {

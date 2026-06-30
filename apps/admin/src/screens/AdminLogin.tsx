@@ -4,6 +4,7 @@ import type { AdminRole } from '@area-code/shared/types'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { startAdminGoogleOAuthWeb } from '../lib/startAdminGoogleOAuth'
 import { useAdminAuthStore } from '../stores/adminAuthStore'
 
 type LoginResponse =
@@ -32,6 +33,18 @@ export function AdminLogin() {
   const [code, setCode] = useState('')
   const [secretCode, setSecretCode] = useState<string | null>(null)
   const [otpauthUri, setOtpauthUri] = useState<string | null>(null)
+  const [googleLoading, setGoogleLoading] = useState(false)
+
+  async function handleGoogle() {
+    setGoogleLoading(true)
+    setError(null)
+    try {
+      await startAdminGoogleOAuthWeb()
+    } catch {
+      setGoogleLoading(false)
+      setError(t('auth.oauth.misconfigured', 'Google sign-in is not configured for this deployment.'))
+    }
+  }
 
   function persist(res: Extract<LoginResponse, { accessToken: string }>) {
     setAuth(res.accessToken, res.refreshToken, res.adminId, res.role)
@@ -101,6 +114,23 @@ export function AdminLogin() {
 
       {phase === 'credentials' && (
         <div className="flex flex-col gap-4 w-full max-w-xs">
+          <button
+            type="button"
+            onClick={() => void handleGoogle()}
+            disabled={googleLoading || loading}
+            className="flex items-center justify-center gap-3 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
+          >
+            {googleLoading ? (
+              <Spinner size="sm" className="border-[var(--accent)] border-t-transparent" />
+            ) : (
+              t('auth.login.continueGoogle', 'Continue with Google')
+            )}
+          </button>
+          <div className="flex items-center gap-3 my-1">
+            <div className="flex-1 h-px bg-[var(--border)]" />
+            <span className="text-[var(--text-muted)] text-xs">{t('auth.login.or', 'or')}</span>
+            <div className="flex-1 h-px bg-[var(--border)]" />
+          </div>
           <label className="sr-only" htmlFor="admin-email">
             {t('admin.login.email')}
           </label>

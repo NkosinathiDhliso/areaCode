@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
+import { requireBusinessPermission, getBusinessRole } from '../../shared/middleware/business-role.js'
 import { validate } from '../../shared/middleware/validation.js'
 import * as service from './service.js'
 import {
@@ -12,31 +13,39 @@ import {
 import { z } from 'zod'
 
 export async function rewardRoutes(app: FastifyInstance) {
-  // POST /v1/business/rewards
+  // POST /v1/business/rewards — owners and managers (manage_rewards)
   app.post(
     '/v1/business/rewards',
     {
-      preHandler: [requireAuth('business'), validate({ body: createRewardBodySchema })],
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('manage_rewards'),
+        validate({ body: createRewardBodySchema }),
+      ],
     },
     async (request, reply) => {
-      const auth = getAuth(request)
+      const businessId = getBusinessRole(request).businessId
       const body = request.body as z.infer<typeof createRewardBodySchema>
-      const reward = await service.createReward(auth.userId, body)
+      const reward = await service.createReward(businessId, body)
       return reply.status(201).send(reward)
     },
   )
 
-  // PUT /v1/business/rewards/:id
+  // PUT /v1/business/rewards/:id — owners and managers (manage_rewards)
   app.put(
     '/v1/business/rewards/:id',
     {
-      preHandler: [requireAuth('business'), validate({ params: rewardIdParamsSchema, body: updateRewardBodySchema })],
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('manage_rewards'),
+        validate({ params: rewardIdParamsSchema, body: updateRewardBodySchema }),
+      ],
     },
     async (request) => {
-      const auth = getAuth(request)
+      const businessId = getBusinessRole(request).businessId
       const params = request.params as z.infer<typeof rewardIdParamsSchema>
       const body = request.body as z.infer<typeof updateRewardBodySchema>
-      return service.updateReward(params.id, auth.userId, body)
+      return service.updateReward(params.id, businessId, body)
     },
   )
 

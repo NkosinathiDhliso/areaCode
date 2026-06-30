@@ -78,24 +78,50 @@ foreach ($app in $AmplifyApps) {
     # Update environment variables
     Write-Host "  Setting environment variables..." -ForegroundColor Gray
     
-    # Build environment variables — Web (basemap) and Business (address
-    # autocomplete via Mapbox Geocoding) both need the Mapbox token.
-    $envVars = "VITE_API_URL=$ApiUrl,VITE_SOCKET_URL=$ApiUrl,VITE_WEBSOCKET_URL=$WebSocketUrl"
+    # Build the MANAGED environment variables this script owns — Web (basemap)
+    # and Business (address autocomplete via Mapbox Geocoding) both need the
+    # Mapbox token.
+    $managed = [ordered]@{
+        VITE_API_URL       = $ApiUrl
+        VITE_SOCKET_URL    = $ApiUrl
+        VITE_WEBSOCKET_URL = $WebSocketUrl
+    }
     if (($app.Name -eq "Web (Main)" -or $app.Name -eq "Business") -and $MapboxToken) {
-        $envVars += ",VITE_MAPBOX_TOKEN=$MapboxToken"
+        $managed['VITE_MAPBOX_TOKEN'] = $MapboxToken
     }
     if ($app.RumMonitorId -and $app.RumIdentityPool) {
-        $envVars += ",VITE_RUM_APP_MONITOR_ID=$($app.RumMonitorId)"
-        $envVars += ",VITE_RUM_IDENTITY_POOL_ID=$($app.RumIdentityPool)"
-        $envVars += ",VITE_RUM_REGION=$Region"
+        $managed['VITE_RUM_APP_MONITOR_ID'] = $app.RumMonitorId
+        $managed['VITE_RUM_IDENTITY_POOL_ID'] = $app.RumIdentityPool
+        $managed['VITE_RUM_REGION'] = $Region
     } else {
         Write-Warn "  ⚠ RUM env vars not provided for $($app.Name) — frontend monitoring will be disabled"
     }
 
-    aws amplify update-branch `
+    # MERGE, never replace. update-branch --environment-variables overwrites the
+    # ENTIRE env set, so we must fetch the existing vars and overlay only the
+    # keys we own. Otherwise out-of-band vars (Cognito Hosted-UI OAuth domains +
+    # client IDs, VAPID keys) would be silently wiped, breaking Google sign-in
+    # and web push on the next run.
+    $existingJson = aws amplify get-branch `
         --app-id $app.AppId `
         --branch-name $app.Branch `
-        --environment-variables $envVars `
+        --region $Region `
+        --query "branch.environmentVariables" --output json 2>$null
+    $merged = [ordered]@{}
+    if ($LASTEXITCODE -eq 0 -and $existingJson) {
+        $existing = $existingJson | ConvertFrom-Json
+        foreach ($p in $existing.PSObject.Properties) { $merged[$p.Name] = $p.Value }
+    } else {
+        Write-Warn "  ⚠ Could not read existing env vars; proceeding with managed keys only"
+    }
+    foreach ($k in $managed.Keys) { $merged[$k] = $managed[$k] }
+
+    $payload = [ordered]@{ appId = $app.AppId; branchName = $app.Branch; environmentVariables = $merged }
+    $payloadPath = Join-Path $env:TEMP "amplify-env-$($app.AppId).json"
+    [System.IO.File]::WriteAllText($payloadPath, ($payload | ConvertTo-Json -Depth 10), (New-Object System.Text.UTF8Encoding($false)))
+
+    aws amplify update-branch `
+        --cli-input-json "file://$payloadPath" `
         --region $Region 2>&1 | Out-Null
     
     if ($LASTEXITCODE -eq 0) {

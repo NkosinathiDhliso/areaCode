@@ -84,6 +84,30 @@ export function AdminDashboard() {
   const tabs = getVisibleTabs(role)
   const [activeTab, setActiveTab] = useState<Tab>(tabs[0] ?? 'dashboard')
 
+  // A signed-in admin whose role grants no tabs (unrecognized or unprovisioned
+  // role) gets an explicit no-access state instead of a tab bar that renders a
+  // panel which 403s.
+  if (tabs.length === 0) {
+    return (
+      <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
+        <header className="flex flex-row items-center justify-between px-5 py-4 border-b border-[var(--border)]">
+          <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">Area Code Admin</span>
+          <button onClick={logout} className="text-[var(--text-muted)] text-sm">
+            {t('admin.logout')}
+          </button>
+        </header>
+        <main className="flex-1 flex items-center justify-center p-8">
+          <div className="text-center max-w-sm">
+            <h2 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">No access</h2>
+            <p className="text-[var(--text-secondary)] text-sm">
+              Your account does not have any permissions assigned. Contact a super admin to have a role provisioned.
+            </p>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
       <header className="flex flex-row items-center justify-between px-5 py-4 border-b border-[var(--border)]">

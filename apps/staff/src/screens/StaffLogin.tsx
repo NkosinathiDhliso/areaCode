@@ -3,6 +3,7 @@ import { api } from '@area-code/shared/lib/api'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { startStaffGoogleOAuthWeb } from '../lib/startStaffGoogleOAuth'
 import { useStaffAuthStore } from '../stores/staffAuthStore'
 
 export function StaffLogin() {
@@ -11,7 +12,19 @@ export function StaffLogin() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  async function handleGoogle() {
+    setGoogleLoading(true)
+    setError(null)
+    try {
+      await startStaffGoogleOAuthWeb()
+    } catch {
+      setGoogleLoading(false)
+      setError(t('auth.oauth.misconfigured', 'Google sign-in is not configured for this deployment.'))
+    }
+  }
 
   async function handleEmailLogin() {
     setLoading(true)
@@ -46,6 +59,23 @@ export function StaffLogin() {
       <h1 className="text-[var(--text-primary)] font-bold text-2xl mb-8 font-[Syne]">{t('staff.login.title')}</h1>
 
       <div className="flex flex-col gap-4 w-full max-w-xs">
+        <button
+          type="button"
+          onClick={() => void handleGoogle()}
+          disabled={googleLoading || loading}
+          className="flex items-center justify-center gap-3 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
+        >
+          {googleLoading ? (
+            <Spinner size="sm" className="border-[var(--accent)] border-t-transparent" />
+          ) : (
+            t('auth.login.continueGoogle', 'Continue with Google')
+          )}
+        </button>
+        <div className="flex items-center gap-3 my-1">
+          <div className="flex-1 h-px bg-[var(--border)]" />
+          <span className="text-[var(--text-muted)] text-xs">{t('auth.login.or', 'or')}</span>
+          <div className="flex-1 h-px bg-[var(--border)]" />
+        </div>
         <input
           type="email"
           value={email}

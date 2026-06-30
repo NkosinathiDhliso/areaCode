@@ -25,6 +25,7 @@ export function NodeManagement() {
   const [editName, setEditName] = useState('')
   const [editCategory, setEditCategory] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
+  const [confirmDeactivate, setConfirmDeactivate] = useState<NodeItem | null>(null)
 
   async function handleSearch() {
     setLoading(true)
@@ -44,6 +45,7 @@ export function NodeManagement() {
     try {
       await api.post(`/v1/admin/nodes/${nodeId}/${action}`, body)
       setEditingNode(null)
+      setConfirmDeactivate(null)
       void handleSearch()
     } catch {
       setError('Action failed. Please try again.')
@@ -125,7 +127,7 @@ export function NodeManagement() {
               </button>
               {node.isActive !== false ? (
                 <button
-                  onClick={() => handleAction(node.nodeId, 'deactivate')}
+                  onClick={() => setConfirmDeactivate(node)}
                   disabled={actionLoading}
                   className="text-xs text-[var(--danger)] font-medium"
                 >
@@ -192,6 +194,42 @@ export function NodeManagement() {
                   <Spinner size="sm" className="border-white border-t-transparent" />
                 ) : (
                   t('common.save', 'Save')
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deactivate confirmation */}
+      {confirmDeactivate && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-5">
+          <div className="bg-[var(--bg-modal)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
+              {t('admin.nodes.deactivateTitle', 'Deactivate Venue?')}
+            </h3>
+            <p className="text-[var(--text-secondary)] text-sm mb-4">
+              {t(
+                'admin.nodes.deactivateBody',
+                'Consumers will no longer be able to check in or claim rewards at this venue. It will be hidden from the map. You can reactivate it later.',
+              )}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDeactivate(null)}
+                className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+              >
+                {t('common.cancel', 'Cancel')}
+              </button>
+              <button
+                onClick={() => void handleAction(confirmDeactivate.nodeId, 'deactivate')}
+                disabled={actionLoading}
+                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium flex items-center justify-center"
+              >
+                {actionLoading ? (
+                  <Spinner size="sm" className="border-white border-t-transparent" />
+                ) : (
+                  t('admin.nodes.deactivate', 'Deactivate')
                 )}
               </button>
             </div>

@@ -2,6 +2,7 @@ import { Spinner } from '@area-code/shared/components/Spinner'
 import { api } from '@area-code/shared/lib/api'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import { useBusinessStore, type DashboardPanel } from '@area-code/shared/stores/businessStore'
+import { useErrorStore } from '@area-code/shared/stores/errorStore'
 import type { Node } from '@area-code/shared/types'
 import { useEffect, useRef, useState, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -87,7 +88,6 @@ export function BusinessDashboard() {
   const { t } = useTranslation()
   const logout = useBusinessAuthStore((s) => s.logout)
   const hasPermission = useBusinessAuthStore((s) => s.hasPermission)
-  const permissions = useBusinessAuthStore((s) => s.permissions)
   const role = useBusinessAuthStore((s) => s.role)
   const { currentPanel, setPanel, nodes, setNodes } = useBusinessStore()
   const navRef = useRef<HTMLDivElement>(null)
@@ -102,18 +102,60 @@ export function BusinessDashboard() {
     api
       .get<{ items: Node[] }>('/v1/business/me/nodes')
       .then((res) => setNodes(res.items ?? []))
-      .catch(() => {})
-  }, [nodes.length, setNodes])
+      .catch(() => {
+        // Surface the failure instead of swallowing it: every node-dependent
+        // panel (rewards, boost, music schedule, settings) degrades without it.
+        useErrorStore
+          .getState()
+          .showError(t('biz.dashboard.nodesError', "Couldn't load your venues. Some panels may be unavailable."))
+      })
+  }, [nodes.length, setNodes, t])
 
-  // Filter panels based on user's permissions.
-  // If permissions haven't loaded yet (empty array = role endpoint failed or not deployed),
-  // show ALL panels. Never hide the nav - that's a worse UX than showing too much.
-  const visiblePanels =
-    permissions.length > 0 ? PANELS.filter((panel) => hasPermission(PANEL_PERMISSIONS[panel])) : PANELS
+  // Filter panels based on the user's permissions. Fail closed: if permissions
+  // could not be resolved (empty), show no panels and surface a retry state
+  // rather than exposing every panel (including owner-only billing).
+  const visiblePanels = PANELS.filter((panel) => hasPermission(PANEL_PERMISSIONS[panel]))
   const currentIdx = visiblePanels.indexOf(currentPanel)
 
   // If current panel is not visible (e.g. role changed), reset to first visible
   const activePanel = visiblePanels.includes(currentPanel) ? currentPanel : (visiblePanels[0] ?? 'live')
+
+  // No panels visible means permissions could not be resolved. Show a retry
+  // state instead of an empty shell or (worse) every panel.
+  if (visiblePanels.length === 0) {
+    return (
+      <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
+        <header
+          className="flex flex-row items-center justify-between px-5 py-3 border-b border-[var(--border)]"
+          style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top, 0px))' }}
+        >
+          <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">Area Code</span>
+          <button onClick={logout} className="text-[var(--text-muted)] text-sm">
+            {t('biz.logout')}
+          </button>
+        </header>
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="text-center max-w-sm">
+            <h2 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
+              {t('biz.dashboard.permsTitle', "Couldn't load your dashboard")}
+            </h2>
+            <p className="text-[var(--text-secondary)] text-sm mb-5">
+              {t(
+                'biz.dashboard.permsBody',
+                'We could not confirm your access permissions. Check your connection and try again.',
+              )}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-[var(--accent)] text-white font-semibold rounded-xl px-6 py-3 text-sm"
+            >
+              {t('common.retry', 'Retry')}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   function handleTouchStart(e: React.TouchEvent) {
     setTouchStart(e.touches[0]?.clientX ?? null)

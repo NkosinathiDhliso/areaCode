@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { requireAuth, getAuth, optionalAuth } from '../../shared/middleware/auth.js'
+import { requireBusinessPermission, getBusinessRole } from '../../shared/middleware/business-role.js'
 import { validate } from '../../shared/middleware/validation.js'
 import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
 import * as service from './service.js'
@@ -83,16 +84,20 @@ export async function nodeRoutes(app: FastifyInstance) {
     },
   )
 
-  // POST /v1/nodes
+  // POST /v1/nodes — owners and managers (manage_nodes)
   app.post(
     '/v1/nodes',
     {
-      preHandler: [requireAuth('business'), validate({ body: createNodeBodySchema })],
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('manage_nodes'),
+        validate({ body: createNodeBodySchema }),
+      ],
     },
     async (request, reply) => {
-      const auth = getAuth(request)
+      const businessId = getBusinessRole(request).businessId
       const body = request.body as z.infer<typeof createNodeBodySchema>
-      const node = await service.createNode(auth.userId, body)
+      const node = await service.createNode(businessId, body)
       return reply.status(201).send(node)
     },
   )
@@ -101,42 +106,54 @@ export async function nodeRoutes(app: FastifyInstance) {
   app.post(
     '/v1/nodes/business-create',
     {
-      preHandler: [requireAuth('business'), validate({ body: businessCreateNodeBodySchema })],
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('manage_nodes'),
+        validate({ body: businessCreateNodeBodySchema }),
+      ],
     },
     async (request, reply) => {
-      const auth = getAuth(request)
+      const businessId = getBusinessRole(request).businessId
       const body = request.body as z.infer<typeof businessCreateNodeBodySchema>
-      const node = await service.businessCreateNode(auth.userId, body)
+      const node = await service.businessCreateNode(businessId, body)
       return reply.status(201).send(node)
     },
   )
 
-  // PUT /v1/nodes/:nodeId
+  // PUT /v1/nodes/:nodeId — owners and managers (manage_nodes)
   app.put(
     '/v1/nodes/:nodeId',
     {
-      preHandler: [requireAuth('business'), validate({ params: nodeIdParamsSchema, body: updateNodeBodySchema })],
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('manage_nodes'),
+        validate({ params: nodeIdParamsSchema, body: updateNodeBodySchema }),
+      ],
     },
     async (request) => {
-      const auth = getAuth(request)
+      const businessId = getBusinessRole(request).businessId
       const params = request.params as z.infer<typeof nodeIdParamsSchema>
       const body = request.body as z.infer<typeof updateNodeBodySchema>
-      await service.updateNode(params.nodeId, auth.userId, body)
+      await service.updateNode(params.nodeId, businessId, body)
       return { success: true }
     },
   )
 
-  // POST /v1/nodes/:nodeId/claim
+  // POST /v1/nodes/:nodeId/claim — owners and managers (manage_nodes)
   app.post(
     '/v1/nodes/:nodeId/claim',
     {
-      preHandler: [requireAuth('business'), validate({ params: nodeIdParamsSchema, body: claimNodeBodySchema })],
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('manage_nodes'),
+        validate({ params: nodeIdParamsSchema, body: claimNodeBodySchema }),
+      ],
     },
     async (request) => {
-      const auth = getAuth(request)
+      const businessId = getBusinessRole(request).businessId
       const params = request.params as z.infer<typeof nodeIdParamsSchema>
       const body = request.body as z.infer<typeof claimNodeBodySchema>
-      return service.claimNode(params.nodeId, auth.userId, body.registrationNumber)
+      return service.claimNode(params.nodeId, businessId, body.registrationNumber)
     },
   )
 

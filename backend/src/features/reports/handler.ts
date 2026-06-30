@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
+import { requireAuth } from '../../shared/middleware/auth.js'
+import { requireBusinessPermission, getBusinessRole } from '../../shared/middleware/business-role.js'
 import { validate } from '../../shared/middleware/validation.js'
 import { reportListQuerySchema, reportIdParamsSchema } from './types.js'
 import { listReports, getReport } from './repository.js'
@@ -20,12 +21,16 @@ export async function reportRoutes(app: FastifyInstance) {
   app.get(
     '/v1/business/me/reports',
     {
-      preHandler: [requireAuth('business'), validate({ query: reportListQuerySchema })],
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('view_reports'),
+        validate({ query: reportListQuerySchema }),
+      ],
     },
     async (request) => {
-      const auth = getAuth(request)
+      const businessId = getBusinessRole(request).businessId
       const query = request.query as z.infer<typeof reportListQuerySchema>
-      const { items, nextCursor } = await listReports(auth.userId, query.cursor, query.period)
+      const { items, nextCursor } = await listReports(businessId, query.cursor, query.period)
       return { items, nextCursor }
     },
   )
@@ -34,18 +39,22 @@ export async function reportRoutes(app: FastifyInstance) {
   app.get(
     '/v1/business/me/reports/:reportId',
     {
-      preHandler: [requireAuth('business'), validate({ params: reportIdParamsSchema })],
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('view_reports'),
+        validate({ params: reportIdParamsSchema }),
+      ],
     },
     async (request) => {
-      const auth = getAuth(request)
+      const businessId = getBusinessRole(request).businessId
       const params = request.params as z.infer<typeof reportIdParamsSchema>
 
-      const report = await getReport(auth.userId, params.reportId)
+      const report = await getReport(businessId, params.reportId)
       if (!report) {
         throw AppError.notFound('Report not found')
       }
 
-      const business = await findBusinessById(auth.userId)
+      const business = await findBusinessById(businessId)
       const tier = business?.tier ?? 'free'
 
       return filterByTier(report, tier)
@@ -57,10 +66,14 @@ export async function reportRoutes(app: FastifyInstance) {
   app.post(
     '/v1/business/me/reports/generate',
     {
-      preHandler: [requireAuth('business'), validate({ body: generateReportBodySchema })],
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('view_reports'),
+        validate({ body: generateReportBodySchema }),
+      ],
     },
     async (request, reply) => {
-      const auth = getAuth(request)
+      const businessId = getBusinessRole(request).businessId
       const body = request.body as z.infer<typeof generateReportBodySchema>
 
       // Default period: trailing 7 days for weekly, trailing 30 days for monthly
@@ -70,7 +83,7 @@ export async function reportRoutes(app: FastifyInstance) {
         new Date(periodEnd).getTime() - (body.periodType === 'weekly' ? 7 : 30) * 24 * 60 * 60 * 1000
       const periodStart = body.periodStart ?? new Date(defaultStartMs).toISOString()
 
-      const result = await generateReportNow(auth.userId, body.periodType, periodStart, periodEnd)
+      const result = await generateReportNow(businessId, body.periodType, periodStart, periodEnd)
 
       if ('skipped' in result) {
         return reply.status(202).send({

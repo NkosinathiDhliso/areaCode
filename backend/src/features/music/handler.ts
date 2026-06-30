@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
+import { requireBusinessPermission, getBusinessRole } from '../../shared/middleware/business-role.js'
 import { validate } from '../../shared/middleware/validation.js'
 import { AppError } from '../../shared/errors/AppError.js'
 import * as service from './service.js'
@@ -160,11 +161,15 @@ export async function musicRoutes(app: FastifyInstance) {
     },
   )
 
-  // GET /v1/business/me/audience/music
-  app.get('/v1/business/me/audience/music', { preHandler: [requireAuth('business')] }, async (request) => {
-    const auth = getAuth(request)
-    return service.getBusinessAudienceMusic(auth.userId)
-  })
+  // GET /v1/business/me/audience/music — owners and managers (view_audience)
+  app.get(
+    '/v1/business/me/audience/music',
+    { preHandler: [requireAuth('business', 'staff'), requireBusinessPermission('view_audience')] },
+    async (request) => {
+      const businessId = getBusinessRole(request).businessId
+      return service.getBusinessAudienceMusic(businessId)
+    },
+  )
 
   // ───────────────────────────────────────────────────────────────────────────
   // Music_Schedule routes (R3.1, R3.5, R3.7, R3.9, R3.11, R3.12, R4.5, R4.7,

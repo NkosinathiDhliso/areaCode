@@ -164,7 +164,10 @@ export function useCheckInFlow(params: UseCheckInFlowParams = {}): CheckInFlow {
       return
     }
 
-    if (qrFallback) {
+    if (qrFallback || geoStatus === 'denied' || geoStatus === 'timeout') {
+      // GPS is unusable (out of range, permission denied, or no fix). Open the
+      // in-app QR scanner so the user can scan the venue's printed poster to
+      // prove presence - the one check-in path that does not need GPS (R14.4).
       setQrScannerOpen(true)
       return
     }
@@ -172,9 +175,13 @@ export function useCheckInFlow(params: UseCheckInFlowParams = {}): CheckInFlow {
     void (async () => {
       // Acquire a fresh fix before checking in. A poor-accuracy fix is still
       // allowed through so the server can decide (and, if too far, trigger the
-      // QR fallback); any other absence of a position aborts the attempt.
+      // QR fallback); if no position can be acquired, fall back to the QR
+      // scanner instead of silently doing nothing.
       const pos = await requestLocation()
-      if (!pos && geoStatus !== 'poorAccuracy') return
+      if (!pos && geoStatus !== 'poorAccuracy') {
+        setQrScannerOpen(true)
+        return
+      }
 
       await submitCheckIn({
         nodeId: activeNode.id,

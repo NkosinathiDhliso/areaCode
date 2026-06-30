@@ -4,7 +4,8 @@ import { z } from 'zod'
 
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { AppError } from '../../shared/errors/AppError.js'
-import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
+import { requireAuth } from '../../shared/middleware/auth.js'
+import { requireBusinessPermission, getBusinessRole } from '../../shared/middleware/business-role.js'
 import { validate } from '../../shared/middleware/validation.js'
 
 import { generateUploadUrl, deleteImage, processUploadedImage } from './image-service.js'
@@ -26,17 +27,21 @@ export async function nodeImageRoutes(app: FastifyInstance) {
   app.post(
     '/v1/business/nodes/:nodeId/image/upload-url',
     {
-      preHandler: [requireAuth('business'), validate({ params: nodeIdParamsSchema, body: uploadUrlBodySchema })],
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('manage_nodes'),
+        validate({ params: nodeIdParamsSchema, body: uploadUrlBodySchema }),
+      ],
     },
     async (request, reply) => {
-      const auth = getAuth(request)
+      const businessId = getBusinessRole(request).businessId
       const { nodeId } = request.params as z.infer<typeof nodeIdParamsSchema>
       const body = request.body as z.infer<typeof uploadUrlBodySchema>
 
       // Verify node ownership
       const nodeResult = await documentClient.send(new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } }))
       const node = nodeResult.Item
-      if (!node || node['businessId'] !== auth.userId) {
+      if (!node || node['businessId'] !== businessId) {
         throw new AppError(403, 'forbidden', 'You do not own this node')
       }
 
@@ -85,16 +90,20 @@ export async function nodeImageRoutes(app: FastifyInstance) {
   app.post(
     '/v1/business/nodes/:nodeId/image/process',
     {
-      preHandler: [requireAuth('business'), validate({ params: nodeIdParamsSchema })],
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('manage_nodes'),
+        validate({ params: nodeIdParamsSchema }),
+      ],
     },
     async (request, reply) => {
-      const auth = getAuth(request)
+      const businessId = getBusinessRole(request).businessId
       const { nodeId } = request.params as z.infer<typeof nodeIdParamsSchema>
 
       // Verify node ownership
       const nodeResult = await documentClient.send(new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } }))
       const node = nodeResult.Item
-      if (!node || node['businessId'] !== auth.userId) {
+      if (!node || node['businessId'] !== businessId) {
         throw new AppError(403, 'forbidden', 'You do not own this node')
       }
 
@@ -133,16 +142,20 @@ export async function nodeImageRoutes(app: FastifyInstance) {
   app.delete(
     '/v1/business/nodes/:nodeId/image',
     {
-      preHandler: [requireAuth('business'), validate({ params: nodeIdParamsSchema })],
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('manage_nodes'),
+        validate({ params: nodeIdParamsSchema }),
+      ],
     },
     async (request, reply) => {
-      const auth = getAuth(request)
+      const businessId = getBusinessRole(request).businessId
       const { nodeId } = request.params as z.infer<typeof nodeIdParamsSchema>
 
       // Verify node ownership
       const nodeResult = await documentClient.send(new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } }))
       const node = nodeResult.Item
-      if (!node || node['businessId'] !== auth.userId) {
+      if (!node || node['businessId'] !== businessId) {
         throw new AppError(403, 'forbidden', 'You do not own this node')
       }
 
