@@ -49,7 +49,7 @@ export function SettingsPanel() {
           api.get<{ items: StaffInvite[] }>('/v1/business/staff/invites'),
         ])
         setBiz(bizRes)
-        setStaff(staffRes.items ?? (Array.isArray(staffRes) ? staffRes : []))
+        setStaff(staffRes.items ?? [])
         setInvites(inviteRes.items ?? [])
       } catch {
         setLoadError(true)

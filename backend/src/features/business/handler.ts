@@ -291,9 +291,13 @@ export async function businessRoutes(app: FastifyInstance) {
   )
 
   // GET /v1/business/staff
+  // Returns { items } to match the list-shape convention used by
+  // /v1/business/staff/invites and consumed by both SettingsPanel and
+  // StaffRedemptionPanel. One shape, everywhere.
   app.get('/v1/business/staff', { preHandler: [requireAuth('business', 'staff')] }, async (request) => {
     const auth = getAuth(request)
-    return service.listStaff(auth.userId)
+    const items = await service.listStaff(auth.userId)
+    return { items }
   })
 
   // GET /v1/business/staff/invites

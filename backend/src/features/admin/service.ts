@@ -26,7 +26,7 @@ const ROLE_PERMISSIONS: Record<AdminRole, Set<string>> = {
     'manage_business',
   ]),
   support_agent: new Set(['view_user', 'send_message', 'view_business', 'extend_trial', 'view_consent', 'manage_user']),
-  content_moderator: new Set(['view_reports', 'action_reports', 'override_cipc']),
+  content_moderator: new Set(['view_reports', 'action_reports', 'override_cipc', 'reset_flags']),
 }
 
 function checkPermission(role: AdminRole, action: string) {
@@ -674,7 +674,11 @@ export async function getErasureQueue(adminRole: AdminRole) {
 // ─── Abuse Flags ────────────────────────────────────────────────────────────
 
 export async function getAbuseFlags(adminRole: AdminRole) {
-  checkPermission(adminRole, 'view_user')
+  // Reading the abuse-flag queue is part of the abuse-moderation capability
+  // (reset_flags), not generic user management (view_user). This lets the
+  // content_moderator role open its Abuse Flags tab, and keeps the gate aligned
+  // with reviewAbuseFlag/actionAbuseFlag, which already require reset_flags.
+  checkPermission(adminRole, 'reset_flags')
   const items = await repo.getUnreviewedAbuseFlags()
   return { items }
 }
