@@ -12,17 +12,13 @@
   html,
   body,
   #root {
-    /* Height resolution, most-robust last:
-       1. 100vh   - universal fallback (older WebKit without dvh).
-       2. 100dvh  - true dynamic viewport on modern iOS 15.4+/Chrome.
-       3. --app-height - JS-pinned window.innerHeight (see useAppHeight); the
-          only value that reliably matches the visible area in an iOS Safari
-          standalone PWA, where dvh/vh can leave a strip below the bottom nav.
-       Each later line overrides the previous only if it computes to a valid
-       length, so unsupported units gracefully degrade. */
+    /* Single height authority for the whole app. #root owns the viewport
+       height; every descendant (the flex shell, the nav) fills it with %, so
+       nothing else computes a viewport unit independently and there is no
+       second source of truth to disagree about where the bottom is. 100vh is
+       the fallback for ancient WebKit; 100dvh wins on modern iOS/Chrome. */
     height: 100vh;
     height: 100dvh;
-    height: var(--app-height, 100dvh);
     margin: 0;
     padding: 0;
     /* Solid backstop so the home-indicator strip can never flash the
