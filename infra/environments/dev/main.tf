@@ -467,14 +467,14 @@ module "lambda_api" {
   vpc_subnet_ids         = module.vpc.private_subnet_ids
   vpc_security_group_ids = module.vpc.lambda_security_group_ids
   environment_variables = {
-    AREA_CODE_ENV                           = local.env
-    USERS_TABLE                             = aws_dynamodb_table.users.name
-    NODES_TABLE                             = aws_dynamodb_table.nodes.name
-    CHECKINS_TABLE                          = aws_dynamodb_table.checkins.name
-    REWARDS_TABLE                           = aws_dynamodb_table.rewards.name
-    BUSINESSES_TABLE                        = aws_dynamodb_table.businesses.name
-    APP_DATA_TABLE                          = aws_dynamodb_table.app_data.name
-    MUSIC_SCHEDULES_TABLE                   = aws_dynamodb_table.music_schedules.name
+    AREA_CODE_ENV         = local.env
+    USERS_TABLE           = aws_dynamodb_table.users.name
+    NODES_TABLE           = aws_dynamodb_table.nodes.name
+    CHECKINS_TABLE        = aws_dynamodb_table.checkins.name
+    REWARDS_TABLE         = aws_dynamodb_table.rewards.name
+    BUSINESSES_TABLE      = aws_dynamodb_table.businesses.name
+    APP_DATA_TABLE        = aws_dynamodb_table.app_data.name
+    MUSIC_SCHEDULES_TABLE = aws_dynamodb_table.music_schedules.name
     # Presence is provisioned by the presence-integrity spec. Env name follows the
     # per-env convention so each env references its own table, never a cross-env one.
     PRESENCE_TABLE                          = "area-code-${local.env}-presence"
@@ -488,8 +488,10 @@ module "lambda_api" {
     AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
     AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
     AREA_CODE_S3_MEDIA_BUCKET               = module.s3_media.bucket_name
-    AREA_CODE_SQS_PUSH_QUEUE_URL = module.sqs_push_sender.queue_url
-    AREA_CODE_CONSENT_VERSION    = "v1.0"
+    AREA_CODE_SQS_PUSH_QUEUE_URL            = module.sqs_push_sender.queue_url
+    AREA_CODE_CONSENT_VERSION               = "v1.0"
+    # Win-back campaigns: the API async-invokes this dispatcher on send-now.
+    AREA_CODE_CAMPAIGN_DISPATCHER_FUNCTION = module.lambda_campaign_dispatcher.function_name
   }
 }
 
@@ -628,6 +630,51 @@ module "lambda_report_generator" {
     AREA_CODE_REPORT_QUEUE_URL   = module.sqs_report_generation.queue_url
     AREA_CODE_SQS_PUSH_QUEUE_URL = module.sqs_push_sender.queue_url
     AREA_CODE_ANONYMIZATION_SALT = "report-anonymization-salt-dev"
+  }
+}
+
+# Win-back campaign dispatcher Lambda — async-invoked by the API on send-now;
+# resolves the audience segment, applies consent/opt-out + frequency-cap +
+# quota filters, then fans batches of <=100 recipients out to the campaign-send
+# queue. (Mirrors the reports dispatcher pattern.)
+module "lambda_campaign_dispatcher" {
+  source                 = "../../modules/lambda"
+  env                    = local.env
+  function_name          = "campaign-dispatcher"
+  timeout                = 60
+  memory_size            = 512
+  lambda_in_vpc          = true
+  vpc_subnet_ids         = module.vpc.private_subnet_ids
+  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  environment_variables = {
+    AREA_CODE_ENV                     = local.env
+    USERS_TABLE                       = aws_dynamodb_table.users.name
+    NODES_TABLE                       = aws_dynamodb_table.nodes.name
+    CHECKINS_TABLE                    = aws_dynamodb_table.checkins.name
+    BUSINESSES_TABLE                  = aws_dynamodb_table.businesses.name
+    APP_DATA_TABLE                    = aws_dynamodb_table.app_data.name
+    AREA_CODE_CAMPAIGN_SEND_QUEUE_URL = module.sqs_campaign_send.queue_url
+  }
+}
+
+# Win-back campaign sender Lambda — SQS-triggered worker; delivers one batch via
+# push (existing push-sender queue) and/or email (SES), and writes one
+# anonymized send record per recipient. (Mirrors the reports generator pattern.)
+module "lambda_campaign_sender" {
+  source                 = "../../modules/lambda"
+  env                    = local.env
+  function_name          = "campaign-sender"
+  timeout                = 120
+  memory_size            = 512
+  lambda_in_vpc          = true
+  vpc_subnet_ids         = module.vpc.private_subnet_ids
+  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  environment_variables = {
+    AREA_CODE_ENV                = local.env
+    USERS_TABLE                  = aws_dynamodb_table.users.name
+    BUSINESSES_TABLE             = aws_dynamodb_table.businesses.name
+    APP_DATA_TABLE               = aws_dynamodb_table.app_data.name
+    AREA_CODE_SQS_PUSH_QUEUE_URL = module.sqs_push_sender.queue_url
   }
 }
 
@@ -907,6 +954,118 @@ resource "aws_iam_role_policy" "report_generator_websocket" {
   })
 }
 
+# Lambda IAM: campaign-dispatcher -> DynamoDB (read users/nodes/checkins/businesses, read+write app-data for counts/quota/freq-cap)
+resource "aws_iam_role_policy" "campaign_dispatcher_dynamodb" {
+  name = "dynamodb-access"
+  role = module.lambda_campaign_dispatcher.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+      ]
+      Resource = [
+        aws_dynamodb_table.users.arn,
+        "${aws_dynamodb_table.users.arn}/index/*",
+        aws_dynamodb_table.nodes.arn,
+        "${aws_dynamodb_table.nodes.arn}/index/*",
+        aws_dynamodb_table.checkins.arn,
+        "${aws_dynamodb_table.checkins.arn}/index/*",
+        aws_dynamodb_table.businesses.arn,
+        "${aws_dynamodb_table.businesses.arn}/index/*",
+        aws_dynamodb_table.app_data.arn,
+        "${aws_dynamodb_table.app_data.arn}/index/*"
+      ]
+    }]
+  })
+}
+
+# Lambda IAM: campaign-dispatcher -> SQS send (campaign-send queue)
+resource "aws_iam_role_policy" "campaign_dispatcher_sqs_send" {
+  name = "sqs-send"
+  role = module.lambda_campaign_dispatcher.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["sqs:SendMessage"]
+      Resource = [module.sqs_campaign_send.queue_arn]
+    }]
+  })
+}
+
+# Lambda IAM: campaign-sender -> DynamoDB (read users/businesses, read+write app-data for send records + freq-cap)
+resource "aws_iam_role_policy" "campaign_sender_dynamodb" {
+  name = "dynamodb-access"
+  role = module.lambda_campaign_sender.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:Query",
+        "dynamodb:BatchGetItem"
+      ]
+      Resource = [
+        aws_dynamodb_table.users.arn,
+        "${aws_dynamodb_table.users.arn}/index/*",
+        aws_dynamodb_table.businesses.arn,
+        "${aws_dynamodb_table.businesses.arn}/index/*",
+        aws_dynamodb_table.app_data.arn,
+        "${aws_dynamodb_table.app_data.arn}/index/*"
+      ]
+    }]
+  })
+}
+
+# Lambda IAM: campaign-sender -> SQS receive/delete (campaign-send queue) + send (push-sender queue)
+resource "aws_iam_role_policy" "campaign_sender_sqs" {
+  name = "sqs-access"
+  role = module.lambda_campaign_sender.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+        Resource = [module.sqs_campaign_send.queue_arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"]
+        Resource = [module.sqs_push_sender.queue_arn]
+      }
+    ]
+  })
+}
+
+# Lambda IAM: campaign-sender -> SES (campaign email delivery)
+resource "aws_iam_role_policy" "campaign_sender_ses" {
+  name = "ses-send"
+  role = module.lambda_campaign_sender.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ses:SendEmail", "ses:SendRawEmail"]
+      Resource = "*"
+    }]
+  })
+}
+
 # Lambda IAM: API Lambda -> Cognito
 resource "aws_iam_role_policy" "api_cognito" {
   name = "cognito-access"
@@ -970,6 +1129,21 @@ resource "aws_iam_role_policy" "api_sqs_send" {
       Effect   = "Allow"
       Action   = ["sqs:SendMessage"]
       Resource = [module.sqs_reward_eval.queue_arn, module.sqs_push_sender.queue_arn]
+    }]
+  })
+}
+
+# Lambda IAM: API -> campaign-dispatcher async invoke (win-back send-now)
+resource "aws_iam_role_policy" "api_invoke_campaign_dispatcher" {
+  name = "invoke-campaign-dispatcher"
+  role = module.lambda_api.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["lambda:InvokeFunction"]
+      Resource = [module.lambda_campaign_dispatcher.function_arn]
     }]
   })
 }
@@ -1041,6 +1215,17 @@ module "sqs_report_generation" {
   visibility_timeout    = 150
   max_receive_count     = 2
   lambda_function_arn   = module.lambda_report_generator.function_arn
+  enable_lambda_mapping = true
+}
+
+# Win-back campaign-send queue — dispatcher publishes batches, sender consumes.
+module "sqs_campaign_send" {
+  source                = "../../modules/sqs"
+  env                   = local.env
+  queue_name            = "campaign-send"
+  visibility_timeout    = 150
+  max_receive_count     = 2
+  lambda_function_arn   = module.lambda_campaign_sender.function_arn
   enable_lambda_mapping = true
 }
 

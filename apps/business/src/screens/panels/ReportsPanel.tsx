@@ -19,6 +19,7 @@ import {
 } from 'recharts'
 
 import { api } from '@area-code/shared/lib/api'
+import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 
 /* ------------------------------------------------------------------ */
 /*  Types matching backend Report / TeaserReport                      */
@@ -516,6 +517,20 @@ function TeaserView({ report }: { report: TeaserReport }) {
 /* ------------------------------------------------------------------ */
 
 function FullReportView({ report }: { report: FullReport }) {
+  const setPanel = useBusinessStore((s) => s.setPanel)
+  const setCampaignPrefill = useBusinessStore((s) => s.setCampaignPrefill)
+
+  function startWinBack(recommendationText: string) {
+    setCampaignPrefill({
+      segment: 'lapsed',
+      nodeIds: [],
+      title: 'We miss you',
+      body: recommendationText,
+      reportId: report.reportId,
+    })
+    setPanel('campaigns')
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {/* Summary cards */}
@@ -556,11 +571,21 @@ function FullReportView({ report }: { report: FullReport }) {
           <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">Recommendations</h3>
           <ol className="flex flex-col gap-2">
             {report.recommendations.recommendations.map((rec, i) => (
-              <li key={i} className="flex flex-row items-start gap-2">
-                <span className="w-5 h-5 rounded-full bg-[var(--bg-raised)] flex items-center justify-center text-xs text-[var(--text-secondary)] flex-shrink-0 mt-0.5">
-                  {i + 1}
-                </span>
-                <span className="text-[var(--text-primary)] text-sm">{rec.text}</span>
+              <li key={i} className="flex flex-col gap-1.5">
+                <div className="flex flex-row items-start gap-2">
+                  <span className="w-5 h-5 rounded-full bg-[var(--bg-raised)] flex items-center justify-center text-xs text-[var(--text-secondary)] flex-shrink-0 mt-0.5">
+                    {i + 1}
+                  </span>
+                  <span className="text-[var(--text-primary)] text-sm">{rec.text}</span>
+                </div>
+                {rec.type === 'retention' && (
+                  <button
+                    onClick={() => startWinBack(rec.text)}
+                    className="self-start ml-7 text-xs font-medium text-[var(--accent)] border border-[var(--accent)]/30 rounded-lg px-3 py-1.5 transition-all active:scale-95"
+                  >
+                    Create win-back campaign →
+                  </button>
+                )}
               </li>
             ))}
           </ol>

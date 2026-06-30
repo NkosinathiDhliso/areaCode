@@ -265,6 +265,12 @@ export const campaignIdParamsSchema = z.object({
  */
 export const campaignOptOutBodySchema = z.object({
   businessId: z.string().min(1).optional(),
+  /**
+   * `true` (default) opts out; `false` opts back in by removing the opt-out row
+   * (POPIA: opting out is reversible). Applies to the same scope `businessId`
+   * resolves (a single business, or all businesses when omitted).
+   */
+  optOut: z.boolean().optional().default(true),
 })
 
 /**

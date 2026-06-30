@@ -35,20 +35,30 @@ export function FirstGetIssuer() {
   const [phase, setPhase] = useState<Phase>('idle')
   const [issued, setIssued] = useState<IssuedToken | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
-  useEffect(() => {
+  function load() {
     let cancelled = false
+    setLoadError(false)
     void api
       .get<{ reward: FirstGet | null }>('/v1/staff/first-get')
       .then((res) => {
+        // A 200 with reward:null is the genuine "venue hasn't set one up" case.
         if (!cancelled) setReward(res.reward)
       })
       .catch(() => {
-        // Silent - venue hasn't set one up
+        // A real fetch failure is NOT the same as "no reward" — surface it so
+        // the First-Get tool isn't silently missing on a transient error.
+        if (!cancelled) setLoadError(true)
       })
     return () => {
       cancelled = true
     }
+  }
+
+  useEffect(() => {
+    const cleanup = load()
+    return cleanup
   }, [])
 
   async function handleIssue() {
@@ -108,7 +118,23 @@ export function FirstGetIssuer() {
     setError(null)
   }
 
-  if (!reward) return null
+  // Genuine empty (no reward configured) renders nothing. A load failure shows
+  // a small retriable notice so staff know the tool exists but failed to load.
+  if (!reward) {
+    if (loadError) {
+      return (
+        <section className="px-5 pt-2 pb-3">
+          <button
+            onClick={() => load()}
+            className="w-full bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-3 text-[var(--text-muted)] text-xs text-center"
+          >
+            Couldn&apos;t load the first-time reward. Tap to retry.
+          </button>
+        </section>
+      )
+    }
+    return null
+  }
 
   return (
     <section className="px-5 pt-2 pb-3" data-testid="first-get-issuer">

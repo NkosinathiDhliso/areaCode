@@ -3,8 +3,10 @@
 // Storage reuses the existing `app-data` table (pk/sk + GSI1) and the `users`
 // table — no new tables or GSIs (Constraint C4). No phone number is read,
 // written, or required anywhere in this module (Constraint C1).
-import { BatchGetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
+import { BatchGetCommand, DeleteCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
+
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
+
 import type { Campaign, CampaignCounts, CampaignSendRecord, ChannelOutcome } from './types.js'
 
 // ============================================================================
@@ -83,6 +85,24 @@ export async function putOptOut(userId: string, businessId: string | 'ALL'): Pro
         pk: `COPTOUT#${userId}`,
         sk: `COPTOUT#${target}`,
         optedOutAt: new Date().toISOString(),
+      },
+    }),
+  )
+}
+
+/**
+ * Remove an opt-out row, opting the consumer BACK IN to campaigns from that
+ * business (or globally with `'ALL'`). POPIA: opting out is reversible by the
+ * consumer at any time. Idempotent — deleting an absent row is a no-op.
+ */
+export async function removeOptOut(userId: string, businessId: string | 'ALL'): Promise<void> {
+  const target = businessId === OPTOUT_GLOBAL ? OPTOUT_GLOBAL : businessId
+  await documentClient.send(
+    new DeleteCommand({
+      TableName: TableNames.appData,
+      Key: {
+        pk: `COPTOUT#${userId}`,
+        sk: `COPTOUT#${target}`,
       },
     }),
   )

@@ -1,10 +1,13 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { requireBusinessPermission, getBusinessRole } from '../../shared/middleware/business-role.js'
 import { validate } from '../../shared/middleware/validation.js'
 import { findBusinessById } from '../business/repository.js'
 import { getEffectiveTier } from '../business/service.js'
+
+import { putOptOut, removeOptOut, getOptOuts } from './repository.js'
 import {
   createCampaign,
   listCampaigns,
@@ -14,8 +17,6 @@ import {
   cancelCampaign,
 } from './service.js'
 import { assertCanSendCampaigns } from './tier-gating.js'
-import { putOptOut } from './repository.js'
-import { verifyUnsubscribeToken } from './unsubscribe.js'
 import {
   createCampaignBodySchema,
   sendCampaignBodySchema,
@@ -31,6 +32,7 @@ import type {
   CampaignOptOutBody,
   UnsubscribeQuery,
 } from './types.js'
+import { verifyUnsubscribeToken } from './unsubscribe.js'
 
 // ============================================================================
 // Win-Back Campaigns — Campaign API Routes (task 8.2)
@@ -254,14 +256,31 @@ export async function campaignConsumerRoutes(app: FastifyInstance) {
       const auth = getAuth(request)
       const body = request.body as CampaignOptOutBody
 
-      // Omitting businessId = global opt-out across every business.
-      if (body.businessId) {
-        await putOptOut(auth.userId, body.businessId)
-        return { optedOut: true, scope: body.businessId }
+      const scope = body.businessId ?? 'ALL'
+
+      // optOut:false opts the consumer back in (removes the row); the default
+      // optOut:true writes the opt-out. Both honour the resolved scope.
+      if (body.optOut === false) {
+        await removeOptOut(auth.userId, scope)
+        return { optedOut: false, scope: body.businessId ?? ('all' as const) }
       }
 
-      await putOptOut(auth.userId, 'ALL')
-      return { optedOut: true, scope: 'all' as const }
+      await putOptOut(auth.userId, scope)
+      return { optedOut: true, scope: body.businessId ?? ('all' as const) }
+    },
+  )
+
+  // GET /v1/users/me/campaign-optout — read the consumer's global opt-out
+  // status so the in-app preference toggle can reflect the persisted state.
+  app.get(
+    '/v1/users/me/campaign-optout',
+    {
+      preHandler: [requireAuth('consumer')],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      const state = await getOptOuts(auth.userId)
+      return { optedOut: state.global, businessIds: state.businessIds }
     },
   )
 

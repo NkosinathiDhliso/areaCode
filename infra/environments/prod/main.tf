@@ -750,6 +750,8 @@ module "lambda_api" {
     AREA_CODE_SQS_PUSH_QUEUE_URL            = module.sqs_push_sender.queue_url
     AREA_CODE_CONSENT_VERSION               = "v1.0"
     AREA_CODE_ANONYMIZATION_SALT            = var.anonymization_salt
+    # Win-back campaigns: the API async-invokes this dispatcher on send-now.
+    AREA_CODE_CAMPAIGN_DISPATCHER_FUNCTION = module.lambda_campaign_dispatcher.function_name
     # HMAC secret used for QR codes AND Spotify OAuth state signing
     AREA_CODE_QR_HMAC_SECRET = data.aws_secretsmanager_secret_version.qr_hmac.secret_string
     # Spotify OAuth — supplied via TF variables (terraform.tfvars or TF_VAR_*)
@@ -899,6 +901,47 @@ module "lambda_report_generator" {
     AREA_CODE_REPORT_QUEUE_URL   = module.sqs_report_generation.queue_url
     AREA_CODE_SQS_PUSH_QUEUE_URL = module.sqs_push_sender.queue_url
     AREA_CODE_ANONYMIZATION_SALT = var.anonymization_salt
+  }
+}
+
+# Win-back campaign dispatcher Lambda — async-invoked by the API on send-now;
+# resolves the segment, applies consent/opt-out + frequency-cap + quota filters,
+# then fans batches of <=100 recipients out to the campaign-send queue.
+module "lambda_campaign_dispatcher" {
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "campaign-dispatcher"
+  timeout       = 60
+  memory_size   = 512
+  environment_variables = {
+    AREA_CODE_ENV                     = local.env
+    USERS_TABLE                       = aws_dynamodb_table.users.name
+    NODES_TABLE                       = aws_dynamodb_table.nodes.name
+    CHECKINS_TABLE                    = aws_dynamodb_table.checkins.name
+    BUSINESSES_TABLE                  = aws_dynamodb_table.businesses.name
+    APP_DATA_TABLE                    = aws_dynamodb_table.app_data.name
+    AREA_CODE_CAMPAIGN_SEND_QUEUE_URL = module.sqs_campaign_send.queue_url
+  }
+}
+
+# Win-back campaign sender Lambda — SQS-triggered worker; delivers one batch via
+# push (existing push-sender queue) and/or email (SES), writing one anonymized
+# send record per recipient. Shares the QR HMAC secret so the unsubscribe tokens
+# it signs verify against the API's unsubscribe route.
+module "lambda_campaign_sender" {
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "campaign-sender"
+  timeout       = 120
+  memory_size   = 512
+  environment_variables = {
+    AREA_CODE_ENV                = local.env
+    USERS_TABLE                  = aws_dynamodb_table.users.name
+    BUSINESSES_TABLE             = aws_dynamodb_table.businesses.name
+    APP_DATA_TABLE               = aws_dynamodb_table.app_data.name
+    AREA_CODE_SQS_PUSH_QUEUE_URL = module.sqs_push_sender.queue_url
+    AREA_CODE_API_BASE_URL       = "https://api.areacode.co.za"
+    AREA_CODE_QR_HMAC_SECRET     = data.aws_secretsmanager_secret_version.qr_hmac.secret_string
   }
 }
 
@@ -1096,6 +1139,17 @@ module "sqs_report_generation" {
   enable_lambda_mapping = true
 }
 
+# Win-back campaign-send queue — dispatcher publishes batches, sender consumes.
+module "sqs_campaign_send" {
+  source                = "../../modules/sqs"
+  env                   = local.env
+  queue_name            = "campaign-send"
+  visibility_timeout    = 150
+  max_receive_count     = 2
+  lambda_function_arn   = module.lambda_campaign_sender.function_arn
+  enable_lambda_mapping = true
+}
+
 # --- Lambda IAM: API + check-in -> SQS send ---
 resource "aws_iam_role_policy" "api_sqs_send" {
   name = "sqs-send"
@@ -1152,6 +1206,130 @@ resource "aws_iam_role_policy" "api_ses_send" {
         "ses:SendRawEmail"
       ]
       Resource = "*"
+    }]
+  })
+}
+
+# --- Lambda IAM: campaign-dispatcher -> DynamoDB + SQS send ---
+resource "aws_iam_role_policy" "campaign_dispatcher_dynamodb" {
+  name = "dynamodb-access"
+  role = module.lambda_campaign_dispatcher.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+      ]
+      Resource = [
+        aws_dynamodb_table.users.arn,
+        "${aws_dynamodb_table.users.arn}/index/*",
+        aws_dynamodb_table.nodes.arn,
+        "${aws_dynamodb_table.nodes.arn}/index/*",
+        aws_dynamodb_table.checkins.arn,
+        "${aws_dynamodb_table.checkins.arn}/index/*",
+        aws_dynamodb_table.businesses.arn,
+        "${aws_dynamodb_table.businesses.arn}/index/*",
+        aws_dynamodb_table.app_data.arn,
+        "${aws_dynamodb_table.app_data.arn}/index/*"
+      ]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "campaign_dispatcher_sqs_send" {
+  name = "sqs-send"
+  role = module.lambda_campaign_dispatcher.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["sqs:SendMessage"]
+      Resource = [module.sqs_campaign_send.queue_arn]
+    }]
+  })
+}
+
+# --- Lambda IAM: campaign-sender -> DynamoDB + SQS + SES ---
+resource "aws_iam_role_policy" "campaign_sender_dynamodb" {
+  name = "dynamodb-access"
+  role = module.lambda_campaign_sender.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:Query",
+        "dynamodb:BatchGetItem"
+      ]
+      Resource = [
+        aws_dynamodb_table.users.arn,
+        "${aws_dynamodb_table.users.arn}/index/*",
+        aws_dynamodb_table.businesses.arn,
+        "${aws_dynamodb_table.businesses.arn}/index/*",
+        aws_dynamodb_table.app_data.arn,
+        "${aws_dynamodb_table.app_data.arn}/index/*"
+      ]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "campaign_sender_sqs" {
+  name = "sqs-access"
+  role = module.lambda_campaign_sender.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+        Resource = [module.sqs_campaign_send.queue_arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"]
+        Resource = [module.sqs_push_sender.queue_arn]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "campaign_sender_ses" {
+  name = "ses-send"
+  role = module.lambda_campaign_sender.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ses:SendEmail", "ses:SendRawEmail"]
+      Resource = "*"
+    }]
+  })
+}
+
+# --- Lambda IAM: API -> campaign-dispatcher async invoke (win-back send-now) ---
+resource "aws_iam_role_policy" "api_invoke_campaign_dispatcher" {
+  name = "invoke-campaign-dispatcher"
+  role = module.lambda_api.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["lambda:InvokeFunction"]
+      Resource = [module.lambda_campaign_dispatcher.function_arn]
     }]
   })
 }
