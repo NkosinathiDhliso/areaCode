@@ -19,7 +19,7 @@
 // Bump CACHE_VERSION whenever the precache list or strategy changes so old
 // caches are cleared on activate.
 
-const CACHE_VERSION = 'v1'
+const CACHE_VERSION = 'v2'
 const CACHE_NAME = `area-code-${CACHE_VERSION}`
 
 // The minimal shell needed for a cold offline boot. Hashed JS/CSS bundles are
