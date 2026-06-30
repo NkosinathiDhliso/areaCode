@@ -121,19 +121,25 @@ const ATMOSPHERE: Record<ThemeMode, AtmosphereConfig> = {
     buildingTopColor: '#3a4d78',
     buildingOpacity: 0.95,
     buildingVerticalScale: 1.45,
-    buildingEmissiveStrength: 0.45,
+    // Towers read as dark mass with a subtle self-glow, not lit panels.
+    buildingEmissiveStrength: 0.3,
     ambientOcclusionIntensity: 0.5,
     ambientOcclusionRadius: 3.5,
     floodLightColor: '#3d5a99',
-    floodLightIntensity: 0.4,
-    skyAtmosphereColor: 'rgba(70, 100, 150, 1)',
-    skyAtmosphereHaloColor: 'rgba(180, 210, 235, 0.85)',
+    floodLightIntensity: 0.3,
+    // Night sky: a dim slate dome (proven dark values), not a bright daytime
+    // blue. The sun intensity drives most of the sky brightness, so it stays
+    // low - a high value here was what washed dark mode out at country zoom.
+    skyAtmosphereColor: 'rgba(85, 110, 145, 1)',
+    skyAtmosphereHaloColor: 'rgba(150, 180, 210, 0.6)',
     skyAtmosphereSun: [25, 88],
-    skyAtmosphereSunIntensity: 8,
+    skyAtmosphereSunIntensity: 4,
+    // Scene lights stay dim in dark mode: enough directional rake to keep the
+    // skyline 3D, not enough to light the city up like day.
     ambientLightColor: '#9fb4d8',
-    ambientLightIntensity: 0.55,
+    ambientLightIntensity: 0.4,
     directionalLightColor: '#dfe8ff',
-    directionalLightIntensity: 0.85,
+    directionalLightIntensity: 0.6,
     directionalLightDirection: [215, 30],
   },
   light: {
@@ -170,11 +176,6 @@ const ATMOSPHERE: Record<ThemeMode, AtmosphereConfig> = {
 const TERRAIN_SOURCE_ID = 'mapbox-dem'
 const SKY_LAYER_ID = 'sky-atmosphere'
 const BUILDING_LAYER_ID = '3d-buildings'
-
-function prefersReducedMotion(): boolean {
-  if (typeof window === 'undefined' || !window.matchMedia) return false
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
-}
 
 /**
  * Mapbox GL renders its attribution and logo as real `<a>` links in the map
