@@ -27,10 +27,38 @@ const USER_VIEW_ZOOM = 10
 /** Fallback zoom for `getZoom()` if the live map read throws. */
 const DEFAULT_ZOOM = 13
 // Steeper default pitch so the skyline reads tall and the shadows rake across
-// the city - the core of the "4D" depth feel.
+// the city - the core of the "4D" depth feel. This is the OVERVIEW pitch used
+// at low/mid zoom (the "seeing nodes & buildings from the side" horizon view).
 const PITCH_3D = 62
 const PITCH_FLAT = 0
 const BEARING_3D = -20
+
+// ── Street-level immersion (zoom-driven pitch ramp) ──
+// As the consumer zooms into a venue the camera tilts up toward the horizon so
+// buildings loom around them - the "dolly down to where you'd be standing"
+// feel, like Google Maps tipping toward Street View. Pitch is a pure function
+// of zoom: flat-ish overview when far out, near-ground when zoomed in.
+/** Near-ground pitch reached at street zoom. Kept under mapbox's 85° cap. */
+const PITCH_STREET = 80
+/** Below this zoom the camera holds the overview pitch ({@link PITCH_3D}). */
+const PITCH_RAMP_START_ZOOM = 13.5
+/** At/above this zoom the camera holds {@link PITCH_STREET}. */
+const PITCH_RAMP_END_ZOOM = 17.5
+/** Mapbox hard cap on pitch; we set it explicitly so the ramp can reach high. */
+const MAX_PITCH = 85
+
+/**
+ * Target camera pitch for a given zoom - a linear ramp from the overview pitch
+ * ({@link PITCH_3D}) up to {@link PITCH_STREET} across the
+ * [{@link PITCH_RAMP_START_ZOOM}, {@link PITCH_RAMP_END_ZOOM}] band. Pure and
+ * total so it can be reasoned about and reused without a live map.
+ */
+function pitchForZoom(zoom: number): number {
+  if (!Number.isFinite(zoom) || zoom <= PITCH_RAMP_START_ZOOM) return PITCH_3D
+  if (zoom >= PITCH_RAMP_END_ZOOM) return PITCH_STREET
+  const t = (zoom - PITCH_RAMP_START_ZOOM) / (PITCH_RAMP_END_ZOOM - PITCH_RAMP_START_ZOOM)
+  return PITCH_3D + t * (PITCH_STREET - PITCH_3D)
+}
 
 type ThemeMode = 'light' | 'dark'
 
@@ -415,6 +443,13 @@ export function useMapInit() {
   const [mapError, setMapError] = useState<string | null>(null)
   const [is3D, setIs3D] = useState(true)
   const [bearing, setBearing] = useState(BEARING_3D)
+  // Live mirror of `is3D` for the zoom handler (which closes over its initial
+  // value). When flat, the zoom-driven pitch ramp is suspended.
+  const is3DRef = useRef(is3D)
+  is3DRef.current = is3D
+  // True while the user is mid two-finger pitch gesture, so the auto pitch
+  // ramp does not fight a deliberate manual tilt.
+  const manualPitchRef = useRef(false)
 
   /**
    * No-op retained for MapControls API compatibility (drift removed).
@@ -428,8 +463,17 @@ export function useMapInit() {
     const map = mapRef.current
     if (!map) return
     try {
+      // When re-enabling 3D, tilt to the pitch that matches the current zoom
+      // (street-level if zoomed in, overview if far out) rather than a fixed
+      // angle, so the toggle is consistent with the zoom-driven ramp.
+      let targetPitch = PITCH_3D
+      try {
+        targetPitch = pitchForZoom(map.getZoom())
+      } catch {
+        /* fall back to overview pitch */
+      }
       map.easeTo({
-        pitch: on ? PITCH_3D : PITCH_FLAT,
+        pitch: on ? targetPitch : PITCH_FLAT,
         bearing: on ? BEARING_3D : 0,
         duration: 800,
       })
@@ -558,6 +602,8 @@ export function useMapInit() {
         projection: 'globe' as unknown as mapboxgl.ProjectionSpecification,
         // Prevent zooming out past a meaningful regional overview.
         minZoom: 4,
+        // Allow the zoom-driven pitch ramp to reach near-ground street level.
+        maxPitch: MAX_PITCH,
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
@@ -575,6 +621,33 @@ export function useMapInit() {
       } catch {
         /* ignore */
       }
+    })
+
+    // ── Street-level immersion: zoom-driven pitch ramp ──
+    // On every zoom change, tilt the camera toward the horizon as the consumer
+    // zooms in (and back toward the overview as they zoom out), so diving into
+    // a venue feels like dropping to where you'd be standing. setPitch tracks
+    // the gradual zoom smoothly and does not emit 'zoom', so there is no loop.
+    // Suspended in flat mode and while the user is manually pitching.
+    const applyZoomPitch = () => {
+      if (!is3DRef.current || manualPitchRef.current) return
+      try {
+        const target = pitchForZoom(map.getZoom())
+        if (Math.abs(map.getPitch() - target) > 0.4) {
+          map.setPitch(target)
+        }
+      } catch {
+        /* pitch is cosmetic - fail open */
+      }
+    }
+    map.on('zoom', applyZoomPitch)
+    // Only a real user gesture carries originalEvent; our own setPitch does not.
+    // Flag manual pitch so the ramp yields to a deliberate two-finger tilt.
+    map.on('pitchstart', (e) => {
+      if ((e as { originalEvent?: unknown }).originalEvent) manualPitchRef.current = true
+    })
+    map.on('pitchend', () => {
+      manualPitchRef.current = false
     })
 
     // Handle map errors gracefully

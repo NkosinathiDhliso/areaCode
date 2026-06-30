@@ -75,25 +75,40 @@ export function useTheme() {
     return 'auto'
   })
 
-  const resolved = resolveTheme(preference)
+  // `resolved` is React state, not a per-render derivation. The auto day/night
+  // transition fires from a `setInterval` (no user interaction, no other state
+  // change), so it MUST push into state to re-render consumers. A previously
+  // derived `resolved = resolveTheme(preference)` only updated the DOM from the
+  // interval and left React unaware - so the map (which swaps its basemap style
+  // off `resolved`) stayed on the light style after the 18:00 SAST flip even
+  // though the CSS chrome went dark. Keeping it in state fixes that.
+  const [resolved, setResolved] = useState<ResolvedTheme>(() => resolveTheme(preference))
 
   const setPreference = useCallback((pref: ThemePreference) => {
     setPreferenceState(pref)
     storage.set(STORAGE_KEY, pref)
-    applyTheme(resolveTheme(pref))
+    const next = resolveTheme(pref)
+    setResolved(next)
+    applyTheme(next)
   }, [])
 
-  // Apply theme on mount and when preference changes
+  // Keep `resolved` and the DOM in sync whenever the preference changes.
   useEffect(() => {
-    applyTheme(resolved)
-  }, [resolved])
+    const next = resolveTheme(preference)
+    setResolved(next)
+    applyTheme(next)
+  }, [preference])
 
-  // Re-evaluate every 60s when on 'auto' to catch day/night transitions
+  // Re-evaluate every 60s when on 'auto' to catch day/night transitions. This
+  // updates state (not just the DOM) so every consumer - the map included -
+  // re-renders and reacts to the flip.
   useEffect(() => {
     if (preference !== 'auto') return
 
     const interval = setInterval(() => {
-      applyTheme(resolveTheme('auto'))
+      const next = resolveTheme('auto')
+      setResolved(next)
+      applyTheme(next)
     }, 60_000)
 
     return () => clearInterval(interval)
