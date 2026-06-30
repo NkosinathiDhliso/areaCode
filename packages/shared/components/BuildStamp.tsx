@@ -1,25 +1,76 @@
+import { useEffect, useRef, useState } from 'react'
+
 declare const __APP_BUILD_ID__: string | undefined
 
 /**
- * On-device build stamp for diagnosing stale installs. The id is injected at
- * build time via each app's vite `define` (__APP_BUILD_ID__): commit hash plus
- * UTC build time. Fixed, dim, and non-interactive so it never blocks UI. Read
- * it on the device to confirm which build is actually running; remove this once
- * stale-build debugging is done.
+ * On-device build + safe-area diagnostic for stale-install and home-indicator
+ * debugging. Shows the build id (commit hash + UTC build time, injected via the
+ * per-app vite `define` __APP_BUILD_ID__), the live measured safe-area insets
+ * (top/bottom in px), and the display mode (pwa = installed standalone, tab =
+ * browser).
+ *
+ * Why measure insets instead of trusting the CSS: on iOS the WebView can report
+ * env(safe-area-inset-bottom) as 0 in standalone after a close/reopen or SPA
+ * navigation, which is exactly what collapses a bottom bar and exposes the
+ * home-indicator strip. Reading the real number on the device tells us whether
+ * iOS is giving us the 34px inset at all. Fixed, dim, non-interactive. Remove
+ * once this is resolved.
  */
 export function BuildStamp() {
   const id = typeof __APP_BUILD_ID__ === 'string' ? __APP_BUILD_ID__ : 'dev'
+  const topProbe = useRef<HTMLDivElement>(null)
+  const bottomProbe = useRef<HTMLDivElement>(null)
+  const [insets, setInsets] = useState({ top: 0, bottom: 0 })
+
+  useEffect(() => {
+    const measure = () => {
+      setInsets({
+        top: topProbe.current?.offsetHeight ?? 0,
+        bottom: bottomProbe.current?.offsetHeight ?? 0,
+      })
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    window.addEventListener('orientationchange', measure)
+    window.visualViewport?.addEventListener('resize', measure)
+    return () => {
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('orientationchange', measure)
+      window.visualViewport?.removeEventListener('resize', measure)
+    }
+  }, [])
+
+  const standalone =
+    typeof window !== 'undefined' &&
+    (window.matchMedia?.('(display-mode: standalone)').matches ||
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true)
+
+  // Hidden probes: their height resolves to the env() inset, which we read back
+  // in px. position:fixed so they map to the real viewport edges.
+  const probeStyle = {
+    position: 'fixed' as const,
+    left: 0,
+    width: 0,
+    visibility: 'hidden' as const,
+    pointerEvents: 'none' as const,
+  }
+
   return (
-    <div
-      aria-hidden="true"
-      className="fixed left-1 top-0 z-[9998] pointer-events-none select-none font-mono text-[9px] leading-none"
-      style={{
-        color: 'var(--text-muted)',
-        opacity: 0.45,
-        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 2px)',
-      }}
-    >
-      {id}
-    </div>
+    <>
+      <div ref={topProbe} style={{ ...probeStyle, top: 0, height: 'env(safe-area-inset-top, 0px)' }} />
+      <div ref={bottomProbe} style={{ ...probeStyle, bottom: 0, height: 'env(safe-area-inset-bottom, 0px)' }} />
+      <div
+        aria-hidden="true"
+        className="fixed left-1 top-0 z-[9998] select-none font-mono text-[9px] leading-none"
+        style={{
+          color: 'var(--text-muted)',
+          opacity: 0.5,
+          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 2px)',
+          pointerEvents: 'none',
+        }}
+      >
+        {id} · sa b{insets.bottom} t{insets.top} · {standalone ? 'pwa' : 'tab'}
+      </div>
+    </>
   )
 }
