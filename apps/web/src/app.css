@@ -10,19 +10,37 @@
 /* ── Base styles ──────────────────────────────────────────────────────── */
 @layer base {
   html,
-  body,
-  #root {
-    /* Single height authority for the whole app. #root owns the viewport
-       height; every descendant (the flex shell, the nav) fills it with %, so
-       nothing else computes a viewport unit independently and there is no
-       second source of truth to disagree about where the bottom is. 100vh is
-       the fallback for ancient WebKit; 100dvh wins on modern iOS/Chrome. */
+  body {
+    /* Full-screen backstop layer. 100vh is the fallback for ancient WebKit;
+       100dvh wins on modern iOS/Chrome. This only paints the background; #root
+       below is the real layout authority. */
     height: 100vh;
     height: 100dvh;
     margin: 0;
     padding: 0;
     /* Solid backstop so the home-indicator strip can never flash the
        standalone webview's black backing if a hairline of viewport shows. */
+    background-color: var(--bg-base);
+  }
+
+  #root {
+    /* Single height authority for the whole app. Every descendant (the flex
+       shell, the nav) fills it with %, so nothing else computes a viewport unit
+       independently and there is no second source of truth about where the
+       bottom is.
+
+       Mechanism: position:fixed + inset:0, NOT height:100dvh. In an installed
+       (Add to Home Screen) standalone PWA, 100vh/100dvh stop at the top of the
+       home-indicator inset instead of the physical screen bottom, so a flex
+       column anchored to dvh leaves the bottom nav floating ~34px above the
+       indicator (the safe-area band then reads as a gap). A fixed box pinned to
+       inset:0 fills the true visual viewport including the safe area, so the nav
+       (with its own padding-bottom: var(--safe-area-bottom)) sits flush over the
+       indicator. */
+    position: fixed;
+    inset: 0;
+    margin: 0;
+    padding: 0;
     background-color: var(--bg-base);
   }
 
