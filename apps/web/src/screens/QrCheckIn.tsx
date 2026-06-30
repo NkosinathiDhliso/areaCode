@@ -130,12 +130,6 @@ export function QrCheckIn({ nodeId, token, onNavigate }: QrCheckInProps) {
             >
               {t('qr.signInCta', 'Sign in')}
             </button>
-            <button
-              onClick={() => onNavigate('signup')}
-              className="w-full border border-[var(--border)] text-[var(--text-primary)] font-semibold rounded-xl py-3 text-sm"
-            >
-              {t('qr.signUpCta', 'Create an account')}
-            </button>
           </>
         )}
 

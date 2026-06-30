@@ -12,9 +12,9 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { api } from '@area-code/shared/lib/api'
 import { Spinner } from '@area-code/shared/components/Spinner'
 
+import { cleanFirstGetToken, isCompleteFirstGetToken, redeemFirstGetToken } from '../lib/firstGetToken'
 import type { AppRoute } from '../types'
 
 interface FirstGetPromptProps {
@@ -27,20 +27,15 @@ export function FirstGetPrompt({ onNavigate }: FirstGetPromptProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  function clean(input: string): string {
-    return input.toUpperCase().replace(/[^0-9A-HJKMNP-TV-Z]/g, '')
-  }
-
   async function handleSubmit() {
-    const t8 = token.trim().toUpperCase()
-    if (t8.length !== 8) {
+    if (!isCompleteFirstGetToken(token)) {
       setError(t('auth.firstGet.tokenInvalid', 'Codes are exactly 8 characters.'))
       return
     }
     setLoading(true)
     setError(null)
     try {
-      await api.post('/v1/users/me/redeem-guest-token', { token: t8 })
+      await redeemFirstGetToken(token)
       onNavigate('map')
     } catch {
       setError(t('auth.firstGet.tokenInvalid', "Couldn't apply that code. Check it with the venue or skip for now."))
@@ -70,7 +65,7 @@ export function FirstGetPrompt({ onNavigate }: FirstGetPromptProps) {
         <input
           type="text"
           value={token}
-          onChange={(e) => setToken(clean(e.target.value))}
+          onChange={(e) => setToken(cleanFirstGetToken(e.target.value))}
           onKeyDown={(e) => e.key === 'Enter' && !loading && void handleSubmit()}
           maxLength={8}
           placeholder="ABCD1234"

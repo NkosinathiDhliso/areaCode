@@ -170,12 +170,12 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
           </button>
           <button
             onClick={() => {
-              recordEvent('landing_cta_signup')
-              go('signup', '/signup')
+              recordEvent('landing_cta_signin')
+              go('login', '/login')
             }}
             className="flex-1 rounded-xl border border-[var(--border-strong)] bg-[var(--bg-surface)] py-3.5 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--accent)]"
           >
-            {t('landing.signUp', 'Sign Up')}
+            {t('landing.signIn', 'Sign In')}
           </button>
         </div>
 
@@ -264,9 +264,6 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
 
         {/* Bottom links */}
         <div className="mt-auto pt-8 flex flex-col items-center gap-2">
-          <button onClick={() => go('login', '/login')} className="text-sm text-[var(--accent)]">
-            {t('landing.hasAccount', 'Already have an account? Sign in')}
-          </button>
           <p className="text-[11px] text-[var(--text-muted)]">Cape Town · Johannesburg · Durban</p>
           {/*
             Legal footer.

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { BottomSheet } from '@area-code/shared/components/BottomSheet'
 
-type Route = 'map' | 'ranks' | 'feed' | 'profile' | 'login' | 'signup' | 'landing'
+type Route = 'map' | 'ranks' | 'feed' | 'profile' | 'login' | 'landing'
 
 interface SignupSheetProps {
   isOpen: boolean
@@ -36,20 +36,11 @@ export function SignupSheet({ isOpen, onClose, onNavigate }: SignupSheetProps) {
         <button
           onClick={() => {
             onClose()
-            onNavigate('signup')
+            onNavigate('login')
           }}
           className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95"
         >
-          {t('landing.signUp', 'Sign Up')}
-        </button>
-        <button
-          onClick={() => {
-            onClose()
-            onNavigate('login')
-          }}
-          className="text-[var(--text-secondary)] text-sm py-2 transition-colors hover:text-[var(--accent)]"
-        >
-          {t('landing.hasAccount', 'Already have an account? Sign in')}
+          {t('auth.signupSheet.cta', 'Sign in to continue')}
         </button>
       </div>
     </BottomSheet>

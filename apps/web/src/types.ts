@@ -10,7 +10,6 @@ export type AppRoute =
   | 'notification-settings'
   | 'history'
   | 'login'
-  | 'signup'
   | 'forgot-password'
   | 'landing'
   | 'first-get-prompt'

@@ -26,7 +26,6 @@ import { NotificationCenter } from './screens/NotificationCenter'
 import { NotificationSettings } from './screens/NotificationSettings'
 import { CheckInHistoryScreen } from './screens/CheckInHistoryScreen'
 import { ConsumerLogin } from './screens/ConsumerLogin'
-import { ConsumerSignup } from './screens/ConsumerSignup'
 import { ConsumerOAuthCallback } from './screens/ConsumerOAuthCallback'
 import { VerifyEmail } from './screens/VerifyEmail'
 import { AuthLanding } from './screens/AuthLanding'
@@ -55,7 +54,6 @@ api.setRefreshHandler({
 const ROUTE_PATHS: Record<AppRoute, string> = {
   landing: '/',
   login: '/login',
-  signup: '/signup',
   'forgot-password': '/forgot-password',
   'first-get-prompt': '/first-get-prompt',
   map: '/map',
@@ -73,7 +71,9 @@ const ROUTE_PATHS: Record<AppRoute, string> = {
 
 function pathToRoute(path: string): AppRoute {
   if (path === '/login') return 'login'
-  if (path === '/signup/consumer' || path === '/signup') return 'signup'
+  // The dedicated signup screen was consolidated into the single login entry
+  // (sign-in creates the account when none exists). Keep old links working.
+  if (path === '/signup/consumer' || path === '/signup') return 'login'
   if (path === '/forgot-password') return 'forgot-password'
   if (path === '/first-get-prompt') return 'first-get-prompt'
   if (path === '/map') return 'map'
@@ -314,7 +314,6 @@ function AppContent() {
             )}
             {activeRoute === 'landing' && !isAuthenticated && <AuthLanding onNavigate={setRoute} />}
             {activeRoute === 'login' && <ConsumerLogin onNavigate={setRoute} />}
-            {activeRoute === 'signup' && <ConsumerSignup onNavigate={setRoute} />}
             {activeRoute === 'forgot-password' && <ForgotPassword onNavigate={setRoute} />}
             {activeRoute === 'first-get-prompt' && <FirstGetPrompt onNavigate={setRoute} />}
             {activeRoute === 'ranks' && <LeaderboardScreen onNavigate={setRoute} />}
