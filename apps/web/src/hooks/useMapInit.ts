@@ -32,71 +32,104 @@ const BEARING_3D = -17
 
 type ThemeMode = 'light' | 'dark'
 
-const STYLE_URL: Record<ThemeMode, string> = {
-  dark: 'mapbox://styles/mapbox/dark-v11',
-  light: 'mapbox://styles/mapbox/light-v11',
-}
+/**
+ * Mapbox Standard (GL JS v3) is a single style serving both themes. Light and
+ * dark are no longer two separate basemaps swapped via `setStyle` - they are
+ * one style relit at runtime by the `lightPreset` config property (`day` vs
+ * `night`), which the theme-sync effect flips in place with no full reload.
+ *
+ * Standard provides, natively and GPU-optimised: dynamic lighting with real
+ * shadows + ambient occlusion, 3D buildings, modelled landmarks, 3D trees, and
+ * its own sky/atmosphere. That replaces the hand-rolled sky layer, fog, and
+ * `fill-extrusion` building layer the v2 dark/light styles needed. The only
+ * custom layer we still manage is terrain (Standard does not enable it itself).
+ */
+const STANDARD_STYLE = 'mapbox://styles/mapbox/standard'
 
-interface AtmosphereConfig {
-  fog: {
-    color: string
-    'high-color': string
-    'horizon-blend': number
-    'space-color': string
-    'star-intensity': number
-    range: [number, number]
-  }
-  buildingColor: string
-  buildingOpacity: number
-  // Sky paint values map to mapbox-gl's sky layer paint props
-  skyAtmosphereColor: string
-  skyAtmosphereHaloColor: string
-  skyAtmosphereSun: [number, number]
-  skyAtmosphereSunIntensity: number
-}
-
-const ATMOSPHERE: Record<ThemeMode, AtmosphereConfig> = {
-  dark: {
-    fog: {
-      color: '#0c1018',
-      'high-color': '#1a2030',
-      'horizon-blend': 0.04,
-      'space-color': '#05070b',
-      'star-intensity': 0.5,
-      range: [0.5, 12],
-    },
-    buildingColor: '#1c2536',
-    buildingOpacity: 0.78,
-    skyAtmosphereColor: 'rgba(85, 110, 145, 1)',
-    skyAtmosphereHaloColor: 'rgba(169, 203, 224, 0.7)',
-    skyAtmosphereSun: [0, 90],
-    skyAtmosphereSunIntensity: 4,
-  },
-  light: {
-    fog: {
-      color: '#e6ecf2',
-      'high-color': '#bccadb',
-      'horizon-blend': 0.06,
-      'space-color': '#cdd9e7',
-      'star-intensity': 0,
-      range: [0.6, 14],
-    },
-    buildingColor: '#d8d2c8',
-    buildingOpacity: 0.92,
-    skyAtmosphereColor: 'rgba(180, 200, 220, 1)',
-    skyAtmosphereHaloColor: 'rgba(220, 230, 240, 0.8)',
-    skyAtmosphereSun: [0, 80],
-    skyAtmosphereSunIntensity: 8,
-  },
+/** Resolved theme → Standard `lightPreset`. */
+const LIGHT_PRESET: Record<ThemeMode, 'day' | 'night'> = {
+  dark: 'night',
+  light: 'day',
 }
 
 const TERRAIN_SOURCE_ID = 'mapbox-dem'
-const SKY_LAYER_ID = 'sky-atmosphere'
-const BUILDING_LAYER_ID = '3d-buildings'
+
+/** Standard's import id, the namespace its config properties live under. */
+const BASEMAP_IMPORT_ID = 'basemap'
+
+/**
+ * `setConfigProperty` is GL JS v3 surface that the bundled mapbox-gl types do
+ * not always expose. Narrow to an optional method so calls are type-safe and
+ * degrade to a no-op rather than throwing if the runtime predates it.
+ */
+type MapWithConfig = mapboxgl.Map & {
+  setConfigProperty?: (importId: string, config: string, value: unknown) => void
+}
+
+interface BasemapConfig {
+  lightPreset: 'day' | 'night'
+  show3dObjects: boolean
+  showPointOfInterestLabels: boolean
+  showPlaceLabels: boolean
+  showRoadLabels: boolean
+  showTransitLabels: boolean
+}
+
+/**
+ * Standard `basemap` configuration. We render our own venue glyphs and beams,
+ * so Mapbox's own POI pins stay off (less clutter, less fill-rate); place and
+ * road labels stay on so the city still reads as a real place behind the
+ * constellation. `show3dObjects` is the heavy realism switch (buildings,
+ * landmarks, trees, shadows, AO) and is gated by {@link shouldEnable3dObjects}.
+ */
+function basemapConfig(theme: ThemeMode, show3d: boolean): BasemapConfig {
+  return {
+    lightPreset: LIGHT_PRESET[theme],
+    show3dObjects: show3d,
+    showPointOfInterestLabels: false,
+    showPlaceLabels: true,
+    showRoadLabels: true,
+    showTransitLabels: false,
+  }
+}
 
 function prefersReducedMotion(): boolean {
   if (typeof window === 'undefined' || !window.matchMedia) return false
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+/**
+ * Coarse low-end detection for phones. Deliberately conservative: only ≤3GB RAM
+ * or ≤2 logical cores counts as low-end, so genuine mid-range Androids (4GB+ /
+ * 4+ cores) still get the full 3D city. Used to decide whether the expensive
+ * shadow/ambient-occlusion pass of Standard's 3D objects is worth enabling.
+ */
+function isLowEndDevice(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory
+  const cores = navigator.hardwareConcurrency
+  if (typeof mem === 'number' && mem > 0 && mem <= 3) return true
+  if (typeof cores === 'number' && cores > 0 && cores <= 2) return true
+  return false
+}
+
+/**
+ * Whether to switch on Standard's full 3D objects at startup. Off when the user
+ * asked for reduced motion or on low-end hardware, where the shadow/AO pass is
+ * the most expensive part of each frame. The user can still force it on/off via
+ * the 3D toggle (`setPitch3D`).
+ */
+function shouldEnable3dObjects(): boolean {
+  return !prefersReducedMotion() && !isLowEndDevice()
+}
+
+/** Set a Standard `basemap` config property, no-op if unsupported. */
+function setBasemapConfig(map: mapboxgl.Map, key: string, value: unknown): void {
+  try {
+    ;(map as MapWithConfig).setConfigProperty?.(BASEMAP_IMPORT_ID, key, value)
+  } catch {
+    /* config is cosmetic - fail open */
+  }
 }
 
 /**
@@ -118,14 +151,13 @@ function suppressCtrlLinkFocus(container: HTMLElement): void {
 }
 
 /**
- * Re-applies every custom layer/source we manage. Called on initial style
- * load and on every subsequent style swap (theme switch).
+ * Adds the terrain DEM and enables real elevation so mountains and valleys lift
+ * off the map plane. Standard supplies its own sky/atmosphere, dynamic
+ * lighting, 3D buildings and landmarks via the `basemap` config, so terrain is
+ * the only custom layer we still hand-manage. Called on initial style load and
+ * on any future style swap.
  */
-function applyCustomLayers(map: mapboxgl.Map, theme: ThemeMode): void {
-  const cfg = ATMOSPHERE[theme]
-
-  // ── Terrain DEM source ──
-  // Adds real elevation so mountains & valleys lift off the map plane.
+function applyTerrain(map: mapboxgl.Map): void {
   try {
     if (!map.getSource(TERRAIN_SOURCE_ID)) {
       map.addSource(TERRAIN_SOURCE_ID, {
@@ -138,93 +170,6 @@ function applyCustomLayers(map: mapboxgl.Map, theme: ThemeMode): void {
     map.setTerrain({ source: TERRAIN_SOURCE_ID, exaggeration: 1.4 })
   } catch {
     /* terrain is cosmetic - fail open */
-  }
-
-  // ── Sky atmosphere layer ──
-  // Gives the horizon real depth: a tinted dome of sky behind buildings.
-  try {
-    if (!map.getLayer(SKY_LAYER_ID)) {
-      map.addLayer({
-        id: SKY_LAYER_ID,
-        type: 'sky',
-        paint: {
-          'sky-type': 'atmosphere',
-          'sky-atmosphere-color': cfg.skyAtmosphereColor,
-          'sky-atmosphere-halo-color': cfg.skyAtmosphereHaloColor,
-          'sky-atmosphere-sun': cfg.skyAtmosphereSun,
-          'sky-atmosphere-sun-intensity': cfg.skyAtmosphereSunIntensity,
-        } as Record<string, unknown> as mapboxgl.SkyLayerSpecification['paint'],
-      })
-    } else {
-      map.setPaintProperty(SKY_LAYER_ID, 'sky-atmosphere-color', cfg.skyAtmosphereColor)
-      map.setPaintProperty(SKY_LAYER_ID, 'sky-atmosphere-halo-color', cfg.skyAtmosphereHaloColor)
-      map.setPaintProperty(SKY_LAYER_ID, 'sky-atmosphere-sun-intensity', cfg.skyAtmosphereSunIntensity)
-    }
-  } catch {
-    /* sky is cosmetic */
-  }
-
-  // ── Atmospheric fog ──
-  // Pulls the horizon back, deepens the perspective.
-  try {
-    map.setFog(cfg.fog as unknown as mapboxgl.FogSpecification)
-  } catch {
-    /* fog is cosmetic */
-  }
-
-  // ── 3D buildings, height-graded by floor count for a layered city feel ──
-  try {
-    const layers = map.getStyle().layers
-    const labelLayer = layers?.find((l) => l.type === 'symbol' && l.layout?.['text-field'])
-
-    if (!map.getLayer(BUILDING_LAYER_ID)) {
-      map.addLayer(
-        {
-          id: BUILDING_LAYER_ID,
-          source: 'composite',
-          'source-layer': 'building',
-          filter: ['==', 'extrude', 'true'],
-          type: 'fill-extrusion',
-          minzoom: 12,
-          paint: {
-            // Color graduates with height so taller buildings stand out
-            'fill-extrusion-color': [
-              'interpolate',
-              ['linear'],
-              ['get', 'height'],
-              0,
-              cfg.buildingColor,
-              60,
-              cfg.buildingColor,
-              200,
-              theme === 'dark' ? '#2a3650' : '#cdb89d',
-            ],
-            'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 13, 0, 13.5, ['get', 'height']],
-            'fill-extrusion-base': ['interpolate', ['linear'], ['zoom'], 13, 0, 13.5, ['get', 'min_height']],
-            'fill-extrusion-opacity': cfg.buildingOpacity,
-            // Vertical gradient adds the "4D" lift: bases stay grounded,
-            // tops catch a hint of light.
-            'fill-extrusion-vertical-gradient': true,
-          },
-        },
-        labelLayer?.id,
-      )
-    } else {
-      map.setPaintProperty(BUILDING_LAYER_ID, 'fill-extrusion-color', [
-        'interpolate',
-        ['linear'],
-        ['get', 'height'],
-        0,
-        cfg.buildingColor,
-        60,
-        cfg.buildingColor,
-        200,
-        theme === 'dark' ? '#2a3650' : '#cdb89d',
-      ])
-      map.setPaintProperty(BUILDING_LAYER_ID, 'fill-extrusion-opacity', cfg.buildingOpacity)
-    }
-  } catch {
-    /* extrusions are cosmetic */
   }
 }
 
@@ -335,6 +280,10 @@ export function useMapInit() {
     } catch {
       /* ignore */
     }
+    // Tie Standard's 3D objects to the 3D toggle: flat mode also sheds the
+    // expensive shadow/ambient-occlusion pass, a real battery lever on phones.
+    // Explicit user intent here overrides the startup device gate.
+    setBasemapConfig(map, 'show3dObjects', on)
   }, [])
 
   /**
@@ -435,6 +384,7 @@ export function useMapInit() {
 
     const initialTheme: ThemeMode = resolved
     themeRef.current = initialTheme
+    const enable3d = shouldEnable3dObjects()
 
     let map: mapboxgl.Map
     try {
@@ -442,7 +392,12 @@ export function useMapInit() {
 
       map = new mapboxgl.Map({
         container,
-        style: STYLE_URL[initialTheme],
+        style: STANDARD_STYLE,
+        // Standard config: relit per theme via lightPreset, with 3D objects
+        // (buildings/landmarks/trees/shadows) gated on device capability.
+        config: {
+          [BASEMAP_IMPORT_ID]: basemapConfig(initialTheme, enable3d),
+        } as unknown as mapboxgl.MapOptions['config'],
         // Open on a full-country overview; the user zooms in via Recenter.
         center: COUNTRY_CENTER,
         zoom: COUNTRY_ZOOM,
@@ -488,10 +443,11 @@ export function useMapInit() {
     })
 
     // style.load fires both on initial style load AND every time setStyle()
-    // swaps the basemap (e.g. dark↔light theme switch). Re-apply terrain,
-    // sky, fog, and 3D buildings every time.
+    // swaps the basemap. Re-apply terrain every time. Standard's sky, lighting,
+    // 3D buildings and landmarks come from the `basemap` config, not custom
+    // layers, so terrain is all that needs re-binding here.
     map.on('style.load', () => {
-      applyCustomLayers(map, themeRef.current ?? 'dark')
+      applyTerrain(map)
       suppressCtrlLinkFocus(container)
     })
 
@@ -555,28 +511,24 @@ export function useMapInit() {
       themeRef.current = null
     }
     // `resolved` is intentionally omitted from deps. The init effect reads it
-    // to seed the initial style URL, but theme changes after init are handled
-    // by the dedicated theme-sync effect below via setStyle(). Including it
-    // here would re-create the entire map on every theme flip.
+    // to seed the initial lightPreset config, but theme changes after init are
+    // handled by the dedicated theme-sync effect below via setConfigProperty.
+    // Including it here would re-create the entire map on every theme flip.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setMapInstance, mapError])
 
   // ── Reactive theme sync ──
   // Whenever the resolved theme flips (SAST 06:00 transition, user toggle, or
-  // the auto path re-evaluating), swap the basemap style. The `style.load`
-  // listener re-applies terrain, sky, fog, and 3D buildings on every swap.
-  // Markers are HTML elements anchored to lng/lat, so they survive untouched.
+  // the auto path re-evaluating), relight the Standard basemap in place via the
+  // `lightPreset` config (day↔night). This is far cheaper than the old
+  // setStyle() swap: no full style reload, no re-binding terrain, and markers
+  // (HTML elements anchored to lng/lat) never flicker.
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
     if (themeRef.current === resolved) return
     themeRef.current = resolved
-    try {
-      // diff: false forces a clean reload so terrain re-binds reliably.
-      map.setStyle(STYLE_URL[resolved], { diff: false } as Parameters<typeof map.setStyle>[1])
-    } catch {
-      /* ignore - style.load handler will re-apply layers next time */
-    }
+    setBasemapConfig(map, 'lightPreset', LIGHT_PRESET[resolved])
   }, [resolved, mapReadyKey])
 
   // Idle bearing drift removed - continuous rotation caused dizziness.
