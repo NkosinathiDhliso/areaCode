@@ -24,7 +24,7 @@ export async function getActiveRewardsForNode(nodeId: string) {
   }
   return rewards.map((r) => ({
     ...r,
-    id: r.rewardId ?? (r as any).id,
+    id: r.rewardId,
     node: node ? { name: node.name, businessId: node.businessId, city: { slug: citySlug } } : null,
   }))
 }

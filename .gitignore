@@ -21,6 +21,10 @@ tfplan
 !README.md
 !.kiro/**/*.md
 !docs/**/*.md
+# Canonical AI rules source + generated mirrors (via scripts/sync-ai-rules.mjs)
+!rules/**/*.md
+!.windsurf/rules/*.md
+!.github/copilot-instructions.md
 
 # Secrets
 .env

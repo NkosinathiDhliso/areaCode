@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb'
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
+import { AWS_REGION, requireEnv } from '../../shared/config/env.js'
 import { anonymizeCheckIns, type RawCheckIn } from './anonymize.js'
 import { analyzePeakHours } from './analyzers/peak-hours.js'
 import { analyzeCrowdComposition } from './analyzers/crowd-composition.js'
@@ -19,7 +20,10 @@ import type { GenerateReportMessage, Report, ReportMetrics, MusicPrefs } from '.
 // Constants
 // ============================================================================
 
-const ANONYMIZATION_SALT = process.env['AREA_CODE_ANONYMIZATION_SALT'] ?? 'default-salt'
+// Anonymization salt for hashing PII in venue reports. Required in prod (a
+// known/default salt would defeat the anonymisation, a POPIA risk); a dev-only
+// salt is used outside production so the test suite and local runs are stable.
+const ANONYMIZATION_SALT = requireEnv('AREA_CODE_ANONYMIZATION_SALT', 'dev-anonymization-salt')
 
 // ============================================================================
 // SQS Event Types
@@ -51,7 +55,7 @@ async function getBusinessNodes(businessId: string): Promise<Array<{ nodeId: str
   )
 
   return (result.Items || []).map((item) => ({
-    nodeId: (item['nodeId'] as string) ?? (item['id'] as string),
+    nodeId: item['nodeId'] as string,
     nodeName: (item['name'] as string) ?? 'Unknown',
   }))
 }
@@ -265,13 +269,13 @@ async function loadAllVenueVisitorMap(
   )
 
   const otherNodes = (cityNodesResult.Items || []).filter((n) => {
-    const nodeId = (n['nodeId'] as string) ?? (n['id'] as string)
+    const nodeId = n['nodeId'] as string
     return !businessNodeIds.has(nodeId)
   })
 
   // For each other node, load check-ins and build visitor set
   for (const node of otherNodes) {
-    const nodeId = (node['nodeId'] as string) ?? (node['id'] as string)
+    const nodeId = node['nodeId'] as string
     const nodeName = (node['name'] as string) ?? 'Unknown'
 
     try {
@@ -330,13 +334,13 @@ async function sendWebSocketNotification(businessId: string, reportId: string): 
  * Queue email notification via SQS push-sender.
  */
 async function queueEmailNotification(businessId: string, reportId: string, periodType: string): Promise<void> {
-  // Terraform sets AREA_CODE_SQS_PUSH_QUEUE_URL; keep AREA_CODE_PUSH_SENDER_QUEUE_URL
-  // as a fallback for local dev or any legacy caller.
-  const queueUrl = process.env['AREA_CODE_SQS_PUSH_QUEUE_URL'] ?? process.env['AREA_CODE_PUSH_SENDER_QUEUE_URL']
+  // Terraform sets AREA_CODE_SQS_PUSH_QUEUE_URL. Unset means push notifications
+  // are not configured for this environment, so there is nothing to queue.
+  const queueUrl = process.env['AREA_CODE_SQS_PUSH_QUEUE_URL']
   if (!queueUrl) return
 
   try {
-    const sqsClient = new SQSClient({ region: process.env['AWS_REGION'] ?? 'us-east-1' })
+    const sqsClient = new SQSClient({ region: AWS_REGION })
     await sqsClient.send(
       new SendMessageCommand({
         QueueUrl: queueUrl,

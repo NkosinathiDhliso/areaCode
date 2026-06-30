@@ -204,11 +204,24 @@ export function NodeEditorPanel() {
         body: file,
       })
       if (!putRes.ok) throw new Error(`S3 upload failed (${putRes.status})`)
+      // Sanitise the upload server-side (strip EXIF/GPS, resize, WebP) and use
+      // the returned final key. Non-fatal if processing is unavailable — the
+      // backend keeps the raw upload and returns its key.
+      let finalKey = presigned.objectKey
+      try {
+        const processed = await api.post<{ headerImageKey: string }>(
+          `/v1/business/nodes/${selected.id}/image/process`,
+          {},
+        )
+        if (processed?.headerImageKey) finalKey = processed.headerImageKey
+      } catch {
+        /* keep raw key */
+      }
       const cdnUrl = import.meta.env['VITE_CDN_URL'] as string | undefined
       if (cdnUrl) {
-        setHeaderImageUrl(`${cdnUrl}/${presigned.objectKey}`)
+        setHeaderImageUrl(`${cdnUrl}/${finalKey}`)
       }
-      const updated = { ...selected, headerImageKey: presigned.objectKey }
+      const updated = { ...selected, headerImageKey: finalKey }
       setSelected(updated)
       setNodes(nodes.map((node) => (node.id === selected.id ? updated : node)))
       setPhotoMessage({ type: 'success', text: 'Photo uploaded.' })

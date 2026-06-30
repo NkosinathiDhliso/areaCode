@@ -6,8 +6,7 @@ import { notifyNewRewardConsumers } from '../notifications/service.js'
 import { validateWindow, classifyLifecycle, isVisibleInFeed } from './lifecycle.js'
 import { pulseStateFromScore, rankGetsByVibe } from './ranking.js'
 import * as repo from './repository.js'
-
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
+import { DEV_MODE } from '../../shared/config/env.js'
 
 const DEV_REWARDS = [
   {
@@ -272,7 +271,7 @@ export async function updateReward(
     const existing = await repo.getActiveRewardsByNodeId(reward.nodeId)
     if (
       existing.some((r) => {
-        const id = (r as { rewardId?: string; id?: string }).rewardId ?? (r as { id?: string }).id
+        const id = (r as { rewardId?: string }).rewardId
         return (r as { isFirstGet?: boolean }).isFirstGet && id !== rewardId
       })
     ) {

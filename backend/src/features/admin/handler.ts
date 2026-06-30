@@ -16,8 +16,7 @@ import {
 import type { AdminRole } from './types.js'
 import { z } from 'zod'
 import * as cognito from '../../shared/cognito/client.js'
-
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
+import { DEV_MODE } from '../../shared/config/env.js'
 
 async function getAdminRole(request: FastifyRequest): Promise<AdminRole> {
   if (DEV_MODE) {

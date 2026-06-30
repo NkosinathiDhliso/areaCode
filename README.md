@@ -57,7 +57,6 @@ infra/          Terraform (environments/dev, environments/prod, modules/)
 packages/       Shared TS packages consumed by apps and backend
 scripts/        Deployment and operational scripts (PowerShell + bash)
 docs/           Operational docs (RUNBOOK, DEPLOY, ROLLBACK)
-_archive/       Retired infrastructure (ECS, RDS, etc.) kept for reference
 ```
 
 ## Getting Started

@@ -48,7 +48,7 @@ export async function evaluateCityNodes(cityId: string, citySlug: string) {
   let surgeCount = 0
 
   for (const n of nodesResult.Items || []) {
-    const nodeId = (n['nodeId'] ?? n['id']) as string
+    const nodeId = n['nodeId'] as string
     const scoreStr = await kvGet(`pulse:${cityId}:${nodeId}`)
     const score = scoreStr ? parseFloat(scoreStr) : 0
     const currentState = getNodeState(score)

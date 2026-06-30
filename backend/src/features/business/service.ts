@@ -1,5 +1,6 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { AppError } from '../../shared/errors/AppError.js'
+import { AWS_REGION, DEV_MODE } from '../../shared/config/env.js'
 import { decideBoostFloorWithMetric, type BoostMetricInput } from './floor-decision.js'
 import { classifyLifecycle, type Lifecycle } from '../rewards/lifecycle.js'
 import { deactivateNodesForBusiness } from '../nodes/dynamodb-repository.js'
@@ -22,8 +23,6 @@ import {
   type FloorChangeAuditRow,
   type FloorChangeAuditView,
 } from './types.js'
-
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
 // ─── Booster structured logging ─────────────────────────────────────────────
 //
@@ -78,7 +77,7 @@ async function getCloudWatchClient(): Promise<import('@aws-sdk/client-cloudwatch
   if (cloudWatchClientSingleton) return cloudWatchClientSingleton
   const { CloudWatchClient } = await import('@aws-sdk/client-cloudwatch')
   cloudWatchClientSingleton = new CloudWatchClient({
-    region: process.env['AWS_REGION'] || 'us-east-1',
+    region: AWS_REGION,
   })
   return cloudWatchClientSingleton
 }

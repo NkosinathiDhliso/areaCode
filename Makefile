@@ -11,9 +11,7 @@ build-fn:
 	@mkdir -p dist/$(FN)
 	npx esbuild backend/src/features/$(FN)/handler.ts \
 		--bundle --platform=node --target=node20 \
-		--outfile=dist/$(FN)/index.js --format=esm \
-		--external:@prisma/client --external:prisma
-	@cp -r backend/prisma/migrations dist/$(FN)/ 2>/dev/null || true
+		--outfile=dist/$(FN)/index.js --format=esm
 	@(cd dist/$(FN) && zip -r ../../dist/$(FN).zip .)
 	@echo "Built dist/$(FN).zip"
 

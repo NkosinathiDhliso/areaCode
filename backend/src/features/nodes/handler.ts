@@ -15,7 +15,6 @@ import {
   reportNodeBodySchema,
   whoIsHereQuerySchema,
   presignedUploadBodySchema,
-  registerImageBodySchema,
 } from './types.js'
 import { z } from 'zod'
 
@@ -170,21 +169,6 @@ export async function nodeRoutes(app: FastifyInstance) {
       const auth = getAuth(request)
       const body = request.body as z.infer<typeof presignedUploadBodySchema>
       return service.createPresignedUpload(auth.userId, body.fileType, body.contentType)
-    },
-  )
-
-  // POST /v1/nodes/:nodeId/images
-  app.post(
-    '/v1/nodes/:nodeId/images',
-    {
-      preHandler: [requireAuth('business'), validate({ params: nodeIdParamsSchema, body: registerImageBodySchema })],
-    },
-    async (request, reply) => {
-      const auth = getAuth(request)
-      const params = request.params as z.infer<typeof nodeIdParamsSchema>
-      const body = request.body as z.infer<typeof registerImageBodySchema>
-      const image = await service.registerNodeImage(params.nodeId, auth.userId, body.s3Key, body.displayOrder)
-      return reply.status(201).send(image)
     },
   )
 

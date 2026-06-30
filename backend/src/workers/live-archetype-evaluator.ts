@@ -93,30 +93,14 @@ const PRESENCE_COUNT_TIMEOUT_MS = 500
 const PROD_LOG_SAMPLE_RATE = 0.01
 
 /**
- * Parse a non-negative integer from an environment variable, falling back to
- * the supplied default when the var is unset or malformed. Mirrors the repo's
- * `process.env[...] ?? default` config convention (see `nodes/service.ts`),
- * but coerces and validates so a stray non-numeric override can never poison
- * the floor/grace gate.
+ * Presence_Floor / Presence_Grace — the single source of truth for the
+ * presence-is-truth gate (live-vibe-declaration R8, founder-confirmed 3 / 1).
+ * Plain module constants: changing them is a normal code deploy, not a runtime
+ * knob. Only consulted on the flag-on path; the `live_vibe_declaration`-off
+ * path passes `presenceFloor` as `undefined` and never reads these.
  */
-function readNonNegativeIntEnv(key: string, fallback: number): number {
-  const raw = process.env[key]
-  if (raw === undefined || raw === '') return fallback
-  const n = Number(raw)
-  return Number.isInteger(n) && n >= 0 ? n : fallback
-}
-
-/**
- * Presence_Floor / Presence_Grace (live-vibe-declaration R8, founder-confirmed
- * 3 / 1). Sourced from env vars (`AREA_CODE_PRESENCE_FLOOR` /
- * `AREA_CODE_PRESENCE_GRACE`) with the founder-confirmed defaults so the gate
- * can be tuned per environment via Lambda configuration without a code deploy
- * (design "Configuration values"). Only consulted on the flag-on path; the
- * `live_vibe_declaration`-off path passes `presenceFloor` as `undefined` and
- * never reads these.
- */
-const PRESENCE_FLOOR = readNonNegativeIntEnv('AREA_CODE_PRESENCE_FLOOR', 3)
-const PRESENCE_GRACE = readNonNegativeIntEnv('AREA_CODE_PRESENCE_GRACE', 1)
+const PRESENCE_FLOOR = 3
+const PRESENCE_GRACE = 1
 
 /**
  * Warm-context `Map<nodeId, lastEmitMs>` (R11.3). Lambdas reuse warm
@@ -251,24 +235,37 @@ async function queryRecentCheckIns(nodeId: string, nowMs: number): Promise<LiveA
  * check-ins and does NOT introduce a parallel aggregate (R7.1, R7.2).
  *
  * On any failure (timeout, throttle, missing item) it resolves to `0` — the room
- * is "not proven", so the resolver falls back to the declared promise / default —
- * and NEVER throws, mirroring `queryRecentCheckIns`' timeout-race fall-through
- * contract.
+ * is "not proven", so the resolver falls back to the declared promise / default.
+ * Returning 0 is the HONEST-degradation outcome (under-claim, never over-claim per
+ * honest-presence) and is intentionally NOT a banned fallback. But a real failure
+ * is logged loudly (no silent swallow per no-fallbacks-no-legacy) before we return
+ * the honest 0. It NEVER throws — throwing would crash the tick, and the honest
+ * path is count 0 — mirroring `queryRecentCheckIns`' timeout-race fall-through.
  *
  * Wired into the resolver call in task 4.1; exported so it is reachable from the
  * evaluator unit tests and the wiring step.
  */
 export async function readHonestPresenceCount(nodeId: string): Promise<number> {
-  const countPromise = getCounter(nodeId).catch(() => 0)
+  const countPromise = getCounter(nodeId).catch((err) => {
+    // Loud log, then honest 0. A failed presence read is a real failure, not a
+    // silent degrade: surface it, but never over-claim — the room is unproven.
+    console.error(
+      `[live-archetype-evaluator] Honest presence read failed for node=${nodeId}; returning honest count 0: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    )
+    return 0
+  })
   const timeoutPromise = new Promise<number>((resolve) => {
-    setTimeout(() => resolve(0), PRESENCE_COUNT_TIMEOUT_MS)
+    setTimeout(() => {
+      console.error(
+        `[live-archetype-evaluator] Honest presence read timed out after ${PRESENCE_COUNT_TIMEOUT_MS}ms for node=${nodeId}; returning honest count 0`,
+      )
+      resolve(0)
+    }, PRESENCE_COUNT_TIMEOUT_MS)
   })
 
-  try {
-    return await Promise.race([countPromise, timeoutPromise])
-  } catch {
-    return 0
-  }
+  return Promise.race([countPromise, timeoutPromise])
 }
 
 /** Read the Node row's cached `lastArchetypeId`, `lastBranch`, and

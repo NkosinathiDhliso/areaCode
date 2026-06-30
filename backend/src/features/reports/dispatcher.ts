@@ -1,6 +1,7 @@
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs'
 import { ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
+import { AWS_REGION } from '../../shared/config/env.js'
 
 // ============================================================================
 // Constants
@@ -151,7 +152,7 @@ async function getNodeIdsForBusiness(businessId: string): Promise<string[]> {
     }),
   )
 
-  return (result.Items || []).map((item) => (item['nodeId'] as string) ?? (item['id'] as string)).filter(Boolean)
+  return (result.Items || []).map((item) => item['nodeId'] as string).filter(Boolean)
 }
 
 /**
@@ -188,7 +189,7 @@ async function hasActivityInPeriod(nodeIds: string[], periodStart: string, perio
 // SQS Message Sending
 // ============================================================================
 
-const sqsClient = new SQSClient({ region: process.env['AWS_REGION'] ?? 'us-east-1' })
+const sqsClient = new SQSClient({ region: AWS_REGION })
 
 async function sendGenerationMessage(
   queueUrl: string,

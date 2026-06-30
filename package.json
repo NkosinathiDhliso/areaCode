@@ -19,15 +19,14 @@
     "guard:no-sms": "powershell -ExecutionPolicy Bypass -File scripts/assert-phone-otp-disabled.ps1",
     "guard:no-dashes": "powershell -ExecutionPolicy Bypass -File scripts/assert-no-em-dashes.ps1",
     "fix:no-dashes": "powershell -ExecutionPolicy Bypass -File scripts/assert-no-em-dashes.ps1 -Fix",
-    "guard:all": "pnpm guard:serverless && pnpm guard:no-sms && pnpm guard:no-dashes",
+    "sync:rules": "node scripts/sync-ai-rules.mjs",
+    "guard:rules": "node scripts/sync-ai-rules.mjs --check",
+    "guard:all": "pnpm guard:serverless && pnpm guard:no-sms && pnpm guard:no-dashes && pnpm guard:rules",
     "prepare": "husky"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "@prisma/client",
-      "@prisma/engines",
       "esbuild",
-      "prisma",
       "sharp"
     ]
   },

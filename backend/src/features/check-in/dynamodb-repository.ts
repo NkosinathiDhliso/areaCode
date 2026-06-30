@@ -284,7 +284,7 @@ export async function markCheckInForDeletion(checkInId: string): Promise<void> {
 
 function mapCheckIn(item: Record<string, unknown>): CheckIn {
   return {
-    checkInId: (item['checkInId'] as string) ?? (item['id'] as string),
+    checkInId: item['checkInId'] as string,
     userId: item['userId'] as string,
     nodeId: item['nodeId'] as string,
     neighbourhoodId: item['neighbourhoodId'] as string | undefined,

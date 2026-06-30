@@ -27,7 +27,6 @@ $ExcludePathPatterns = @(
   "node_modules",
   "dist",
   ".terraform",
-  "_archive",
   "assert-serverless-only.ps1"
 )
 

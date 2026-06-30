@@ -201,7 +201,7 @@ async function getBusinessNodeIds(businessId: string): Promise<Set<string>> {
       }),
     )
     for (const item of result.Items ?? []) {
-      ids.add((item['nodeId'] ?? item['id']) as string)
+      ids.add(item['nodeId'] as string)
     }
     exclusiveStartKey = result.LastEvaluatedKey
   } while (exclusiveStartKey)

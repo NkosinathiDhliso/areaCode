@@ -197,7 +197,6 @@ export default tseslint.config(
       '**/.turbo/**',
       '**/coverage/**',
       'infra/**',
-      '_archive/**',
       '**/*.config.js',
       '**/*.config.ts',
       '**/*.config.mjs',

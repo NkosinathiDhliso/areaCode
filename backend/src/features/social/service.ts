@@ -2,8 +2,7 @@ import { AppError } from '../../shared/errors/AppError.js'
 import { filterByPrivacy } from '../../shared/privacy/privacy-guard.js'
 import * as repo from './repository.js'
 import { deriveTopVenue } from './leaderboard-utils.js'
-
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
+import { DEV_MODE } from '../../shared/config/env.js'
 
 /**
  * Returns the ISO string for the start of the current week (Monday 00:00 SAST).

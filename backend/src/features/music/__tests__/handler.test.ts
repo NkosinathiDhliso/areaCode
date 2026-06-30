@@ -95,6 +95,14 @@ function authHeaderFor(businessId: string): { authorization: string } {
   return { authorization: `Bearer dev-${businessId}` }
 }
 
+// A venue-scoped staff session. The dev-mode auth grammar (auth.ts) reads the
+// structured `dev-<role>:<userId>:<businessId>` token, so this mints a staff
+// session whose resolved `businessId` is `businessId` — exactly what the prod
+// verifyToken puts on the payload from the staff row / claim.
+function staffAuthHeaderFor(staffId: string, businessId: string): { authorization: string } {
+  return { authorization: `Bearer dev-staff:${staffId}:${businessId}` }
+}
+
 function urlFor(businessId: string, suffix = ''): string {
   return `/v1/business/${businessId}/music-schedule${suffix}`
 }
@@ -631,6 +639,109 @@ describe('JWT-claims mismatch returns 403 with no DynamoDB I/O', () => {
 
     expect(getSchedule).not.toHaveBeenCalled()
     expect(upsertSchedule).not.toHaveBeenCalled()
+    expect(deleteScheduleSlot).not.toHaveBeenCalled()
+  })
+})
+
+// ─── 5. Venue-scoped staff sessions (single source of truth) ────────────────
+//
+// Staff set the vibe through the SAME endpoints the operator uses. A staff
+// session carries its resolved `businessId`; the schedule routes authorise
+// GET/POST for a staff member whose venue matches the path, reject a staff
+// member scoped to a different venue (fail closed, no I/O), and keep DELETE
+// business-only.
+
+describe('venue-scoped staff sessions on the shared schedule endpoints', () => {
+  const STAFF_ID = 'staff-1'
+
+  it('staff whose businessId matches the path can GET and POST', async () => {
+    // POST: a staff member scoped to BUSINESS_A writes BUSINESS_A's schedule.
+    const upsert = await app.inject({
+      method: 'POST',
+      url: urlFor(BUSINESS_A),
+      headers: staffAuthHeaderFor(STAFF_ID, BUSINESS_A),
+      payload: validBlanketBody(),
+    })
+    expect(upsert.statusCode).toBe(200)
+    const upsertBody = upsert.json() as MusicSchedule
+    expect(upsertBody.businessId).toBe(BUSINESS_A)
+    expect(upsertBody.scheduleId).toBe('default')
+    expect(upsertSchedule).toHaveBeenCalledTimes(1)
+
+    // GET: the same staff member reads it back through the same endpoint.
+    const get = await app.inject({
+      method: 'GET',
+      url: urlFor(BUSINESS_A),
+      headers: staffAuthHeaderFor(STAFF_ID, BUSINESS_A),
+    })
+    expect(get.statusCode).toBe(200)
+    const getBody = get.json() as MusicSchedule
+    expect(getBody.businessId).toBe(BUSINESS_A)
+    expect(getBody.slots).toHaveLength(1)
+    expect(getBody.slots[0]!.slotId).toBe('fri-evening')
+  })
+
+  it('staff scoped to a DIFFERENT venue is rejected 403 on GET with no schedule I/O', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: urlFor(BUSINESS_B),
+      headers: staffAuthHeaderFor(STAFF_ID, BUSINESS_A),
+    })
+    expect(response.statusCode).toBe(403)
+
+    expect(getSchedule).not.toHaveBeenCalled()
+    expect(upsertSchedule).not.toHaveBeenCalled()
+    expect(deleteScheduleSlot).not.toHaveBeenCalled()
+  })
+
+  it('staff scoped to a DIFFERENT venue is rejected 403 on POST BEFORE validation OR repository I/O', async () => {
+    // An otherwise-valid payload must not be validated or persisted: the 403
+    // short-circuits before any schedule work (fail closed, deny by default).
+    const response = await app.inject({
+      method: 'POST',
+      url: urlFor(BUSINESS_B),
+      headers: staffAuthHeaderFor(STAFF_ID, BUSINESS_A),
+      payload: validBlanketBody(),
+    })
+    expect(response.statusCode).toBe(403)
+
+    expect(getSchedule).not.toHaveBeenCalled()
+    expect(upsertSchedule).not.toHaveBeenCalled()
+    expect(deleteScheduleSlot).not.toHaveBeenCalled()
+  })
+
+  it('DELETE stays business-only: a staff-pool session cannot delete a slot', async () => {
+    // Seed a schedule so a successful delete would otherwise touch the repo.
+    storedSchedule = {
+      businessId: BUSINESS_A,
+      scheduleId: 'default',
+      timezone: 'Africa/Johannesburg',
+      slots: [
+        {
+          slotId: 'real-slot',
+          dayOfWeek: 'FRI',
+          startTime: '20:00',
+          endTime: '23:00',
+          startTimeMin: 1200,
+          endTimeMin: 1380,
+          mode: 'blanket',
+          genres: ['amapiano'],
+        },
+      ],
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      schemaVersion: 1,
+    }
+
+    // The DELETE route is `requireAuth('business')` only — staff set the vibe
+    // but never delete schedule slots. A staff-pool session does not satisfy
+    // the business-only route (in prod it fails business-pool verification),
+    // so it is rejected at the auth layer and the slot is never removed.
+    const response = await app.inject({
+      method: 'DELETE',
+      url: urlFor(BUSINESS_A, '/real-slot'),
+      headers: staffAuthHeaderFor(STAFF_ID, BUSINESS_A),
+    })
+    expect(response.statusCode).toBe(401)
     expect(deleteScheduleSlot).not.toHaveBeenCalled()
   })
 })

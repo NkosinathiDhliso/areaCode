@@ -1,3 +1,7 @@
+<!-- GENERATED FILE. DO NOT EDIT.
+     Single source of truth: rules/*.md
+     Regenerate with: pnpm sync:rules -->
+
 # Reuse first. Never duplicate. Edit in place.
 
 This is a hard engineering rule for the whole codebase, not a style preference.

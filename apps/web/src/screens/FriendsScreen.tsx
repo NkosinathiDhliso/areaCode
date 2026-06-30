@@ -60,15 +60,15 @@ export function FriendsScreen() {
         ))}
       </div>
 
-      {tab === 'friends' && <FriendsTab />}
-      {tab === 'following' && <FollowingTab />}
-      {tab === 'followers' && <FollowersTab />}
+      {tab === 'friends' && <FriendsTab onFindPeople={() => setTab('search')} />}
+      {tab === 'following' && <FollowingTab onFindPeople={() => setTab('search')} />}
+      {tab === 'followers' && <FollowersTab onFindPeople={() => setTab('search')} />}
       {tab === 'search' && <SearchTab search={search} setSearch={setSearch} />}
     </div>
   )
 }
 
-function FriendsTab() {
+function FriendsTab({ onFindPeople }: { onFindPeople: () => void }) {
   const { t } = useTranslation()
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['friends'],
@@ -81,7 +81,13 @@ function FriendsTab() {
     return <ErrorState message={t('friends.loadError', "Couldn't load friends.")} onRetry={() => void refetch()} />
 
   if (!data?.friends.length) {
-    return <EmptyState message={t('friends.noFriends')} />
+    return (
+      <EmptyState
+        message={t('friends.noFriends')}
+        actionLabel={t('friends.findPeople', 'Find your people')}
+        onAction={onFindPeople}
+      />
+    )
   }
 
   return (
@@ -94,7 +100,7 @@ function FriendsTab() {
   )
 }
 
-function FollowingTab() {
+function FollowingTab({ onFindPeople }: { onFindPeople: () => void }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
@@ -120,7 +126,13 @@ function FollowingTab() {
     return <ErrorState message={t('friends.loadError', "Couldn't load following.")} onRetry={() => void refetch()} />
 
   if (!data?.users.length) {
-    return <EmptyState message={t('friends.notFollowingAnyone')} />
+    return (
+      <EmptyState
+        message={t('friends.notFollowingAnyone')}
+        actionLabel={t('friends.findPeople', 'Find your people')}
+        onAction={onFindPeople}
+      />
+    )
   }
 
   return (
@@ -153,7 +165,7 @@ function FollowingTab() {
   )
 }
 
-function FollowersTab() {
+function FollowersTab({ onFindPeople }: { onFindPeople: () => void }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
@@ -180,7 +192,13 @@ function FollowersTab() {
     return <ErrorState message={t('friends.loadError', "Couldn't load followers.")} onRetry={() => void refetch()} />
 
   if (!data?.users.length) {
-    return <EmptyState message={t('friends.noFollowers')} />
+    return (
+      <EmptyState
+        message={t('friends.noFollowers')}
+        actionLabel={t('friends.findPeople', 'Find your people')}
+        onAction={onFindPeople}
+      />
+    )
   }
 
   return (
@@ -341,8 +359,28 @@ function LoadingSkeleton({ count = 5 }: { count?: number }) {
   )
 }
 
-function EmptyState({ message }: { message: string }) {
-  return <p className="text-[var(--text-muted)] text-sm text-center py-8">{message}</p>
+function EmptyState({
+  message,
+  actionLabel,
+  onAction,
+}: {
+  message: string
+  actionLabel?: string
+  onAction?: () => void
+}) {
+  return (
+    <div className="flex flex-col items-center gap-3 py-8">
+      <p className="text-[var(--text-muted)] text-sm text-center">{message}</p>
+      {actionLabel && onAction && (
+        <button
+          onClick={onAction}
+          className="text-sm text-white gradient-accent rounded-xl px-4 py-2 transition-all active:scale-95"
+        >
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  )
 }
 
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {

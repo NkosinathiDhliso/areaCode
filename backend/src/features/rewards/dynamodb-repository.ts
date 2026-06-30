@@ -261,8 +261,8 @@ export async function getRewardsNeedingEvaluation(): Promise<Reward[]> {
 
 export function mapReward(item: Record<string, unknown>): Reward {
   const copy = { ...item } as Record<string, unknown>
-  copy['id'] = (item['rewardId'] as string) ?? (item['id'] as string)
-  copy['rewardId'] = (item['rewardId'] as string) ?? (item['id'] as string)
+  copy['id'] = item['rewardId'] as string
+  copy['rewardId'] = item['rewardId'] as string
   // R1.1 / R7.1: rows persisted before this feature lack a `getCategory`
   // attribute. Surface them as `loyalty` so callers never observe `undefined`
   // and every legacy row keeps its existing behaviour without a backfill.

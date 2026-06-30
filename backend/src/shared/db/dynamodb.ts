@@ -1,8 +1,10 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 
+import { AWS_REGION, requireEnv } from '../config/env.js'
+
 const client = new DynamoDBClient({
-  region: process.env['AWS_REGION'] || 'us-east-1',
+  region: AWS_REGION,
 })
 
 export const documentClient = DynamoDBDocumentClient.from(client, {
@@ -12,17 +14,36 @@ export const documentClient = DynamoDBDocumentClient.from(client, {
   },
 })
 
-// Table names from environment. Production Lambda always sets these via Terraform.
-// Fallbacks point to dev tables — never prod — so local runs and tests are safe.
+// Table names from environment. Production Lambda always sets the tables it
+// uses via Terraform; `requireEnv` crashes prod if an accessed table's var is
+// missing rather than silently reading a dev table. Accessors are lazy (getters)
+// so a Lambda only validates the tables it actually touches — importing this
+// module never forces every Lambda to set all eight vars.
 export const TableNames = {
-  users: process.env['USERS_TABLE'] || 'area-code-dev-users',
-  nodes: process.env['NODES_TABLE'] || 'area-code-dev-nodes',
-  checkins: process.env['CHECKINS_TABLE'] || 'area-code-dev-checkins',
-  rewards: process.env['REWARDS_TABLE'] || 'area-code-dev-rewards',
-  businesses: process.env['BUSINESSES_TABLE'] || 'area-code-dev-businesses',
-  appData: process.env['APP_DATA_TABLE'] || 'area-code-dev-app-data',
-  musicSchedules: process.env['MUSIC_SCHEDULES_TABLE'] || 'area-code-dev-music-schedules',
-  presence: process.env['PRESENCE_TABLE'] || 'area-code-dev-presence',
-} as const
+  get users() {
+    return requireEnv('USERS_TABLE', 'area-code-dev-users')
+  },
+  get nodes() {
+    return requireEnv('NODES_TABLE', 'area-code-dev-nodes')
+  },
+  get checkins() {
+    return requireEnv('CHECKINS_TABLE', 'area-code-dev-checkins')
+  },
+  get rewards() {
+    return requireEnv('REWARDS_TABLE', 'area-code-dev-rewards')
+  },
+  get businesses() {
+    return requireEnv('BUSINESSES_TABLE', 'area-code-dev-businesses')
+  },
+  get appData() {
+    return requireEnv('APP_DATA_TABLE', 'area-code-dev-app-data')
+  },
+  get musicSchedules() {
+    return requireEnv('MUSIC_SCHEDULES_TABLE', 'area-code-dev-music-schedules')
+  },
+  get presence() {
+    return requireEnv('PRESENCE_TABLE', 'area-code-dev-presence')
+  },
+}
 
 export { client }

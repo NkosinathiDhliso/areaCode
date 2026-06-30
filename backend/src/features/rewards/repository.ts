@@ -79,7 +79,7 @@ export async function getRewardById(id: string) {
   const node = await getNodeById(reward.nodeId)
   return {
     ...reward,
-    id: reward.rewardId ?? (reward as any).id,
+    id: reward.rewardId,
     node: node ? { businessId: node.businessId, name: node.name } : null,
   }
 }
@@ -113,7 +113,7 @@ export async function countActiveRewardsForBusiness(businessId: string) {
       ExpressionAttributeValues: { ':bid': businessId },
     }),
   )
-  const nodeIds = (nodesResult.Items || []).map((n) => (n['nodeId'] ?? n['id']) as string)
+  const nodeIds = (nodesResult.Items || []).map((n) => n['nodeId'] as string)
   let count = 0
   for (const nid of nodeIds) {
     const rewards = await dynamo.getActiveRewardsByNodeId(nid)
@@ -188,7 +188,7 @@ export async function getRewardsNearMe(lat: number, lng: number, viewerId?: stri
       classifyLifecycle(startsAt, endsAt, nowMs) === 'live'
 
     candidates.push({
-      id: (r['rewardId'] ?? r['id']) as string,
+      id: r['rewardId'] as string,
       title: r['title'],
       type: r['type'],
       total_slots: r['totalSlots'] ?? null,
@@ -336,7 +336,7 @@ export async function getRecentRedemptions(businessId: string, limit = 20) {
       ExpressionAttributeValues: { ':bid': businessId },
     }),
   )
-  const nodeIds = new Set((nodesResult.Items || []).map((n) => (n['nodeId'] ?? n['id']) as string))
+  const nodeIds = new Set((nodesResult.Items || []).map((n) => n['nodeId'] as string))
   // Scan redemptions and filter
   const result = await documentClient.send(
     new ScanCommand({

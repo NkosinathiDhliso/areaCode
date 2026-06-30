@@ -1,3 +1,7 @@
+<!-- GENERATED FILE. DO NOT EDIT.
+     Single source of truth: rules/*.md
+     Regenerate with: pnpm sync:rules -->
+
 ---
 inclusion: always
 ---
@@ -67,7 +71,7 @@ On active touch only (then settle):
 ## Interactions (three layers)
 
 All inputs still write the single `selectionStore` Active_Venue. See
-`CLAUDE.md` Map Carousel rules for carousel/camera invariants.
+`map-carousel.md` for carousel/camera invariants.
 
 ### 1. Sweep (play, no selection)
 

@@ -242,6 +242,12 @@ export function FeedScreen({ onNavigate }: FeedScreenProps) {
           <p className="text-[var(--text-muted)] text-sm text-center max-w-xs">
             {t('feed.emptyState', 'No activity yet | follow friends to fill this up.')}
           </p>
+          <button
+            onClick={() => onNavigate('friends')}
+            className="text-sm text-white gradient-accent rounded-xl px-4 py-2 transition-all active:scale-95"
+          >
+            {t('feed.findPeople', 'Find your people')}
+          </button>
         </div>
       )}
     </div>

@@ -1,6 +1,8 @@
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2'
 
-const ses = new SESv2Client({ region: process.env['AWS_REGION'] ?? 'us-east-1' })
+import { AWS_REGION } from '../config/env.js'
+
+const ses = new SESv2Client({ region: AWS_REGION })
 const FROM_EMAIL = process.env['AREA_CODE_FROM_EMAIL'] ?? 'noreply@areacode.co.za'
 
 export async function sendPasswordResetEmail(to: string, code: string) {

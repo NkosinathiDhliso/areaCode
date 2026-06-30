@@ -64,7 +64,7 @@ export async function getBusinessAudienceMusicData(businessId: string) {
       ExpressionAttributeValues: { ':bid': businessId },
     }),
   )
-  const nodeIds = (nodesResult.Items || []).map((n) => (n['nodeId'] ?? n['id']) as string)
+  const nodeIds = (nodesResult.Items || []).map((n) => n['nodeId'] as string)
 
   const seen = new Set<string>()
   const users = []

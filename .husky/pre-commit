@@ -3,6 +3,14 @@
 # Uses xargs so we don't blow the Windows command-line length limit when
 # many files are staged at once.
 
+# If the rules source changed, regenerate every tool's mirror and stage them
+# so Kiro/Claude/Cursor/Windsurf/Copilot copies never drift from rules/.
+rules_changed="$(git diff --cached --name-only --diff-filter=ACMRD | grep -E '^(rules/.*\.md|scripts/sync-ai-rules\.mjs)$' || true)"
+if [ -n "$rules_changed" ]; then
+  node scripts/sync-ai-rules.mjs
+  git add .kiro/steering CLAUDE.md .cursor/rules/area-code.mdc .windsurf/rules/area-code.md .github/copilot-instructions.md
+fi
+
 prettier_files="$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx|json|css|md|yml|yaml)$' || true)"
 eslint_files="$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx)$' || true)"
 

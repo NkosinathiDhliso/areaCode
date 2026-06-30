@@ -48,7 +48,7 @@ export async function getNodesByCitySlug(citySlug: string) {
       return paidBusinessTiers.has(bid)
     })
     .map((n) => ({
-      id: n['nodeId'] ?? n['id'],
+      id: n['nodeId'],
       name: n['name'],
       slug: n['slug'],
       category: n['category'],
@@ -58,6 +58,7 @@ export async function getNodesByCitySlug(citySlug: string) {
       nodeColour: n['nodeColour'],
       nodeIcon: n['nodeIcon'],
       isVerified: n['isVerified'],
+      headerImageKey: n['headerImageKey'] ?? null,
       businessTier: paidBusinessTiers.get(n['businessId'] as string) ?? 'starter',
     }))
 }
@@ -76,9 +77,9 @@ export async function getNodeById(nodeId: string) {
   }
   return {
     ...node,
-    id: node.nodeId ?? (node as unknown as { id?: string }).id,
+    id: node.nodeId,
     rewards: rewards.map((r) => ({
-      id: r.rewardId ?? (r as unknown as { id?: string }).id,
+      id: r.rewardId,
       title: r.title,
       type: r.type,
       totalSlots: r.totalSlots,
@@ -106,7 +107,7 @@ export async function getNodeBySlug(slug: string) {
     lat: node.lat,
     lng: node.lng,
     city,
-    rewards: rewards.map((r) => ({ id: r.rewardId ?? (r as unknown as { id?: string }).id })),
+    rewards: rewards.map((r) => ({ id: r.rewardId })),
   }
 }
 
@@ -133,7 +134,7 @@ export async function searchNodes(query: string, lat: number, lng: number) {
         Math.cos((lat * Math.PI) / 180) * Math.cos((nLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
       const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
       return {
-        id: n['nodeId'] ?? n['id'],
+        id: n['nodeId'],
         name: n['name'],
         slug: n['slug'],
         category: n['category'],
@@ -252,7 +253,7 @@ export async function getWhoIsHere(nodeId: string, limit: number) {
     const user = await getUserById(ci.userId)
     if (user) {
       items.push({
-        userId: user.userId ?? (user as unknown as { id?: string }).id,
+        userId: user.userId,
         displayName: user.displayName,
         username: user.username,
         avatarUrl: user.avatarUrl,
@@ -264,12 +265,6 @@ export async function getWhoIsHere(nodeId: string, limit: number) {
   }
   const hasMore = checkIns.length > limit
   return { items, nextCursor: null, hasMore }
-}
-
-export async function registerNodeImage(nodeId: string, s3Key: string, uploadedBy: string, displayOrder: number) {
-  return dynamo.addNodeImage({ nodeId, s3Key, uploadedBy, displayOrder } as unknown as Parameters<
-    typeof dynamo.addNodeImage
-  >[0])
 }
 
 export async function getCityBySlug(slug: string) {

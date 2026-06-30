@@ -2,10 +2,9 @@ import type { FastifyRequest, FastifyReply } from 'fastify'
 import jwt from 'jsonwebtoken'
 import jwksClient from 'jwks-rsa'
 import { AppError } from '../errors/AppError.js'
+import { AWS_REGION, DEV_MODE, requireEnv } from '../config/env.js'
 import { getUserByCognitoSub, getStaffByCognitoSub } from '../../features/auth/dynamodb-repository.js'
 import { findBusinessByCognitoSub } from '../../features/business/repository.js'
-
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
 export type AuthRole = 'consumer' | 'business' | 'staff' | 'admin'
 
@@ -16,6 +15,17 @@ export interface AuthPayload {
   citySlug?: string | undefined
   /** Present on many federated access tokens (e.g. Google via Hosted UI). */
   email?: string | undefined
+  /**
+   * The venue the session is scoped to. Resolved for venue-scoped roles so a
+   * downstream handler can authorise against the venue without a second DB
+   * lookup:
+   *   - business: the operator IS the venue (userId === businessId), so this is
+   *     redundant there and left unset; business routes check `userId`.
+   *   - staff: the staff member's `businessId`, resolved from the
+   *     `custom:businessId` claim or the staff row (see verifyToken).
+   * Absent for consumer/admin.
+   */
+  businessId?: string | undefined
 }
 
 // Cognito pool config , each pool has its own JWKS endpoint
@@ -26,30 +36,30 @@ interface PoolConfig {
 }
 
 function getPoolConfig(role: AuthRole): PoolConfig {
-  const region = process.env['AWS_REGION'] ?? 'us-east-1'
+  const region = AWS_REGION
   switch (role) {
     case 'consumer':
       return {
-        poolId: process.env['AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID'] ?? '',
-        clientId: process.env['AREA_CODE_COGNITO_CONSUMER_CLIENT_ID'] ?? '',
+        poolId: requireEnv('AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID', ''),
+        clientId: requireEnv('AREA_CODE_COGNITO_CONSUMER_CLIENT_ID', ''),
         region,
       }
     case 'business':
       return {
-        poolId: process.env['AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID'] ?? '',
-        clientId: process.env['AREA_CODE_COGNITO_BUSINESS_CLIENT_ID'] ?? '',
+        poolId: requireEnv('AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID', ''),
+        clientId: requireEnv('AREA_CODE_COGNITO_BUSINESS_CLIENT_ID', ''),
         region,
       }
     case 'staff':
       return {
-        poolId: process.env['AREA_CODE_COGNITO_STAFF_USER_POOL_ID'] ?? '',
-        clientId: process.env['AREA_CODE_COGNITO_STAFF_CLIENT_ID'] ?? '',
+        poolId: requireEnv('AREA_CODE_COGNITO_STAFF_USER_POOL_ID', ''),
+        clientId: requireEnv('AREA_CODE_COGNITO_STAFF_CLIENT_ID', ''),
         region,
       }
     case 'admin':
       return {
-        poolId: process.env['AREA_CODE_COGNITO_ADMIN_USER_POOL_ID'] ?? '',
-        clientId: process.env['AREA_CODE_COGNITO_ADMIN_CLIENT_ID'] ?? '',
+        poolId: requireEnv('AREA_CODE_COGNITO_ADMIN_USER_POOL_ID', ''),
+        clientId: requireEnv('AREA_CODE_COGNITO_ADMIN_CLIENT_ID', ''),
         region,
       }
   }
@@ -119,12 +129,20 @@ async function verifyToken(token: string, role: AuthRole): Promise<AuthPayload> 
     }
   }
 
+  // Venue scope for the staff session. Resolved with the SAME strategy the
+  // business role uses for its id: prefer the JWT claim, else the Dynamo row.
+  // Both the staffId and the businessId come from a SINGLE staff-row lookup —
+  // we fetch the row at most once and reuse it for whatever the claims omit.
+  let businessId: string | undefined
   if (role === 'staff') {
     const sid = payload['custom:staffId'] as string | undefined
+    const bid = payload['custom:businessId'] as string | undefined
     if (sid) userId = sid
-    else {
+    if (bid) businessId = bid
+    if (!sid || !bid) {
       const st = await getStaffByCognitoSub(cognitoSub)
-      if (st?.staffId) userId = st.staffId
+      if (!sid && st?.staffId) userId = st.staffId
+      if (!bid && st?.businessId) businessId = st.businessId
     }
   }
 
@@ -132,7 +150,7 @@ async function verifyToken(token: string, role: AuthRole): Promise<AuthPayload> 
 
   const email = typeof payload['email'] === 'string' ? payload.email : undefined
 
-  return { userId, role, cognitoSub, citySlug, email }
+  return { userId, role, cognitoSub, citySlug, email, businessId }
 }
 
 /**
@@ -158,6 +176,54 @@ function poolFromIssuer(token: string, candidates: AuthRole[]): AuthRole | null 
 }
 
 /**
+ * Build a mock AuthPayload for dev mode from a `dev-…` bearer token.
+ *
+ * Dev mode never verifies a real JWT, so the token itself encodes the session.
+ * There is ONE grammar (extended in place, no parallel parser):
+ *
+ *   dev-<id>                      → role = allowedRoles[0], userId = <id>
+ *   dev-<role>:<id>               → explicit role, userId = <id>
+ *   dev-<role>:<id>:<businessId>  → explicit role + venue scope (staff/business)
+ *
+ * The structured `:` form is the single way a dev token expresses a
+ * venue-scoped staff session; it mirrors how verifyToken puts the resolved
+ * businessId on the payload in prod. The positional `dev-<id>` form is
+ * unchanged (no colon ⇒ legacy branch), so existing dev tokens keep their
+ * exact userId. For the `business` role the venue IS the operator, so
+ * businessId defaults to userId to mirror prod semantics.
+ */
+function devAuthPayload(token: string, allowedRoles: AuthRole[]): AuthPayload {
+  const DEV_ROLES: readonly AuthRole[] = ['consumer', 'business', 'staff', 'admin']
+  const body = token.startsWith('dev-') ? token.slice(4) : token
+  const parts = body.split(':')
+  const maybeRole = parts[0] as AuthRole
+
+  if (parts.length > 1 && DEV_ROLES.includes(maybeRole)) {
+    const userId = parts[1] ?? `dev-user-${Date.now()}`
+    const businessId = parts[2]
+    return {
+      userId,
+      role: maybeRole,
+      cognitoSub: `dev-sub-${userId}`,
+      citySlug: 'johannesburg',
+      email: undefined,
+      businessId: businessId ?? (maybeRole === 'business' ? userId : undefined),
+    }
+  }
+
+  const role = allowedRoles[0] ?? 'consumer'
+  const userId = token.includes('dev-') ? token.split('-').slice(1, 3).join('-') : `dev-user-${Date.now()}`
+  return {
+    userId,
+    role,
+    cognitoSub: `dev-sub-${userId}`,
+    citySlug: 'johannesburg',
+    email: undefined,
+    businessId: role === 'business' ? userId : undefined,
+  }
+}
+
+/**
  * Creates a Fastify preHandler that verifies JWT for the given role(s).
  * Attaches `request.auth` with the verified payload.
  */
@@ -167,15 +233,16 @@ export function requireAuth(...roles: AuthRole[]) {
     if (DEV_MODE) {
       const authHeader = request.headers.authorization
       const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : ''
-      const role = roles[0] ?? 'consumer'
-      const userId = token.includes('dev-') ? token.split('-').slice(1, 3).join('-') : `dev-user-${Date.now()}`
-      ;(request as FastifyRequest & { auth: AuthPayload }).auth = {
-        userId,
-        role,
-        cognitoSub: `dev-sub-${userId}`,
-        citySlug: 'johannesburg',
-        email: undefined,
+      const payload = devAuthPayload(token, roles)
+      // Mirror prod: a token only authenticates on a route whose allowed roles
+      // include the token's pool. In prod a staff-pool token fails business-pool
+      // verification (401); here the legacy positional form always yields
+      // roles[0] (always allowed), while a structured token naming a role
+      // outside `roles` is rejected. Fail closed.
+      if (!roles.includes(payload.role)) {
+        throw AppError.unauthorized('Invalid or expired token')
       }
+      ;(request as FastifyRequest & { auth: AuthPayload }).auth = payload
       return
     }
 

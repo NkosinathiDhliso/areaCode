@@ -9,10 +9,12 @@ import {
 import { DynamoDBClient, PutItemCommand, DeleteItemCommand, QueryCommand, ScanCommand } from '@aws-sdk/client-dynamodb'
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb'
 
-const ddbClient = new DynamoDBClient({ region: process.env['AWS_REGION'] || 'us-east-1' })
+import { AWS_REGION, requireEnv } from '../shared/config/env.js'
+
+const ddbClient = new DynamoDBClient({ region: AWS_REGION })
 
 // Connection management table
-const CONNECTIONS_TABLE = process.env['CONNECTIONS_TABLE'] || 'area-code-prod-websocket-connections'
+const CONNECTIONS_TABLE = requireEnv('CONNECTIONS_TABLE', 'area-code-dev-websocket-connections')
 
 // WebSocket API endpoint (for sending messages back)
 const WEBSOCKET_ENDPOINT = process.env['WEBSOCKET_ENDPOINT']
@@ -235,7 +237,7 @@ async function sendToConnection(connectionId: string, message: BroadcastMessage)
   }
 
   const client = new ApiGatewayManagementApiClient({
-    region: process.env['AWS_REGION'] || 'us-east-1',
+    region: AWS_REGION,
     endpoint,
   })
 

@@ -64,11 +64,6 @@ export const presignedUploadBodySchema = z.object({
   contentType: z.enum(['image/jpeg', 'image/webp', 'image/png']),
 })
 
-export const registerImageBodySchema = z.object({
-  s3Key: z.string().min(1),
-  displayOrder: z.number().int().min(0).default(0),
-})
-
 // ============================================================================
 // DynamoDB Entity Types
 // ============================================================================
@@ -90,6 +85,8 @@ export interface Node {
   qrCheckinEnabled: boolean
   isVerified: boolean
   isActive: boolean
+  /** S3 object key of the venue header image, served to clients via VITE_CDN_URL. */
+  headerImageKey?: string | null
   /**
    * Fallback Archetype id used by taste-match ranking (and the Live_Archetype
    * resolver) when no live archetype is currently emitted. Absent/unknown ids
@@ -100,13 +97,4 @@ export interface Node {
   currentArchetypeId?: string | null
   createdAt: string
   updatedAt: string
-}
-
-export interface NodeImage {
-  imageId: string
-  nodeId: string
-  s3Key: string
-  displayOrder: number
-  uploadedBy?: string
-  createdAt: string
 }

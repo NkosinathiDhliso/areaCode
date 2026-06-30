@@ -2,7 +2,7 @@
 import { GetCommand, QueryCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
-import type { Node, NodeImage } from './types.js'
+import type { Node } from './types.js'
 
 // ============================================================================
 // NODE OPERATIONS
@@ -75,7 +75,7 @@ export async function createNode(data: Omit<Node, 'nodeId' | 'createdAt'>): Prom
   await documentClient.send(
     new PutCommand({
       TableName: TableNames.nodes,
-      Item: { ...node, id: nodeId },
+      Item: { ...node },
     }),
   )
 
@@ -169,7 +169,7 @@ export async function listNodes(options?: {
 
 function mapNode(item: Record<string, unknown>): Node {
   return {
-    nodeId: (item['nodeId'] as string) ?? (item['id'] as string),
+    nodeId: item['nodeId'] as string,
     name: item['name'] as string,
     slug: item['slug'] as string,
     category: item['category'] as string,
@@ -185,62 +185,12 @@ function mapNode(item: Record<string, unknown>): Node {
     qrCheckinEnabled: (item['qrCheckinEnabled'] as boolean) ?? false,
     isVerified: (item['isVerified'] as boolean) ?? false,
     isActive: (item['isActive'] as boolean) ?? true,
+    headerImageKey: (item['headerImageKey'] as string | null | undefined) ?? null,
     defaultArchetypeId: (item['defaultArchetypeId'] as string | null | undefined) ?? null,
     currentArchetypeId: (item['currentArchetypeId'] as string | null | undefined) ?? null,
     createdAt: (item['createdAt'] as string) ?? '',
     updatedAt: (item['updatedAt'] as string) ?? '',
   }
-}
-
-// ============================================================================
-// NODE IMAGES
-// ============================================================================
-
-export async function getNodeImages(nodeId: string): Promise<NodeImage[]> {
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.appData,
-      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :skPrefix)',
-      ExpressionAttributeValues: {
-        ':pk': `NODE#${nodeId}`,
-        ':skPrefix': 'IMAGE#',
-      },
-    }),
-  )
-  return (result.Items || []) as NodeImage[]
-}
-
-export async function addNodeImage(data: Omit<NodeImage, 'imageId' | 'createdAt'>): Promise<NodeImage> {
-  const imageId = generateId()
-  const now = new Date().toISOString()
-
-  const image: NodeImage = {
-    ...data,
-    imageId,
-    createdAt: now,
-  }
-
-  await documentClient.send(
-    new PutCommand({
-      TableName: TableNames.appData,
-      Item: {
-        pk: `NODE#${data.nodeId}`,
-        sk: `IMAGE#${imageId}`,
-        ...image,
-      },
-    }),
-  )
-
-  return image
-}
-
-export async function deleteNodeImage(nodeId: string, imageId: string): Promise<void> {
-  await documentClient.send(
-    new DeleteCommand({
-      TableName: TableNames.appData,
-      Key: { pk: `NODE#${nodeId}`, sk: `IMAGE#${imageId}` },
-    }),
-  )
 }
 
 // ============================================================================

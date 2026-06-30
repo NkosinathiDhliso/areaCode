@@ -147,7 +147,7 @@ export async function getNearbyRecentEvent(lat: number, lng: number, radiusMetre
       Math.cos((lat * Math.PI) / 180) * Math.cos((nLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
     const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
     if (distance <= radiusMetres) {
-      nearbyNodes.push({ nodeId: (n['nodeId'] ?? n['id']) as string, name: n['name'] as string, distance })
+      nearbyNodes.push({ nodeId: n['nodeId'] as string, name: n['name'] as string, distance })
     }
   }
 
@@ -335,7 +335,7 @@ export async function searchUsers(query: string, viewerId: string) {
   const result = await documentClient.send(new ScanCommand({ TableName: TableNames.users }))
   const users = (result.Items || [])
     .filter((u) => {
-      const uid = (u['userId'] ?? u['id']) as string
+      const uid = u['userId'] as string
       if (uid === viewerId) return false
       const uname = ((u['username'] as string) || '').toLowerCase()
       const dname = ((u['displayName'] as string) || '').toLowerCase()
@@ -343,7 +343,7 @@ export async function searchUsers(query: string, viewerId: string) {
     })
     .slice(0, 20)
 
-  const userIds = users.map((u) => (u['userId'] ?? u['id']) as string)
+  const userIds = users.map((u) => u['userId'] as string)
   const followingSet = new Set<string>()
   for (const uid of userIds) {
     if (await isFollowing(viewerId, uid)) followingSet.add(uid)
@@ -351,7 +351,7 @@ export async function searchUsers(query: string, viewerId: string) {
   const mutualIds = userIds.length > 0 ? await getMutualFollowIds(viewerId, userIds) : new Set<string>()
 
   return users.map((u) => {
-    const uid = (u['userId'] ?? u['id']) as string
+    const uid = u['userId'] as string
     return {
       userId: uid,
       username: u['username'],

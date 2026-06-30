@@ -1,7 +1,7 @@
 import * as repo from './repository.js'
 import type { MusicGenre, DimensionScoreVector, CrowdVibeSnapshot, BusinessMusicAudience } from './shared-types.js'
 
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
+import { DEV_MODE } from '../../shared/config/env.js'
 
 // Re-export the archetype resolver logic inline to avoid cross-package import issues at runtime
 const DIMENSIONS = ['energy', 'cultural_rootedness', 'sophistication', 'edge', 'spirituality'] as const

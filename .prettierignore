@@ -5,3 +5,11 @@ coverage
 *.tfstate
 .terraform
 pnpm-lock.yaml
+
+# Generated AI-rule mirrors. Single source of truth is rules/*.md; these are
+# produced by scripts/sync-ai-rules.mjs and must not be hand-formatted.
+.kiro/steering
+CLAUDE.md
+.cursor
+.windsurf
+.github/copilot-instructions.md

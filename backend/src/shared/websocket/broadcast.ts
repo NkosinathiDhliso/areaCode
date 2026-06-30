@@ -5,11 +5,13 @@ import { ApiGatewayManagementApiClient, PostToConnectionCommand } from '@aws-sdk
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb'
 import { unmarshall } from '@aws-sdk/util-dynamodb'
 
-const ddbClient = new DynamoDBClient({ region: process.env['AWS_REGION'] || 'us-east-1' })
+import { AWS_REGION, requireEnv } from '../config/env.js'
+
+const ddbClient = new DynamoDBClient({ region: AWS_REGION })
 
 // WebSocket API endpoint from environment
 const WEBSOCKET_ENDPOINT = process.env['WEBSOCKET_ENDPOINT']
-const CONNECTIONS_TABLE = process.env['CONNECTIONS_TABLE'] || 'area-code-prod-websocket-connections'
+const CONNECTIONS_TABLE = requireEnv('CONNECTIONS_TABLE', 'area-code-dev-websocket-connections')
 
 interface BroadcastMessage {
   type: string
@@ -23,7 +25,7 @@ async function getApiClient(): Promise<ApiGatewayManagementApiClient> {
   }
 
   return new ApiGatewayManagementApiClient({
-    region: process.env['AWS_REGION'] || 'us-east-1',
+    region: AWS_REGION,
     endpoint,
   })
 }

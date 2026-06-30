@@ -12,8 +12,7 @@ import { LEGAL_CLAUSES_VERSION } from '@area-code/shared/constants/legal'
 
 import { randomBytes } from 'node:crypto'
 
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
-
+import { AWS_REGION, DEV_MODE } from '../../shared/config/env.js'
 /**
  * Canonical consent version. Falls back to `LEGAL_CLAUSES_VERSION` from
  * the shared constants module if the env var isn't set, so a misconfigured
@@ -1158,7 +1157,7 @@ export async function refreshToken(refreshTokenValue: string, pool: string) {
 
   const { CognitoIdentityProviderClient, AdminInitiateAuthCommand } =
     await import('@aws-sdk/client-cognito-identity-provider')
-  const client = new CognitoIdentityProviderClient({ region: process.env['AWS_REGION'] ?? 'us-east-1' })
+  const client = new CognitoIdentityProviderClient({ region: AWS_REGION })
 
   const result = await client.send(
     new AdminInitiateAuthCommand({

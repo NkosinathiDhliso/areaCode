@@ -198,7 +198,7 @@ export async function deactivateBusinessRewards(businessId: string) {
       ExpressionAttributeValues: { ':bid': businessId },
     }),
   )
-  const nodeIds = (nodesResult.Items || []).map((n) => (n['nodeId'] ?? n['id']) as string)
+  const nodeIds = (nodesResult.Items || []).map((n) => n['nodeId'] as string)
   let count = 0
   for (const nid of nodeIds) {
     const rewards = await documentClient.send(
@@ -234,7 +234,7 @@ export async function getLiveStats(businessId: string) {
       ExpressionAttributeValues: { ':bid': businessId },
     }),
   )
-  const nodeIds = (nodesResult.Items || []).map((n) => (n['nodeId'] ?? n['id']) as string)
+  const nodeIds = (nodesResult.Items || []).map((n) => n['nodeId'] as string)
 
   let checkInsToday = 0
   let totalCheckIns = 0
@@ -259,7 +259,7 @@ export async function getNodesForBusiness(businessId: string) {
       ExpressionAttributeValues: { ':bid': businessId },
     }),
   )
-  return (result.Items || []).map((n) => ({ ...n, id: n['nodeId'] ?? n['id'] }))
+  return (result.Items || []).map((n) => ({ ...n, id: n['nodeId'] }))
 }
 
 // ─── Audience Analytics ─────────────────────────────────────────────────────
@@ -273,7 +273,7 @@ export async function getAudienceAnalytics(businessId: string) {
       ExpressionAttributeValues: { ':bid': businessId },
     }),
   )
-  const nodeIds = (nodesResult.Items || []).map((n) => (n['nodeId'] ?? n['id']) as string)
+  const nodeIds = (nodesResult.Items || []).map((n) => n['nodeId'] as string)
 
   const uniqueUserIds = new Set<string>()
   for (const nid of nodeIds) {
@@ -416,7 +416,7 @@ export async function getRewardsForBusiness(businessId: string) {
       ExpressionAttributeValues: { ':bid': businessId },
     }),
   )
-  const nodeIds = (nodesResult.Items || []).map((n) => (n['nodeId'] ?? n['id']) as string)
+  const nodeIds = (nodesResult.Items || []).map((n) => n['nodeId'] as string)
   const allRewards = []
   for (const nid of nodeIds) {
     const result = await documentClient.send(
@@ -426,7 +426,7 @@ export async function getRewardsForBusiness(businessId: string) {
         ExpressionAttributeValues: { ':nid': nid },
       }),
     )
-    allRewards.push(...(result.Items || []).map((r) => ({ ...r, id: r['rewardId'] ?? r['id'] })))
+    allRewards.push(...(result.Items || []).map((r) => ({ ...r, id: r['rewardId'] })))
   }
   return allRewards
 }

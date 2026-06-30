@@ -1,8 +1,7 @@
 import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet, kvSet, kvDel } from '../../shared/kv/dynamodb-kv.js'
 import * as repo from './repository.js'
-
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
+import { DEV_MODE } from '../../shared/config/env.js'
 
 // ─── User Profile ───────────────────────────────────────────────────────────
 

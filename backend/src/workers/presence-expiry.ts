@@ -74,7 +74,7 @@ export async function handler() {
     )
 
     for (const n of nodesResult.Items || []) {
-      const nodeId = (n['nodeId'] ?? n['id']) as string
+      const nodeId = n['nodeId'] as string
 
       // Compute `now` per node so a long sweep stays accurate as it progresses.
       const now = Math.floor(Date.now() / 1000)

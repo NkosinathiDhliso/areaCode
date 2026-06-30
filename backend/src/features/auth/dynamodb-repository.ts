@@ -307,8 +307,8 @@ export async function updateUser(
 function mapUser(item: Record<string, unknown>): User {
   return {
     ...item,
-    id: (item['userId'] as string) ?? (item['id'] as string),
-    userId: (item['userId'] as string) ?? (item['id'] as string),
+    id: item['userId'] as string,
+    userId: item['userId'] as string,
   } as User
 }
 
@@ -420,8 +420,8 @@ export async function updateBusiness(
 function mapBiz(item: Record<string, unknown>): BusinessAccount {
   return {
     ...item,
-    id: (item['businessId'] as string) ?? (item['id'] as string),
-    businessId: (item['businessId'] as string) ?? (item['id'] as string),
+    id: item['businessId'] as string,
+    businessId: item['businessId'] as string,
   } as BusinessAccount
 }
 
@@ -572,7 +572,7 @@ export async function deleteUser(userId: string): Promise<void> {
 function mapStaff(item: Record<string, unknown>): StaffAccount {
   return {
     ...item,
-    id: (item['staffId'] as string) ?? (item['id'] as string),
-    staffId: (item['staffId'] as string) ?? (item['id'] as string),
+    id: item['staffId'] as string,
+    staffId: item['staffId'] as string,
   } as StaffAccount
 }

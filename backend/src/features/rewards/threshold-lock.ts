@@ -169,7 +169,7 @@ export async function processCheckInRewardLocks(userId: string, nodeId: string):
 
     const threshold = (reward as { triggerValue?: number }).triggerValue
     if (typeof threshold !== 'number' || threshold <= 0) continue
-    const rewardId = (reward as { rewardId?: string; id?: string }).rewardId ?? (reward as { id?: string }).id
+    const rewardId = (reward as { rewardId?: string }).rewardId
     if (!rewardId) continue
     try {
       await incrementProgress({ userId, rewardId, currentThreshold: threshold })

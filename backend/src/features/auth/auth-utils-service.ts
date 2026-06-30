@@ -1,9 +1,7 @@
 import { AppError } from '../../shared/errors/AppError.js'
 import * as repo from './repository.js'
 import * as cognito from '../../shared/cognito/client.js'
-
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
-
+import { AWS_REGION, DEV_MODE, requireEnv } from '../../shared/config/env.js'
 // ─── Staff Invite ───────────────────────────────────────────────────────────
 
 export async function acceptStaffInvite(token: string, name: string, phone: string) {
@@ -79,13 +77,13 @@ export async function revokeUserTokens(role: string, cognitoSub: string) {
 
   const { CognitoIdentityProviderClient, AdminUserGlobalSignOutCommand } =
     await import('@aws-sdk/client-cognito-identity-provider')
-  const region = process.env['AWS_REGION'] ?? 'us-east-1'
+  const region = AWS_REGION
 
   const poolIdMap: Record<string, string> = {
-    consumer: process.env['AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID'] ?? '',
-    business: process.env['AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID'] ?? '',
-    staff: process.env['AREA_CODE_COGNITO_STAFF_USER_POOL_ID'] ?? '',
-    admin: process.env['AREA_CODE_COGNITO_ADMIN_USER_POOL_ID'] ?? '',
+    consumer: requireEnv('AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID', ''),
+    business: requireEnv('AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID', ''),
+    staff: requireEnv('AREA_CODE_COGNITO_STAFF_USER_POOL_ID', ''),
+    admin: requireEnv('AREA_CODE_COGNITO_ADMIN_USER_POOL_ID', ''),
   }
 
   const userPoolId = poolIdMap[role]

@@ -1,3 +1,7 @@
+<!-- GENERATED FILE. DO NOT EDIT.
+     Single source of truth: rules/*.md
+     Regenerate with: pnpm sync:rules -->
+
 ---
 inclusion: always
 ---

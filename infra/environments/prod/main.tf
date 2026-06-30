@@ -726,6 +726,10 @@ module "lambda_api" {
     REWARDS_TABLE                           = aws_dynamodb_table.rewards.name
     BUSINESSES_TABLE                        = aws_dynamodb_table.businesses.name
     APP_DATA_TABLE                          = aws_dynamodb_table.app_data.name
+    MUSIC_SCHEDULES_TABLE                   = aws_dynamodb_table.music_schedules.name
+    # Presence is provisioned by the presence-integrity spec. Env name follows the
+    # per-env convention so the API references the prod table, never a dev one.
+    PRESENCE_TABLE                          = "area-code-${local.env}-presence"
     AREA_CODE_REWARD_QUEUE_URL              = module.sqs_reward_eval.queue_url
     # Pinned to the v2 pool that owns the live Hosted UI domain (see locals above).
     AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID = local.consumer_pool_id
@@ -737,8 +741,6 @@ module "lambda_api" {
     AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
     AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
     AREA_CODE_S3_MEDIA_BUCKET               = module.s3_media.bucket_name
-    # MEDIA_BUCKET kept as an alias for any code paths that still read the short name.
-    MEDIA_BUCKET                 = module.s3_media.bucket_name
     AREA_CODE_SQS_PUSH_QUEUE_URL = module.sqs_push_sender.queue_url
     AREA_CODE_CONSENT_VERSION    = "v1.0"
     AREA_CODE_ANONYMIZATION_SALT = var.anonymization_salt
@@ -772,8 +774,8 @@ module "lambda_api" {
 
 # Legacy per-route Lambdas (check-in, node-detail, rewards-near-me) were removed
 # from production in May 2026. All routes are now served by the monolith API Lambda
-# via the `$default` API Gateway integration. The archived Terraform blocks live in
-# _archive/retired-high-cost-infra/ if historical reference is needed.
+# via the `$default` API Gateway integration. The retired Terraform blocks were
+# removed; see git history if historical reference is needed.
 
 module "lambda_reward_evaluator" {
   source                 = "../../modules/lambda"

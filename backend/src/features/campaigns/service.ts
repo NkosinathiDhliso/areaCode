@@ -30,6 +30,7 @@
 
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda'
 import { AppError } from '../../shared/errors/AppError.js'
+import { AWS_REGION } from '../../shared/config/env.js'
 import { generateId } from '../../shared/db/entities.js'
 import { kvGet } from '../../shared/kv/dynamodb-kv.js'
 import { findBusinessById } from '../business/repository.js'
@@ -161,7 +162,7 @@ const DEFAULT_LAPSED_WINDOW_DAYS = 21
  */
 export const CAMPAIGN_DISPATCHER_FUNCTION_ENV = 'AREA_CODE_CAMPAIGN_DISPATCHER_FUNCTION'
 
-const lambdaClient = new LambdaClient({ region: process.env['AWS_REGION'] ?? 'us-east-1' })
+const lambdaClient = new LambdaClient({ region: AWS_REGION })
 
 /** Compute the 13-month retention TTL (epoch seconds) for a campaign (Requirement 14.3). */
 function campaignTtlSeconds(createdAtIso: string): number {
@@ -239,7 +240,7 @@ async function assertNodesOwned(businessId: string, nodeIds: string[]): Promise<
   const ownedNodes = await getNodesByBusinessId(businessId)
   const ownedIds = new Set<string>()
   for (const n of ownedNodes) {
-    const id = (n.nodeId ?? (n as { id?: string }).id) as string | undefined
+    const id = n.nodeId as string | undefined
     if (id) ownedIds.add(id)
   }
 

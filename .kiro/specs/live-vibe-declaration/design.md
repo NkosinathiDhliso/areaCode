@@ -175,7 +175,7 @@ Wire/types:
 | `Presence_Floor` | **3** qualifying present check-ins in the Lookback_Window | enter `crowd_live` |
 | `Presence_Grace` | **1** (revert to promise only below floor − 1, i.e. < 2)  | exit `crowd_live`  |
 
-Both live as flag-gated config read by the evaluator, so they can be tuned without a deploy.
+Both live as plain module constants in the evaluator (`PRESENCE_FLOOR = 3`, `PRESENCE_GRACE = 1`) — the single source of truth. They are only consulted on the `live_vibe_declaration` flag-on path; changing either value is a normal code deploy, not a runtime knob.
 
 ## Error Handling
 

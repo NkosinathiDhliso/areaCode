@@ -67,7 +67,7 @@ export async function handler() {
     )
 
     for (const n of nodesResult.Items || []) {
-      const nodeId = (n['nodeId'] ?? n['id']) as string
+      const nodeId = n['nodeId'] as string
       const scoreStr = await kvGet(`pulse:${city.id}:${nodeId}`)
       if (!scoreStr) continue
 

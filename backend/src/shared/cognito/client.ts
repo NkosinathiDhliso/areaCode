@@ -31,10 +31,11 @@ import {
 } from '@aws-sdk/client-cognito-identity-provider'
 
 import type { AuthRole } from '../middleware/auth.js'
+import { AWS_REGION, requireEnv } from '../config/env.js'
 
 import { withCognitoErrorMapping } from './errors.js'
 
-const region = process.env['AWS_REGION'] ?? 'us-east-1'
+const region = AWS_REGION
 const cognitoClient = new CognitoIdentityProviderClient({ region })
 
 interface PoolConfig {
@@ -44,20 +45,20 @@ interface PoolConfig {
 
 const poolConfigs: Record<AuthRole, () => PoolConfig> = {
   consumer: () => ({
-    userPoolId: process.env['AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID'] ?? '',
-    clientId: process.env['AREA_CODE_COGNITO_CONSUMER_CLIENT_ID'] ?? '',
+    userPoolId: requireEnv('AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID', ''),
+    clientId: requireEnv('AREA_CODE_COGNITO_CONSUMER_CLIENT_ID', ''),
   }),
   business: () => ({
-    userPoolId: process.env['AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID'] ?? '',
-    clientId: process.env['AREA_CODE_COGNITO_BUSINESS_CLIENT_ID'] ?? '',
+    userPoolId: requireEnv('AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID', ''),
+    clientId: requireEnv('AREA_CODE_COGNITO_BUSINESS_CLIENT_ID', ''),
   }),
   staff: () => ({
-    userPoolId: process.env['AREA_CODE_COGNITO_STAFF_USER_POOL_ID'] ?? '',
-    clientId: process.env['AREA_CODE_COGNITO_STAFF_CLIENT_ID'] ?? '',
+    userPoolId: requireEnv('AREA_CODE_COGNITO_STAFF_USER_POOL_ID', ''),
+    clientId: requireEnv('AREA_CODE_COGNITO_STAFF_CLIENT_ID', ''),
   }),
   admin: () => ({
-    userPoolId: process.env['AREA_CODE_COGNITO_ADMIN_USER_POOL_ID'] ?? '',
-    clientId: process.env['AREA_CODE_COGNITO_ADMIN_CLIENT_ID'] ?? '',
+    userPoolId: requireEnv('AREA_CODE_COGNITO_ADMIN_USER_POOL_ID', ''),
+    clientId: requireEnv('AREA_CODE_COGNITO_ADMIN_CLIENT_ID', ''),
   }),
 }
 

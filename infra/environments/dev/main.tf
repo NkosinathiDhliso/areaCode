@@ -474,6 +474,10 @@ module "lambda_api" {
     REWARDS_TABLE                           = aws_dynamodb_table.rewards.name
     BUSINESSES_TABLE                        = aws_dynamodb_table.businesses.name
     APP_DATA_TABLE                          = aws_dynamodb_table.app_data.name
+    MUSIC_SCHEDULES_TABLE                   = aws_dynamodb_table.music_schedules.name
+    # Presence is provisioned by the presence-integrity spec. Env name follows the
+    # per-env convention so each env references its own table, never a cross-env one.
+    PRESENCE_TABLE                          = "area-code-${local.env}-presence"
     AREA_CODE_REWARD_QUEUE_URL              = module.sqs_reward_eval.queue_url
     AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID = module.cognito_consumer.user_pool_id
     AREA_CODE_COGNITO_CONSUMER_CLIENT_ID    = module.cognito_consumer.client_id
@@ -484,8 +488,6 @@ module "lambda_api" {
     AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
     AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
     AREA_CODE_S3_MEDIA_BUCKET               = module.s3_media.bucket_name
-    # MEDIA_BUCKET kept as an alias for any code paths that still read the short name.
-    MEDIA_BUCKET                 = module.s3_media.bucket_name
     AREA_CODE_SQS_PUSH_QUEUE_URL = module.sqs_push_sender.queue_url
     AREA_CODE_CONSENT_VERSION    = "v1.0"
   }

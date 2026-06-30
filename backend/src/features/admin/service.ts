@@ -1,4 +1,5 @@
 import { AppError } from '../../shared/errors/AppError.js'
+import { AWS_REGION, requireEnv } from '../../shared/config/env.js'
 import * as repo from './repository.js'
 import type { AdminRole } from './types.js'
 
@@ -175,7 +176,7 @@ export async function getConsentHistory(adminRole: AdminRole, userId: string) {
 
 export async function getReconsentList(adminRole: AdminRole) {
   checkPermission(adminRole, 'view_consent')
-  const version = process.env['AREA_CODE_CONSENT_VERSION'] ?? 'v1.0'
+  const version = requireEnv('AREA_CODE_CONSENT_VERSION', 'v1.0')
   return repo.getUsersNeedingReconsent(version)
 }
 
@@ -797,8 +798,8 @@ export async function disableUser(adminId: string, adminRole: AdminRole, userId:
     try {
       const { CognitoIdentityProviderClient, AdminUserGlobalSignOutCommand } =
         await import('@aws-sdk/client-cognito-identity-provider')
-      const region = process.env['AWS_REGION'] ?? 'us-east-1'
-      const userPoolId = process.env['AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID'] ?? ''
+      const region = AWS_REGION
+      const userPoolId = requireEnv('AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID', '')
       if (userPoolId) {
         const client = new CognitoIdentityProviderClient({ region })
         await client.send(

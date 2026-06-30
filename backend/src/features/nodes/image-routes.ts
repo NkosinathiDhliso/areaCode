@@ -7,7 +7,7 @@ import { AppError } from '../../shared/errors/AppError.js'
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { validate } from '../../shared/middleware/validation.js'
 
-import { generateUploadUrl, deleteImage } from './image-service.js'
+import { generateUploadUrl, deleteImage, processUploadedImage } from './image-service.js'
 
 const uploadUrlBodySchema = z.object({
   contentType: z.enum(['image/jpeg', 'image/png']),
@@ -65,6 +65,64 @@ export async function nodeImageRoutes(app: FastifyInstance) {
       }
 
       return reply.send({ uploadUrl, objectKey })
+    },
+  )
+
+  /**
+   * POST /v1/business/nodes/:nodeId/image/process
+   * Called by the client AFTER it has PUT the file to the presigned URL.
+   *
+   * Sanitises the upload server-side: strips ALL EXIF metadata (POPIA — phone
+   * photos routinely embed GPS coordinates), auto-rotates, resizes to max
+   * 1200px, and re-encodes to WebP. It then repoints `headerImageKey` at the
+   * processed object (the original is deleted by `processUploadedImage`).
+   *
+   * Best-effort: if processing is unavailable in this runtime (e.g. the sharp
+   * binary is not bundled) the raw upload is kept so the photo still renders,
+   * and a warning is logged so the EXIF-stripping gap is observable rather than
+   * silently skipped.
+   */
+  app.post(
+    '/v1/business/nodes/:nodeId/image/process',
+    {
+      preHandler: [requireAuth('business'), validate({ params: nodeIdParamsSchema })],
+    },
+    async (request, reply) => {
+      const auth = getAuth(request)
+      const { nodeId } = request.params as z.infer<typeof nodeIdParamsSchema>
+
+      // Verify node ownership
+      const nodeResult = await documentClient.send(new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } }))
+      const node = nodeResult.Item
+      if (!node || node['businessId'] !== auth.userId) {
+        throw new AppError(403, 'forbidden', 'You do not own this node')
+      }
+
+      const rawKey = (node['headerImageKey'] as string | undefined) ?? null
+      if (!rawKey) {
+        throw new AppError(400, 'no_pending_image', 'No uploaded image to process for this node')
+      }
+
+      try {
+        const { processedKey } = await processUploadedImage(rawKey)
+        if (processedKey !== rawKey) {
+          await documentClient.send(
+            new UpdateCommand({
+              TableName: TableNames.nodes,
+              Key: { nodeId },
+              UpdateExpression: 'SET headerImageKey = :key',
+              ExpressionAttributeValues: { ':key': processedKey },
+            }),
+          )
+        }
+        return reply.send({ headerImageKey: processedKey, processed: true })
+      } catch (err) {
+        request.log.warn(
+          { err, nodeId, rawKey },
+          'node image processing failed; serving unprocessed upload (EXIF not stripped)',
+        )
+        return reply.send({ headerImageKey: rawKey, processed: false })
+      }
     },
   )
 

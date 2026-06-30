@@ -1,8 +1,7 @@
 import type { FastifyRequest } from 'fastify'
 import { kvIncr, kvTtl } from '../kv/dynamodb-kv.js'
 import { AppError } from '../errors/AppError.js'
-
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
+import { DEV_MODE } from '../config/env.js'
 
 interface RateLimitOptions {
   /** Key prefix for this limiter */

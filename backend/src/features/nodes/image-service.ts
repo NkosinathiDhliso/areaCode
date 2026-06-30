@@ -1,16 +1,16 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
+import { AWS_REGION, requireEnv } from '../../shared/config/env.js'
+
 const s3 = new S3Client({
-  region: process.env['AWS_REGION'] ?? 'us-east-1',
+  region: AWS_REGION,
   // Avoid SDK v3 default of injecting x-amz-checksum-crc32 + x-amz-sdk-checksum-algorithm
   // into presigned PUT URLs — the browser cannot reproduce those headers, causing 403s.
   requestChecksumCalculation: 'WHEN_REQUIRED',
   responseChecksumValidation: 'WHEN_REQUIRED',
 })
-// Prefer AREA_CODE_S3_MEDIA_BUCKET (set by Terraform) and fall back to
-// MEDIA_BUCKET for local dev / legacy callers.
-const BUCKET = process.env['AREA_CODE_S3_MEDIA_BUCKET'] ?? process.env['MEDIA_BUCKET'] ?? 'area-code-media'
+const BUCKET = requireEnv('AREA_CODE_S3_MEDIA_BUCKET', 'area-code-dev-media')
 const MAX_WIDTH = 1200
 
 export interface ImageProcessingResult {

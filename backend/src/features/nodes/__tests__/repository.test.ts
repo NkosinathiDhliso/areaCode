@@ -54,7 +54,6 @@ vi.mock('../dynamodb-repository.js', () => ({
   getNodeBySlug: vi.fn(),
   createNode: vi.fn(),
   updateNode: vi.fn(),
-  addNodeImage: vi.fn(),
 }))
 
 import { getNodesByCitySlug } from '../repository.js'

@@ -38,22 +38,33 @@ const scheduleSlotPathParamsSchema = z.object({
 })
 
 /**
- * Reject with 403 when the authenticated business operator's `businessId`
- * claim does not match the path's `businessId` (R4.11, R4.12). The check
- * runs BEFORE any DynamoDB I/O on the MusicSchedules table — by the time
- * `requireAuth('business')` has set `auth.userId`, the value already maps
- * to the JWT's `custom:businessId` claim (or to the business row resolved
- * from the Cognito sub at token-verification time), so this comparison
- * never touches the schedules table itself.
+ * Authorise access to a venue's Music_Schedule, BEFORE any DynamoDB I/O.
  *
- * Throws `AppError.forbidden` so the existing global error handler maps it
- * to a 403 response.
+ * One helper, one rule set, fail CLOSED (deny by default) — the schedule is a
+ * single source of truth shared by the business operator and that venue's
+ * staff:
+ *   - role `business`: allowed iff `auth.userId === pathBusinessId` (the
+ *     existing owner rule, unchanged — R4.11/R4.12).
+ *   - role `staff`: allowed iff the staff member's resolved venue matches the
+ *     path (`auth.businessId === pathBusinessId`). The staff session carries
+ *     its `businessId` from `verifyToken` (the `custom:businessId` claim, else
+ *     the staff row) — see `shared/middleware/auth.ts`.
+ *   - anything else / missing businessId: 403 (deny by default).
+ *
+ * The check runs BEFORE any MusicSchedules I/O. `requireAuth` has already set
+ * `auth` from the verified token, so this comparison never touches the
+ * schedules table itself.
+ *
+ * Throws `AppError.forbidden` so the existing global error handler maps it to a
+ * 403 response.
  */
-function authoriseBusinessClaim(request: FastifyRequest, pathBusinessId: string): void {
+function authoriseScheduleAccess(request: FastifyRequest, pathBusinessId: string): void {
   const auth = getAuth(request)
-  if (auth.userId !== pathBusinessId) {
-    throw AppError.forbidden('You do not have access to this venue.')
-  }
+
+  if (auth.role === 'business' && auth.userId === pathBusinessId) return
+  if (auth.role === 'staff' && auth.businessId !== undefined && auth.businessId === pathBusinessId) return
+
+  throw AppError.forbidden('You do not have access to this venue.')
 }
 
 /**
@@ -159,10 +170,16 @@ export async function musicRoutes(app: FastifyInstance) {
   // Music_Schedule routes (R3.1, R3.5, R3.7, R3.9, R3.11, R3.12, R4.5, R4.7,
   // R4.11, R4.12, R4.13)
   //
-  // All three routes:
-  //   1. Require a verified business-pool JWT (`requireAuth('business')`).
-  //   2. Reject with 403 when the JWT's `businessId` claim does not match
-  //      the path `businessId`, BEFORE any MusicSchedules I/O.
+  // The Music_Schedule is a single source of truth shared by the business
+  // operator and that venue's staff. GET and POST accept either a verified
+  // business-pool JWT or a verified staff-pool JWT; DELETE stays business-only
+  // (staff set the vibe, they do not delete schedule slots).
+  //
+  // All routes:
+  //   1. Require a verified JWT for an allowed role (`requireAuth(...)`).
+  //   2. Reject with 403 via `authoriseScheduleAccess` when the session's
+  //      resolved venue does not match the path `businessId`, BEFORE any
+  //      MusicSchedules I/O (fail closed, deny by default).
   //   3. Run `validateMusicSchedule` server-side on every write regardless
   //      of what the editor sends — never trust the client.
   //   4. Persist Cross_Midnight_Pair as the two same-day slots the editor
@@ -175,11 +192,11 @@ export async function musicRoutes(app: FastifyInstance) {
   app.get(
     '/v1/business/:businessId/music-schedule',
     {
-      preHandler: [requireAuth('business'), validate({ params: businessPathParamsSchema })],
+      preHandler: [requireAuth('business', 'staff'), validate({ params: businessPathParamsSchema })],
     },
     async (request, reply) => {
       const params = request.params as z.infer<typeof businessPathParamsSchema>
-      authoriseBusinessClaim(request, params.businessId)
+      authoriseScheduleAccess(request, params.businessId)
 
       const schedule = await getSchedule(params.businessId, DEFAULT_SCHEDULE_ID)
       if (!schedule) {
@@ -196,11 +213,11 @@ export async function musicRoutes(app: FastifyInstance) {
   app.post(
     '/v1/business/:businessId/music-schedule',
     {
-      preHandler: [requireAuth('business'), validate({ params: businessPathParamsSchema })],
+      preHandler: [requireAuth('business', 'staff'), validate({ params: businessPathParamsSchema })],
     },
     async (request, reply) => {
       const params = request.params as z.infer<typeof businessPathParamsSchema>
-      authoriseBusinessClaim(request, params.businessId)
+      authoriseScheduleAccess(request, params.businessId)
 
       // Override the (businessId, scheduleId) fields from the path so a
       // misbehaving client cannot write under a different businessId.
@@ -224,7 +241,7 @@ export async function musicRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const params = request.params as z.infer<typeof scheduleSlotPathParamsSchema>
-      authoriseBusinessClaim(request, params.businessId)
+      authoriseScheduleAccess(request, params.businessId)
 
       try {
         const updated = await deleteScheduleSlot(params.businessId, DEFAULT_SCHEDULE_ID, params.slotId)

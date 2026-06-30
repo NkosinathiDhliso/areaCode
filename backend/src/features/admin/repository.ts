@@ -113,7 +113,7 @@ export async function getBusinessById(businessId: string) {
     }),
   )
   const nodes = (nodesResult.Items || []).map((n) => ({
-    id: n['nodeId'] ?? n['id'],
+    id: n['nodeId'],
     name: n['name'],
     slug: n['slug'],
     claimStatus: n['claimStatus'],
@@ -272,7 +272,7 @@ export async function getUsersNeedingReconsent(currentVersion: string) {
   const usersResult = await documentClient.send(new ScanCommand({ TableName: TableNames.users }))
   const needReconsent = []
   for (const u of (usersResult.Items || []).slice(0, 200)) {
-    const uid = (u['userId'] ?? u['id']) as string
+    const uid = u['userId'] as string
     const consent = await documentClient.send(
       new QueryCommand({
         TableName: TableNames.appData,
@@ -309,7 +309,7 @@ export async function searchConsumers(query: string) {
   // Compute additional fields for each user
   const enriched = []
   for (const u of sliced) {
-    const userId = (u['userId'] ?? u['id']) as string
+    const userId = u['userId'] as string
 
     // streakCount and isDisabled from user record
     const streakCount = (u['streakCount'] as number) ?? 0
@@ -360,7 +360,7 @@ export async function searchBusinesses(query: string) {
   // Compute additional fields for each business — all enrichments run in parallel
   const enriched = await Promise.all(
     sliced.map(async (b) => {
-      const businessId = (b['businessId'] ?? b['id']) as string
+      const businessId = b['businessId'] as string
 
       const [staffCount, nodeCount, activeRewardCount] = await Promise.all([
         getStaffByBusinessId(businessId)

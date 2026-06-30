@@ -100,6 +100,23 @@ const ACTIVE_RING_LAYER = 'active-ring'
 /** Marker sub-element that owns the React glyph mount. */
 const GLYPH_HOST_LAYER = 'glyph-host'
 
+/** Marker sub-element that owns the glyph tap target (selection input). */
+const GLYPH_HIT_LAYER = 'glyph-hit'
+
+/**
+ * Minimum tap target for a glyph marker (code-style 44px rule). The visual
+ * glyph stays at its Pulse_State size; a transparent pad of at least this
+ * size, centred on the glyph, carries the select tap so a small dormant/quiet
+ * glyph (18-22px) is still reliably selectable by a direct map tap rather than
+ * only via the carousel arrows.
+ */
+const GLYPH_MIN_HIT_PX = 44
+
+/** Centred hit-pad size for a glyph of the given visual diameter. */
+function glyphHitSize(glyphSize: number): number {
+  return Math.max(glyphSize, GLYPH_MIN_HIT_PX)
+}
+
 /**
  * Per-Pulse_State animation, halo opacity, and ripple settings. The old
  * "core dot" layer has been retired (see R8.1 redesign): the
@@ -233,12 +250,35 @@ function buildMarkerElement(
     zIndex: '2',
   })
   glyphWrapper.dataset.layer = 'glyph-wrapper'
-  glyphWrapper.addEventListener('mousedown', (e) => e.stopPropagation())
-  glyphWrapper.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true })
-  glyphWrapper.addEventListener('click', (e) => {
+
+  // ── Glyph hit pad (selection tap target) ──
+  // The visible glyph is sized to its Pulse_State (often < 44px). Selection
+  // taps go through a transparent, centred pad sized to at least the 44px touch
+  // target so a direct map tap on the glyph reliably selects the venue (R3.1,
+  // R3.4: every input feeds the one Selection_Model). pointer-events is left to
+  // inherit from the glyph wrapper so applyPresentationTier's auto/none gating
+  // on faded neighbours governs the pad too.
+  const glyphHit = document.createElement('div')
+  glyphHit.dataset.layer = GLYPH_HIT_LAYER
+  const hitSize = glyphHitSize(glyphSize)
+  Object.assign(glyphHit.style, {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: `${hitSize}px`,
+    height: `${hitSize}px`,
+    transform: 'translate(-50%, -50%)',
+    cursor: 'pointer',
+    background: 'transparent',
+    zIndex: '3',
+  })
+  glyphHit.addEventListener('mousedown', (e) => e.stopPropagation())
+  glyphHit.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true })
+  glyphHit.addEventListener('click', (e) => {
     e.stopPropagation()
     onTap()
   })
+  glyphWrapper.appendChild(glyphHit)
 
   const glyphHost = document.createElement('div')
   Object.assign(glyphHost.style, {
@@ -462,6 +502,12 @@ function updateMarkerElement(
       height: `${glyphSize}px`,
       filter: state === 'dormant' ? 'none' : `drop-shadow(0 0 ${glyphSize * 0.25}px ${colour}66)`,
     })
+    const glyphHit = glyphWrapper.querySelector(`[data-layer="${GLYPH_HIT_LAYER}"]`) as HTMLElement | null
+    if (glyphHit) {
+      const hitSize = glyphHitSize(glyphSize)
+      glyphHit.style.width = `${hitSize}px`
+      glyphHit.style.height = `${hitSize}px`
+    }
   }
 
   // Live count badge - reflects the venue's Live_Check_In_Count, updated in

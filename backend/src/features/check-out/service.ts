@@ -24,7 +24,7 @@ import { getMutualFollowIds, getFollowingIds } from '../social/repository.js'
 import { canEmitIdentity } from '../../shared/privacy/privacy-guard.js'
 import type { CheckOutInput, CheckOutResponse } from './types.js'
 
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
+import { DEV_MODE } from '../../shared/config/env.js'
 
 /**
  * Process a consumer check-out (`POST /v1/check-out`).

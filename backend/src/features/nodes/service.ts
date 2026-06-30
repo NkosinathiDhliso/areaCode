@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { AppError } from '../../shared/errors/AppError.js'
+import { APP_ENV, AWS_REGION, DEV_MODE, requireEnv } from '../../shared/config/env.js'
 import { kvGet } from '../../shared/kv/dynamodb-kv.js'
 import { getActiveRewardsByNodeId } from '../rewards/dynamodb-repository.js'
 import * as repo from './repository.js'
@@ -14,17 +15,14 @@ import { getLivePresenceCount } from '../presence/repository.js'
 const PAID_TIERS = new Set(['starter', 'growth', 'pro', 'payg'])
 
 const s3 = new S3Client({
-  region: process.env['AWS_REGION'] ?? 'us-east-1',
+  region: AWS_REGION,
   // Avoid SDK v3 default of injecting x-amz-checksum-crc32 + x-amz-sdk-checksum-algorithm
   // into presigned PUT URLs — the browser cannot reproduce those headers, causing 403s.
   requestChecksumCalculation: 'WHEN_REQUIRED',
   responseChecksumValidation: 'WHEN_REQUIRED',
 })
-// Prefer AREA_CODE_S3_MEDIA_BUCKET (set by Terraform) and fall back to
-// MEDIA_BUCKET for local dev / legacy callers.
-const BUCKET = process.env['AREA_CODE_S3_MEDIA_BUCKET'] ?? process.env['MEDIA_BUCKET'] ?? 'area-code-media'
-const ENV = process.env['AREA_CODE_ENV'] ?? 'dev'
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
+const BUCKET = requireEnv('AREA_CODE_S3_MEDIA_BUCKET', 'area-code-dev-media')
+const ENV = APP_ENV
 
 // ─── State Thresholds ───────────────────────────────────────────────────────
 
@@ -681,19 +679,6 @@ export async function createPresignedUpload(ownerId: string, fileType: string, c
   const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 300 })
 
   return { uploadUrl, s3Key, expiresIn: 300 }
-}
-
-export async function registerNodeImage(nodeId: string, businessId: string, s3Key: string, displayOrder: number) {
-  if (DEV_MODE) {
-    return { id: `img-${Date.now()}`, nodeId, s3Key, displayOrder }
-  }
-  // Verify ownership
-  const node = await repo.getNodeById(nodeId)
-  if (!node || node.businessId !== businessId) {
-    throw AppError.forbidden('You do not own this node')
-  }
-
-  return repo.registerNodeImage(nodeId, s3Key, businessId, displayOrder)
 }
 
 // ─── Node Rewards ───────────────────────────────────────────────────────────

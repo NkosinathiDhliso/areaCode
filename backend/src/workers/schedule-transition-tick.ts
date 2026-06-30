@@ -91,7 +91,7 @@ async function resolveVenueRouting(businessId: string): Promise<VenueRouting | n
       KeyConditionExpression: 'businessId = :bid',
       ExpressionAttributeValues: { ':bid': businessId },
       // Only need nodeId + cityId + isActive — keeps the response small.
-      ProjectionExpression: 'nodeId, id, cityId, isActive',
+      ProjectionExpression: 'nodeId, cityId, isActive',
     }),
   )
   const items = nodesResult.Items ?? []
@@ -100,7 +100,7 @@ async function resolveVenueRouting(businessId: string): Promise<VenueRouting | n
   const active = items.find((it) => it['isActive'] === true) ?? items[0]
   if (!active) return null
 
-  const nodeId = (active['nodeId'] ?? active['id']) as string | undefined
+  const nodeId = active['nodeId'] as string | undefined
   const cityId = active['cityId'] as string | undefined
   if (!nodeId || !cityId) return null
 

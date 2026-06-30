@@ -4,8 +4,7 @@ import { getAuth } from './auth.js'
 import { getBusinessById, getStaffById } from '../../features/auth/dynamodb-repository.js'
 import type { BusinessMemberRole } from '../../features/business/types.js'
 import { hasPermission } from '../../features/business/types.js'
-
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
+import { DEV_MODE } from '../config/env.js'
 
 export interface BusinessRolePayload {
   businessId: string

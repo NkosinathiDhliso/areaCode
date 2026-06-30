@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto'
 import { AppError } from '../../shared/errors/AppError.js'
+import { AWS_REGION, DEV_MODE } from '../../shared/config/env.js'
 import { kvGet, kvSet, kvIncr, kvTtl } from '../../shared/kv/dynamodb-kv.js'
 import {
   emitPulseUpdate,
@@ -22,8 +23,6 @@ import { PutCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import type { CheckInInput, CheckInResponse } from './types.js'
 import { decideProximity, haversineMetres, type ProximityConfig, type ProximityMode } from './proximity.js'
-
-const DEV_MODE = process.env['AREA_CODE_ENV'] === 'dev' && !process.env['AREA_CODE_FORCE_LIVE']
 
 const REWARD_COOLDOWN = 14400 // 4 hours
 const PRESENCE_COOLDOWN = 3600 // 1 hour
@@ -461,7 +460,7 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
       const { SQSClient, SendMessageCommand } = await import('@aws-sdk/client-sqs')
       const sqsUrl = process.env['AREA_CODE_REWARD_QUEUE_URL']
       if (sqsUrl) {
-        const sqs = new SQSClient({ region: process.env['AWS_REGION'] ?? 'us-east-1' })
+        const sqs = new SQSClient({ region: AWS_REGION })
         await sqs.send(
           new SendMessageCommand({
             QueueUrl: sqsUrl,

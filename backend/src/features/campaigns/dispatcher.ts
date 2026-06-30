@@ -1,4 +1,5 @@
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs'
+import { AWS_REGION } from '../../shared/config/env.js'
 import { findBusinessById } from '../business/repository.js'
 import { getEffectiveTier } from '../business/service.js'
 import { recipientToken } from './anonymize.js'
@@ -45,7 +46,7 @@ export const MAX_BATCH_SIZE = 100
  */
 export const CAMPAIGN_SEND_QUEUE_URL_ENV = 'AREA_CODE_CAMPAIGN_SEND_QUEUE_URL'
 
-const sqsClient = new SQSClient({ region: process.env['AWS_REGION'] ?? 'us-east-1' })
+const sqsClient = new SQSClient({ region: AWS_REGION })
 
 // ----------------------------------------------------------------------------
 // Pure helpers (exported for property tests — Property 10)

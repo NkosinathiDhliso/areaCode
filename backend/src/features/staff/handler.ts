@@ -160,14 +160,14 @@ export async function staffRoutes(app: FastifyInstance) {
         ExpressionAttributeValues: { ':bid': staff.businessId },
       }),
     )
-    const nodeIds = (nodesResult.Items ?? []).map((n) => (n['nodeId'] ?? n['id']) as string)
+    const nodeIds = (nodesResult.Items ?? []).map((n) => n['nodeId'] as string)
     for (const nodeId of nodeIds) {
       const rewards = await getActiveRewardsByNodeId(nodeId)
       const firstGet = rewards.find((r) => (r as { isFirstGet?: boolean }).isFirstGet)
       if (firstGet) {
         return {
           reward: {
-            rewardId: (firstGet as { rewardId?: string; id?: string }).rewardId ?? (firstGet as { id?: string }).id,
+            rewardId: (firstGet as { rewardId?: string }).rewardId,
             title: firstGet.title,
             description: (firstGet as unknown as Record<string, unknown>)['description'] ?? '',
             nodeId,
