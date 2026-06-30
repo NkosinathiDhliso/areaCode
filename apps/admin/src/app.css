@@ -12,6 +12,11 @@
     height: 100%;
     margin: 0;
     padding: 0;
+    /* Solid backstop so any uncovered strip (safe-area, overscroll, or a 100%
+       vs dvh delta against an h-dvh screen) shows --bg-base, the same colour as
+       the screens and the OS system bar, instead of the webview's black/white
+       backing. This is what removes the standalone-PWA bottom gap. */
+    background-color: var(--bg-base);
   }
   body {
     background: var(--bg-gradient);

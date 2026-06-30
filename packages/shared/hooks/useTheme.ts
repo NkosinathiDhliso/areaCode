@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { create } from 'zustand'
 import { storage } from '../lib/storage'
 
 /**
@@ -57,6 +57,59 @@ function applyTheme(theme: ResolvedTheme): void {
   })
 }
 
+/** Reads the persisted preference, defaulting to 'auto'. */
+function readStoredPreference(): ThemePreference {
+  const stored = storage.get(STORAGE_KEY)
+  if (stored === 'light' || stored === 'dark' || stored === 'auto') return stored
+  return 'auto'
+}
+
+interface ThemeStore {
+  preference: ThemePreference
+  resolved: ResolvedTheme
+  setPreference: (pref: ThemePreference) => void
+  /** Re-evaluate the SAST auto day/night flip. Driven by the 60s interval. */
+  refresh: () => void
+}
+
+const initialPreference = readStoredPreference()
+
+/**
+ * Shared theme store. The basemap style swap (`useMapInit`), the theme toggle
+ * UI (`ProfileScreen`), and the app shell (`App`) all subscribe to this one
+ * store, so a manual flip in any surface re-renders every consumer - the map
+ * included. Backing this with component-local `useState` was the bug: each
+ * `useTheme()` caller held its own copy, so toggling in Profile updated the CSS
+ * (via `applyTheme`) but left the map on its stale style.
+ */
+export const useThemeStore = create<ThemeStore>((set, get) => ({
+  preference: initialPreference,
+  resolved: resolveTheme(initialPreference),
+  setPreference: (pref) => {
+    storage.set(STORAGE_KEY, pref)
+    const next = resolveTheme(pref)
+    applyTheme(next)
+    set({ preference: pref, resolved: next })
+  },
+  refresh: () => {
+    const { preference, resolved } = get()
+    if (preference !== 'auto') return
+    const next = resolveTheme('auto')
+    if (next === resolved) return
+    applyTheme(next)
+    set({ resolved: next })
+  },
+}))
+
+// Apply the initial theme once at module load so the first paint is correct.
+applyTheme(useThemeStore.getState().resolved)
+
+// Single module-level interval drives the SAST auto day/night flip for every
+// consumer. One source of truth, no per-hook intervals.
+if (typeof window !== 'undefined') {
+  setInterval(() => useThemeStore.getState().refresh(), 60_000)
+}
+
 /**
  * Time-of-day theme hook for Area Code.
  *
@@ -66,53 +119,12 @@ function applyTheme(theme: ResolvedTheme): void {
  *
  * Users can override via setPreference('light' | 'dark' | 'auto').
  * Override persists in localStorage under 'area-code:theme-preference'.
- * Re-evaluates every 60s when on 'auto' to catch the transition.
+ * The shared store re-evaluates every 60s when on 'auto' to catch the
+ * transition, and every consumer re-renders off the same `resolved` value.
  */
 export function useTheme() {
-  const [preference, setPreferenceState] = useState<ThemePreference>(() => {
-    const stored = storage.get(STORAGE_KEY)
-    if (stored === 'light' || stored === 'dark' || stored === 'auto') return stored
-    return 'auto'
-  })
-
-  // `resolved` is React state, not a per-render derivation. The auto day/night
-  // transition fires from a `setInterval` (no user interaction, no other state
-  // change), so it MUST push into state to re-render consumers. A previously
-  // derived `resolved = resolveTheme(preference)` only updated the DOM from the
-  // interval and left React unaware - so the map (which swaps its basemap style
-  // off `resolved`) stayed on the light style after the 18:00 SAST flip even
-  // though the CSS chrome went dark. Keeping it in state fixes that.
-  const [resolved, setResolved] = useState<ResolvedTheme>(() => resolveTheme(preference))
-
-  const setPreference = useCallback((pref: ThemePreference) => {
-    setPreferenceState(pref)
-    storage.set(STORAGE_KEY, pref)
-    const next = resolveTheme(pref)
-    setResolved(next)
-    applyTheme(next)
-  }, [])
-
-  // Keep `resolved` and the DOM in sync whenever the preference changes.
-  useEffect(() => {
-    const next = resolveTheme(preference)
-    setResolved(next)
-    applyTheme(next)
-  }, [preference])
-
-  // Re-evaluate every 60s when on 'auto' to catch day/night transitions. This
-  // updates state (not just the DOM) so every consumer - the map included -
-  // re-renders and reacts to the flip.
-  useEffect(() => {
-    if (preference !== 'auto') return
-
-    const interval = setInterval(() => {
-      const next = resolveTheme('auto')
-      setResolved(next)
-      applyTheme(next)
-    }, 60_000)
-
-    return () => clearInterval(interval)
-  }, [preference])
-
+  const preference = useThemeStore((s) => s.preference)
+  const resolved = useThemeStore((s) => s.resolved)
+  const setPreference = useThemeStore((s) => s.setPreference)
   return { preference, resolved, setPreference } as const
 }
