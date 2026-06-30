@@ -110,8 +110,10 @@ function AppContent() {
   const setApiOnly = useConnectivityStore((s) => s.setApiOnly)
   const setOffline = useConnectivityStore((s) => s.setOffline)
 
-  // Activate SAST time-based theme (06:00-18:00 light, 18:00-06:00 dark)
-  useTheme()
+  // Activate SAST time-based theme (06:00-18:00 light, 18:00-06:00 dark).
+  // Single instance: the nav's long-press theme flip drives this same hook via
+  // setPreference, so there is one theme source of truth (no duplicate interval).
+  const { resolved: resolvedTheme, setPreference: setThemePreference } = useTheme()
 
   // App-wide live subscriptions: reward codes land in the wallet and
   // notification/tier events feed the notification center from any screen,
@@ -331,7 +333,24 @@ function AppContent() {
         onNavigate={setRoute}
         onReselect={(route) => {
           // Re-tapping Map while on the Map screen toggles the Peek_Carousel.
-          if (route === 'map') useSelectionStore.getState().toggleOpen()
+          if (route === 'map') {
+            useSelectionStore.getState().toggleOpen()
+            return
+          }
+          // Re-tapping any other tab scrolls its screen back to the top.
+          const el = contentRef.current
+          if (!el) return
+          el.scrollTo({ top: 0, behavior: 'smooth' })
+          el.querySelector('[data-scroll-container]')?.scrollTo({ top: 0, behavior: 'smooth' })
+        }}
+        onLongPress={(route) => {
+          // Hold Profile to flip light/dark theme. Returns true so the hold does
+          // not also navigate. Other tabs have no shortcut yet (fall through).
+          if (route === 'profile') {
+            setThemePreference(resolvedTheme === 'dark' ? 'light' : 'dark')
+            return true
+          }
+          return false
         }}
       />
     </div>
