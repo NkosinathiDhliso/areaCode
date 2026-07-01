@@ -30,7 +30,7 @@ export default function RootLayout() {
   const router = useRouter()
   const accessToken = useConsumerAuthStore((s) => s.accessToken)
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
-  const { setOnline, setApiOnly } = useConnectivityStore()
+  const { setOnline } = useConnectivityStore()
   const [ready, setReady] = useState(false)
 
   // Wire the shared layer for React Native (storage, API, socket, geo) before
@@ -56,14 +56,11 @@ export default function RootLayout() {
     if (!ready) return
     const socket = getSocket(accessToken ?? undefined, { citySlug: CITY_SLUG })
     const onConnect = () => setOnline()
-    const onDisconnect = () => setApiOnly()
     socket.on('connect', onConnect)
-    socket.on('disconnect', onDisconnect)
     return () => {
       socket.off('connect', onConnect)
-      socket.off('disconnect', onDisconnect)
     }
-  }, [ready, accessToken, setOnline, setApiOnly])
+  }, [ready, accessToken, setOnline])
 
   // Subscribe to live pulse updates so map markers reflect realtime activity.
   useNodePulse(accessToken ?? undefined, { citySlug: CITY_SLUG })

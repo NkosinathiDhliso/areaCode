@@ -2,14 +2,11 @@ import { Tabs } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 import { View } from 'react-native'
 
-import { ConnectivityBanner } from '../../src/components/ConnectivityBanner'
-
 export default function TabsLayout() {
   const { t } = useTranslation()
 
   return (
     <View style={{ flex: 1, backgroundColor: '#0a0a0f' }}>
-      <ConnectivityBanner />
       <Tabs
         screenOptions={{
           headerShown: false,

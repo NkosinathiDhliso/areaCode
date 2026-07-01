@@ -36,7 +36,6 @@ import { QrCheckIn } from './screens/QrCheckIn'
 import { PrivacyPolicyScreen } from './screens/PrivacyPolicyScreen'
 import { TermsScreen } from './screens/TermsScreen'
 import { BottomNav } from './components/BottomNav'
-import { ConnectivityBanner } from './components/ConnectivityBanner'
 import { VerifyEmailBanner } from './components/VerifyEmailBanner'
 import type { AppRoute } from './types'
 
@@ -109,7 +108,6 @@ function AppContent() {
   const accessToken = useConsumerAuthStore((s) => s.accessToken)
   const resetNavigation = useNavigationStore((s) => s.resetNavigation)
   const setOnline = useConnectivityStore((s) => s.setOnline)
-  const setApiOnly = useConnectivityStore((s) => s.setApiOnly)
   const setOffline = useConnectivityStore((s) => s.setOffline)
 
   // Activate SAST time-based theme (06:00-18:00 light, 18:00-06:00 dark).
@@ -169,7 +167,6 @@ function AppContent() {
     const socket = getSocket(accessToken ?? undefined)
 
     socket.on('connect', () => setOnline())
-    socket.on('disconnect', () => setApiOnly())
 
     const handleOnline = () => setOnline()
     const handleOffline = () => setOffline()
@@ -180,7 +177,7 @@ function AppContent() {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
-  }, [accessToken, setOnline, setApiOnly, setOffline])
+  }, [accessToken, setOnline, setOffline])
 
   // Check onboarding status after login
   useEffect(() => {
@@ -298,7 +295,6 @@ function AppContent() {
 
   return (
     <div className="flex flex-col h-full bg-[var(--bg-base)]">
-      <ConnectivityBanner />
       {isAuthenticated && !showAuthGate && <VerifyEmailBanner />}
       <div ref={contentRef} className="flex-1 relative overflow-x-hidden overflow-y-auto overscroll-y-contain">
         {showAuthGate ? (

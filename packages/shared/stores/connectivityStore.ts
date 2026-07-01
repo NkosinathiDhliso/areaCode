@@ -1,13 +1,12 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 
-type ConnectivityState = 'online' | 'apiOnly' | 'offline'
+type ConnectivityState = 'online' | 'offline'
 
 interface ConnectivityStoreState {
   state: ConnectivityState
   lastUpdated: string | null
   setOnline: () => void
-  setApiOnly: () => void
   setOffline: () => void
 }
 
@@ -18,11 +17,6 @@ export const useConnectivityStore = create<ConnectivityStoreState>()(
     setOnline: () =>
       set((s) => {
         s.state = 'online'
-        s.lastUpdated = new Date().toISOString()
-      }),
-    setApiOnly: () =>
-      set((s) => {
-        s.state = 'apiOnly'
         s.lastUpdated = new Date().toISOString()
       }),
     setOffline: () =>
