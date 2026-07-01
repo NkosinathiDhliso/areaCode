@@ -24,19 +24,15 @@
   }
 
   #root {
-    /* Single height authority for the whole app. Every descendant (the flex
-       shell, the nav) fills it with %, so nothing else computes a viewport unit
-       independently and there is no second source of truth about where the
-       bottom is.
-
-       Mechanism: position:fixed + inset:0, NOT height:100dvh. In an installed
-       (Add to Home Screen) standalone PWA, 100vh/100dvh stop at the top of the
-       home-indicator inset instead of the physical screen bottom, so a flex
-       column anchored to dvh leaves the bottom nav floating above the indicator.
-       A fixed box pinned to inset:0 fills the true visual viewport, so the nav
-       sits flush at the bottom with no strip below it. */
-    position: fixed;
-    inset: 0;
+    /* Fill the full screen down to the physical bottom edge, including under the
+       home indicator. With viewport-fit=cover the safe areas are insets you
+       subtract with env(), not viewport reductions, so 100dvh spans the whole
+       screen and a normal-flow shell reaches the true bottom. The flush bottom
+       nav then sits on the real screen edge with no strip below it. (position:
+       fixed + inset:0 was used before but clamps to the safe area on some iOS
+       standalone builds, which reintroduced the gap.) */
+    height: 100vh;
+    height: 100dvh;
     margin: 0;
     padding: 0;
     background-color: var(--bg-base);
