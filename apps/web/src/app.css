@@ -32,11 +32,9 @@
        Mechanism: position:fixed + inset:0, NOT height:100dvh. In an installed
        (Add to Home Screen) standalone PWA, 100vh/100dvh stop at the top of the
        home-indicator inset instead of the physical screen bottom, so a flex
-       column anchored to dvh leaves the bottom nav floating ~34px above the
-       indicator (the safe-area band then reads as a gap). A fixed box pinned to
-       inset:0 fills the true visual viewport including the safe area, so the nav
-       (with its own padding-bottom: var(--safe-area-bottom)) sits flush over the
-       indicator. */
+       column anchored to dvh leaves the bottom nav floating above the indicator.
+       A fixed box pinned to inset:0 fills the true visual viewport, so the nav
+       sits flush at the bottom with no strip below it. */
     position: fixed;
     inset: 0;
     margin: 0;
@@ -44,17 +42,10 @@
     background-color: var(--bg-base);
   }
 
-  /* Bottom safe-area inset (iOS home indicator / Android gesture bar).
-     Resolves to 0 when no inset is present. */
-  :root {
-    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
-  }
-
   /* Native-feel bottom nav. A solid --bg-base surface, the same colour as the
      OS system bar (driven by <meta name="theme-color">, see useTheme) and the
-     app shell background. The nav sits at the base of the 100dvh flex flow, so
-     its bottom edge meets the true screen bottom, and its padding-bottom bleeds
-     this colour into the safe-area strip. Nav and system bar share one colour,
+     app shell background. The nav sits flush at the base of the shell, so its
+     bottom edge meets the screen bottom. Nav and system bar share one colour,
      so they read as a single continuous surface with no gap. */
   .app-bottom-nav {
     background-color: var(--bg-base);

@@ -4,7 +4,6 @@ import { useStaffAuthStore } from './stores/staffAuthStore'
 import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
 import { GlobalErrorToast } from '@area-code/shared/components/GlobalErrorToast'
-import { BuildStamp } from '@area-code/shared/components/BuildStamp'
 import { api } from '@area-code/shared/lib/api'
 import { StaffInvite } from './screens/StaffInvite'
 import { StaffLogin } from './screens/StaffLogin'
@@ -16,7 +15,6 @@ export function App() {
     <ErrorBoundary>
       <AppContent />
       <GlobalErrorToast />
-      <BuildStamp />
     </ErrorBoundary>
   )
 }

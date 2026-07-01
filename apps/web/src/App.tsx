@@ -14,7 +14,6 @@ import type { User } from '@area-code/shared/types'
 import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
 import { GlobalErrorToast } from '@area-code/shared/components/GlobalErrorToast'
 import { OnboardingFlow } from '@area-code/shared/components/OnboardingFlow'
-import { BuildStamp } from '@area-code/shared/components/BuildStamp'
 
 import { useFriendsPresence } from './hooks/useFriendsPresence'
 import { MapScreen } from './screens/MapScreen'
@@ -98,7 +97,6 @@ export function App() {
     <ErrorBoundary>
       <AppContent />
       <GlobalErrorToast />
-      <BuildStamp />
     </ErrorBoundary>
   )
 }

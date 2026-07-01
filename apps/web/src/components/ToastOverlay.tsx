@@ -52,7 +52,7 @@ export function ToastOverlay() {
   // (Requirement 16.4). Otherwise it sits above the nav bar as before.
   const anchorStyle: React.CSSProperties = isBottomSheetOpen
     ? { top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }
-    : { bottom: 'calc(var(--nav-height, 56px) + var(--safe-area-bottom, 0px) + 8px)' }
+    : { bottom: 'calc(var(--nav-height, 56px) + 8px)' }
 
   return (
     <div

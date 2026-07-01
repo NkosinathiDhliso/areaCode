@@ -334,16 +334,3 @@
     background-position: 0% 0%;
   }
 }
-
-/* Safe-area insets for iOS Safari / notched devices.
-   Requires viewport-fit=cover in the <meta name="viewport"> tag. */
-.safe-area-top {
-  padding-top: env(safe-area-inset-top, 0px);
-}
-.safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-.safe-area-x {
-  padding-left: env(safe-area-inset-left, 0px);
-  padding-right: env(safe-area-inset-right, 0px);
-}

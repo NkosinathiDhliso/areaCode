@@ -7,7 +7,6 @@ import { api } from '@area-code/shared/lib/api'
 import { getSocket } from '@area-code/shared/lib/socket'
 import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
 import { GlobalErrorToast } from '@area-code/shared/components/GlobalErrorToast'
-import { BuildStamp } from '@area-code/shared/components/BuildStamp'
 import { BusinessLogin } from './screens/BusinessLogin'
 import { BusinessSignup } from './screens/BusinessSignup'
 import { BusinessOAuthCallback } from './screens/BusinessOAuthCallback'
@@ -33,7 +32,6 @@ export function App() {
       <QueryClientProvider client={queryClient}>
         <AppContent />
         <GlobalErrorToast />
-        <BuildStamp />
       </QueryClientProvider>
     </ErrorBoundary>
   )
