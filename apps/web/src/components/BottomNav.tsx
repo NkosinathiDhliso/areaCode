@@ -111,6 +111,15 @@ export function BottomNav({ active, onNavigate, onReselect, onLongPress }: Botto
           transition: reduced ? 'opacity 0.2s ease' : 'left 0.34s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease',
         }}
       />
+      {/* DEBUG: bright white line pinned to the nav's true bottom edge, so on
+          every screen you can see exactly where the bar ends and whether it
+          reaches the physical screen bottom. Remove once the safe-area bottom is
+          verified. */}
+      <span
+        aria-hidden="true"
+        className="absolute left-0 right-0 bottom-0 z-50 pointer-events-none"
+        style={{ height: '2px', background: '#ffffff', boxShadow: '0 0 8px 2px rgba(255, 255, 255, 0.85)' }}
+      />
       {NAV_ITEMS.map((item) => {
         const isActive = active === item.route
         return (
