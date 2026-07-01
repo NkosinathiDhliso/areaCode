@@ -61,15 +61,19 @@ export function BuildStamp() {
       <div ref={bottomProbe} style={{ ...probeStyle, bottom: 0, height: 'env(safe-area-inset-bottom, 0px)' }} />
       <div
         aria-hidden="true"
-        className="fixed left-1 z-[9998] select-none font-mono text-[9px] leading-none"
+        className="fixed left-1/2 z-[9998] -translate-x-1/2 select-none rounded-lg text-center font-mono text-[13px] font-semibold leading-tight"
         style={{
-          top: 'calc(env(safe-area-inset-top, 0px) + 2px)',
-          color: 'var(--text-muted)',
-          opacity: 0.45,
+          bottom: 'calc(var(--nav-height, 56px) + env(safe-area-inset-bottom, 0px) + 14px)',
+          color: '#ffffff',
+          background: 'rgba(220, 0, 90, 0.92)',
+          padding: '7px 12px',
           pointerEvents: 'none',
+          whiteSpace: 'nowrap',
         }}
       >
-        {id} · saB {insets.bottom} saT {insets.top} · {standalone ? 'pwa' : 'tab'}
+        saB={insets.bottom} saT={insets.top} · {standalone ? 'PWA' : 'TAB'}
+        <br />
+        {id}
       </div>
     </>
   )
