@@ -89,8 +89,12 @@ export function BottomNav({ active, onNavigate, onReselect, onLongPress }: Botto
     <nav
       className="app-bottom-nav relative flex-shrink-0 flex flex-row items-stretch justify-around z-50"
       style={{
-        height: 'calc(var(--nav-height) + var(--safe-area-bottom))',
-        paddingBottom: 'var(--safe-area-bottom)',
+        // Compact visible bar at --nav-height. The home-indicator inset is a
+        // margin below the bar (not padding that grows it), so the strip is
+        // painted by the shell's --bg-base backdrop, the same colour as the nav.
+        // Result: a natural-height bar with a seamless, gap-free safe area.
+        height: 'var(--nav-height)',
+        marginBottom: 'var(--safe-area-bottom)',
       }}
       role="navigation"
       aria-label="Main navigation"
