@@ -65,6 +65,10 @@ export interface PeekCarouselProps {
   qrFallback?: boolean
   /** Whether a check-in request is in flight (CTA pending state). */
   isCheckingIn?: boolean
+  /** Check the consumer out of the Active_Venue (wired from `useCheckOut`). */
+  onCheckOut?: () => void
+  /** Whether a check-out request is in flight (CTA pending state). */
+  isCheckingOut?: boolean
   /**
    * The active Category_Filter - passed so the browse strip state machine can
    * dispatch `FILTER_CHANGE` when it changes, resetting to top 2 view (R4.4).
@@ -94,6 +98,8 @@ export function PeekCarousel({
   onSignIn,
   qrFallback = false,
   isCheckingIn = false,
+  onCheckOut,
+  isCheckingOut = false,
   categoryFilter = null,
 }: PeekCarouselProps) {
   const { t } = useTranslation()
@@ -286,6 +292,8 @@ export function PeekCarousel({
               onSignIn={onSignIn}
               qrFallback={qrFallback}
               isCheckingIn={isCheckingIn}
+              onCheckOut={onCheckOut}
+              isCheckingOut={isCheckingOut}
             />
           </CommitMode>
         )}

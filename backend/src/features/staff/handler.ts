@@ -83,29 +83,6 @@ export async function staffRoutes(app: FastifyInstance) {
 
   const firstGetIdParamsSchema = z.object({ rewardId: z.string().uuid() })
 
-  // GET /v1/staff/first-get/:rewardId/preview
-  // Returns the reward summary so the staff member can confirm before
-  // minting a token. No customer information required.
-  app.get(
-    '/v1/staff/first-get/:rewardId/preview',
-    {
-      preHandler: [requireAuth('staff'), validate({ params: firstGetIdParamsSchema })],
-    },
-    async (request) => {
-      const params = request.params as z.infer<typeof firstGetIdParamsSchema>
-      const reward = await getRewardById(params.rewardId)
-      if (!reward) throw AppError.notFound('Reward not found')
-      if (!(reward as { isFirstGet?: boolean }).isFirstGet) {
-        throw AppError.badRequest('not_a_first_get')
-      }
-      return {
-        rewardTitle: reward.title,
-        rewardDescription: (reward as Record<string, unknown>)['description'] ?? '',
-        guestClaim: true,
-      }
-    },
-  )
-
   // POST /v1/staff/first-get/:rewardId/confirm
   // Mints a token and returns it to the staff app for display / printing.
   app.post(

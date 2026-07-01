@@ -1,4 +1,5 @@
 export { useCheckIn } from './useCheckIn'
+export { useCheckOut } from './useCheckOut'
 export { useCityPulseToast } from './useCityPulseToast'
 export { useNodePulse } from './useNodePulse'
 export { useNodeArchetype } from './useNodeArchetype'

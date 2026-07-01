@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { MapPin, Check, Lock, AlertCircle } from 'lucide-react'
 import { api, type ApiError } from '@area-code/shared/lib/api'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
+import { usePresenceStore } from '@area-code/shared/stores/presenceStore'
 import type { CheckInResponse } from '@area-code/shared/types'
 import type { AppRoute } from '../types'
 
@@ -52,6 +53,10 @@ export function QrCheckIn({ nodeId, token, onNavigate }: QrCheckInProps) {
         })
         if (cancelled) return
         setPhase('success')
+        // Establish client-side Active_Presence so the venue surface offers the
+        // Check_Out_CTA once the user lands on the map (honest-presence-ui R3.1).
+        // Only set on an actual successful check-in, never on error/cooldown.
+        usePresenceStore.getState().setPresent(nodeId)
         setMessage(
           res.cooldownUntil
             ? `${t('qr.checkedIn', "You're checked in.")} ${t(

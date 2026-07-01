@@ -4,6 +4,7 @@ import { getSocket } from '@area-code/shared/lib/socket'
 import { api } from '@area-code/shared/lib/api'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
+import { usePresenceStore } from '@area-code/shared/stores/presenceStore'
 
 import { filterActiveFriends } from '../lib/carouselRanking'
 
@@ -53,6 +54,9 @@ export function useFriendsPresence(token?: string) {
     if (!isAuthenticated || !token) {
       // Clear store on logout (R3.3)
       clearFriendsPresence()
+      // Clear the current user's own Active_Presence on logout, parity with
+      // friends presence (honest-presence-ui R3).
+      usePresenceStore.getState().clear()
       seededRef.current = false
       return
     }

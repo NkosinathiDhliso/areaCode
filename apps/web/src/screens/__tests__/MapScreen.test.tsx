@@ -74,6 +74,7 @@ vi.mock('@area-code/shared/hooks', () => ({
     qrFallback: h.checkIn.qrFallback,
     resetQrFallback: h.checkIn.resetQrFallback,
   }),
+  useCheckOut: () => ({ checkOut: vi.fn(), isPending: false, error: null }),
 }))
 
 vi.mock('@area-code/shared/lib/featureGating', () => ({ useLiveVibeOnMap: () => false }))

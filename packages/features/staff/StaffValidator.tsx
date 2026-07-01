@@ -386,7 +386,9 @@ export function StaffValidator() {
       <input
         ref={inputRef}
         type="text"
-        inputMode="numeric"
+        inputMode="text"
+        autoCapitalize="characters"
+        autoComplete="off"
         maxLength={6}
         value={code}
         onChange={(e) => setCode(e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())}

@@ -647,9 +647,10 @@ describe('JWT-claims mismatch returns 403 with no DynamoDB I/O', () => {
 //
 // Staff set the vibe through the SAME endpoints the operator uses. A staff
 // session carries its resolved `businessId`; the schedule routes authorise
-// GET/POST for a staff member whose venue matches the path, reject a staff
-// member scoped to a different venue (fail closed, no I/O), and keep DELETE
-// business-only.
+// GET/POST/DELETE for a staff member whose venue matches the path, and reject a
+// staff member scoped to a different venue (fail closed, no I/O). A Manager
+// authenticates through the staff pool, so delete parity with create lets a
+// role that can add a slot also remove one for the same venue (item B, R2.1-2.4).
 
 describe('venue-scoped staff sessions on the shared schedule endpoints', () => {
   const STAFF_ID = 'staff-1'
@@ -710,8 +711,8 @@ describe('venue-scoped staff sessions on the shared schedule endpoints', () => {
     expect(deleteScheduleSlot).not.toHaveBeenCalled()
   })
 
-  it('DELETE stays business-only: a staff-pool session cannot delete a slot', async () => {
-    // Seed a schedule so a successful delete would otherwise touch the repo.
+  it('staff whose businessId matches the path can DELETE a slot (create/delete parity, R2.1)', async () => {
+    // Seed a schedule so a successful delete touches the repo and returns 200.
     storedSchedule = {
       businessId: BUSINESS_A,
       scheduleId: 'default',
@@ -732,16 +733,82 @@ describe('venue-scoped staff sessions on the shared schedule endpoints', () => {
       schemaVersion: 1,
     }
 
-    // The DELETE route is `requireAuth('business')` only — staff set the vibe
-    // but never delete schedule slots. A staff-pool session does not satisfy
-    // the business-only route (in prod it fails business-pool verification),
-    // so it is rejected at the auth layer and the slot is never removed.
+    // A Manager authenticates through the staff pool. With a resolved
+    // businessId matching the path, DELETE is authorised on the same role
+    // basis as create (R2.1, R2.3) and the slot is removed.
     const response = await app.inject({
       method: 'DELETE',
       url: urlFor(BUSINESS_A, '/real-slot'),
       headers: staffAuthHeaderFor(STAFF_ID, BUSINESS_A),
     })
-    expect(response.statusCode).toBe(401)
+    expect(response.statusCode).toBe(200)
+    const body = response.json() as MusicSchedule
+    expect(body.slots).toHaveLength(0)
+    expect(deleteScheduleSlot).toHaveBeenCalledWith(BUSINESS_A, 'default', 'real-slot')
+  })
+
+  it('staff scoped to a DIFFERENT venue is rejected 403 on DELETE with no schedule I/O (R2.2, R2.4)', async () => {
+    // Seed BUSINESS_A's schedule; a staff session scoped to BUSINESS_A must
+    // NOT be able to delete BUSINESS_B's slot. The cross-business guard
+    // (authoriseScheduleAccess) fails closed BEFORE any repository I/O.
+    storedSchedule = {
+      businessId: BUSINESS_B,
+      scheduleId: 'default',
+      timezone: 'Africa/Johannesburg',
+      slots: [
+        {
+          slotId: 'real-slot',
+          dayOfWeek: 'FRI',
+          startTime: '20:00',
+          endTime: '23:00',
+          startTimeMin: 1200,
+          endTimeMin: 1380,
+          mode: 'blanket',
+          genres: ['amapiano'],
+        },
+      ],
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      schemaVersion: 1,
+    }
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: urlFor(BUSINESS_B, '/real-slot'),
+      headers: staffAuthHeaderFor(STAFF_ID, BUSINESS_A),
+    })
+    expect(response.statusCode).toBe(403)
     expect(deleteScheduleSlot).not.toHaveBeenCalled()
+  })
+
+  it('business-pool owner can DELETE a slot for their own venue (R2.1)', async () => {
+    storedSchedule = {
+      businessId: BUSINESS_A,
+      scheduleId: 'default',
+      timezone: 'Africa/Johannesburg',
+      slots: [
+        {
+          slotId: 'real-slot',
+          dayOfWeek: 'FRI',
+          startTime: '20:00',
+          endTime: '23:00',
+          startTimeMin: 1200,
+          endTimeMin: 1380,
+          mode: 'blanket',
+          genres: ['amapiano'],
+        },
+      ],
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      schemaVersion: 1,
+    }
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: urlFor(BUSINESS_A, '/real-slot'),
+      headers: authHeaderFor(BUSINESS_A),
+    })
+    expect(response.statusCode).toBe(200)
+    const body = response.json() as MusicSchedule
+    expect(body.slots).toHaveLength(0)
+    expect(deleteScheduleSlot).toHaveBeenCalledWith(BUSINESS_A, 'default', 'real-slot')
   })
 })

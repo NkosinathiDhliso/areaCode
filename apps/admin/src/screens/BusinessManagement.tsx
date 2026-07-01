@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@area-code/shared/lib/api'
 import type { BusinessAccount } from '@area-code/shared/types'
 import { useAdminAuthStore } from '../stores/adminAuthStore'
+import { BusinessDetailPanel } from '../components/BusinessDetailPanel'
 
 interface BusinessDetail extends BusinessAccount {
   staffCount: number
@@ -37,6 +38,7 @@ export function BusinessManagement() {
   const [staffList, setStaffList] = useState<{ id: string; phone?: string; email?: string; isActive?: boolean }[]>([])
   const [staffLoading, setStaffLoading] = useState(false)
   const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null)
+  const [detailBusinessId, setDetailBusinessId] = useState<string | null>(null)
 
   async function handleSearch() {
     if (!query.trim()) return
@@ -200,6 +202,15 @@ export function BusinessManagement() {
 
             {selected?.id === biz.id && (
               <div className="mt-4 pt-4 border-t border-[var(--border)] flex flex-row flex-wrap gap-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDetailBusinessId(biz.id)
+                  }}
+                  className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs"
+                >
+                  {t('admin.businesses.viewDetails', 'View details')}
+                </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
@@ -504,6 +515,10 @@ export function BusinessManagement() {
             )}
           </div>
         </div>
+      )}
+
+      {detailBusinessId && (
+        <BusinessDetailPanel businessId={detailBusinessId} onClose={() => setDetailBusinessId(null)} />
       )}
     </div>
   )

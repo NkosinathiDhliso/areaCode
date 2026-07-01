@@ -33,6 +33,8 @@
   "node.oneMore": "One more visit unlocks your {{title}}.",
   "node.share": "Share node",
   "node.report": "Report this venue",
+  "node.checkOut": "I'm leaving",
+  "node.checkingOut": "Checking out...",
   "node.directions": "Get directions",
   "directions.title": "Open directions in",
   "directions.fallbackHint": "If the app isn't installed we'll open the web version instead.",

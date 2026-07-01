@@ -212,27 +212,6 @@ export async function createAuditLog(data: {
   return { id: logId, ...data, createdAt: now }
 }
 
-// ─── Impersonation ──────────────────────────────────────────────────────────
-
-export async function createImpersonationLog(data: {
-  adminId: string
-  targetUserId: string
-  targetAccountType: string
-  note: string
-}) {
-  const logId = generateId()
-  const now = new Date().toISOString()
-  const item = {
-    pk: `IMPERSONATION#${logId}`,
-    sk: `IMPERSONATION#${now}`,
-    logId,
-    ...data,
-    createdAt: now,
-  }
-  await documentClient.send(new PutCommand({ TableName: TableNames.appData, Item: item }))
-  return { id: logId, ...data, createdAt: now }
-}
-
 // ─── Admin Messages ─────────────────────────────────────────────────────────
 
 export async function sendAdminMessage(adminId: string, targetUserId: string, message: string) {

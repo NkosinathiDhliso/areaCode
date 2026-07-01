@@ -10,3 +10,4 @@ export { useConnectivityStore, type ConnectivityState } from './connectivityStor
 export { useConsumerAuthStore } from './consumerAuthStore'
 export { useBusinessAuthStore } from './businessAuthStore'
 export { useSelectionStore, type SelectionState, type SelectionMode, type SelectionSource } from './selectionStore'
+export { usePresenceStore, type PresenceState } from './presenceStore'

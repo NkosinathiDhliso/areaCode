@@ -75,8 +75,7 @@ export function MyRank() {
               }`}
             >
               <span className="truncate">
-                #{idx + 1} {idx === 0 ? '🥇 ' : idx === 1 ? '🥈 ' : '🥉 '}
-                {e.staffId === staffId ? 'You' : e.staffName}
+                #{idx + 1} {e.staffId === staffId ? 'You' : e.staffName}
               </span>
               <span>{e.redemptions} redemptions</span>
             </li>

@@ -547,6 +547,17 @@ export interface CheckInResponse {
   cooldownUntil: string
 }
 
+// Check-out response. Mirrors backend/src/features/check-out/types.ts
+// `presenceState` is `checked_out` when an active presence was ended, or
+// `no_active_presence` when the request was a successful no-op (never checked
+// in, already checked out, or already expired). `dwellSeconds` is whole seconds
+// of dwell when a record was ended, and `null` on a no-op.
+export interface CheckOutResponse {
+  nodeId: string
+  presenceState: 'checked_out' | 'no_active_presence'
+  dwellSeconds: number | null
+}
+
 // Paginated response
 export interface PaginatedResponse<T> {
   items: T[]

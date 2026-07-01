@@ -6,7 +6,6 @@ import {
   userIdParamsSchema,
   businessIdParamsSchema,
   adminMessageBodySchema,
-  impersonateBodySchema,
   extendTrialBodySchema,
   setTierBodySchema,
   reportActionBodySchema,
@@ -222,18 +221,6 @@ export async function adminRoutes(app: FastifyInstance) {
     },
   )
 
-  // POST /v1/admin/impersonate
-  app.post(
-    '/v1/admin/impersonate',
-    { preHandler: [adminAuth, validate({ body: impersonateBodySchema })] },
-    async (request) => {
-      const auth = getAuth(request)
-      const role = await getAdminRole(request)
-      const body = request.body as z.infer<typeof impersonateBodySchema>
-      return service.startImpersonation(auth.userId, role, body.targetUserId, body.targetAccountType, body.note)
-    },
-  )
-
   // GET /v1/admin/consent/:userId
   app.get(
     '/v1/admin/consent/:userId',
@@ -244,12 +231,6 @@ export async function adminRoutes(app: FastifyInstance) {
       return service.getConsentHistory(role, params.userId)
     },
   )
-
-  // GET /v1/admin/consent/reconsent-list
-  app.get('/v1/admin/consent/reconsent-list', { preHandler: [adminAuth] }, async (request) => {
-    const role = await getAdminRole(request)
-    return service.getReconsentList(role)
-  })
 
   // ─── Abuse Flags ─────────────────────────────────────────────────────────
 

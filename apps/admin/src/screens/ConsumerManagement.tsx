@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@area-code/shared/lib/api'
 import type { User, Tier } from '@area-code/shared/types'
 import { useAdminAuthStore } from '../stores/adminAuthStore'
+import { ConsumerDetailPanel } from '../components/ConsumerDetailPanel'
 
 interface ConsumerDetail extends User {
   isDisabled: boolean
@@ -23,6 +24,7 @@ export function ConsumerManagement() {
   const [actionNote, setActionNote] = useState('')
   const [confirmDisable, setConfirmDisable] = useState<string | null>(null)
   const [confirmErasure, setConfirmErasure] = useState<string | null>(null)
+  const [detailUserId, setDetailUserId] = useState<string | null>(null)
 
   async function handleSearch() {
     if (!query.trim()) return
@@ -119,63 +121,73 @@ export function ConsumerManagement() {
               </div>
             </div>
 
-            {selected?.id === user.id && canModify && (
+            {selected?.id === user.id && (
               <div className="mt-4 pt-4 border-t border-[var(--border)] flex flex-col gap-3">
                 <div className="text-[var(--text-secondary)] text-xs">
                   Check-ins: {user.totalCheckIns} · Streak: {user.streakCount} · Flags: {user.abuseFlags}
                 </div>
-                <input
-                  type="text"
-                  value={actionNote}
-                  onChange={(e) => setActionNote(e.target.value)}
-                  placeholder="Reason (required for some actions)"
-                  className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-3 py-2 text-xs placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-                />
                 <div className="flex flex-row flex-wrap gap-2">
-                  {role === 'super_admin' && !user.isDisabled && (
-                    <ActionButton
-                      label={t('admin.consumers.disable', 'Disable Account')}
-                      onClick={() => setConfirmDisable(user.id)}
-                      danger
-                    />
-                  )}
-                  {role === 'super_admin' && user.isDisabled && (
-                    <ActionButton
-                      label={t('admin.consumers.enable', 'Enable Account')}
-                      onClick={() => void handleAction('enable', user.id)}
-                    />
-                  )}
-                  {role === 'super_admin' && (
-                    <ActionButton
-                      label={t('admin.consumers.resetFlags')}
-                      onClick={() => void handleAction('reset-flags', user.id)}
-                    />
-                  )}
-                  {role === 'super_admin' && (
-                    <ActionButton
-                      label={t('admin.consumers.recalcTier')}
-                      onClick={() => void handleAction('recalc-tier', user.id)}
-                    />
-                  )}
-                  {role === 'super_admin' && (
-                    <ActionButton
-                      label={t('admin.consumers.overrideStreak')}
-                      onClick={() => void handleAction('override-streak', user.id)}
-                    />
-                  )}
-                  {role === 'super_admin' && (
-                    <ActionButton
-                      label={t('admin.consumers.processErasure')}
-                      onClick={() => setConfirmErasure(user.id)}
-                      danger
-                    />
-                  )}
                   <ActionButton
-                    label={t('admin.consumers.sendMessage')}
-                    onClick={() => void handleAction('send-message', user.id)}
-                    disabled={!actionNote.trim()}
+                    label={t('admin.consumers.viewDetails', 'View details')}
+                    onClick={() => setDetailUserId(user.id)}
                   />
                 </div>
+                {canModify && (
+                  <>
+                    <input
+                      type="text"
+                      value={actionNote}
+                      onChange={(e) => setActionNote(e.target.value)}
+                      placeholder="Reason (required for some actions)"
+                      className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-3 py-2 text-xs placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+                    />
+                    <div className="flex flex-row flex-wrap gap-2">
+                      {role === 'super_admin' && !user.isDisabled && (
+                        <ActionButton
+                          label={t('admin.consumers.disable', 'Disable Account')}
+                          onClick={() => setConfirmDisable(user.id)}
+                          danger
+                        />
+                      )}
+                      {role === 'super_admin' && user.isDisabled && (
+                        <ActionButton
+                          label={t('admin.consumers.enable', 'Enable Account')}
+                          onClick={() => void handleAction('enable', user.id)}
+                        />
+                      )}
+                      {role === 'super_admin' && (
+                        <ActionButton
+                          label={t('admin.consumers.resetFlags')}
+                          onClick={() => void handleAction('reset-flags', user.id)}
+                        />
+                      )}
+                      {role === 'super_admin' && (
+                        <ActionButton
+                          label={t('admin.consumers.recalcTier')}
+                          onClick={() => void handleAction('recalc-tier', user.id)}
+                        />
+                      )}
+                      {role === 'super_admin' && (
+                        <ActionButton
+                          label={t('admin.consumers.overrideStreak')}
+                          onClick={() => void handleAction('override-streak', user.id)}
+                        />
+                      )}
+                      {role === 'super_admin' && (
+                        <ActionButton
+                          label={t('admin.consumers.processErasure')}
+                          onClick={() => setConfirmErasure(user.id)}
+                          danger
+                        />
+                      )}
+                      <ActionButton
+                        label={t('admin.consumers.sendMessage')}
+                        onClick={() => void handleAction('send-message', user.id)}
+                        disabled={!actionNote.trim()}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -241,6 +253,8 @@ export function ConsumerManagement() {
           </div>
         </div>
       )}
+
+      {detailUserId && <ConsumerDetailPanel userId={detailUserId} onClose={() => setDetailUserId(null)} />}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { Spinner } from '@area-code/shared/components/Spinner'
-import { useGeolocation, useNodeArchetype, useCityPulseToast } from '@area-code/shared/hooks'
+import { useGeolocation, useNodeArchetype, useCityPulseToast, useCheckOut } from '@area-code/shared/hooks'
 import { api } from '@area-code/shared/lib/api'
 import { useLiveVibeOnMap } from '@area-code/shared/lib/featureGating'
 import {
@@ -8,6 +8,7 @@ import {
   useLocationStore,
   useUserStore,
   useSelectionStore,
+  usePresenceStore,
 } from '@area-code/shared/stores'
 import type { Node, NodeCategory, Reward } from '@area-code/shared/types'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -33,6 +34,7 @@ import { useMapInit } from '../hooks/useMapInit'
 import { useMapMarkers } from '../hooks/useMapMarkers'
 import { useMapSockets } from '../hooks/useMapSockets'
 import { useOverlayCoordinator } from '../hooks/useOverlayCoordinator'
+import { usePresenceSeeding } from '../hooks/usePresenceSeeding'
 import { getNodeState } from '../lib/mapHelpers'
 import type { AppRoute } from '../types'
 
@@ -46,6 +48,14 @@ interface MapScreenProps {
  * otherwise opens on the full-country overview from useMapInit.
  */
 const USER_VIEW_ZOOM = 10
+
+/**
+ * Stable empty-nodes reference for presence seeding while the city nodes query
+ * is still loading. Using a module-level constant (rather than a fresh `[]`
+ * literal each render) keeps `usePresenceSeeding`'s effect from re-firing on
+ * every render before the payload resolves.
+ */
+const EMPTY_NODES: Node[] = []
 
 /**
  * Flag-gated subscriber for live archetype deltas (R11.1, R12.4, R12.6).
@@ -174,6 +184,13 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     }
   }, [nodeList, setNodes])
 
+  // First-paint presence seeding (R4.1, R4.2): once the city nodes resolve,
+  // prime each in-view venue's honest Live_Presence_Count over REST so venues
+  // do not read quiet before the first `node:presence_update` socket event.
+  // One-shot per nodes payload and non-blocking (a `useEffect` fan-out), so it
+  // never delays the map render.
+  usePresenceSeeding(nodeList ?? EMPTY_NODES)
+
   // Geolocation acquisition via the GPS state machine hook. We acquire the
   // position (for check-in proximity and to enable the Recenter button) but
   // deliberately do NOT move the camera - the map opens on the full-country
@@ -190,16 +207,31 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   // prevention. The success callback owns the side effects only the screen can
   // perform: closing the carousel, query invalidation, and first-check-in
   // notification priming (R14.7).
-  const handleCheckInSuccess = useCallback(() => {
-    dismiss()
-    void queryClient.invalidateQueries({ queryKey: ['nodes'] })
-    if (!onboarding.firstCheckIn) {
-      markHintSeen('firstCheckIn')
-      setHasCompletedFirstCheckIn(true)
-    }
-  }, [dismiss, queryClient, onboarding.firstCheckIn, markHintSeen])
+  const handleCheckInSuccess = useCallback(
+    (nodeId: string) => {
+      // Establish client-side Active_Presence so the venue surface shows the
+      // Check_Out_CTA (honest-presence-ui R3.1). Only set on a real success.
+      usePresenceStore.getState().setPresent(nodeId)
+      dismiss()
+      void queryClient.invalidateQueries({ queryKey: ['nodes'] })
+      if (!onboarding.firstCheckIn) {
+        markHintSeen('firstCheckIn')
+        setHasCompletedFirstCheckIn(true)
+      }
+    },
+    [dismiss, queryClient, onboarding.firstCheckIn, markHintSeen],
+  )
 
   const checkInFlow = useCheckInFlow({ onCheckInSuccess: handleCheckInSuccess })
+
+  // Commit-mode check-out (honest-presence-ui task 3.2). Symmetric with the
+  // check-in wiring: the shared `useCheckOut` hook calls `POST /v1/check-out`
+  // and clears Active_Presence on success/no-op. The CTA only shows while the
+  // user holds Active_Presence for the Active_Venue.
+  const { checkOut, isPending: isCheckingOut } = useCheckOut()
+  const handleCheckOut = useCallback(() => {
+    if (activeVenueId) void checkOut(activeVenueId)
+  }, [activeVenueId, checkOut])
 
   // ── Marker layer ──
   // The Active_Venue from the Selection_Model carries the active-marker
@@ -463,6 +495,8 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
         onSignIn={checkInFlow.activateCheckIn}
         qrFallback={checkInFlow.qrFallback}
         isCheckingIn={checkInFlow.isPending}
+        onCheckOut={handleCheckOut}
+        isCheckingOut={isCheckingOut}
         categoryFilter={categoryFilter}
       />
 

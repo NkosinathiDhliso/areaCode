@@ -13,12 +13,6 @@ export const overrideStreakBodySchema = z.object({
   reason: z.string().min(1, 'Reason is mandatory'),
 })
 
-export const impersonateBodySchema = z.object({
-  targetUserId: z.string().uuid(),
-  targetAccountType: z.enum(['consumer', 'business', 'staff']),
-  note: z.string().min(1, 'Note is mandatory'),
-})
-
 export const extendTrialBodySchema = z.object({
   days: z.number().int().min(1).max(30),
 })

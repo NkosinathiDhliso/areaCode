@@ -176,9 +176,10 @@ export async function musicRoutes(app: FastifyInstance) {
   // R4.11, R4.12, R4.13)
   //
   // The Music_Schedule is a single source of truth shared by the business
-  // operator and that venue's staff. GET and POST accept either a verified
-  // business-pool JWT or a verified staff-pool JWT; DELETE stays business-only
-  // (staff set the vibe, they do not delete schedule slots).
+  // operator and that venue's staff. GET, POST, and DELETE accept either a
+  // verified business-pool JWT or a verified staff-pool JWT; a Manager
+  // authenticates through the staff pool, so delete parity with create lets a
+  // role that can add a slot also remove one for the same venue.
   //
   // All routes:
   //   1. Require a verified JWT for an allowed role (`requireAuth(...)`).
@@ -242,7 +243,7 @@ export async function musicRoutes(app: FastifyInstance) {
   app.delete(
     '/v1/business/:businessId/music-schedule/:slotId',
     {
-      preHandler: [requireAuth('business'), validate({ params: scheduleSlotPathParamsSchema })],
+      preHandler: [requireAuth('business', 'staff'), validate({ params: scheduleSlotPathParamsSchema })],
     },
     async (request, reply) => {
       const params = request.params as z.infer<typeof scheduleSlotPathParamsSchema>

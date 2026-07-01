@@ -34,11 +34,6 @@ interface TrendingSpot {
   category?: string
 }
 
-const FALLBACK_TRENDING: TrendingSpot[] = [
-  { name: 'Maboneng Precinct', area: 'Johannesburg', state: 'active', checkIns: 34, category: 'arts' },
-  { name: 'Umhlanga Promenade', area: 'Durban', state: 'buzzing', checkIns: 21, category: 'food' },
-]
-
 const STATE_CONFIG: Record<string, { Icon: LucideIcon; label: string }> = {
   popping: { Icon: Flame, label: 'Popping' },
   buzzing: { Icon: Zap, label: 'Buzzing' },
@@ -88,13 +83,13 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
 
   const { data: trendingData } = useQuery({
     queryKey: ['trending'],
-    queryFn: () => api.get<{ items: TrendingSpot[] }>('/v1/nodes/trending').catch(() => ({ items: FALLBACK_TRENDING })),
+    queryFn: () => api.get<{ items: TrendingSpot[] }>('/v1/nodes/trending'),
     staleTime: 60_000,
     retry: 1,
   })
 
-  const trending = trendingData?.items ?? FALLBACK_TRENDING
-  const hasLiveData = trendingData?.items !== undefined && trendingData.items !== FALLBACK_TRENDING
+  const trending = trendingData?.items ?? []
+  const hasLiveData = trendingData?.items !== undefined
 
   const go = (route: AppRoute, path: string) => {
     window.history.pushState({ route }, '', path)

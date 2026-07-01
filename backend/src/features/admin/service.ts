@@ -13,7 +13,6 @@ const ROLE_PERMISSIONS: Record<AdminRole, Set<string>> = {
     'override_streak',
     'process_erasure',
     'send_message',
-    'impersonate',
     'view_business',
     'extend_trial',
     'revoke_staff',
@@ -146,25 +145,6 @@ export async function actionReport(adminId: string, adminRole: AdminRole, report
     afterState: { status: action },
   })
   return report
-}
-
-// ─── Impersonation ──────────────────────────────────────────────────────────
-
-export async function startImpersonation(
-  adminId: string,
-  adminRole: AdminRole,
-  targetUserId: string,
-  targetAccountType: string,
-  note: string,
-) {
-  checkPermission(adminRole, 'impersonate')
-  if (!note) throw AppError.badRequest('Note is mandatory for impersonation')
-  return repo.createImpersonationLog({
-    adminId,
-    targetUserId,
-    targetAccountType,
-    note,
-  })
 }
 
 // ─── Consent Audit ──────────────────────────────────────────────────────────

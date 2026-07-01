@@ -4,6 +4,7 @@ import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore
 import { useErrorStore } from '@area-code/shared/stores/errorStore'
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
+import { usePresenceStore } from '@area-code/shared/stores/presenceStore'
 import type { Node, Reward, NodeState } from '@area-code/shared/types'
 import { useState, memo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -54,6 +55,11 @@ export interface NodeDetailContentProps {
   onSignIn: () => void
   qrFallback?: boolean
   isCheckingIn?: boolean
+  // Symmetric with onCheckIn/isCheckingIn. Optional because the Commit_Mode
+  // parent wires the handler separately (honest-presence-ui task 3.2); until
+  // wired, no check-in sets Active_Presence so the Check_Out_CTA stays hidden.
+  onCheckOut?: () => void
+  isCheckingOut?: boolean
 }
 
 export const NodeDetailContent = memo(function NodeDetailContent({
@@ -64,6 +70,8 @@ export const NodeDetailContent = memo(function NodeDetailContent({
   onSignIn,
   qrFallback = false,
   isCheckingIn = false,
+  onCheckOut,
+  isCheckingOut = false,
 }: NodeDetailContentProps) {
   const { t } = useTranslation()
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
@@ -77,6 +85,10 @@ export const NodeDetailContent = memo(function NodeDetailContent({
   const archetypeId = useMapStore(
     (s) => (node ? s.archetypeIds[node.id] : undefined) ?? node?.defaultArchetypeId ?? DEFAULT_ARCHETYPE_ID,
   )
+  // Active_Presence for this node: drives whether the Check_Out_CTA replaces
+  // the check-in CTA. Read from the shared presence store, never fabricated
+  // (honest-presence-ui R1.1, R1.2, R3).
+  const isPresent = usePresenceStore((s) => (node ? s.isPresent(node.id) : false))
   const [menuOpen, setMenuOpen] = useState(false)
   const [claimModalOpen, setClaimModalOpen] = useState(false)
   const [registrationNumber, setRegistrationNumber] = useState('')
@@ -406,18 +418,34 @@ export const NodeDetailContent = memo(function NodeDetailContent({
         </button>
       )}
 
-      {/* CTA */}
-      <button
-        onClick={handleCheckIn}
-        disabled={ctaInfo.disabled}
-        className={`w-full font-semibold rounded-xl py-4 text-base transition-all duration-150 active:scale-95 ${
-          ctaInfo.disabled
-            ? 'bg-[var(--bg-raised)] text-[var(--text-muted)] cursor-not-allowed'
-            : 'bg-[var(--accent)] text-white'
-        }`}
-      >
-        {ctaLabel}
-      </button>
+      {/* CTA: while the user holds Active_Presence here, the Check_Out_CTA
+          replaces the check-in button as the primary action (R1.1). Otherwise
+          the existing check-in CTA is unchanged (R1.2). */}
+      {isPresent ? (
+        <button
+          onClick={onCheckOut}
+          disabled={isCheckingOut}
+          aria-disabled={isCheckingOut}
+          aria-label={t('node.checkOut')}
+          className={`w-full font-semibold rounded-xl py-4 text-base border border-[var(--border)] bg-[var(--bg-raised)] text-[var(--text-primary)] transition-all duration-150 active:scale-95 ${
+            isCheckingOut ? 'opacity-60 cursor-not-allowed' : ''
+          }`}
+        >
+          {isCheckingOut ? t('node.checkingOut') : t('node.checkOut')}
+        </button>
+      ) : (
+        <button
+          onClick={handleCheckIn}
+          disabled={ctaInfo.disabled}
+          className={`w-full font-semibold rounded-xl py-4 text-base transition-all duration-150 active:scale-95 ${
+            ctaInfo.disabled
+              ? 'bg-[var(--bg-raised)] text-[var(--text-muted)] cursor-not-allowed'
+              : 'bg-[var(--accent)] text-white'
+          }`}
+        >
+          {ctaLabel}
+        </button>
+      )}
 
       {/* Report Modal */}
       {reportModalOpen && (
