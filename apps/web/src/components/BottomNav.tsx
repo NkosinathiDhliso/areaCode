@@ -89,12 +89,12 @@ export function BottomNav({ active, onNavigate, onReselect, onLongPress }: Botto
     <nav
       className="app-bottom-nav relative flex-shrink-0 flex flex-row items-stretch justify-around z-50"
       style={{
-        // Compact visible bar at --nav-height. The home-indicator inset is a
-        // margin below the bar (not padding that grows it), so the strip is
-        // painted by the shell's --bg-base backdrop, the same colour as the nav.
-        // Result: a natural-height bar with a seamless, gap-free safe area.
+        // Compact bar flush to the physical bottom edge. No safe-area margin,
+        // so there is no strip below it and no gap. Icons are centred in the
+        // 49px bar, so they stay clear of the home indicator, which floats over
+        // the bar's bottom few pixels (same --bg-base colour). Trade-off: the
+        // lowest sliver of the tab row sits in the system gesture zone.
         height: 'var(--nav-height)',
-        marginBottom: 'var(--safe-area-bottom)',
       }}
       role="navigation"
       aria-label="Main navigation"
