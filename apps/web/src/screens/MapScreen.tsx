@@ -1,4 +1,3 @@
-import { Spinner } from '@area-code/shared/components/Spinner'
 import { useGeolocation, useNodeArchetype, useCityPulseToast, useCheckOut } from '@area-code/shared/hooks'
 import { api } from '@area-code/shared/lib/api'
 import { useLiveVibeOnMap } from '@area-code/shared/lib/featureGating'
@@ -17,6 +16,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CategoryFilterBar } from '../components/CategoryFilterBar'
+import { CheckInCelebration } from '../components/CheckInCelebration'
 import { MapControls } from '../components/MapControls'
 import { NotificationPrimingSheet, isDeferredRecently } from '../components/NotificationPrimingSheet'
 import { PeekCarousel } from '../components/PeekCarousel'
@@ -124,6 +124,15 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   // overlay coordinator turns these into the actual render decision.
   const [hasCompletedFirstCheckIn, setHasCompletedFirstCheckIn] = useState(false)
   const [primingShownThisSession, setPrimingShownThisSession] = useState(false)
+  // The check-in reward moment (peak-end). Set on a successful check-in with
+  // the honest, client-known values; cleared when the moment self-dismisses.
+  const [celebration, setCelebration] = useState<{
+    venueName: string
+    fromCount: number
+    toCount: number
+    totalCheckIns: number
+    streakCount: number
+  } | null>(null)
 
   // ── Selection_Model: the single source of truth for the Active_Venue ──
   // Drives the Peek_Carousel, the camera, and the marker layer. Replaces the
@@ -212,8 +221,36 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       // Establish client-side Active_Presence so the venue surface shows the
       // Check_Out_CTA (honest-presence-ui R3.1). Only set on a real success.
       usePresenceStore.getState().setPresent(nodeId)
+
+      // Optimistic, honest live-count bump. The user genuinely just checked in
+      // (GPS/QR proven), so their own arrival is real presence, not a fabricated
+      // number (honest-presence.md). The next `node:presence_update` reconciles
+      // to the server truth.
+      const mapState = useMapStore.getState()
+      const fromCount = mapState.checkInCounts[nodeId] ?? 0
+      const toCount = fromCount + 1
+      mapState.setLivePresenceCount(nodeId, toCount)
+
+      // Optimistic profile progress so the reward moment reflects the new total
+      // instantly; the query invalidations below reconcile with the server.
+      const userState = useUserStore.getState()
+      userState.incrementCheckIns()
+
+      setCelebration({
+        venueName: mapState.nodes[nodeId]?.name ?? '',
+        fromCount,
+        toCount,
+        totalCheckIns: useUserStore.getState().totalCheckIns,
+        streakCount: userState.streakCount,
+      })
+
       dismiss()
+      // Reconcile server truth for the map and the profile progress surfaces
+      // (total check-ins, streak, tier progress) the celebration previews.
       void queryClient.invalidateQueries({ queryKey: ['nodes'] })
+      void queryClient.invalidateQueries({ queryKey: ['user', 'me'] })
+      void queryClient.invalidateQueries({ queryKey: ['streak'] })
+      void queryClient.invalidateQueries({ queryKey: ['tier-progress'] })
       if (!onboarding.firstCheckIn) {
         markHintSeen('firstCheckIn')
         setHasCompletedFirstCheckIn(true)
@@ -369,12 +406,21 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     <div className="h-full w-full relative" style={{ background: 'var(--bg-map)' }}>
       <div ref={containerRef} className="absolute inset-0 w-full h-full" style={{ background: 'var(--bg-map)' }} />
 
-      {/* Map loading overlay */}
+      {/* Map loading overlay: a calm skeleton wash rather than a bare spinner,
+          so first paint reads as the map materialising, not a dead load. */}
       {!mapReady && !mapError && (
-        <div className="absolute inset-0 flex items-center justify-center z-5" style={{ background: 'var(--bg-map)' }}>
-          <div className="flex flex-col items-center gap-3">
-            <Spinner size="lg" />
-            <span className="text-[var(--text-muted)] text-sm">Loading map...</span>
+        <div
+          className="absolute inset-0 z-5 overflow-hidden"
+          style={{ background: 'var(--bg-map)' }}
+          role="status"
+          aria-label={t('map.loading', 'Loading map')}
+        >
+          <div className="absolute inset-0 animate-shimmer" style={{ background: 'var(--glass-highlight)' }} />
+          <div className="absolute inset-x-4 z-10" style={{ bottom: 'calc(var(--nav-height) + 1.5rem)' }}>
+            <div className="flex gap-3 overflow-hidden">
+              <div className="h-20 w-[200px] shrink-0 rounded-2xl bg-[var(--bg-raised)] animate-pulse" />
+              <div className="h-20 w-[200px] shrink-0 rounded-2xl bg-[var(--bg-raised)] animate-pulse" />
+            </div>
           </div>
         </div>
       )}
@@ -387,7 +433,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
           <p className="text-[var(--text-secondary)] text-sm mb-6 text-center max-w-[280px]">{mapError}</p>
           <button
             onClick={retryMap}
-            className="bg-[var(--accent)] text-white font-semibold rounded-xl px-6 py-3 text-sm"
+            className="bg-[var(--accent-cta)] text-white font-semibold rounded-xl px-6 py-3 text-sm"
           >
             Retry
           </button>
@@ -433,7 +479,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
             </div>
             <button
               onClick={handleEnableLocation}
-              className="bg-[var(--accent)] text-white text-xs font-semibold rounded-lg px-3 py-1.5 mr-2"
+              className="bg-[var(--accent-cta)] text-white text-xs font-semibold rounded-lg px-3 py-1.5 mr-2"
             >
               {t('location.enable')}
             </button>
@@ -459,6 +505,17 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       <ToastOverlay />
       {overlay.showNudge && <ProximityNudgeBanner onNavigate={onNavigate} />}
 
+      {celebration && (
+        <CheckInCelebration
+          venueName={celebration.venueName}
+          fromCount={celebration.fromCount}
+          toCount={celebration.toCount}
+          totalCheckIns={celebration.totalCheckIns}
+          streakCount={celebration.streakCount}
+          onDone={() => setCelebration(null)}
+        />
+      )}
+
       {/* City venue-data states: failed fetch (retry) or genuinely empty city. */}
       {(nodesFetchFailed || cityHasNoVenues) && (
         <div className="absolute left-4 right-4 z-20" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 4.5rem)' }}>
@@ -471,7 +528,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
             {nodesFetchFailed && (
               <button
                 onClick={() => void refetchNodes()}
-                className="bg-[var(--accent)] text-white text-xs font-semibold rounded-lg px-3 py-1.5 shrink-0"
+                className="bg-[var(--accent-cta)] text-white text-xs font-semibold rounded-lg px-3 py-1.5 shrink-0"
               >
                 {t('common.retry', 'Retry')}
               </button>

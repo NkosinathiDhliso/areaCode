@@ -63,7 +63,7 @@ export function VerifyEmail({ onNavigate }: VerifyEmailProps) {
           <button
             type="button"
             onClick={go}
-            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 px-8 text-base transition-all duration-150 active:scale-95"
+            className="bg-[var(--accent-cta)] text-white font-semibold rounded-xl py-3.5 px-8 text-base transition-all duration-150 active:scale-95"
           >
             {t('auth.verifyEmail.continue', 'Continue')}
           </button>
@@ -84,7 +84,7 @@ export function VerifyEmail({ onNavigate }: VerifyEmailProps) {
           <button
             type="button"
             onClick={go}
-            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 px-8 text-base transition-all duration-150 active:scale-95"
+            className="bg-[var(--accent-cta)] text-white font-semibold rounded-xl py-3.5 px-8 text-base transition-all duration-150 active:scale-95"
           >
             {t('auth.verifyEmail.continue', 'Continue')}
           </button>

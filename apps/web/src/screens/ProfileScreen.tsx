@@ -103,7 +103,7 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
         <p className="text-[var(--text-secondary)] text-sm">{t('auth.gated.signIn')}</p>
         <button
           onClick={() => onNavigate('login')}
-          className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3 px-8 text-sm transition-all duration-150 active:scale-95"
+          className="bg-[var(--accent-cta)] text-white font-semibold rounded-xl py-3 px-8 text-sm transition-all duration-150 active:scale-95"
         >
           {t('auth.gated.signInButton')}
         </button>

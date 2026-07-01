@@ -97,7 +97,7 @@ export function LeaderboardScreen({ onNavigate }: LeaderboardScreenProps) {
           disabled={!userArchetypeId}
           className={`flex-1 py-2 px-3 rounded-xl text-xs font-medium transition-all ${
             viewMode === 'archetype'
-              ? 'bg-[var(--accent)] text-white'
+              ? 'bg-[var(--accent-cta)] text-white'
               : 'bg-[var(--bg-surface)] text-[var(--text-muted)] border border-[var(--border)]'
           } ${!userArchetypeId ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
@@ -114,7 +114,7 @@ export function LeaderboardScreen({ onNavigate }: LeaderboardScreenProps) {
           onClick={() => setViewMode('city-wide')}
           className={`flex-1 py-2 px-3 rounded-xl text-xs font-medium transition-all ${
             viewMode === 'city-wide'
-              ? 'bg-[var(--accent)] text-white'
+              ? 'bg-[var(--accent-cta)] text-white'
               : 'bg-[var(--bg-surface)] text-[var(--text-muted)] border border-[var(--border)]'
           }`}
         >

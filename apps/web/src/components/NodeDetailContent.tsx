@@ -274,7 +274,9 @@ export const NodeDetailContent = memo(function NodeDetailContent({
         <img
           src={headerImageUrl}
           alt={node.name}
-          className="w-full h-40 object-cover rounded-2xl border border-[var(--border)] mb-4"
+          loading="lazy"
+          decoding="async"
+          className="w-full h-40 object-cover rounded-2xl border border-[var(--border)] mb-4 bg-[var(--bg-raised)]"
         />
       )}
 
@@ -412,7 +414,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
       {isBusinessAuthenticated && node.claimStatus === 'unclaimed' && (
         <button
           onClick={() => setClaimModalOpen(true)}
-          className="w-full flex items-center justify-center gap-2 bg-[var(--accent)] text-white font-medium rounded-xl py-3 text-sm mb-3 transition-all duration-150 active:scale-95"
+          className="w-full flex items-center justify-center gap-2 bg-[var(--accent-cta)] text-white font-medium rounded-xl py-3 text-sm mb-3 transition-all duration-150 active:scale-95"
         >
           {t('node.claimVenue')}
         </button>
@@ -440,7 +442,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
           className={`w-full font-semibold rounded-xl py-4 text-base transition-all duration-150 active:scale-95 ${
             ctaInfo.disabled
               ? 'bg-[var(--bg-raised)] text-[var(--text-muted)] cursor-not-allowed'
-              : 'bg-[var(--accent)] text-white'
+              : 'bg-[var(--accent-cta)] text-white'
           }`}
         >
           {ctaLabel}
@@ -504,7 +506,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
                   <button
                     onClick={() => void handleSubmitReport()}
                     disabled={reporting}
-                    className="flex-1 bg-[var(--accent)] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
+                    className="flex-1 bg-[var(--accent-cta)] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
                   >
                     {reporting ? t('common.submitting', 'Submitting…') : t('node.submitReport', 'Submit')}
                   </button>
@@ -546,7 +548,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
                   <button
                     onClick={() => void handleClaim()}
                     disabled={claiming || !registrationNumber.trim()}
-                    className="flex-1 bg-[var(--accent)] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
+                    className="flex-1 bg-[var(--accent-cta)] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
                   >
                     {claiming ? t('node.claiming') : t('node.submitClaim')}
                   </button>

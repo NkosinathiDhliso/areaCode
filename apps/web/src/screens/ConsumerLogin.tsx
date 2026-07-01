@@ -199,7 +199,7 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
           type="button"
           onClick={() => void handleEmailAuth()}
           disabled={loading || googleLoading || !canSubmit}
-          className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+          className="bg-[var(--accent-cta)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {loading ? (
             <Spinner size="sm" className="border-white border-t-transparent" />

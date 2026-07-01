@@ -137,7 +137,9 @@ export function useCheckInFlow(params: UseCheckInFlowParams = {}): CheckInFlow {
       try {
         const result = await checkIn(payload)
         if (result) {
-          if (navigator.vibrate) navigator.vibrate(50)
+          // Haptic + celebration are owned by the success side effect
+          // (`onCheckInSuccess` → CheckInCelebration), which fires a
+          // reduced-motion-aware tick. Do not double-buzz here.
           onCheckInSuccess?.(payload.nodeId)
           return true
         }

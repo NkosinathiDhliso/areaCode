@@ -296,7 +296,7 @@ export function StreamingSection() {
             <button
               onClick={() => setShowConsent('spotify')}
               disabled={loading}
-              className="w-full bg-[var(--accent)] text-white rounded-xl py-3 text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-95"
+              className="w-full bg-[var(--accent-cta)] text-white rounded-xl py-3 text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-95"
             >
               {loading ? (
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />

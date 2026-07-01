@@ -131,7 +131,7 @@ export function QrCheckIn({ nodeId, token, onNavigate }: QrCheckInProps) {
             </p>
             <button
               onClick={() => onNavigate('login')}
-              className="w-full bg-[var(--accent)] text-white font-semibold rounded-xl py-3 text-sm mt-2"
+              className="w-full bg-[var(--accent-cta)] text-white font-semibold rounded-xl py-3 text-sm mt-2"
             >
               {t('qr.signInCta', 'Sign in')}
             </button>
@@ -147,7 +147,7 @@ export function QrCheckIn({ nodeId, token, onNavigate }: QrCheckInProps) {
             <p className="text-[var(--text-secondary)] text-sm">{message}</p>
             <button
               onClick={() => onNavigate('map')}
-              className="w-full bg-[var(--accent)] text-white font-semibold rounded-xl py-3 text-sm mt-2"
+              className="w-full bg-[var(--accent-cta)] text-white font-semibold rounded-xl py-3 text-sm mt-2"
             >
               {t('qr.openMap', 'Open the map')}
             </button>

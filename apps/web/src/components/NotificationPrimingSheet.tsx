@@ -132,7 +132,7 @@ export function NotificationPrimingSheet({ isOpen, onClose, lat, lng, userId }: 
 
         <button
           onClick={handleEnable}
-          className="w-full bg-[var(--accent)] text-white font-semibold rounded-xl py-4 text-base"
+          className="w-full bg-[var(--accent-cta)] text-white font-semibold rounded-xl py-4 text-base"
         >
           {t('notif.priming.enable')}
         </button>

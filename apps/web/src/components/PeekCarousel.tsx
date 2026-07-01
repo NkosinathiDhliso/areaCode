@@ -330,7 +330,7 @@ function ConstellationMode({ vm, nearbyCount, nodeCategory, onZoomIn, onDismiss 
       <button
         type="button"
         onClick={onZoomIn}
-        className="w-full flex items-center justify-center gap-2 bg-[var(--accent)] text-white font-semibold rounded-xl py-3 text-sm transition-all duration-150 active:scale-95"
+        className="w-full flex items-center justify-center gap-2 bg-[var(--accent-cta)] text-white font-semibold rounded-xl py-3 text-sm transition-all duration-150 active:scale-95"
       >
         {t('map.zoomIn', 'Zoom in')}
       </button>
@@ -458,7 +458,7 @@ function BrowseMode({
         type="button"
         onClick={onEnterCommit}
         disabled={activeVenueId === null}
-        className="w-full flex items-center justify-center gap-2 bg-[var(--accent)] text-white font-semibold rounded-xl py-3 text-sm transition-all duration-150 active:scale-95 disabled:opacity-40"
+        className="w-full flex items-center justify-center gap-2 bg-[var(--accent-cta)] text-white font-semibold rounded-xl py-3 text-sm transition-all duration-150 active:scale-95 disabled:opacity-40"
       >
         <ChevronUp size={16} strokeWidth={2} />
         {t('map.viewDetails', 'View details')}

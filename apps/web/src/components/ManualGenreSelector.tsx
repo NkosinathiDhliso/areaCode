@@ -63,7 +63,7 @@ export function ManualGenreSelector() {
             onClick={() => toggle(genre)}
             className={`rounded-xl px-3 py-1 text-xs transition-all duration-150 ${
               selected.includes(genre)
-                ? 'bg-[var(--accent)] text-white'
+                ? 'bg-[var(--accent-cta)] text-white'
                 : 'bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-secondary)]'
             }`}
           >
@@ -75,7 +75,7 @@ export function ManualGenreSelector() {
       <button
         onClick={handleSave}
         disabled={saving || selected.length < 1}
-        className="w-full bg-[var(--accent)] text-white rounded-xl py-2 text-sm font-medium disabled:opacity-50"
+        className="w-full bg-[var(--accent-cta)] text-white rounded-xl py-2 text-sm font-medium disabled:opacity-50"
       >
         {t('profile.genres.save')}
       </button>

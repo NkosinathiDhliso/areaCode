@@ -212,7 +212,7 @@ describe('MapScreen - 17.2 render and state coverage', () => {
   it('shows the loading overlay while the map is not ready (R9.x)', async () => {
     h.mapInit.mapReady = false
     const { container } = await renderScreen()
-    expect(screen.getByText('Loading map...')).toBeTruthy()
+    expect(screen.getByRole('status', { name: 'Loading map' })).toBeTruthy()
     expect(container.querySelector('[data-peek-carousel]')!.getAttribute('data-mode')).toBe('closed')
   })
 

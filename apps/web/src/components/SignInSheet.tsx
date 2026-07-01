@@ -38,7 +38,7 @@ export function SignInSheet({ isOpen, onClose, onNavigate }: SignInSheetProps) {
             onClose()
             onNavigate('login')
           }}
-          className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95"
+          className="bg-[var(--accent-cta)] text-white font-semibold rounded-xl py-3.5 text-base transition-all duration-150 active:scale-95"
         >
           {t('auth.signInSheet.cta', 'Sign in to continue')}
         </button>

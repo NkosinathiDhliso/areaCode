@@ -15,10 +15,15 @@
   --glow-warm: radial-gradient(ellipse at 50% 100%, rgba(255, 107, 107, 0.08) 0%, transparent 60%);
   --text-primary: #e8ecf0;
   --text-secondary: #9aa8b8;
-  --text-muted: #5c6878;
+  --text-muted: #7a8a9c;
   --accent: #778ca9;
   --accent-bright: #a9cbe0;
   --accent-dim: #5a6f8a;
+  /* Solid accent for primary-CTA backgrounds with white/`--on-accent` text.
+     Darker than `--accent` so white text clears WCAG AA (>=4.5:1); `--accent`
+     itself stays for text/icons/switches where it already passes on the dark
+     base. See code-style.md styling rules. */
+  --accent-cta: #5a6f8a;
   --accent-gradient: linear-gradient(135deg, #5a6f8a 0%, #778ca9 50%, #a9cbe0 100%);
   --cta-gradient: linear-gradient(135deg, #5a6f8a 0%, #6e8ba8 100%);
   --cta-gradient-hover: linear-gradient(135deg, #6e8ba8 0%, #8aa4c0 100%);
@@ -85,10 +90,12 @@
   --glow-warm: radial-gradient(ellipse at 50% 100%, rgba(205, 127, 50, 0.08) 0%, transparent 60%);
   --text-primary: #1a1e24;
   --text-secondary: #4a5568;
-  --text-muted: #8a94a0;
+  --text-muted: #5f6a7a;
   --accent: #5a6f8a;
   --accent-bright: #778ca9;
   --accent-dim: #465a72;
+  /* Solid accent for primary-CTA backgrounds with white text (WCAG AA >=4.5:1). */
+  --accent-cta: #4f6a88;
   --accent-gradient: linear-gradient(135deg, #465a72 0%, #5a6f8a 50%, #778ca9 100%);
   --cta-gradient: linear-gradient(135deg, #465a72 0%, #5a7088 100%);
   --cta-gradient-hover: linear-gradient(135deg, #5a7088 0%, #6e8ba8 100%);

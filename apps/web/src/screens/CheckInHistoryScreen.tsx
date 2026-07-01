@@ -119,7 +119,7 @@ export function CheckInHistoryScreen({ onNavigate }: CheckInHistoryScreenProps) 
           </p>
           <button
             onClick={() => void refetch()}
-            className="bg-[var(--accent)] text-white font-semibold rounded-xl py-3 px-6 text-sm transition-all duration-150 active:scale-95"
+            className="bg-[var(--accent-cta)] text-white font-semibold rounded-xl py-3 px-6 text-sm transition-all duration-150 active:scale-95"
           >
             {t('common.retry', 'Retry')}
           </button>

@@ -158,7 +158,7 @@ export function FeedItemRow({ item, onFocusVenue }: FeedItemRowProps) {
         <button
           type="button"
           onClick={() => onFocusVenue(node.id)}
-          className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[var(--accent)] text-white transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+          className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[var(--accent-cta)] text-white transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
         >
           {t('feed.joinThem', 'Join them?')}
         </button>
