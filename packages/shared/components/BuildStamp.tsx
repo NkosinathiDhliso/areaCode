@@ -61,12 +61,11 @@ export function BuildStamp() {
       <div ref={bottomProbe} style={{ ...probeStyle, bottom: 0, height: 'env(safe-area-inset-bottom, 0px)' }} />
       <div
         aria-hidden="true"
-        className="fixed left-1 z-[9998] select-none rounded-md font-mono text-[11px] leading-none"
+        className="fixed left-1 z-[9998] select-none font-mono text-[9px] leading-none"
         style={{
           top: 'calc(env(safe-area-inset-top, 0px) + 2px)',
-          color: '#ffffff',
-          background: 'rgba(255, 0, 128, 0.85)',
-          padding: '4px 6px',
+          color: 'var(--text-muted)',
+          opacity: 0.45,
           pointerEvents: 'none',
         }}
       >

@@ -111,21 +111,6 @@ export function BottomNav({ active, onNavigate, onReselect, onLongPress }: Botto
           transition: reduced ? 'opacity 0.2s ease' : 'left 0.34s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease',
         }}
       />
-      {/* DEBUG: safe-area band pinned to the nav's true bottom edge. Its height
-          IS env(safe-area-inset-bottom), so a visible magenta band means the
-          inset is being applied (its thickness = the inset); the white line
-          marks the nav's bottom edge. Any black BELOW the band is the gap.
-          Remove once the safe-area bottom is verified. */}
-      <span
-        aria-hidden="true"
-        className="absolute left-0 right-0 bottom-0 z-50 pointer-events-none"
-        style={{
-          height: 'max(3px, env(safe-area-inset-bottom, 0px))',
-          background: 'rgba(255, 0, 128, 0.55)',
-          borderTop: '2px solid #ffffff',
-          boxShadow: '0 0 8px 2px rgba(255, 255, 255, 0.85)',
-        }}
-      />
       {NAV_ITEMS.map((item) => {
         const isActive = active === item.route
         return (
