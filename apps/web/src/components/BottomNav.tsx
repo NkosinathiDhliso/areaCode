@@ -133,7 +133,7 @@ export function BottomNav({ active, onNavigate, onReselect, onLongPress }: Botto
             aria-current={isActive ? 'page' : undefined}
             aria-label={t(item.labelKey)}
           >
-            <item.Icon size={20} strokeWidth={isActive ? 2.5 : 1.5} />
+            <item.Icon size={24} strokeWidth={isActive ? 2.5 : 1.5} />
             <span className="text-[10px] mt-0.5 leading-none">{t(item.labelKey)}</span>
           </button>
         )

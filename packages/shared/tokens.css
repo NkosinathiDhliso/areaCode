@@ -64,7 +64,9 @@
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
   --shadow-glow: 0 0 20px rgba(169, 203, 224, 0.12);
   --noise-opacity: 0.03;
-  --nav-height: 48px;
+  /* iOS Human Interface Guidelines tab-bar height (49pt); matches TikTok /
+     Instagram / X on iPhone. Android Material bottom nav is 56dp. */
+  --nav-height: 49px;
   --bottom-sheet-radius: 20px;
 }
 
