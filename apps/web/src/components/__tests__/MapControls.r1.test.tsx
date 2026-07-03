@@ -27,6 +27,8 @@ function setup(overrides: Partial<Parameters<typeof MapControls>[0]> = {}) {
   const onResetNorth = vi.fn()
   const onRecenter = vi.fn()
   const onToggle3D = vi.fn()
+  const onZoomIn = vi.fn()
+  const onZoomOut = vi.fn()
   const pauseIdleDrift = vi.fn()
   const props = {
     is3D: true,
@@ -34,12 +36,14 @@ function setup(overrides: Partial<Parameters<typeof MapControls>[0]> = {}) {
     onToggle3D,
     onResetNorth,
     onRecenter,
+    onZoomIn,
+    onZoomOut,
     lastKnownPositionFreshAt: null as number | null,
     pauseIdleDrift,
     ...overrides,
   }
   render(<MapControls {...props} />)
-  return { onResetNorth, onRecenter, onToggle3D, pauseIdleDrift }
+  return { onResetNorth, onRecenter, onToggle3D, onZoomIn, onZoomOut, pauseIdleDrift }
 }
 
 describe('MapControls (R1 sidebar correctness)', () => {

@@ -625,10 +625,18 @@ export function useMapMarkers(
       } catch {
         /* map gone */
       }
-      setMapZoom(zoom)
+      // Quantised zoom state (0.25 steps). Re-running the marker-reconcile
+      // effect below (vibeRank + per-marker DOM/React updates) on every zoom
+      // frame is what made pinch and wheel zoom stutter. The per-frame visuals
+      // (scale, tier fade, beam blend) are applied imperatively right here;
+      // the effect only needs to re-run when beam-cap membership could change,
+      // and 0.25-zoom granularity covers that.
+      setMapZoom((prev) => (Math.abs(prev - zoom) < 0.25 ? prev : zoom))
 
       const tier = presentationTierForZoom(zoom)
-      const blend = beamBlendForZoom(zoom)
+      // Blend quantised to 0.05 so the heavy per-marker restyle below only
+      // runs when the crossfade visibly moves, not on every zoom frame.
+      const blend = Math.round(beamBlendForZoom(zoom) * 20) / 20
       // Dim non-selected markers whenever a venue is active. The beam tier
       // gates this on `tier === 'beam'` itself; the glyph/dot tiers use it to
       // fade neighbours so the selected glyph stands out in a cluster.
@@ -636,7 +644,17 @@ export function useMapMarkers(
 
       for (const [nodeId, marker] of markersRef.current) {
         const el = marker.getElement()
+        // Cheap and per-frame: keeps marker size tracking the zoom smoothly.
         applyZoomScale(el, zoom)
+
+        // Everything below fans out into querySelectors, style rewrites, and
+        // animation syncs per marker. Re-apply only when the presentation
+        // inputs actually moved - doing it every zoom frame for every marker
+        // was a large share of the zoom jank.
+        const presentationKey = `${tier}|${dimInactive}|${blend}`
+        if (el.dataset['presentationKey'] === presentationKey) continue
+        el.dataset['presentationKey'] = presentationKey
+
         const isActive = el.dataset.active === 'true'
         const score = useMapStore.getState().pulseScores[nodeId] ?? 0
         const pulseState = getNodeState(score)

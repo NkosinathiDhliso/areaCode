@@ -30,6 +30,12 @@ bugs already fixed. Ranking DNA lives in
   camera, nothing else. Commit_Mode (details) opens only from the "View details"
   control. No card tap and no gesture (including swipe-up) opens details.
   Swipe-down dismisses; horizontal swipe steps the carousel.
+- **Browse never blocks the map.** Browse_Mode and the Constellation peek
+  render on a non-modal sheet (`BottomSheet modal={false}`): no backdrop, and
+  the map above the strip stays fully interactive (pan, zoom, marker taps).
+  This is load-bearing, not cosmetic: the `area` scope can only ever be entered
+  by a user pan/zoom performed while the strip is open. Only Commit_Mode is a
+  modal takeover (backdrop, focus trap, tap-outside dismiss).
 - **Map tab re-tap toggles the carousel** via `selectionStore.toggleOpen`, wired
   through `BottomNav` `onReselect`.
 - **Constellation scope lock.** While `zoom < MIN_MARKER_ZOOM`, browse scope

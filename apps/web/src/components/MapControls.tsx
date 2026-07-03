@@ -1,7 +1,9 @@
 import { useMapStore } from '@area-code/shared/stores/mapStore'
-import { Box, Square, Compass, Crosshair, Activity } from 'lucide-react'
+import { Box, Square, Compass, Crosshair, Activity, Plus, Minus } from 'lucide-react'
 import { useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { POSITION_FRESHNESS_WINDOW } from '../lib/carouselConstants'
 
 /**
  * R1 debounce window shared by Compass_Button and Recenter_Button. A
@@ -9,12 +11,6 @@ import { useTranslation } from 'react-i18next'
  * does not whiplash between a bearing reset and a fly-to.
  */
 const SIDEBAR_TAP_DEBOUNCE_MS = 250
-
-/**
- * R1.3 / R1.4 freshness window. Anything older than 60s is treated as a
- * stale fix and Recenter_Button renders in its disabled affordance.
- */
-const LAST_KNOWN_POSITION_FRESHNESS_MS = 60_000
 
 /**
  * R1.5 - minimum idle-drift pause after a sidebar tap so the city does not
@@ -28,6 +24,10 @@ interface MapControlsProps {
   onToggle3D: () => void
   onResetNorth: () => void
   onRecenter: () => void
+  /** Zoom in one level (eased). Desktop-only affordance. */
+  onZoomIn: () => void
+  /** Zoom out one level (eased). Desktop-only affordance. */
+  onZoomOut: () => void
   /**
    * Timestamp (Date.now() ms) of the most recent Last_Known_Position, or
    * `null` if the consumer has not yet granted permission / acquired a fix.
@@ -59,6 +59,8 @@ export function MapControls({
   onToggle3D,
   onResetNorth,
   onRecenter,
+  onZoomIn,
+  onZoomOut,
   lastKnownPositionFreshAt,
   pauseIdleDrift,
 }: MapControlsProps) {
@@ -74,7 +76,7 @@ export function MapControls({
   // so the affordance flips back to disabled the moment the fix ages out,
   // without requiring an extra timer to re-render the button.
   const hasFreshUserLocation =
-    lastKnownPositionFreshAt !== null && Date.now() - lastKnownPositionFreshAt <= LAST_KNOWN_POSITION_FRESHNESS_MS
+    lastKnownPositionFreshAt !== null && Date.now() - lastKnownPositionFreshAt <= POSITION_FRESHNESS_WINDOW
 
   const handleResetNorth = useCallback(() => {
     const now = Date.now()
@@ -150,6 +152,16 @@ export function MapControls({
         >
           <Crosshair size={18} strokeWidth={1.75} />
         </ControlButton>
+
+        {/* Zoom controls: pointer-only affordance, hidden on mobile (R9.1) */}
+        <div className="hidden md:flex flex-col gap-1">
+          <ControlButton onClick={onZoomIn} label={t('map.controls.zoomIn')} testId="map-sidebar-zoom-in">
+            <Plus size={18} strokeWidth={1.75} />
+          </ControlButton>
+          <ControlButton onClick={onZoomOut} label={t('map.controls.zoomOut')} testId="map-sidebar-zoom-out">
+            <Minus size={18} strokeWidth={1.75} />
+          </ControlButton>
+        </div>
       </div>
 
       {/* Live signal indicator - mission cue: "this is real-time" */}
@@ -187,7 +199,7 @@ function ControlButton({ onClick, children, label, active, disabled, testId }: C
       title={label}
       data-testid={testId}
       className={`
-        w-10 h-10 rounded-xl flex items-center justify-center transition-all
+        w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-95
         ${
           active
             ? 'bg-[var(--accent)] text-[var(--on-accent)] shadow-[var(--shadow-glow)]'

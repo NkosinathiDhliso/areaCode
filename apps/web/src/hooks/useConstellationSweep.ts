@@ -4,23 +4,21 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 
 import { DRAG_AXIS_THRESHOLD, MIN_MARKER_ZOOM } from '../lib/carouselConstants'
 import { classifyDrag } from '../lib/gestureClassifier'
+import { reducedMotion } from '../lib/reducedMotion'
+import { computeWhisperText } from '../lib/whisperText'
 
 const SWEEP_HIT_PX = 44
 
-function detectReducedMotion(): boolean {
-  if (typeof window === 'undefined' || !window.matchMedia) return false
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
-}
-
 /**
- * Constellation play layer: horizontal sweeps brighten nearby beams.
+ * Constellation play layer: horizontal sweeps brighten nearby beams
+ * and show a one-line magnet whisper chip (belonging > momentum > aliveness).
  * Does not select venues or flip browse scope.
  */
 export function useConstellationSweep(mapRef: RefObject<mapboxgl.Map | null>, mapReady: boolean) {
   const [brushedNodeId, setBrushedNodeId] = useState<string | null>(null)
+  const [whisperText, setWhisperText] = useState<string | null>(null)
   const dragStartRef = useRef<{ x: number; y: number } | null>(null)
   const lastVibratedRef = useRef<string | null>(null)
-  const reducedMotionRef = useRef(detectReducedMotion())
 
   useEffect(() => {
     const map = mapRef.current
@@ -43,6 +41,7 @@ export function useConstellationSweep(mapRef: RefObject<mapboxgl.Map | null>, ma
       }
       if (zoom >= MIN_MARKER_ZOOM) {
         setBrushedNodeId(null)
+        setWhisperText(null)
         return
       }
 
@@ -50,6 +49,7 @@ export function useConstellationSweep(mapRef: RefObject<mapboxgl.Map | null>, ma
       const dy = e.clientY - start.y
       if (classifyDrag(dx, dy, DRAG_AXIS_THRESHOLD) !== 'horizontal') {
         setBrushedNodeId(null)
+        setWhisperText(null)
         return
       }
 
@@ -68,9 +68,18 @@ export function useConstellationSweep(mapRef: RefObject<mapboxgl.Map | null>, ma
       }
 
       setBrushedNodeId(nearestId)
+
+      if (nearestId) {
+        const node = mapState.nodes[nearestId]
+        const text = computeWhisperText(nearestId, node, mapState)
+        setWhisperText(text)
+      } else {
+        setWhisperText(null)
+      }
+
       if (
         nearestId &&
-        !reducedMotionRef.current &&
+        !reducedMotion() &&
         typeof navigator !== 'undefined' &&
         navigator.vibrate &&
         lastVibratedRef.current !== nearestId
@@ -83,6 +92,7 @@ export function useConstellationSweep(mapRef: RefObject<mapboxgl.Map | null>, ma
     const onUp = () => {
       dragStartRef.current = null
       setBrushedNodeId(null)
+      setWhisperText(null)
       lastVibratedRef.current = null
     }
 
@@ -98,5 +108,5 @@ export function useConstellationSweep(mapRef: RefObject<mapboxgl.Map | null>, ma
     }
   }, [mapRef, mapReady])
 
-  return { brushedNodeId }
+  return { brushedNodeId, whisperText }
 }

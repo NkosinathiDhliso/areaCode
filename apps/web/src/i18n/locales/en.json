@@ -17,6 +17,8 @@
   "map.controls.north": "Reset to north",
   "map.controls.recenter": "Centre on me",
   "map.controls.live": "Live",
+  "map.controls.zoomIn": "Zoom in",
+  "map.controls.zoomOut": "Zoom out",
   "checkin.button": "Check In",
   "checkin.checking": "Checking in...",
   "checkin.tooFar": "You are too far from this venue",

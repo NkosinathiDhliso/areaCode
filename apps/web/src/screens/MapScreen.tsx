@@ -25,9 +25,11 @@ import { QrScannerSheet } from '../components/QrScannerSheet'
 import { SearchSheet, type SearchResult } from '../components/SearchSheet'
 import { SignInSheet } from '../components/SignInSheet'
 import { ToastOverlay } from '../components/ToastOverlay'
+import { WhisperChip } from '../components/WhisperChip'
 import { useCarouselSelection } from '../hooks/useCarouselSelection'
 import { useConstellationSweep } from '../hooks/useConstellationSweep'
 import { MIN_MARKER_ZOOM } from '../lib/carouselConstants'
+import { USER_VIEW_ZOOM } from '../lib/cameraControl'
 import { useCheckInFlow } from '../hooks/useCheckInFlow'
 import { useHasLiveGets } from '../hooks/useHasLiveGets'
 import { useMapInit } from '../hooks/useMapInit'
@@ -41,13 +43,6 @@ import type { AppRoute } from '../types'
 interface MapScreenProps {
   onNavigate: (route: AppRoute) => void
 }
-
-/**
- * Zoom used when the user explicitly asks to be located (Recenter button or
- * the "Enable location" banner): roughly a 20 km radius around them. The map
- * otherwise opens on the full-country overview from useMapInit.
- */
-const USER_VIEW_ZOOM = 10
 
 /**
  * Stable empty-nodes reference for presence seeding while the city nodes query
@@ -149,7 +144,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     commitZoom,
   } = selection
 
-  const { brushedNodeId } = useConstellationSweep(mapRef, mapReady)
+  const { brushedNodeId, whisperText } = useConstellationSweep(mapRef, mapReady)
 
   const handleCommitZoom = useCallback(
     (node: Node) => {
@@ -280,6 +275,14 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
     },
     [onMarkerTap],
   )
+
+  const handleZoomIn = useCallback(() => {
+    mapRef.current?.zoomIn()
+  }, [mapRef])
+
+  const handleZoomOut = useCallback(() => {
+    mapRef.current?.zoomOut()
+  }, [mapRef])
 
   useMapMarkers(mapRef, categoryFilter, handleMarkerTap, mapReady, activeVenueId, {
     is3D,
@@ -465,6 +468,8 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
           onToggle3D={() => setPitch3D(!is3D)}
           onResetNorth={resetNorth}
           onRecenter={recenterUser}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
           lastKnownPositionFreshAt={lastKnownPositionCapturedAt}
           pauseIdleDrift={pauseIdleDrift}
         />
@@ -503,6 +508,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
       )}
 
       <ToastOverlay />
+      <WhisperChip text={whisperText} />
       {overlay.showNudge && <ProximityNudgeBanner onNavigate={onNavigate} />}
 
       {celebration && (

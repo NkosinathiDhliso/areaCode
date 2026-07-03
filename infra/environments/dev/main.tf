@@ -336,6 +336,51 @@ resource "aws_dynamodb_table" "businesses" {
   tags = { Environment = local.env }
 }
 
+resource "aws_dynamodb_table" "presence" {
+  name         = "area-code-${local.env}-presence"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "userId"
+  range_key    = "nodeId"
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  attribute {
+    name = "nodeId"
+    type = "S"
+  }
+
+  attribute {
+    name = "expiresAt"
+    type = "N"
+  }
+
+  # NodeIndex: the honest Live_Presence_Count read (`expiresAt > now`) and the
+  # serverless expiry sweep (`expiresAt <= now`) both query present records by
+  # nodeId with an expiresAt range. projection ALL so the read model needs no
+  # follow-up GetItem. (presence-integrity spec, task 1.1)
+  global_secondary_index {
+    name            = "NodeIndex"
+    hash_key        = "nodeId"
+    range_key       = "expiresAt"
+    projection_type = "ALL"
+  }
+
+  # A Presence_Record is physically removed a bounded grace period after it
+  # expires. TTL is cleanup only and is NOT the authoritative count — the read
+  # model excludes `expiresAt <= now` records regardless of TTL lag.
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+
+  point_in_time_recovery { enabled = true }
+
+  tags = { Environment = local.env }
+}
+
 resource "aws_dynamodb_table" "app_data" {
   name         = "area-code-${local.env}-app-data"
   billing_mode = "PAY_PER_REQUEST"
@@ -522,6 +567,58 @@ module "lambda_pulse_decay" {
     AREA_CODE_ENV = local.env
     USERS_TABLE   = aws_dynamodb_table.users.name
   }
+}
+
+# Presence expiry sweep — arm64 Lambda on EventBridge rate(5 minutes), the
+# serverless half of honest presence (presence-integrity spec, task 12). Expires
+# due `present` records, captures bounded dwell, reconciles the cached counter to
+# the authoritative record-derived count, and best-effort broadcasts the honest
+# count. In VPC to match the other DynamoDB workers; the websocket broadcast is
+# best-effort and wrapped, mirroring schedule-transition-tick.
+module "lambda_presence_expiry" {
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "presence-expiry"
+  timeout       = 120
+  memory_size   = 256
+  # Not in VPC: this worker only calls public AWS endpoints (DynamoDB and the
+  # WebSocket management API). serverless-only forbids NAT and interface
+  # endpoints, so running it outside the VPC is the correct path to reach them.
+  environment_variables = {
+    AREA_CODE_ENV  = local.env
+    USERS_TABLE    = aws_dynamodb_table.users.name
+    NODES_TABLE    = aws_dynamodb_table.nodes.name
+    APP_DATA_TABLE = aws_dynamodb_table.app_data.name
+    PRESENCE_TABLE = aws_dynamodb_table.presence.name
+    # WebSocket broadcast of the honest count (best-effort). CONNECTIONS_TABLE is
+    # read at module load by the broadcast helper, so it must be set.
+    CONNECTIONS_TABLE  = module.websocket.connections_table_name
+    WEBSOCKET_ENDPOINT = replace(module.websocket.websocket_api_endpoint, "wss://", "https://")
+  }
+}
+
+resource "aws_iam_role_policy" "presence_expiry_websocket" {
+  name = "websocket-manage"
+  role = module.lambda_presence_expiry.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["execute-api:ManageConnections", "execute-api:Invoke"]
+        Resource = "arn:aws:execute-api:us-east-1:*:${module.websocket.websocket_api_id}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = ["dynamodb:GetItem", "dynamodb:Query"]
+        Resource = [
+          module.websocket.connections_table_arn,
+          "${module.websocket.connections_table_arn}/index/*"
+        ]
+      }
+    ]
+  })
 }
 
 module "lambda_leaderboard_reset" {
@@ -790,6 +887,7 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
     leaderboard_reset = module.lambda_leaderboard_reset.role_name
     cleanup           = module.lambda_cleanup.role_name
     websocket         = module.lambda_websocket.role_name
+    presence_expiry   = module.lambda_presence_expiry.role_name
   }
 
   name = "dynamodb-access"
@@ -814,12 +912,14 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
         aws_dynamodb_table.rewards.arn,
         aws_dynamodb_table.businesses.arn,
         aws_dynamodb_table.app_data.arn,
+        aws_dynamodb_table.presence.arn,
         "${aws_dynamodb_table.users.arn}/index/*",
         "${aws_dynamodb_table.nodes.arn}/index/*",
         "${aws_dynamodb_table.checkins.arn}/index/*",
         "${aws_dynamodb_table.rewards.arn}/index/*",
         "${aws_dynamodb_table.businesses.arn}/index/*",
-        "${aws_dynamodb_table.app_data.arn}/index/*"
+        "${aws_dynamodb_table.app_data.arn}/index/*",
+        "${aws_dynamodb_table.presence.arn}/index/*"
       ]
     }]
   })
@@ -1243,6 +1343,12 @@ module "eventbridge_schedules" {
       schedule_expression  = "rate(5 minutes)"
       lambda_arn           = module.lambda_pulse_decay.function_arn
       lambda_function_name = module.lambda_pulse_decay.function_name
+    }
+    presence-expiry = {
+      description          = "Presence expiry sweep every 5 minutes (honest presence)"
+      schedule_expression  = "rate(5 minutes)"
+      lambda_arn           = module.lambda_presence_expiry.function_arn
+      lambda_function_name = module.lambda_presence_expiry.function_name
     }
     leaderboard-reset = {
       description          = "Weekly leaderboard reset Monday 00:00 SAST (Sunday 22:00 UTC)"

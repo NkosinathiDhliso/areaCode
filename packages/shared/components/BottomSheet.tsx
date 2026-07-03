@@ -13,11 +13,29 @@ interface BottomSheetProps {
    * (or other underlying content) stays visible behind the sheet. Used by
    * the Gets-to-map redirect so that pulsing neighbour venues stay in
    * peripheral vision while the user reads the focused venue's details.
+   * Only meaningful while {@link modal} is true.
    */
   transparentBackdrop?: boolean
+  /**
+   * Modal (default): full-screen backdrop that dims and blocks the content
+   * behind the sheet, tap-outside dismisses, focus is trapped inside.
+   *
+   * Non-modal (`modal={false}`): no backdrop, everything above the sheet
+   * stays fully interactive (pointer events pass through), and focus is not
+   * trapped. Escape still dismisses. Used by the Peek_Carousel Browse strip
+   * and Constellation peek, which must never block map play: panning the map
+   * with the strip open is what drives the `area` browse scope.
+   */
+  modal?: boolean
 }
 
-export function BottomSheet({ isOpen, onClose, children, transparentBackdrop = false }: BottomSheetProps) {
+export function BottomSheet({
+  isOpen,
+  onClose,
+  children,
+  transparentBackdrop = false,
+  modal = true,
+}: BottomSheetProps) {
   const setBottomSheetOpen = useToastStore((s) => s.setBottomSheetOpen)
   const backdropMouseDownRef = useRef(false)
   const sheetRef = useRef<HTMLDivElement>(null)
@@ -27,7 +45,10 @@ export function BottomSheet({ isOpen, onClose, children, transparentBackdrop = f
     return () => setBottomSheetOpen(false)
   }, [isOpen, setBottomSheetOpen])
 
-  // Focus trap (Issue #8)
+  // Escape-to-dismiss in both modes; focus trap + autofocus only when modal
+  // (Issue #8). A non-modal sheet is a persistent surface, not a takeover:
+  // trapping Tab or stealing focus would lock keyboard users out of the map
+  // controls behind it.
   useEffect(() => {
     if (!isOpen) return
 
@@ -36,6 +57,7 @@ export function BottomSheet({ isOpen, onClose, children, transparentBackdrop = f
         onClose()
         return
       }
+      if (!modal) return
       if (e.key !== 'Tab' || !sheetRef.current) return
 
       const focusable = sheetRef.current.querySelectorAll<HTMLElement>(
@@ -60,16 +82,18 @@ export function BottomSheet({ isOpen, onClose, children, transparentBackdrop = f
     }
 
     document.addEventListener('keydown', handleKeyDown)
-    // Focus the first focusable element
-    requestAnimationFrame(() => {
-      const first = sheetRef.current?.querySelector<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-      )
-      first?.focus()
-    })
+    if (modal) {
+      // Focus the first focusable element
+      requestAnimationFrame(() => {
+        const first = sheetRef.current?.querySelector<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        )
+        first?.focus()
+      })
+    }
 
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
+  }, [isOpen, onClose, modal])
 
   const handleBackdropMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
@@ -98,22 +122,28 @@ export function BottomSheet({ isOpen, onClose, children, transparentBackdrop = f
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'flex-end',
+        // Non-modal: the wrapper spans the viewport for layout only; pointer
+        // events pass through to the map. The sheet panel re-enables them.
+        pointerEvents: modal ? undefined : 'none',
       }}
     >
-      {/* Backdrop overlay */}
-      <Box
-        className={`absolute inset-0 ${transparentBackdrop ? 'bg-[rgba(8,10,14,0.25)]' : 'bg-[var(--bg-overlay)]'}`}
-        onMouseDown={handleBackdropMouseDown}
-        onClick={handleBackdropClick}
-        role="presentation"
-      />
+      {/* Backdrop overlay (modal only) */}
+      {modal && (
+        <Box
+          className={`absolute inset-0 ${transparentBackdrop ? 'bg-[rgba(8,10,14,0.25)]' : 'bg-[var(--bg-overlay)]'}`}
+          onMouseDown={handleBackdropMouseDown}
+          onClick={handleBackdropClick}
+          role="presentation"
+        />
+      )}
       {/* Sheet panel, positioned above the nav bar */}
       <div
         ref={sheetRef}
         role="dialog"
-        aria-modal="true"
+        aria-modal={modal ? 'true' : undefined}
         style={{
           position: 'relative',
+          pointerEvents: 'auto',
           // Clear the bottom nav so the sheet's bottom content - primary CTAs
           // especially - is not hidden behind it. The nav is a flush bar of
           // height --nav-height with no safe-area padding.

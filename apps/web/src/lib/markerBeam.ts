@@ -6,6 +6,7 @@ import type { NodeState } from '@area-code/shared/types'
 
 import { BEAM_HIT_WIDTH_PX, PULSE_TEMPO } from './carouselConstants'
 import type { MarkerPresentationTier } from './markerPresentation'
+import { reducedMotion } from './reducedMotion'
 
 export const BEACON_STACK = 'beacon-stack'
 export const BEAM_COLUMN_LAYER = 'beam-cone'
@@ -81,13 +82,9 @@ function beamGradient(colour: string): string {
   ].join(' ')
 }
 
-function prefersReducedMotion(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-}
-
 function animationForState(state: NodeState): string {
   const anim = PULSE_TEMPO[state]
-  return prefersReducedMotion() ? 'none' : `${anim.animation} ${anim.speed} ease-in-out infinite`
+  return reducedMotion() ? 'none' : `${anim.animation} ${anim.speed} ease-in-out infinite`
 }
 
 export function beamHeightForState(state: NodeState): number {
@@ -285,7 +282,7 @@ export function ensureBeamLayers(
   const topW = coneTopWidth(state, tierScale, hybrid)
   const opacity = resolveBeamOpacity(state, options) * (hybrid ? 1.08 : 1)
   const glyphSize = options.glyphSize ?? 24
-  const reducedMotion = prefersReducedMotion()
+  const isReduced = reducedMotion()
 
   Object.assign(hit.style, {
     position: 'relative',
@@ -322,7 +319,7 @@ export function ensureBeamLayers(
   })
 
   ensureMouthConnector(hit, colour, topW, glyphSize, opacity)
-  applyBeamEmbellishments(hit, colour, beamH, options, reducedMotion)
+  applyBeamEmbellishments(hit, colour, beamH, options, isReduced)
 }
 
 export function updateBeamLayers(
@@ -342,7 +339,7 @@ export function updateBeamLayers(
   const topW = coneTopWidth(state, tierScale, hybrid)
   const opacity = resolveBeamOpacity(state, options) * (hybrid ? 1.08 : 1)
   const glyphSize = options.glyphSize ?? 24
-  const reducedMotion = prefersReducedMotion()
+  const isReduced = reducedMotion()
 
   Object.assign(hit.style, {
     width: `${Math.max(BEAM_HIT_WIDTH_PX, topW + 12)}px`,
@@ -359,7 +356,7 @@ export function updateBeamLayers(
     })
   }
   ensureMouthConnector(hit, colour, topW, glyphSize, opacity)
-  applyBeamEmbellishments(hit, colour, beamH, options, reducedMotion)
+  applyBeamEmbellishments(hit, colour, beamH, options, isReduced)
 }
 
 /** Pulse the glyph and cone together when beams are visible. */

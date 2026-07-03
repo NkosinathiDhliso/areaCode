@@ -240,7 +240,11 @@ export function PeekCarousel({
     : ''
 
   return (
-    <BottomSheet isOpen onClose={dismiss} transparentBackdrop={openedFromFocus}>
+    // Browse_Mode and the Constellation peek are non-modal: the map behind the
+    // strip stays fully interactive (pan/zoom/marker taps), which is what
+    // feeds the `area` browse scope via moveend. Only Commit_Mode - the full
+    // detail takeover with its check-in CTA - dims and blocks the map.
+    <BottomSheet isOpen onClose={dismiss} modal={mode === 'commit'} transparentBackdrop={openedFromFocus}>
       <div
         data-peek-carousel
         data-mode={mode}

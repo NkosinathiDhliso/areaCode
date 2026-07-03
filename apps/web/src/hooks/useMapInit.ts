@@ -5,6 +5,11 @@ import type { MapInstance } from '@area-code/shared/types'
 import mapboxgl from 'mapbox-gl'
 import { useEffect, useRef, useState, useCallback } from 'react'
 
+import { USER_VIEW_ZOOM } from '../lib/cameraControl'
+import { deviceTier } from '../lib/deviceTier'
+import { PITCH_3D, PITCH_FLAT, MAX_PITCH, pitchForZoom, computeRampTarget } from '../lib/pitchRamp'
+import { reducedMotion } from '../lib/reducedMotion'
+
 const MAPBOX_TOKEN = import.meta.env['VITE_MAPBOX_TOKEN'] as string | undefined
 
 /**
@@ -15,50 +20,9 @@ const MAPBOX_TOKEN = import.meta.env['VITE_MAPBOX_TOKEN'] as string | undefined
 const COUNTRY_CENTER: [number, number] = [25.0, -29.0]
 const COUNTRY_ZOOM = 5
 
-/**
- * Zoom the Recenter button flies to: roughly a 20 km radius around the user on
- * a typical phone viewport. (At ~zoom 10 and mid-SA latitude one screen width
- * spans ~40-50 km, i.e. a ~20-25 km radius.) Kept as a zoom level rather than
- * a `fitBounds` so the existing R1 recenter tests - which assert a `flyTo`
- * with a center + duration - keep passing.
- */
-const USER_VIEW_ZOOM = 10
-
 /** Fallback zoom for `getZoom()` if the live map read throws. */
 const DEFAULT_ZOOM = 13
-// Steeper default pitch so the skyline reads tall and the shadows rake across
-// the city - the core of the "4D" depth feel. This is the OVERVIEW pitch used
-// at low/mid zoom (the "seeing nodes & buildings from the side" horizon view).
-const PITCH_3D = 62
-const PITCH_FLAT = 0
 const BEARING_3D = -20
-
-// ── Street-level immersion (zoom-driven pitch ramp) ──
-// As the consumer zooms into a venue the camera tilts up toward the horizon so
-// buildings loom around them - the "dolly down to where you'd be standing"
-// feel, like Google Maps tipping toward Street View. Pitch is a pure function
-// of zoom: flat-ish overview when far out, near-ground when zoomed in.
-/** Near-ground pitch reached at street zoom. Kept under mapbox's 85° cap. */
-const PITCH_STREET = 80
-/** Below this zoom the camera holds the overview pitch ({@link PITCH_3D}). */
-const PITCH_RAMP_START_ZOOM = 13.5
-/** At/above this zoom the camera holds {@link PITCH_STREET}. */
-const PITCH_RAMP_END_ZOOM = 17.5
-/** Mapbox hard cap on pitch; we set it explicitly so the ramp can reach high. */
-const MAX_PITCH = 85
-
-/**
- * Target camera pitch for a given zoom - a linear ramp from the overview pitch
- * ({@link PITCH_3D}) up to {@link PITCH_STREET} across the
- * [{@link PITCH_RAMP_START_ZOOM}, {@link PITCH_RAMP_END_ZOOM}] band. Pure and
- * total so it can be reasoned about and reused without a live map.
- */
-function pitchForZoom(zoom: number): number {
-  if (!Number.isFinite(zoom) || zoom <= PITCH_RAMP_START_ZOOM) return PITCH_3D
-  if (zoom >= PITCH_RAMP_END_ZOOM) return PITCH_STREET
-  const t = (zoom - PITCH_RAMP_START_ZOOM) / (PITCH_RAMP_END_ZOOM - PITCH_RAMP_START_ZOOM)
-  return PITCH_3D + t * (PITCH_STREET - PITCH_3D)
-}
 
 type ThemeMode = 'light' | 'dark'
 
@@ -218,7 +182,9 @@ function applyCustomLayers(map: mapboxgl.Map, theme: ThemeMode): void {
         maxzoom: 14,
       })
     }
-    map.setTerrain({ source: TERRAIN_SOURCE_ID, exaggeration: cfg.terrainExaggeration })
+    // Low-tier devices use exaggeration 1.0 (flat terrain) to save GPU (Req 7.1).
+    const exaggeration = deviceTier === 'high' ? cfg.terrainExaggeration : 1.0
+    map.setTerrain({ source: TERRAIN_SOURCE_ID, exaggeration })
   } catch {
     /* terrain is cosmetic - fail open */
   }
@@ -227,6 +193,7 @@ function applyCustomLayers(map: mapboxgl.Map, theme: ThemeMode): void {
   // A directional light with cast-shadows is what turns flat extrusions into
   // a city with real raking shadows - the single biggest "4D" upgrade. Ambient
   // light keeps the shadowed sides from going pure black.
+  // Low-tier devices skip cast-shadows to stay within GPU budget (Req 7.1).
   try {
     const lights = [
       {
@@ -244,8 +211,8 @@ function applyCustomLayers(map: mapboxgl.Map, theme: ThemeMode): void {
           color: cfg.directionalLightColor,
           intensity: cfg.directionalLightIntensity,
           direction: cfg.directionalLightDirection,
-          'cast-shadows': true,
-          'shadow-intensity': 1,
+          'cast-shadows': deviceTier === 'high',
+          'shadow-intensity': deviceTier === 'high' ? 1 : 0,
         },
       },
     ]
@@ -321,7 +288,8 @@ function applyCustomLayers(map: mapboxgl.Map, theme: ThemeMode): void {
     'fill-extrusion-flood-light-ground-radius': 12,
     'fill-extrusion-flood-light-wall-radius': 12,
     'fill-extrusion-rounded-roof': true,
-    'fill-extrusion-cast-shadows': true,
+    // Low-tier devices skip per-extrusion cast shadows (Req 7.1).
+    'fill-extrusion-cast-shadows': deviceTier === 'high',
   } as Record<string, unknown> as mapboxgl.FillExtrusionLayerSpecification['paint']
 
   try {
@@ -451,6 +419,12 @@ export function useMapInit() {
   // True while the user is mid two-finger pitch gesture, so the auto pitch
   // ramp does not fight a deliberate manual tilt.
   const manualPitchRef = useRef(false)
+  // Sticky offset (degrees) between the user's manually chosen pitch and the
+  // ramp's value at that zoom, captured when a manual tilt gesture ends. The
+  // ramp preserves this offset on later zooms instead of snapping the camera
+  // back to the ramp value - a two-finger tilt to the horizon survives the
+  // next pinch or wheel zoom. Reset by the 3D toggle (a deliberate re-baseline).
+  const manualPitchOffsetRef = useRef(0)
 
   /**
    * No-op retained for MapControls API compatibility (drift removed).
@@ -461,6 +435,9 @@ export function useMapInit() {
 
   const setPitch3D = useCallback((on: boolean) => {
     setIs3D(on)
+    // A deliberate mode toggle re-baselines the camera: drop any sticky manual
+    // tilt so the ramp owns the pitch again.
+    manualPitchOffsetRef.current = 0
     const map = mapRef.current
     if (!map) return
     try {
@@ -476,7 +453,7 @@ export function useMapInit() {
       map.easeTo({
         pitch: on ? targetPitch : PITCH_FLAT,
         bearing: on ? BEARING_3D : 0,
-        duration: 800,
+        duration: reducedMotion() ? 0 : 800,
       })
     } catch {
       /* ignore */
@@ -510,7 +487,7 @@ export function useMapInit() {
       if (delta <= 1) {
         return
       }
-      map.easeTo({ bearing: 0, duration: 600 })
+      map.easeTo({ bearing: 0, duration: reducedMotion() ? 0 : 600 })
     } catch {
       /* ignore */
     }
@@ -541,7 +518,7 @@ export function useMapInit() {
     if (!pos || !capturedAt) return
     if (Date.now() - capturedAt > 60_000) return
     try {
-      map.flyTo({ center: [pos.lng, pos.lat], zoom: USER_VIEW_ZOOM, duration: 1000 })
+      map.flyTo({ center: [pos.lng, pos.lat], zoom: USER_VIEW_ZOOM, duration: reducedMotion() ? 0 : 1000 })
     } catch {
       /* ignore */
     }
@@ -594,7 +571,8 @@ export function useMapInit() {
         zoom: COUNTRY_ZOOM,
         pitch: PITCH_3D,
         bearing: BEARING_3D,
-        antialias: true,
+        // Low-tier devices skip antialias to stay within GPU budget (Req 7.1).
+        antialias: deviceTier === 'high',
         failIfMajorPerformanceCaveat: false,
         // Globe projection uses spherical math for marker screen-coordinate
         // projection. Without this, the implicit mercator projection at very
@@ -615,39 +593,59 @@ export function useMapInit() {
       return
     }
 
-    // Track bearing changes so the compass UI reflects reality.
+    // Track bearing changes so the compass UI reflects reality. Quantised to
+    // whole degrees: 'rotate' fires every frame of a rotate gesture, and a raw
+    // setBearing re-rendered the entire MapScreen tree per frame. The compass
+    // icon cannot show sub-degree rotation anyway.
     map.on('rotate', () => {
       try {
-        setBearing(map.getBearing())
+        const rounded = Math.round(map.getBearing())
+        setBearing((prev) => (prev === rounded ? prev : rounded))
       } catch {
         /* ignore */
       }
     })
 
     // ── Street-level immersion: zoom-driven pitch ramp ──
-    // On every zoom change, tilt the camera toward the horizon as the consumer
-    // zooms in (and back toward the overview as they zoom out), so diving into
-    // a venue feels like dropping to where you'd be standing. setPitch tracks
-    // the gradual zoom smoothly and does not emit 'zoom', so there is no loop.
+    // After each zoom settles, ease the camera toward the pitch that matches
+    // the new zoom, so diving into a venue feels like dropping to where you'd
+    // be standing. Two invariants:
+    //   1. Applied on 'zoomend' via easeTo, never per 'zoom' frame via
+    //      setPitch. setPitch is jumpTo under the hood: it stops any in-flight
+    //      camera animation, so a per-frame ramp aborted wheel-zoom easing and
+    //      selection fly-tos mid-flight (the same bug class map-carousel.md
+    //      records for setBearing) and made zooming feel stuttery.
+    //   2. The target honours the sticky manual offset, so a deliberate
+    //      two-finger tilt is preserved across later zooms instead of the view
+    //      snapping back to the ramp value.
     // Suspended in flat mode and while the user is manually pitching.
     const applyZoomPitch = () => {
       if (!is3DRef.current || manualPitchRef.current) return
       try {
-        const target = pitchForZoom(map.getZoom())
-        if (Math.abs(map.getPitch() - target) > 0.4) {
-          map.setPitch(target)
+        const target = computeRampTarget(map.getZoom(), manualPitchOffsetRef.current)
+        if (Math.abs(map.getPitch() - target) > 1) {
+          map.easeTo({ pitch: target, duration: reducedMotion() ? 0 : 450 })
         }
       } catch {
         /* pitch is cosmetic - fail open */
       }
     }
-    map.on('zoom', applyZoomPitch)
-    // Only a real user gesture carries originalEvent; our own setPitch does not.
+    map.on('zoomend', applyZoomPitch)
+    // Only a real user gesture carries originalEvent; our own easeTo does not.
     // Flag manual pitch so the ramp yields to a deliberate two-finger tilt.
     map.on('pitchstart', (e) => {
       if ((e as { originalEvent?: unknown }).originalEvent) manualPitchRef.current = true
     })
     map.on('pitchend', () => {
+      // Capture the offset a manual tilt chose (relative to the ramp at the
+      // current zoom) so later zooms preserve the user's intent.
+      if (manualPitchRef.current) {
+        try {
+          manualPitchOffsetRef.current = map.getPitch() - pitchForZoom(map.getZoom())
+        } catch {
+          /* keep the previous offset */
+        }
+      }
       manualPitchRef.current = false
     })
 

@@ -81,6 +81,18 @@ export function markerVisibilityScale(zoom: number): number {
   return glyphDot
 }
 
+/**
+ * Presentation key used to gate expensive per-marker restyles. Returns a
+ * string of the form `"tier|dimInactive|blend"` where blend is quantised to
+ * 0.05 steps. Two consecutive zooms that produce the same key need no restyle.
+ */
+export function computePresentationKey(zoom: number, hasActiveVenue: boolean): string {
+  const tier = presentationTierForZoom(zoom)
+  const blend = Math.round(beamBlendForZoom(zoom) * 20) / 20
+  const dimInactive = hasActiveVenue
+  return `${tier}|${dimInactive}|${blend}`
+}
+
 export function isActiveMarker(nodeId: string, activeVenueId: string | null): boolean {
   return activeVenueId !== null && nodeId === activeVenueId
 }

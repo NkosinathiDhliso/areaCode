@@ -1,5 +1,5 @@
 import { haptic, prefersReducedMotion } from '@area-code/shared/lib/haptics'
-import { Check } from 'lucide-react'
+import { Check, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -16,9 +16,11 @@ import { useTranslation } from 'react-i18next'
  * total is their real incremented total; the streak is their existing streak.
  * Nothing here claims activity that did not happen.
  *
- * Non-blocking and self-dismissing: it renders over the map with
- * `pointer-events: none`, auto-dismisses after ~2.6s, and honours
- * `prefers-reduced-motion` (no count-up tween, no scale/ripple animation).
+ * Non-blocking and self-dismissing: it renders over the map with a
+ * non-interactive backdrop (so the map stays pannable around it), stays for
+ * ~30s so the user can read the payoff, offers a small dismiss control to close
+ * it early, and honours `prefers-reduced-motion` (no count-up tween, no
+ * scale/ripple animation).
  */
 export interface CheckInCelebrationProps {
   venueName: string
@@ -34,7 +36,7 @@ export interface CheckInCelebrationProps {
   onDone: () => void
 }
 
-const VISIBLE_MS = 2600
+const VISIBLE_MS = 30000
 const COUNT_UP_MS = 700
 
 /** Tween an integer from → to over durationMs. Instant when disabled. */
@@ -99,9 +101,21 @@ export function CheckInCelebration({
       aria-live="polite"
     >
       <div
-        className="glass-raised flex flex-col items-center gap-3 rounded-2xl px-8 py-7 text-center"
+        className="glass-raised pointer-events-auto relative flex flex-col items-center gap-3 rounded-2xl px-8 py-7 text-center"
         style={{ animation: reduced ? undefined : 'popIn 320ms cubic-bezier(0.22, 1, 0.36, 1) forwards' }}
       >
+        {/* Manual dismiss. The moment now lingers (30s) so it must be closeable
+            early; the outer backdrop stays non-interactive so the map remains
+            pannable while this is open. */}
+        <button
+          type="button"
+          onClick={onDone}
+          aria-label={t('common.dismiss', 'Dismiss')}
+          className="absolute right-1 top-1 flex h-11 w-11 items-center justify-center rounded-full text-[var(--text-muted)] transition-all duration-150 active:scale-95"
+        >
+          <X size={18} strokeWidth={2} />
+        </button>
+
         {/* Pulsing confirmation ring. The ripple is decorative and hidden from
             assistive tech; the spoken confirmation lives in the text below. */}
         <div className="relative flex h-16 w-16 items-center justify-center">
