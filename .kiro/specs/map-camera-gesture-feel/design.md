@@ -97,3 +97,23 @@ honest-presence). Dismiss on `pointerup`.
 Two 44px buttons in the existing `MapControls` glass cluster calling
 `map.zoomIn()` / `map.zoomOut()` (eased, gesture-safe). Hidden below the `md`
 breakpoint where pinch is the norm.
+
+## Motion signature at full depth (planned, from code review)
+
+`cameraEasing.ts` landed with the curve applied inline at six call sites while
+`cameraControl.ts` (the module that centralises camera moves, including the
+selection fly-to users see most) never receives it, and the `MapInstance`
+adapter drops an `easing` option. One `cameraMotion(ms)` helper in
+`cameraEasing.ts` becomes the single home for
+`{ duration: reducedMotion() ? 0 : ms, easing: cameraEasing }`; cameraControl,
+useMapInit, and MapScreen consume it, and the adapter forwards `easing`.
+`easeOutCubic` also replaces the inline copy in `CheckInCelebration.tsx`.
+
+## WhisperChip hardening (planned, from code review)
+
+Visibility check tightens to `text != null && text !== ''` (undefined slipped
+through `!== null` and rendered an opaque empty chip, visible today in the
+MapScreen test mocks). The retained exit copy becomes a render-time ref
+instead of state + effect (one render per text change, no dead `lastTextRef`),
+and the faded-out chip gets `visibility: hidden` so its backdrop blur stops
+compositing over the map canvas.

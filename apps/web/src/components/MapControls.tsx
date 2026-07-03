@@ -39,6 +39,13 @@ interface MapControlsProps {
    * Wired through from `useMapInit`.
    */
   pauseIdleDrift?: (ms: number) => void
+  /**
+   * Request a fresh location fix. Fired when Recenter_Button is tapped while
+   * no fresh fix exists: instead of a dead tap, we ask for location (and the
+   * host flies to it on success). This never triggers a fly-to on a stale
+   * fix, so R1.4 holds.
+   */
+  onRequestLocation?: () => void
 }
 
 /**
@@ -63,6 +70,7 @@ export function MapControls({
   onZoomOut,
   lastKnownPositionFreshAt,
   pauseIdleDrift,
+  onRequestLocation,
 }: MapControlsProps) {
   const { t } = useTranslation()
   const pulseScores = useMapStore((s) => s.pulseScores)
@@ -87,12 +95,19 @@ export function MapControls({
   }, [onResetNorth, pauseIdleDrift])
 
   const handleRecenter = useCallback(() => {
+    // R1.4: with no fresh fix we must never fly to a stale position. Rather
+    // than a dead tap, ask for a fresh location; the host flies to it on
+    // success, which self-enables the control.
+    if (!hasFreshUserLocation) {
+      onRequestLocation?.()
+      return
+    }
     const now = Date.now()
     if (now - lastTapAtRef.current < SIDEBAR_TAP_DEBOUNCE_MS) return
     lastTapAtRef.current = now
     pauseIdleDrift?.(SIDEBAR_DRIFT_PAUSE_MS)
     onRecenter()
-  }, [onRecenter, pauseIdleDrift])
+  }, [hasFreshUserLocation, onRequestLocation, onRecenter, pauseIdleDrift])
 
   // The City_Pulse total used to drive a permanent glass card here. R2 moved
   // it to a once-per-session toast (`useCityPulseToast`), so this component
@@ -146,7 +161,7 @@ export function MapControls({
 
         <ControlButton
           onClick={handleRecenter}
-          disabled={!hasFreshUserLocation}
+          inactive={!hasFreshUserLocation}
           label={t('map.controls.recenter')}
           testId="map-sidebar-recenter"
         >
@@ -186,16 +201,24 @@ interface ControlButtonProps {
   label: string
   active?: boolean
   disabled?: boolean
+  /**
+   * Announced and styled as disabled (reduced opacity, non-interactive cursor,
+   * aria-disabled) per R1.4, but still fires onClick. Recenter_Button uses this
+   * so a tap with no fresh fix requests location instead of being a dead tap,
+   * while never triggering a fly-to.
+   */
+  inactive?: boolean
   testId?: string
 }
 
-function ControlButton({ onClick, children, label, active, disabled, testId }: ControlButtonProps) {
+function ControlButton({ onClick, children, label, active, disabled, inactive, testId }: ControlButtonProps) {
+  const muted = disabled || inactive
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      aria-disabled={disabled ? true : undefined}
+      aria-disabled={muted ? true : undefined}
       title={label}
       data-testid={testId}
       className={`
@@ -205,7 +228,7 @@ function ControlButton({ onClick, children, label, active, disabled, testId }: C
             ? 'bg-[var(--accent)] text-[var(--on-accent)] shadow-[var(--shadow-glow)]'
             : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-raised)]'
         }
-        ${disabled ? 'opacity-40 cursor-not-allowed' : ''}
+        ${muted ? 'opacity-40 cursor-not-allowed' : ''}
       `}
     >
       {children}

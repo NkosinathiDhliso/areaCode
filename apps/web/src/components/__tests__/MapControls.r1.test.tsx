@@ -53,26 +53,38 @@ describe('MapControls (R1 sidebar correctness)', () => {
     expect(screen.getByTestId('map-sidebar-recenter')).toBeTruthy()
   })
 
-  it('renders Recenter_Button disabled when no Last_Known_Position has been captured (R1.4)', () => {
+  it('announces Recenter_Button as disabled when no Last_Known_Position has been captured (R1.4)', () => {
     setup({ lastKnownPositionFreshAt: null })
     const btn = screen.getByTestId('map-sidebar-recenter') as HTMLButtonElement
-    expect(btn.disabled).toBe(true)
+    // R1.4: reduced opacity, non-interactive cursor, aria-disabled. The button
+    // is not natively disabled so a tap can request a fresh fix (never a fly-to).
     expect(btn.getAttribute('aria-disabled')).toBe('true')
     expect(btn.className).toMatch(/cursor-not-allowed/)
+    expect(btn.className).toMatch(/opacity-40/)
   })
 
-  it('renders Recenter_Button disabled when Last_Known_Position is stale (>60s old) (R1.3)', () => {
+  it('announces Recenter_Button as disabled when Last_Known_Position is stale (>60s old) (R1.3)', () => {
     setup({ lastKnownPositionFreshAt: Date.now() - 61_000 })
     const btn = screen.getByTestId('map-sidebar-recenter') as HTMLButtonElement
-    expect(btn.disabled).toBe(true)
     expect(btn.getAttribute('aria-disabled')).toBe('true')
+  })
+
+  it('does not fly to a stale fix but requests location on tap (R1.4)', () => {
+    const onRequestLocation = vi.fn()
+    const { onRecenter } = setup({ lastKnownPositionFreshAt: null, onRequestLocation })
+    fireEvent.click(screen.getByTestId('map-sidebar-recenter'))
+    // No fly-to on a stale/absent fix ...
+    expect(onRecenter).not.toHaveBeenCalled()
+    // ... instead the tap asks for a fresh location.
+    expect(onRequestLocation).toHaveBeenCalledTimes(1)
   })
 
   it('renders Recenter_Button enabled when Last_Known_Position is fresh (R1.3, R1.4)', () => {
-    setup({ lastKnownPositionFreshAt: Date.now() })
+    const { onRecenter } = setup({ lastKnownPositionFreshAt: Date.now() })
     const btn = screen.getByTestId('map-sidebar-recenter') as HTMLButtonElement
-    expect(btn.disabled).toBe(false)
     expect(btn.getAttribute('aria-disabled')).toBeNull()
+    fireEvent.click(btn)
+    expect(onRecenter).toHaveBeenCalledTimes(1)
   })
 
   it('debounces double-taps within 250ms across both sidebar buttons (R1.7)', () => {

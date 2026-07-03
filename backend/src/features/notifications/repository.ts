@@ -2,6 +2,7 @@
 import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
+import type { NotificationPreferences } from '@area-code/shared/types'
 
 // ============================================================================
 // NOTIFICATION HISTORY
@@ -159,29 +160,43 @@ export async function getNotificationPreferences(userId: string) {
   return result.Item ?? null
 }
 
-export async function upsertNotificationPreferences(
-  userId: string,
-  prefs: Partial<{
-    streakAtRisk: boolean
-    rewardActivated: boolean
-    rewardClaimedPush: boolean
-    leaderboardPrewarning: boolean
-    followedUserCheckin: boolean
-  }>,
-) {
+/**
+ * Merge the provided preference keys into the user's persisted record.
+ *
+ * Uses a partial `UpdateCommand` (not a `PutCommand`) so a patch that carries
+ * a single key does not erase the other preferences. A full-item overwrite
+ * here would silently drop every unspecified pref back to its default on the
+ * next read — including reverting an explicit `false` (e.g. reward pushes the
+ * user turned off) back to sending. One toggle must never mutate another.
+ */
+export async function upsertNotificationPreferences(userId: string, prefs: Partial<NotificationPreferences>) {
   const now = new Date().toISOString()
+
+  const entries = Object.entries(prefs).filter(([, value]) => value !== undefined)
+
+  // Always stamp userId (first-write) and updatedAt. Attribute names are
+  // aliased because `userId` and the pref keys are safe, but aliasing keeps
+  // the builder uniform and reserved-word-proof.
+  const setClauses = ['#userId = :userId', '#updatedAt = :updatedAt']
+  const names: Record<string, string> = { '#userId': 'userId', '#updatedAt': 'updatedAt' }
+  const values: Record<string, unknown> = { ':userId': userId, ':updatedAt': now }
+
+  for (const [key, value] of entries) {
+    setClauses.push(`#${key} = :${key}`)
+    names[`#${key}`] = key
+    values[`:${key}`] = value
+  }
+
   await documentClient.send(
-    new PutCommand({
+    new UpdateCommand({
       TableName: TableNames.appData,
-      Item: {
-        pk: `NOTIF_PREFS#${userId}`,
-        sk: `NOTIF_PREFS#${userId}`,
-        userId,
-        ...prefs,
-        updatedAt: now,
-      },
+      Key: { pk: `NOTIF_PREFS#${userId}`, sk: `NOTIF_PREFS#${userId}` },
+      UpdateExpression: `SET ${setClauses.join(', ')}`,
+      ExpressionAttributeNames: names,
+      ExpressionAttributeValues: values,
     }),
   )
+
   return { userId, ...prefs, updatedAt: now }
 }
 

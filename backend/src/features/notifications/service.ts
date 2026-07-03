@@ -2,20 +2,16 @@ import { kvGet, kvIncr } from '../../shared/kv/dynamodb-kv.js'
 import * as repo from './repository.js'
 import { getIO } from '../../shared/socket/server.js'
 import { userRoom } from '../../shared/socket/rooms.js'
-
-const DEFAULTS = {
-  streakAtRisk: false,
-  rewardActivated: false,
-  rewardClaimedPush: true,
-  leaderboardPrewarning: false,
-  followedUserCheckin: false,
-}
+import {
+  NOTIFICATION_PREFERENCE_DEFAULTS as DEFAULTS,
+  type NotificationPreferenceKey,
+} from '@area-code/shared/constants/notification-preferences'
 
 /**
  * Maps notification types to the corresponding user preference key.
  * If a type is not listed here, the notification is always sent.
  */
-const NOTIFICATION_TYPE_TO_PREF: Record<string, keyof typeof DEFAULTS> = {
+const NOTIFICATION_TYPE_TO_PREF: Record<string, NotificationPreferenceKey> = {
   reward_new: 'rewardActivated',
   reward_code: 'rewardClaimedPush',
   streak_at_risk: 'streakAtRisk',

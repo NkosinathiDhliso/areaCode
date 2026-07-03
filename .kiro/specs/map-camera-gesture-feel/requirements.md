@@ -181,3 +181,58 @@ directions, notification priming) SHALL remain modal by default.
 
 10.5. With the strip open, a user pan or zoom past the existing thresholds
 SHALL flip the browse scope to `area` (the previously dead path).
+
+## Requirement 11: One motion signature, applied at full depth
+
+`cameraEasing.ts` promises every camera move shares the same motion signature,
+but a code review found it applied at only some call sites while the module
+that centralises camera moves (`cameraControl.ts`) never receives it, and the
+`{ duration: reducedMotion() ? 0 : N, easing: cameraEasing }` tuple is
+copy-pasted at six call sites.
+
+### Acceptance Criteria
+
+11.1. A single `cameraMotion(ms)` helper (in `cameraEasing.ts`) SHALL build
+the shared animation options (`duration` honouring reduced motion, `easing`),
+and every camera-move call site SHALL consume it instead of inlining the
+tuple.
+
+11.2. `moveCameraToActive` (the selection fly-to) and `recenterIfFresh` in
+`cameraControl.ts`, and `handleEnableLocation`'s fly-to in `MapScreen.tsx`,
+SHALL use the shared easing like every other camera move.
+
+11.3. The `MapInstance` adapter (`buildMapInstance` in `useMapInit.ts`) SHALL
+forward an `easing` option to `map.flyTo` instead of silently dropping it,
+and the `MapInstance` type SHALL accept it.
+
+11.4. `easeOutCubic` SHALL have one home: `CheckInCelebration.tsx` (inline
+`1 - Math.pow(1 - p, 3)` at its count-up) SHALL import it from
+`cameraEasing.ts` per `dry-reuse-no-duplication.md`.
+
+## Requirement 12: WhisperChip correctness and cost
+
+The exit-fade enhancement loosened the visibility check and over-built the
+retained-text mechanism.
+
+### Acceptance Criteria
+
+12.1. The chip SHALL be hidden for `null`, `undefined`, and empty-string
+text (`text != null && text !== ''`), never rendering a visible empty chip.
+
+12.2. The retained last copy SHALL be derived without extra renders: assign a
+ref during render (`if (text) lastShown.current = text`) and display
+`text ?? lastShown.current ?? ''`; the `displayText` state, its effect, and
+the unread `lastTextRef` are removed.
+
+12.3. While hidden, the chip SHALL NOT keep a live `backdrop-filter` layer
+composited over the map canvas: toggle `visibility: hidden` after the exit
+transition (transition `visibility` with a delay matching the fade), so the
+GPU skips it entirely.
+
+12.4. The `useConstellationSweep` mock in `MapScreen.test.tsx` SHALL include
+`whisperText: null` so tests exercise the real prop contract.
+
+12.5. The new lib imports in `MapScreen.tsx` SHALL satisfy `import/order`
+(currently three warnings at lines 32-34), and the `cameraEasing.test.ts`
+title "in the first half" SHALL be corrected to "at every interior point" to
+match its assertion.

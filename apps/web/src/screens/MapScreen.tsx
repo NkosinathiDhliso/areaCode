@@ -27,16 +27,17 @@ import { SignInSheet } from '../components/SignInSheet'
 import { ToastOverlay } from '../components/ToastOverlay'
 import { WhisperChip } from '../components/WhisperChip'
 import { useCarouselSelection } from '../hooks/useCarouselSelection'
-import { useConstellationSweep } from '../hooks/useConstellationSweep'
-import { MIN_MARKER_ZOOM } from '../lib/carouselConstants'
-import { USER_VIEW_ZOOM } from '../lib/cameraControl'
 import { useCheckInFlow } from '../hooks/useCheckInFlow'
+import { useConstellationSweep } from '../hooks/useConstellationSweep'
 import { useHasLiveGets } from '../hooks/useHasLiveGets'
 import { useMapInit } from '../hooks/useMapInit'
 import { useMapMarkers } from '../hooks/useMapMarkers'
 import { useMapSockets } from '../hooks/useMapSockets'
 import { useOverlayCoordinator } from '../hooks/useOverlayCoordinator'
 import { usePresenceSeeding } from '../hooks/usePresenceSeeding'
+import { USER_VIEW_ZOOM } from '../lib/cameraControl'
+import { cameraMotion } from '../lib/cameraEasing'
+import { MIN_MARKER_ZOOM } from '../lib/carouselConstants'
 import { getNodeState } from '../lib/mapHelpers'
 import type { AppRoute } from '../types'
 
@@ -277,11 +278,11 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
   )
 
   const handleZoomIn = useCallback(() => {
-    mapRef.current?.zoomIn()
+    mapRef.current?.zoomIn(cameraMotion(400))
   }, [mapRef])
 
   const handleZoomOut = useCallback(() => {
-    mapRef.current?.zoomOut()
+    mapRef.current?.zoomOut(cameraMotion(400))
   }, [mapRef])
 
   useMapMarkers(mapRef, categoryFilter, handleMarkerTap, mapReady, activeVenueId, {
@@ -376,6 +377,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
         mapRef.current?.flyTo({
           center: [pos.lng, pos.lat],
           zoom: USER_VIEW_ZOOM,
+          ...cameraMotion(1000),
         })
       } else {
         // Permission still denied, dismiss banner
@@ -472,6 +474,7 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
           onZoomOut={handleZoomOut}
           lastKnownPositionFreshAt={lastKnownPositionCapturedAt}
           pauseIdleDrift={pauseIdleDrift}
+          onRequestLocation={handleEnableLocation}
         />
       )}
 

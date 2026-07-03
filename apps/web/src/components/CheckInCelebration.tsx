@@ -3,6 +3,8 @@ import { Check, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { easeOutCubic } from '../lib/cameraEasing'
+
 /**
  * `CheckInCelebration` - the peak-end reward moment for a successful check-in.
  *
@@ -53,7 +55,7 @@ function useCountUp(from: number, to: number, durationMs: number, animate: boole
     const tick = (now: number) => {
       const p = Math.min(1, (now - start) / durationMs)
       // easeOutCubic for a count that decelerates into place
-      const eased = 1 - Math.pow(1 - p, 3)
+      const eased = easeOutCubic(p)
       setValue(Math.round(from + (to - from) * eased))
       if (p < 1) raf = requestAnimationFrame(tick)
     }

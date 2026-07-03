@@ -78,3 +78,49 @@ All work edits the existing hooks in place; no new stores, no new infra.
         stays a modal takeover
   - [x] 11.3 Record the invariant in `rules/map-carousel.md` (synced)
   - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
+
+- [x] 12. Motion signature at full depth (`cameraEasing.ts`, `cameraControl.ts`,
+      `useMapInit.ts`, `MapScreen.tsx`)
+  - [x] 12.1 Add `cameraMotion(ms: number)` to `cameraEasing.ts` returning
+        `{ duration: reducedMotion() ? 0 : ms, easing: cameraEasing }`; replace
+        the inline tuple at all six call sites (useMapInit: setPitch3D,
+        resetNorth, recenterUser, zoom-pitch ramp; MapScreen: handleZoomIn,
+        handleZoomOut)
+  - [x] 12.2 Apply the shared motion to `moveCameraToActive` and
+        `recenterIfFresh` in `cameraControl.ts` (keep `moveCameraToActive`'s
+        exactly-one-flyTo contract and its reduced-motion zero-duration rule)
+        and to `handleEnableLocation`'s flyTo in `MapScreen.tsx`
+  - [x] 12.3 Forward `easing` through the `MapInstance` adapter: add it to the
+        `MapInstance.flyTo` option type in `packages/shared/types` and pass it
+        through `buildMapInstance` in `useMapInit.ts` (today it is silently
+        dropped, so the store-driven fly-tos can never carry the curve)
+  - _Requirements: 11.1, 11.2, 11.3_
+
+- [x] 13. One home for easeOutCubic
+  - Replace the inline `1 - Math.pow(1 - p, 3)` in
+    `apps/web/src/components/CheckInCelebration.tsx` (count-up easing, ~line 56) with an import of `easeOutCubic` from `../lib/cameraEasing`
+  - _Requirements: 11.4_
+
+- [x] 14. WhisperChip correctness and cost (`WhisperChip.tsx`,
+      `MapScreen.test.tsx`)
+  - [x] 14.1 Tighten visibility: `const visible = text != null && text !== ''`
+        so undefined/empty text never renders a visible empty chip
+  - [x] 14.2 Replace the `displayText` state + effect + unread `lastTextRef`
+        with a render-time ref: `if (visible) lastShown.current = text`,
+        render `text ?? lastShown.current ?? ''` (removes the extra render per
+        pointermove-driven text change and the dead ref)
+  - [x] 14.3 Add `visibility: hidden` while faded out (include `visibility` in
+        the transition with a delay matching the 180ms fade) so the invisible
+        backdrop-blur layer stops compositing over the WebGL canvas
+  - [x] 14.4 Update the `useConstellationSweep` mock in
+        `apps/web/src/screens/__tests__/MapScreen.test.tsx` (~line 63) to
+        return `{ brushedNodeId: null, whisperText: null }`
+  - _Requirements: 12.1, 12.2, 12.3, 12.4_
+
+- [x] 15. Lint and wording cleanup
+  - [x] 15.1 Fix the three `import/order` warnings in `MapScreen.tsx`
+        (lib imports at lines 32-34 placed among hook imports; eslint --fix)
+  - [x] 15.2 Rename the `cameraEasing.test.ts` case "progress is ahead of
+        linear in the first half" to "...at every interior point" to match the
+        assertion range [0.01, 0.99]
+  - _Requirements: 12.5_

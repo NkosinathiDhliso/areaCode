@@ -112,9 +112,21 @@ const GLYPH_HIT_LAYER = 'glyph-hit'
  */
 const GLYPH_MIN_HIT_PX = 44
 
-/** Centred hit-pad size for a glyph of the given visual diameter. */
-function glyphHitSize(glyphSize: number): number {
-  return Math.max(glyphSize, GLYPH_MIN_HIT_PX)
+/**
+ * Centred hit-pad size for a glyph of the given visual diameter.
+ *
+ * Inactive markers get the enlarged 44px pad so a small dormant/quiet glyph is
+ * reliably selectable by a direct map tap. The Active_Venue's marker does NOT:
+ * it is raised to an elevated z-index for visual prominence (R12.6), and an
+ * enlarged pad on the elevated marker would sit ON TOP of neighbouring markers'
+ * pads at a packed zoom, swallowing taps meant for them. That is the "have to
+ * deselect before I can select the next one" bug - you could never switch
+ * directly from one venue to a nearby one. The active marker is already
+ * reachable via its glyph and the carousel, so its pad shrinks to the glyph
+ * itself, leaving neighbours' 44px pads free to receive the switch tap.
+ */
+function glyphHitSize(glyphSize: number, isActive: boolean): number {
+  return isActive ? glyphSize : Math.max(glyphSize, GLYPH_MIN_HIT_PX)
 }
 
 /**
@@ -260,7 +272,7 @@ function buildMarkerElement(
   // on faded neighbours governs the pad too.
   const glyphHit = document.createElement('div')
   glyphHit.dataset.layer = GLYPH_HIT_LAYER
-  const hitSize = glyphHitSize(glyphSize)
+  const hitSize = glyphHitSize(glyphSize, isActive)
   Object.assign(glyphHit.style, {
     position: 'absolute',
     top: '50%',
@@ -504,7 +516,7 @@ function updateMarkerElement(
     })
     const glyphHit = glyphWrapper.querySelector(`[data-layer="${GLYPH_HIT_LAYER}"]`) as HTMLElement | null
     if (glyphHit) {
-      const hitSize = glyphHitSize(glyphSize)
+      const hitSize = glyphHitSize(glyphSize, isActive)
       glyphHit.style.width = `${hitSize}px`
       glyphHit.style.height = `${hitSize}px`
     }

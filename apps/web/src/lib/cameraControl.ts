@@ -15,6 +15,7 @@
 
 import type { MapInstance, Node } from '@area-code/shared/types'
 
+import { cameraEasing, cameraMotion } from './cameraEasing'
 import { POSITION_FRESHNESS_WINDOW, SHEET_FOCUS_OFFSET_RATIO } from './carouselConstants'
 
 /**
@@ -131,12 +132,16 @@ export interface MoveCameraOptions {
  * Validates: Requirements 1.4, 1.5, 8.5
  */
 export function moveCameraToActive(map: MapInstance, node: Node, { reducedMotion, zoom }: MoveCameraOptions): void {
+  // Shared camera easing (Req 11.2) rides on every move; the duration stays
+  // param-driven so the exactly-one-flyTo + Reduced_Motion zero-duration
+  // contract is preserved: a jump under Reduced_Motion, otherwise the map's
+  // default animated fly-to (no explicit duration). Spread so `easing` reaches
+  // the adapter without the MapInstance option literal rejecting it.
+  const motion = { easing: cameraEasing, ...(reducedMotion ? { duration: 0 } : {}) }
   map.flyTo({
     center: [node.lng, node.lat],
     offset: sheetFocusOffset(markerApexOffset(node.id)),
-    // Reduced_Motion → zero-duration jump; otherwise let the map use its
-    // default animated fly-to easing.
-    ...(reducedMotion ? { duration: 0 } : {}),
+    ...motion,
     ...(zoom !== undefined ? { zoom } : {}),
   })
 }
@@ -224,6 +229,9 @@ export function recenterIfFresh({
   if (!position) return false
   if (!canRecenter(capturedAt, now, freshnessWindow)) return false
 
-  map.flyTo({ center: [position.lng, position.lat], zoom, duration: 1000 })
+  // Shared motion signature (Req 11.2): the recenter fly-to carries the common
+  // easing and honours Reduced_Motion (zero duration) like every other camera
+  // move, instead of a bare 1000ms glide.
+  map.flyTo({ center: [position.lng, position.lat], zoom, ...cameraMotion(1000) })
   return true
 }

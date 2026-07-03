@@ -1,6 +1,12 @@
 import { Spinner } from '@area-code/shared/components/Spinner'
+import {
+  NOTIFICATION_PREFERENCE_KEYS as PREF_KEYS,
+  NOTIFICATION_PREFERENCE_DEFAULTS as DEFAULTS,
+  type NotificationPreferenceKey,
+} from '@area-code/shared/constants/notification-preferences'
 import { api } from '@area-code/shared/lib/api'
 import { useErrorStore } from '@area-code/shared/stores/errorStore'
+import type { NotificationPreferences } from '@area-code/shared/types'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -11,30 +17,8 @@ interface NotificationSettingsProps {
   onNavigate: (route: AppRoute) => void
 }
 
-type PrefKey =
-  | 'streakAtRisk'
-  | 'rewardActivated'
-  | 'rewardClaimedPush'
-  | 'leaderboardPrewarning'
-  | 'followedUserCheckin'
-
-type Prefs = Record<PrefKey, boolean>
-
-const PREF_KEYS: PrefKey[] = [
-  'rewardClaimedPush',
-  'rewardActivated',
-  'streakAtRisk',
-  'leaderboardPrewarning',
-  'followedUserCheckin',
-]
-
-const DEFAULTS: Prefs = {
-  streakAtRisk: false,
-  rewardActivated: false,
-  rewardClaimedPush: true,
-  leaderboardPrewarning: false,
-  followedUserCheckin: false,
-}
+type PrefKey = NotificationPreferenceKey
+type Prefs = NotificationPreferences
 
 export function NotificationSettings({ onNavigate }: NotificationSettingsProps) {
   const { t } = useTranslation()

@@ -19,3 +19,8 @@ export {
 export type { ArchetypeIconSpec, ArchetypeIconWeight } from './archetype-icons'
 export { TIER_SIZE_MULTIPLIER } from './tier-size'
 export { ERROR_COPY, type ErrorCopyKey } from './error-copy'
+export {
+  NOTIFICATION_PREFERENCE_KEYS,
+  NOTIFICATION_PREFERENCE_DEFAULTS,
+  type NotificationPreferenceKey,
+} from './notification-preferences'

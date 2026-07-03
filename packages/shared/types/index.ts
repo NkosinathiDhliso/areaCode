@@ -427,6 +427,12 @@ export interface MapInstance {
      */
     offset?: [number, number]
     duration?: number
+    /**
+     * Easing curve for the camera move, matching Mapbox's `easing` option:
+     * maps animation progress `t` (0-1) to eased progress. Lets store-driven
+     * fly-tos carry the shared `cameraEasing` motion signature.
+     */
+    easing?: (t: number) => number
   }): void
   setFeatureState(feature: { source: string; id: string }, state: Record<string, unknown>): void
   getZoom(): number

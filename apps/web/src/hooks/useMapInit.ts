@@ -5,10 +5,10 @@ import type { MapInstance } from '@area-code/shared/types'
 import mapboxgl from 'mapbox-gl'
 import { useEffect, useRef, useState, useCallback } from 'react'
 
+import { cameraMotion } from '../lib/cameraEasing'
 import { USER_VIEW_ZOOM } from '../lib/cameraControl'
 import { deviceTier } from '../lib/deviceTier'
 import { PITCH_3D, PITCH_FLAT, MAX_PITCH, pitchForZoom, computeRampTarget } from '../lib/pitchRamp'
-import { reducedMotion } from '../lib/reducedMotion'
 
 const MAPBOX_TOKEN = import.meta.env['VITE_MAPBOX_TOKEN'] as string | undefined
 
@@ -334,6 +334,7 @@ function buildMapInstance(map: mapboxgl.Map): MapInstance {
         if (opts.zoom !== undefined) flyOpts['zoom'] = opts.zoom
         if (opts.offset !== undefined) flyOpts['offset'] = opts.offset
         if (opts.duration !== undefined) flyOpts['duration'] = opts.duration
+        if (opts.easing !== undefined) flyOpts['easing'] = opts.easing
         map.flyTo(flyOpts as Parameters<typeof map.flyTo>[0])
       } catch {
         // Map may have been removed, ignore
@@ -453,7 +454,7 @@ export function useMapInit() {
       map.easeTo({
         pitch: on ? targetPitch : PITCH_FLAT,
         bearing: on ? BEARING_3D : 0,
-        duration: reducedMotion() ? 0 : 800,
+        ...cameraMotion(800),
       })
     } catch {
       /* ignore */
@@ -487,7 +488,7 @@ export function useMapInit() {
       if (delta <= 1) {
         return
       }
-      map.easeTo({ bearing: 0, duration: reducedMotion() ? 0 : 600 })
+      map.easeTo({ bearing: 0, ...cameraMotion(600) })
     } catch {
       /* ignore */
     }
@@ -518,7 +519,11 @@ export function useMapInit() {
     if (!pos || !capturedAt) return
     if (Date.now() - capturedAt > 60_000) return
     try {
-      map.flyTo({ center: [pos.lng, pos.lat], zoom: USER_VIEW_ZOOM, duration: reducedMotion() ? 0 : 1000 })
+      map.flyTo({
+        center: [pos.lng, pos.lat],
+        zoom: USER_VIEW_ZOOM,
+        ...cameraMotion(1000),
+      })
     } catch {
       /* ignore */
     }
@@ -624,7 +629,7 @@ export function useMapInit() {
       try {
         const target = computeRampTarget(map.getZoom(), manualPitchOffsetRef.current)
         if (Math.abs(map.getPitch() - target) > 1) {
-          map.easeTo({ pitch: target, duration: reducedMotion() ? 0 : 450 })
+          map.easeTo({ pitch: target, ...cameraMotion(450) })
         }
       } catch {
         /* pitch is cosmetic - fail open */
