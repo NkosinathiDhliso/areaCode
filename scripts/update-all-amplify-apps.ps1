@@ -8,8 +8,11 @@
 
 param(
     [string]$Region = "us-east-1",
-    [string]$ApiUrl = "https://iyj02gvt12.execute-api.us-east-1.amazonaws.com",
-    [string]$WebSocketUrl = "wss://iyj02gvt12.execute-api.us-east-1.amazonaws.com/prod",
+    # REST API is served on the stable custom domain. The WebSocket API has no
+    # custom domain, so it stays on its execute-api endpoint (a distinct API id
+    # from the HTTP API - do not reuse the HTTP id here or real-time breaks).
+    [string]$ApiUrl = "https://api.areacode.co.za",
+    [string]$WebSocketUrl = "wss://ilcimxarf0.execute-api.us-east-1.amazonaws.com/prod",
     [string]$MapboxToken = $env:VITE_MAPBOX_TOKEN,
     # CloudWatch RUM monitor + identity pool IDs per app.
     # Pull these from `terraform output -json rum_monitors` after applying.
@@ -74,11 +77,11 @@ foreach ($app in $AmplifyApps) {
     Write-Info "  App ID: $($app.AppId)"
     Write-Info "  Branch: $($app.Branch)"
     Write-Info "  Domain: $($app.Domain)"
-    
+
     # Update environment variables
     Write-Host "  Setting environment variables..." -ForegroundColor Gray
-    
-    # Build the MANAGED environment variables this script owns — Web (basemap)
+
+    # Build the MANAGED environment variables this script owns - Web (basemap)
     # and Business (address autocomplete via Mapbox Geocoding) both need the
     # Mapbox token.
     $managed = [ordered]@{
@@ -94,7 +97,7 @@ foreach ($app in $AmplifyApps) {
         $managed['VITE_RUM_IDENTITY_POOL_ID'] = $app.RumIdentityPool
         $managed['VITE_RUM_REGION'] = $Region
     } else {
-        Write-Warn "  ⚠ RUM env vars not provided for $($app.Name) — frontend monitoring will be disabled"
+        Write-Warn "  [warn] RUM env vars not provided for $($app.Name) - frontend monitoring will be disabled"
     }
 
     # MERGE, never replace. update-branch --environment-variables overwrites the
@@ -112,7 +115,7 @@ foreach ($app in $AmplifyApps) {
         $existing = $existingJson | ConvertFrom-Json
         foreach ($p in $existing.PSObject.Properties) { $merged[$p.Name] = $p.Value }
     } else {
-        Write-Warn "  ⚠ Could not read existing env vars; proceeding with managed keys only"
+        Write-Warn "  [warn] Could not read existing env vars; proceeding with managed keys only"
     }
     foreach ($k in $managed.Keys) { $merged[$k] = $managed[$k] }
 
@@ -123,10 +126,10 @@ foreach ($app in $AmplifyApps) {
     aws amplify update-branch `
         --cli-input-json "file://$payloadPath" `
         --region $Region 2>&1 | Out-Null
-    
+
     if ($LASTEXITCODE -eq 0) {
-        Write-Success "  ✓ Environment variables updated"
-        
+        Write-Success "  [OK] Environment variables updated"
+
         # Trigger new build
         Write-Host "  Triggering new build..." -ForegroundColor Gray
         aws amplify start-job `
@@ -134,19 +137,19 @@ foreach ($app in $AmplifyApps) {
             --branch-name $app.Branch `
             --job-type RELEASE `
             --region $Region 2>&1 | Out-Null
-        
+
         if ($LASTEXITCODE -eq 0) {
-            Write-Success "  ✓ Build triggered successfully"
+            Write-Success "  [OK] Build triggered successfully"
             $successCount++
         } else {
-            Write-Warn "  ⚠ Build trigger failed"
+            Write-Warn "  [warn] Build trigger failed"
             $failCount++
         }
     } else {
-        Write-Err "  ✗ Failed to update environment variables"
+        Write-Err "  [FAIL] Failed to update environment variables"
         $failCount++
     }
-    
+
     Write-Host ""
 }
 
@@ -175,7 +178,7 @@ if ($failCount -gt 0) {
     Write-Host ""
     Write-Warn "Some apps failed to update. Manual fix:"
     Write-Host "1. Go to https://$Region.console.aws.amazon.com/amplify/apps"
-    Write-Host "2. Click each app → Environment Variables"
+    Write-Host "2. Click each app, open Environment Variables"
     Write-Host "3. Set: VITE_API_URL = $ApiUrl"
     Write-Host "4. Save and redeploy"
 }
