@@ -1,7 +1,7 @@
 import { BottomSheet } from '@area-code/shared/components/BottomSheet'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import type { NodeCategory, NodeState, Reward } from '@area-code/shared/types'
-import { ChevronDown, ChevronUp, Compass, Sparkles } from 'lucide-react'
+import { ChevronDown, ChevronUp, Compass } from 'lucide-react'
 import { useEffect, useReducer, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -390,7 +390,6 @@ function BrowseMode({
         onClick={onShowRecommended}
         className="self-start flex items-center gap-1.5 text-[var(--accent)] text-xs font-semibold transition-all duration-150 active:scale-95"
       >
-        <Sparkles size={14} strokeWidth={1.75} />
         {t('map.backToRecommended', 'Back to recommended')}
       </button>
     ) : null

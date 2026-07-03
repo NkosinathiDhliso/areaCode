@@ -305,7 +305,7 @@ function AppContent() {
                 interaction while another tab is active. */}
             {mapMounted && (
               <div className="absolute inset-0" style={{ display: activeRoute === 'map' ? undefined : 'none' }}>
-                <MapScreen onNavigate={setRoute} />
+                <MapScreen onNavigate={setRoute} active={activeRoute === 'map'} />
               </div>
             )}
             {activeRoute === 'landing' && !isAuthenticated && <AuthLanding onNavigate={setRoute} />}

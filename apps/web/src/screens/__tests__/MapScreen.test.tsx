@@ -180,7 +180,7 @@ async function renderScreen() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const utils = render(
     <QueryClientProvider client={client}>
-      <MapScreen onNavigate={vi.fn()} />
+      <MapScreen onNavigate={vi.fn()} active />
     </QueryClientProvider>,
   )
   // Flush the node/rewards query promises and the cascading selection effects.

@@ -43,6 +43,14 @@ import type { AppRoute } from '../types'
 
 interface MapScreenProps {
   onNavigate: (route: AppRoute) => void
+  /**
+   * Whether the Map tab is the active route. The map is kept mounted (only
+   * hidden with `display:none`) on tab switch so Mapbox is never torn down, but
+   * the Peek_Carousel renders through a `document.body` portal and so escapes
+   * that hiding. Gate the carousel on this flag so it never leaks on top of
+   * other tabs (Ranks, Feed, Profile).
+   */
+  active: boolean
 }
 
 /**
@@ -80,7 +88,7 @@ function CityPulseToastMount({ mapReady }: { mapReady: boolean }) {
   return null
 }
 
-export function MapScreen({ onNavigate }: MapScreenProps) {
+export function MapScreen({ onNavigate, active }: MapScreenProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
@@ -551,73 +559,86 @@ export function MapScreen({ onNavigate }: MapScreenProps) {
 
       {/* Peek_Carousel - the two-state browse-and-compare surface (R1.1, R2.x).
           Browse_Mode (swipeable Venue_Card strip + FlickControls) and
-          Commit_Mode (full detail body) over a single shared BottomSheet. */}
-      <PeekCarousel
-        selection={selection}
-        rewards={nodeRewards ?? []}
-        pulseScore={activeScore}
-        state={getNodeState(activeScore)}
-        onCheckIn={checkInFlow.activateCheckIn}
-        onSignIn={checkInFlow.activateCheckIn}
-        qrFallback={checkInFlow.qrFallback}
-        isCheckingIn={checkInFlow.isPending}
-        onCheckOut={handleCheckOut}
-        isCheckingOut={isCheckingOut}
-        categoryFilter={categoryFilter}
-      />
+          Commit_Mode (full detail body) over a single shared BottomSheet.
+          Rendered only while the Map tab is active: the sheet portals to
+          document.body, so without this gate it would stay visible over the
+          other tabs when the map is hidden (display:none). Selection state
+          lives in selectionStore, so the carousel restores on return. */}
+      {active && (
+        <PeekCarousel
+          selection={selection}
+          rewards={nodeRewards ?? []}
+          pulseScore={activeScore}
+          state={getNodeState(activeScore)}
+          onCheckIn={checkInFlow.activateCheckIn}
+          onSignIn={checkInFlow.activateCheckIn}
+          qrFallback={checkInFlow.qrFallback}
+          isCheckingIn={checkInFlow.isPending}
+          onCheckOut={handleCheckOut}
+          isCheckingOut={isCheckingOut}
+          categoryFilter={categoryFilter}
+        />
+      )}
 
       {/* Auth + QR surfaces owned by the check-in flow. The only auth entry
           reachable from the map is the email/password + Google OAuth
-          SignInSheet - no phone-number or SMS surface (R20.1). */}
-      <SignInSheet isOpen={checkInFlow.signInOpen} onClose={checkInFlow.closeSignIn} onNavigate={onNavigate} />
-      <QrScannerSheet
-        isOpen={checkInFlow.qrScannerOpen}
-        onClose={checkInFlow.closeQrScanner}
-        onScanned={checkInFlow.onQrScanned}
-      />
+          SignInSheet - no phone-number or SMS surface (R20.1). All of these
+          portal to document.body, so they are gated on `active` for the same
+          reason as the Peek_Carousel: without it an open sheet would stay
+          visible over the other tabs while the map is hidden. */}
+      {active && (
+        <>
+          <SignInSheet isOpen={checkInFlow.signInOpen} onClose={checkInFlow.closeSignIn} onNavigate={onNavigate} />
+          <QrScannerSheet
+            isOpen={checkInFlow.qrScannerOpen}
+            onClose={checkInFlow.closeQrScanner}
+            onScanned={checkInFlow.onQrScanned}
+          />
 
-      <SearchSheet
-        isOpen={searchOpen}
-        onClose={() => setSearchOpen(false)}
-        onSelectNode={(result: SearchResult) => {
-          setSearchOpen(false)
-          // Ensure the searched venue is resolvable by the Selection_Model and
-          // the camera/detail layers even if it is not in the current city
-          // node set, then route the selection through the single model (R13.4).
-          if (!useMapStore.getState().nodes[result.id]) {
-            const node: Node = {
-              id: result.id,
-              name: result.name,
-              slug: result.slug,
-              category: result.category as Node['category'],
-              lat: result.lat,
-              lng: result.lng,
-              cityId: '',
-              businessId: null,
-              submittedBy: null,
-              claimStatus: 'unclaimed',
-              claimCipcStatus: null,
-              nodeColour: 'default',
-              nodeIcon: null,
-              qrCheckinEnabled: false,
-              isVerified: false,
-              isActive: true,
-              createdAt: '',
-            }
-            addNode(node)
-          }
-          onSearchSelect(result.id)
-        }}
-      />
+          <SearchSheet
+            isOpen={searchOpen}
+            onClose={() => setSearchOpen(false)}
+            onSelectNode={(result: SearchResult) => {
+              setSearchOpen(false)
+              // Ensure the searched venue is resolvable by the Selection_Model and
+              // the camera/detail layers even if it is not in the current city
+              // node set, then route the selection through the single model (R13.4).
+              if (!useMapStore.getState().nodes[result.id]) {
+                const node: Node = {
+                  id: result.id,
+                  name: result.name,
+                  slug: result.slug,
+                  category: result.category as Node['category'],
+                  lat: result.lat,
+                  lng: result.lng,
+                  cityId: '',
+                  businessId: null,
+                  submittedBy: null,
+                  claimStatus: 'unclaimed',
+                  claimCipcStatus: null,
+                  nodeColour: 'default',
+                  nodeIcon: null,
+                  qrCheckinEnabled: false,
+                  isVerified: false,
+                  isActive: true,
+                  createdAt: '',
+                }
+                addNode(node)
+              }
+              onSearchSelect(result.id)
+            }}
+          />
 
-      {overlay.showPriming && userId && lastKnownPosition && (
-        <NotificationPrimingSheet
-          isOpen
-          onClose={() => setPrimingShownThisSession(true)}
-          lat={lastKnownPosition.lat}
-          lng={lastKnownPosition.lng}
-          userId={userId}
-        />
+          {overlay.showPriming && userId && lastKnownPosition && (
+            <NotificationPrimingSheet
+              isOpen
+              onClose={() => setPrimingShownThisSession(true)}
+              lat={lastKnownPosition.lat}
+              lng={lastKnownPosition.lng}
+              userId={userId}
+            />
+          )}
+        </>
       )}
     </div>
   )
