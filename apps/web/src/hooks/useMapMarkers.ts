@@ -237,8 +237,6 @@ function buildMarkerElement(
     state,
     () => {
       const now = Date.now()
-      // eslint-disable-next-line no-console
-      console.log('[map-select] beam tap', { nodeId: node.id, name: node.name })
       if (now - lastBeamTapAt < 350 && onCommitZoom) {
         lastBeamTapAt = 0
         onCommitZoom()
@@ -296,8 +294,6 @@ function buildMarkerElement(
   glyphHit.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true })
   glyphHit.addEventListener('click', (e) => {
     e.stopPropagation()
-    // eslint-disable-next-line no-console
-    console.log('[map-select] glyph click', { nodeId: node.id, name: node.name })
     onTap()
   })
   glyphWrapper.appendChild(glyphHit)
@@ -404,10 +400,6 @@ function buildMarkerElement(
  * Validates: Requirements 12.5, 12.6
  */
 function applyActiveStyling(el: HTMLElement, isActive: boolean, colour: string): void {
-  if (el.dataset.active !== (isActive ? 'true' : 'false')) {
-    // eslint-disable-next-line no-console
-    console.log('[map-select] ring toggle', { nodeId: el.dataset.nodeId, isActive })
-  }
   el.dataset.active = isActive ? 'true' : 'false'
   // The ring must be centred on the GLYPH at the beam apex, not on the middle
   // of the tall marker container. The container is `beamHeight + glyphSize`

@@ -503,8 +503,6 @@ export function useCarouselSelection({
 
   const onMarkerTap = useCallback(
     (nodeId: string) => {
-      // eslint-disable-next-line no-console
-      console.log('[map-select] onMarkerTap', { nodeId })
       selectVenueRaw(nodeId, 'marker')
       let zoom = MAP_ARRIVAL_ZOOM
       try {

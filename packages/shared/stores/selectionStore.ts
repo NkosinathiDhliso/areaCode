@@ -88,13 +88,6 @@ export const useSelectionStore = create<SelectionState>()(
     // Focus_Signal so the lighter backdrop can be applied (Requirement 15.3).
     selectVenue: (id, source) =>
       set((state) => {
-        // eslint-disable-next-line no-console
-        console.log('[map-select] store.selectVenue', {
-          from: state.activeVenueId,
-          to: id,
-          source,
-          mode: state.mode,
-        })
         state.activeVenueId = id
         state.lastVenueId = id
         state.openedFromFocus = source === 'focus'
