@@ -56,6 +56,48 @@ export const consumer = {
   viewDetails: (page: Page) => page.getByRole('button', { name: /view details/i }).first(),
   /** Empty-viewport invite shown when no venue is in range. */
   browseEmpty: (page: Page) => page.locator('[data-browse-empty]').first(),
+
+  // ── Bottom-nav tabs (consumer shell) ──
+  /** A bottom-nav tab button, scoped to the nav so it never matches in-screen buttons. */
+  navTab: (page: Page, name: RegExp) =>
+    page
+      .getByRole('navigation', { name: /main navigation/i })
+      .getByRole('button', { name })
+      .first(),
+
+  // ── Map-owned portaled sheets (map-carousel scope contract) ──
+  // These render through a document.body portal and are gated on the Map tab
+  // being active (fix c047c94). They must never be visible on another tab.
+  /** Venue search sheet (dialog hosting the search input). */
+  searchSheet: (page: Page) =>
+    page
+      .getByRole('dialog')
+      .filter({ has: page.getByPlaceholder(/search/i) })
+      .first(),
+  /** Sign-in sheet (email/password + Google OAuth entry; no phone/SMS). */
+  signInSheet: (page: Page) =>
+    page
+      .getByRole('dialog')
+      .filter({ hasText: /sign in to (check in|continue)/i })
+      .first(),
+  /** In-app QR scanner sheet. */
+  qrScannerSheet: (page: Page) =>
+    page
+      .getByRole('dialog')
+      .filter({ hasText: /scan the venue qr/i })
+      .first(),
+
+  // ── BottomSheet portal internals (non-modal Browse contract) ──
+  /** The dialog panel that hosts the carousel (the only interactive layer in Browse). */
+  sheetPanel: (page: Page) =>
+    page
+      .getByRole('dialog')
+      .filter({ has: page.locator('[data-peek-carousel]') })
+      .first(),
+  /** The BottomSheet portal wrapper: a direct child of <body> containing the carousel. */
+  sheetPortal: (page: Page) => page.locator('body > div:has([data-peek-carousel])').first(),
+  /** Modal backdrop sibling (role=presentation). Present only in Commit_Mode. */
+  sheetBackdrop: (page: Page) => page.locator('body > div:has([data-peek-carousel]) [role="presentation"]'),
 }
 
 export const business = {

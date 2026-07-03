@@ -8,6 +8,7 @@
 
 import { expect, test } from '../../support/fixtures.js'
 import { staff } from '../../support/selectors.js'
+import { assertStructuralIntegrity } from '../../support/structure.js'
 
 test.describe('Staff — auth & redemption', () => {
   test('login lands on StaffHome', async ({ page, loginAs }) => {
@@ -91,6 +92,24 @@ test.describe('Staff — auth & redemption', () => {
         .click()
       await expect(page).toHaveURL(/login|signin|^https?:\/\/[^/]+\/?$/i, { timeout: 10_000 })
     }
+  })
+})
+
+test.describe('Staff — structural integrity (authenticated shell)', () => {
+  test('StaffHome has no horizontal scroll, a reachable CTA and clean axe criticals', async ({ page, loginAs }) => {
+    try {
+      await loginAs('staffMember', 'staff')
+    } catch (e) {
+      test.skip(true, `staff fixture not available: ${String(e)}`)
+    }
+    await expect(staff.scanQrButton(page)).toBeVisible({ timeout: 15_000 })
+
+    // Staff is a single-screen validator; there is no second primary route, so
+    // the overlay-leak check (c) does not apply. (a), (b) and (d) still run.
+    await assertStructuralIntegrity(page, {
+      portal: 'staff',
+      primaryControl: (p) => staff.scanQrButton(p),
+    })
   })
 })
 

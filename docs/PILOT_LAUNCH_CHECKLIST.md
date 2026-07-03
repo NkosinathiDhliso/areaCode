@@ -10,6 +10,16 @@
 
 These are the things that, if broken on the first day, kill the pilot.
 
+> **Why this stays a manual human gate.** Readiness has three layers. The
+> go-live script (`scripts/go-live-check.ps1`) proves backend and deployment
+> truth, and the `tests/e2e` sweep proves UI structure across all four
+> portals. Both are automated, and both catch structural problems only: a
+> wrong surface visible, the wrong tab, a blocked interaction. Neither can see
+> purely visual defects like misaligned glass, wrong colors, or janky motion.
+> That is what this section is for: human eyes on a real phone. A green script
+> plus a green e2e run is never launch approval on its own, so §1 stays
+> mandatory even when both automated layers are green.
+
 | #   | Test                                                                          | Pass condition                                                                       | Fix path                                                                                                                                         |
 | --- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1   | **First QR scan succeeds end-to-end on a real venue staff phone.**            | Staff sees redemption preview within 2 seconds; confirms; sees "Redeemed!"           | Test once per venue, on the actual phone. Switch to manual code entry if camera permission is denied.                                            |
@@ -24,6 +34,8 @@ These are the things that, if broken on the first day, kill the pilot.
 ## §2 — Backend ready check
 
 Run before the launch day, repeat the morning of.
+
+> One command: `scripts/go-live-check.ps1 -Environment prod` runs every scripted item in this section. The per-item list below stays as the manual fallback.
 
 - [ ] `curl https://api.areacode.co.za/health` returns `{"status":"ok","env":"prod"}`
 - [ ] `curl https://api.areacode.co.za/v1/nodes/johannesburg` returns at least 5 nodes
@@ -40,6 +52,8 @@ Run before the launch day, repeat the morning of.
 
 ## §3 — Frontend ready check
 
+> One command: `scripts/go-live-check.ps1 -Environment prod` runs every scripted item in this section. The per-item list below stays as the manual fallback.
+
 - [ ] `https://areacode.co.za` loads with map visible
 - [ ] `https://business.areacode.co.za` loads to the login screen
 - [ ] `https://staff.areacode.co.za` loads to the login screen
@@ -47,6 +61,7 @@ Run before the launch day, repeat the morning of.
 - [ ] All four respond < 3s on first load over LTE
 - [ ] No console errors in DevTools on initial load
 - [ ] HTTPS is enforced (test with `http://areacode.co.za` → expect a 30x to https)
+- [ ] Run the consumer e2e project (`cd tests/e2e && pnpm test -- --project=consumer`), pins the overlay-confinement regression (carousel must not leak over the Feed, commit c047c94)
 
 ## §4 — Per-venue pre-launch (run for each pilot venue)
 

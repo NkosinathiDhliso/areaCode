@@ -5,6 +5,7 @@
 import { TEST_ACCOUNTS } from '../../support/env.js'
 import { expect, test } from '../../support/fixtures.js'
 import { admin } from '../../support/selectors.js'
+import { assertStructuralIntegrity } from '../../support/structure.js'
 
 test.describe('Admin — auth & dashboard', () => {
   test('admin login lands on DashboardOverview with key counters', async ({ page, loginAs }) => {
@@ -33,5 +34,28 @@ test.describe('Admin — auth & dashboard', () => {
     const a = await api.get('/v1/admin/overview')
     const b = await api.get('/v1/admin/overview')
     expect(a.ok() && b.ok()).toBe(true)
+  })
+})
+
+test.describe('Admin — structural integrity (authenticated shell)', () => {
+  test('dashboard has no horizontal scroll, a reachable CTA and clean axe criticals', async ({ page, loginAs }) => {
+    try {
+      await loginAs('admin', 'admin')
+    } catch (e) {
+      test.skip(true, `admin fixture not available: ${String(e)}`)
+    }
+    await expect(admin.totalConsumers(page)).toBeVisible({ timeout: 15_000 })
+
+    await assertStructuralIntegrity(page, {
+      portal: 'admin',
+      primaryControl: (p) => admin.navTab(p, /consumers?/i),
+      routeChange: {
+        // Overview -> Businesses: no portaled overlay should survive the nav.
+        toSecond: async (p) => {
+          await admin.navTab(p, /businesses?/i).click()
+        },
+        secondLabel: 'Businesses',
+      },
+    })
   })
 })
