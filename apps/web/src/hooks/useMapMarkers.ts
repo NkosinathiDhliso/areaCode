@@ -847,15 +847,21 @@ export function useMapMarkers(
       }
     }
 
-    if (map.loaded()) {
-      addMarkers()
-    } else {
-      map.once('load', addMarkers)
-    }
+    // Reconcile markers immediately. This effect is already gated on `mapReady`
+    // (set after the map's one-and-only 'load'), so the map exists and markers
+    // - HTML overlays positioned by lng/lat - can be added without waiting on
+    // tiles or style. The previous `map.loaded()` gate was actively harmful:
+    // `loaded()` returns false whenever the map is still settling from a camera
+    // fly-to or loading tiles, and the effect then deferred to
+    // `map.once('load', …)`. But 'load' fires exactly once in the map's
+    // lifetime, so any reconcile that landed mid-animation (e.g. selecting a
+    // second venue while the first fly-to was still moving) was dropped forever
+    // - the Active_Venue ring never moved off the previous node. Running
+    // synchronously keeps the ring in lockstep with the selection store.
+    addMarkers()
 
     return () => {
       cancelled = true
-      map.off('load', addMarkers)
     }
   }, [
     nodes,
