@@ -466,7 +466,6 @@ function updateMarkerElement(
   const totalWidth = Math.max(glyphFootprint, beamBox.width)
   el.style.width = `${totalWidth}px`
   el.style.height = `${totalSize}px`
-  const scaleLayer = (el.querySelector(`[data-layer="${SCALE_LAYER}"]`) as HTMLElement | null) ?? el
   const glyphWrapper = el.querySelector('[data-layer="glyph-wrapper"]') as HTMLElement | null
 
   const haloSize = glyphSize * 2.2
