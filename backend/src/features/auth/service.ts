@@ -165,7 +165,7 @@ export async function consumerOAuthSync(opts: { cognitoSub: string; email?: stri
   if (!user) {
     isNewUser = true
     let email = rawEmail?.toLowerCase().trim()
-    if (!email) email = await cognito.getConsumerVerifiedEmailBySub(cognitoSub)
+    if (!email) email = await cognito.getVerifiedEmailBySub('consumer', cognitoSub)
     if (!email) {
       throw AppError.unprocessable('Your Google account has no email. Use another Google account or contact support.')
     }

@@ -386,11 +386,6 @@ export async function getVerifiedEmailBySub(role: AuthRole, cognitoSub: string):
   return typeof email === 'string' ? email.toLowerCase().trim() : undefined
 }
 
-/** @deprecated use getVerifiedEmailBySub('consumer', sub) */
-export async function getConsumerVerifiedEmailBySub(cognitoSub: string): Promise<string | undefined> {
-  return getVerifiedEmailBySub('consumer', cognitoSub)
-}
-
 export async function updateUserAttributesByCognitoSub(
   role: AuthRole,
   cognitoSub: string,
