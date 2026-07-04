@@ -169,6 +169,13 @@ vi.mock('../../../shared/db/dynamodb.js', () => ({
     businesses: 'businesses',
     musicSchedules: 'music-schedules',
   },
+  // Faithful copy of the real detector (shared/db/dynamodb.ts): the repository
+  // under test imports it to tell a benign "already claimed" conditional
+  // failure apart from a transient error that must surface (R2.4 compensating
+  // delete). The in-memory store throws errors with the same `name`, so this
+  // mirror keeps the branch decisions honest.
+  isConditionalCheckFailedError: (err: unknown): boolean =>
+    (err as { name?: string } | null)?.name === 'ConditionalCheckFailedException',
 }))
 
 // Stub out repository peers that are reached transitively through

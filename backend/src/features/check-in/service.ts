@@ -18,7 +18,7 @@ import { runAbuseChecks } from './abuse.js'
 import * as repo from './repository.js'
 import { createOrRefreshPresence, getLivePresenceCount } from '../presence/repository.js'
 import { expiryWindowSeconds } from '../presence/window.js'
-import { getUserCheckInCountAtNode } from './dynamodb-repository.js'
+import { getUserCheckInCountAtNode, incrementLeaderboard } from './dynamodb-repository.js'
 import { PutCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import type { CheckInInput, CheckInResponse } from './types.js'
@@ -304,8 +304,18 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
   if (cityId) {
     // Store pulse score in KV for quick lookup
     await kvSet(`pulse:${cityId}:${input.nodeId}`, String(pulseScore), 86400)
-    // Increment leaderboard counter
-    await kvIncr(`leaderboard:${cityId}:${userId}`, 0) // no TTL
+
+    // Increment the canonical current-period Leaderboard_Entry
+    // (LEADERBOARD#{cityId} / USER#{userId}) that the Ranks read serves
+    // (Requirements 2.1, 2.3). Best-effort per Requirement 2.4: a single atomic
+    // ADD, awaited on the live path but wrapped in the same log-and-continue
+    // pattern as the other check-in fan-outs so a leaderboard write failure
+    // never blocks or fails the check-in response.
+    try {
+      await incrementLeaderboard(cityId, userId)
+    } catch (err) {
+      console.warn(`[check-in] leaderboard increment failed: ${String(err)}`)
+    }
   }
 
   // 7. Emit socket events (best-effort; never fail the check-in over fan-out)

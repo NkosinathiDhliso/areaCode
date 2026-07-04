@@ -153,4 +153,37 @@ describe('Feature: venue-intelligence-reports, Property 5: PII Scanner Correctne
       { numRuns: 25 },
     )
   })
+
+  // Structural identifiers (reportId/businessId/nodeId) are legitimately
+  // UUID-shaped but are not personal data. They must not be treated as PII, or
+  // every report (which carries its own randomUUID reportId, businessId, and
+  // node ids) would be wrongly flagged and skipped.
+  it('structural identifier fields (reportId/businessId/nodeId) with UUID values are clean', () => {
+    fc.assert(
+      fc.property(uuidArb, uuidArb, uuidArb, (reportId, businessId, nodeId) => {
+        const doc = JSON.stringify({
+          reportId,
+          businessId,
+          nodes: [{ nodeId, nodeName: 'The Rooftop Bar' }],
+          summary: { totalCheckIns: 42, pulseState: 'buzzing' },
+        })
+        const result = scanForPii(doc)
+        expect(result.clean).toBe(true)
+        expect(result.violations).toEqual([])
+      }),
+      { numRuns: 25 },
+    )
+  })
+
+  it('a person UUID (userId) is still flagged even alongside allowed structural ids', () => {
+    fc.assert(
+      fc.property(uuidArb, uuidArb, (reportId, userId) => {
+        const doc = JSON.stringify({ reportId, leaked: { userId } })
+        const result = scanForPii(doc)
+        expect(result.clean).toBe(false)
+        expect(result.violations.length).toBeGreaterThan(0)
+      }),
+      { numRuns: 25 },
+    )
+  })
 })

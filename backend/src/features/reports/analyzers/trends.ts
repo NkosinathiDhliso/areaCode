@@ -25,18 +25,22 @@ const TREND_METRICS = ['totalCheckIns', 'uniqueVisitors', 'repeatVisitorRate', '
  * Division by zero handling:
  * - If previous = 0 and current > 0 → direction = "up", percentChange = 100
  * - If previous = 0 and current = 0 → direction = "flat", percentChange = 0
+ *
+ * Per-metric "no prior data" (H4): a metric key listed in `unavailablePriorMetrics`
+ * has a genuinely unknown previous value (distinct from a known 0). Its delta is
+ * marked `hasPriorData: false` with a flat, zero-change value so the UI never
+ * renders a fabricated +100% up delta from a substituted or 0 baseline.
  */
-export function analyzeTrends(currentMetrics: ReportMetrics, previousMetrics: ReportMetrics | null): TrendResult {
-  // No prior data available
+export function analyzeTrends(
+  currentMetrics: ReportMetrics,
+  previousMetrics: ReportMetrics | null,
+  unavailablePriorMetrics: ReadonlySet<string> = new Set(),
+): TrendResult {
+  // No prior data available at all
   if (previousMetrics === null) {
     const metrics: Record<string, TrendDelta> = {}
     for (const key of TREND_METRICS) {
-      metrics[key] = {
-        current: currentMetrics[key],
-        previous: 0,
-        percentChange: 0,
-        direction: 'flat',
-      }
+      metrics[key] = noPriorDataDelta(currentMetrics[key])
     }
     return {
       metrics,
@@ -47,10 +51,12 @@ export function analyzeTrends(currentMetrics: ReportMetrics, previousMetrics: Re
   const metrics: Record<string, TrendDelta> = {}
 
   for (const key of TREND_METRICS) {
-    const current = currentMetrics[key]
-    const previous = previousMetrics[key]
-
-    metrics[key] = computeTrendDelta(current, previous)
+    if (unavailablePriorMetrics.has(key)) {
+      // Prior value for this specific metric is genuinely unknown.
+      metrics[key] = noPriorDataDelta(currentMetrics[key])
+      continue
+    }
+    metrics[key] = computeTrendDelta(currentMetrics[key], previousMetrics[key])
   }
 
   return {
@@ -62,6 +68,20 @@ export function analyzeTrends(currentMetrics: ReportMetrics, previousMetrics: Re
 // ============================================================================
 // Helpers
 // ============================================================================
+
+/**
+ * Build a delta for a metric with no prior baseline. Flat, zero-change, and
+ * explicitly marked so the UI omits it rather than rendering +100% from 0.
+ */
+function noPriorDataDelta(current: number): TrendDelta {
+  return {
+    current,
+    previous: 0,
+    percentChange: 0,
+    direction: 'flat',
+    hasPriorData: false,
+  }
+}
 
 /**
  * Compute a single trend delta between current and previous values.
@@ -96,5 +116,6 @@ function computeTrendDelta(current: number, previous: number): TrendDelta {
     previous,
     percentChange,
     direction,
+    hasPriorData: true,
   }
 }

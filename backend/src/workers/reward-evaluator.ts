@@ -8,6 +8,7 @@ import {
 import { userRoom } from '../shared/socket/rooms.js'
 import { getIO } from '../shared/socket/server.js'
 import { classifyLifecycle, isClaimEligible } from '../features/rewards/lifecycle.js'
+import { isConditionalCheckFailedError } from '../shared/db/dynamodb.js'
 import * as repo from './reward-evaluator-repository.js'
 
 interface CheckInMessage {
@@ -96,8 +97,17 @@ async function evaluateRewards(userId: string, nodeId: string) {
         ...(reward.node?.name ? { nodeName: reward.node.name } : {}),
         rewardTitle: reward.title,
       })
-    } catch {
-      continue // ON CONFLICT , already claimed
+    } catch (err) {
+      if (isConditionalCheckFailedError(err)) {
+        // ON CONFLICT , already claimed. The unique-claim condition tripped,
+        // so this reward is already minted for the user. Skip it.
+        continue
+      }
+      // Any other failure is a real (likely transient) fault. Do not silently
+      // drop an earned reward: log loudly and rethrow so the SQS message fails
+      // and is retried (no-fallbacks-no-legacy.md).
+      console.error(`[reward-evaluator] createRedemption failed: user=${userId} reward=${reward.id}`, err)
+      throw err
     }
 
     await repo.incrementClaimedCount(reward.id)

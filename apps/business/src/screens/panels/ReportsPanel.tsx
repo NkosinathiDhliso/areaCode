@@ -56,6 +56,10 @@ interface TrendDelta {
   previous: number
   percentChange: number
   direction: 'up' | 'down' | 'flat'
+  // Per-metric prior-data availability. When explicitly false, the prior value
+  // for this metric is unavailable (e.g. pulse predates persistence), so the
+  // row is omitted rather than shown as a fabricated +100% delta.
+  hasPriorData?: boolean
 }
 
 interface TrendResult {
@@ -92,7 +96,15 @@ interface FullReport {
   peakHours: PeakHoursResult
   crowdComposition: CrowdCompositionResult
   musicProfile: MusicProfileResult | null
-  repeatVisitors: { repeatRate: number; firstTimeVisitorCount: number; totalUniqueVisitors: number }
+  // hasPriorData false => no prior-period tokens, so the repeat rate is not a
+  // real computed value. Its trend row is suppressed by TrendsSection and the
+  // rate is never rendered as a bare 0% (Requirement 4.5).
+  repeatVisitors: {
+    repeatRate: number
+    firstTimeVisitorCount: number
+    totalUniqueVisitors: number
+    hasPriorData: boolean
+  }
   trends: TrendResult
   benchmarks: {
     metrics: Record<string, { venueValue: number; benchmarkAverage: number; percentAboveBelow: number }>
@@ -281,6 +293,37 @@ function MusicProfileChart({ data }: { data: MusicProfileResult }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function TrendsSection({ trends }: { trends: TrendResult }) {
+  // Result-level gate: no prior period at all. Per-metric gate: a metric whose
+  // prior baseline is unavailable (hasPriorData === false) is omitted so it is
+  // never shown as a +100% up delta from a 0 baseline (Requirement 5.3).
+  if (!trends.hasPriorData) return null
+
+  const visibleMetrics = Object.entries(trends.metrics).filter(([, delta]) => delta.hasPriorData !== false)
+  if (visibleMetrics.length === 0) return null
+
+  return (
+    <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
+      <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">Trends</h3>
+      <div className="flex flex-col gap-2">
+        {visibleMetrics.map(([key, delta]) => (
+          <div key={key} className="flex flex-row items-center justify-between">
+            <span className="text-[var(--text-primary)] text-sm capitalize">
+              {key
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/_/g, ' ')
+                .trim()}
+            </span>
+            <span className="text-sm font-medium" style={{ color: directionColor(delta.direction) }}>
+              {directionIcon(delta.direction)} {Math.abs(Math.round(delta.percentChange))}%
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -536,27 +579,9 @@ function FullReportView({ report }: { report: FullReport }) {
       {/* Summary cards */}
       <SummaryCards summary={report.summary} />
 
-      {/* Trend comparisons */}
-      {report.trends.hasPriorData && (
-        <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
-          <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">Trends</h3>
-          <div className="flex flex-col gap-2">
-            {Object.entries(report.trends.metrics).map(([key, delta]) => (
-              <div key={key} className="flex flex-row items-center justify-between">
-                <span className="text-[var(--text-primary)] text-sm capitalize">
-                  {key
-                    .replace(/([A-Z])/g, ' $1')
-                    .replace(/_/g, ' ')
-                    .trim()}
-                </span>
-                <span className="text-sm font-medium" style={{ color: directionColor(delta.direction) }}>
-                  {directionIcon(delta.direction)} {Math.abs(Math.round(delta.percentChange))}%
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Trend comparisons. Per-metric rows with no prior baseline are omitted
+          so we never render a fabricated +100% delta from a 0 baseline. */}
+      <TrendsSection trends={report.trends} />
 
       {/* Charts - conditionally rendered based on data availability */}
       {report.peakHours && <PeakHoursChart data={report.peakHours} />}

@@ -15,6 +15,50 @@ async function getCities() {
   return (result.Items || []).map((c) => ({ id: (c['cityId'] ?? c['pk']) as string, slug: c['slug'] as string }))
 }
 
+interface RankedLeaderboardEntry {
+  userId: string
+  checkInCount: number
+  rank: number
+}
+
+/**
+ * Read ALL leaderboard entries for a city from the canonical key
+ * (`pk=LEADERBOARD#{cityId}`), paginating over every page. No Limit cap:
+ * lower-ranked entries beyond the first page must be included too.
+ */
+async function readAllLeaderboardItems(cityId: string): Promise<Record<string, unknown>[]> {
+  const items: Record<string, unknown>[] = []
+  let lastEvaluatedKey: Record<string, unknown> | undefined
+  do {
+    const page = await documentClient.send(
+      new QueryCommand({
+        TableName: TableNames.appData,
+        KeyConditionExpression: 'pk = :pk',
+        ExpressionAttributeValues: { ':pk': `LEADERBOARD#${cityId}` },
+        ExclusiveStartKey: lastEvaluatedKey,
+      }),
+    )
+    items.push(...((page.Items ?? []) as Record<string, unknown>[]))
+    lastEvaluatedKey = page.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (lastEvaluatedKey)
+  return items
+}
+
+/**
+ * Rank raw leaderboard items by checkInCount desc with a deterministic userId
+ * tiebreak, assigning 1-based ranks. Shared by the reset and pre-reset paths so
+ * the ranked users a pre-reset notification warns match what the reset archives.
+ */
+function rankLeaderboardEntries(items: Record<string, unknown>[]): RankedLeaderboardEntry[] {
+  return items
+    .map((item) => ({
+      userId: item['userId'] as string,
+      checkInCount: (item['checkInCount'] as number) ?? 0,
+    }))
+    .sort((a, b) => b.checkInCount - a.checkInCount || a.userId.localeCompare(b.userId))
+    .map((e, i) => ({ ...e, rank: i + 1 }))
+}
+
 /**
  * Leaderboard reset worker , EventBridge Lambda Monday 00:00 SAST.
  */
@@ -26,23 +70,12 @@ export async function handler() {
   let totalEntries = 0
 
   for (const city of cities) {
-    // 1. Get leaderboard entries from app_data
-    const result = await documentClient.send(
-      new QueryCommand({
-        TableName: TableNames.appData,
-        KeyConditionExpression: 'pk = :pk',
-        ExpressionAttributeValues: { ':pk': `LEADERBOARD#${city.id}` },
-        ScanIndexForward: false,
-        Limit: 50,
-      }),
-    )
-    const entries = (result.Items || []).map((item, i) => ({
-      userId: item['userId'] as string,
-      rank: i + 1,
-      checkInCount: (item['checkInCount'] as number) ?? 0,
-    }))
+    // 1. Get ALL leaderboard entries for the city (paginated, canonical key),
+    //    then rank across the full set.
+    const items = await readAllLeaderboardItems(city.id)
+    const entries = rankLeaderboardEntries(items)
 
-    // 2. Persist to leaderboard history
+    // 2. Archive every entry to leaderboard history.
     for (const e of entries) {
       await documentClient.send(
         new PutCommand({
@@ -60,8 +93,8 @@ export async function handler() {
       )
     }
 
-    // 3. Delete current leaderboard entries
-    for (const item of result.Items || []) {
+    // 3. Delete every current leaderboard entry.
+    for (const item of items) {
       await documentClient.send(
         new DeleteCommand({
           TableName: TableNames.appData,
@@ -88,25 +121,18 @@ export async function preResetHandler() {
   let sent = 0
 
   for (const city of cities) {
-    const result = await documentClient.send(
-      new QueryCommand({
-        TableName: TableNames.appData,
-        KeyConditionExpression: 'pk = :pk',
-        ExpressionAttributeValues: { ':pk': `LEADERBOARD#${city.id}` },
-        ScanIndexForward: false,
-        Limit: 50,
-      }),
-    )
+    // Same paginated read + rank as the reset handler (shared helpers), so the
+    // ranked users we warn match exactly what the reset will archive.
+    const items = await readAllLeaderboardItems(city.id)
+    const entries = rankLeaderboardEntries(items)
 
-    for (let i = 0; i < (result.Items || []).length; i++) {
-      const item = result.Items![i]!
-      const userId = item['userId'] as string
-      const prefs = await getNotificationPreferences(userId)
+    for (const entry of entries) {
+      const prefs = await getNotificationPreferences(entry.userId)
       if (prefs && prefs['leaderboardPrewarning']) {
         const { emitToast } = await import('../shared/socket/events.js')
         emitToast(city.slug, {
           type: 'leaderboard',
-          message: `Ranks reset tonight! You're #${i + 1} with ${item['checkInCount'] ?? 0} check-ins.`,
+          message: `Ranks reset tonight! You're #${entry.rank} with ${entry.checkInCount} check-ins.`,
           nodeId: '',
         })
         sent++

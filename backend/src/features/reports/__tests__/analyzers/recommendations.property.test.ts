@@ -84,6 +84,7 @@ const peakHoursArb: fc.Arbitrary<PeakHoursResult> = fc
       dailyDistribution,
       topWindows,
       peakDay,
+      hasInsufficientData: false,
     }
   })
 
@@ -102,6 +103,7 @@ const crowdCompositionArb: fc.Arbitrary<CrowdCompositionResult> = fc.record({
     fixture: fc.integer({ min: 0, max: 100 }),
   }),
   totalUniqueVisitors: fc.integer({ min: 0, max: 500 }),
+  hasInsufficientData: fc.boolean(),
 })
 
 /** Generate MusicProfileResult or null */
@@ -150,6 +152,7 @@ const repeatVisitorArb: fc.Arbitrary<RepeatVisitorResult> = fc.record({
   repeatRate: fc.double({ min: 0, max: 100, noNaN: true }),
   firstTimeVisitorCount: fc.integer({ min: 0, max: 500 }),
   totalUniqueVisitors: fc.integer({ min: 0, max: 500 }),
+  hasPriorData: fc.boolean(),
 })
 
 /** Generate BenchmarkResult or null */
@@ -254,6 +257,7 @@ describe('Feature: venue-intelligence-reports, Property 10: Recommendation Gener
             dailyDistribution: baseReport.peakHours.dailyDistribution,
             topWindows: [{ startHour: 20, endHour: 20, count: peakCount }],
             peakDay: 'Friday',
+            hasInsufficientData: false,
           },
         }
 

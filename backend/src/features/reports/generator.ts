@@ -3,7 +3,7 @@ import { QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb'
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { AWS_REGION, requireEnv } from '../../shared/config/env.js'
-import { anonymizeCheckIns, type RawCheckIn } from './anonymize.js'
+import { anonymizeCheckIns, hashVisitorToken, type RawCheckIn } from './anonymize.js'
 import { analyzePeakHours } from './analyzers/peak-hours.js'
 import { analyzeCrowdComposition } from './analyzers/crowd-composition.js'
 import { analyzeMusicProfile } from './analyzers/music-profile.js'
@@ -13,7 +13,7 @@ import { analyzeBenchmarks } from './analyzers/benchmarks.js'
 import { analyzeJourney } from './analyzers/journey.js'
 import { generateRecommendations } from './analyzers/recommendations.js'
 import { scanForPii } from './pii-scanner.js'
-import { storeReport, getPreviousReport } from './repository.js'
+import { storeReport, storeReportTokens, storeBusinessMetrics, getPreviousReport } from './repository.js'
 import type { GenerateReportMessage, Report, ReportMetrics, MusicPrefs } from './types.js'
 
 // ============================================================================
@@ -284,10 +284,9 @@ async function loadAllVenueVisitorMap(
 
       const visitors = new Set<string>()
       for (const ci of checkIns) {
-        // Hash the visitor token the same way as the business's check-ins
-        const { createHash } = await import('node:crypto')
-        const token = createHash('sha256').update(`${ci.userId}${periodStart}${ANONYMIZATION_SALT}`).digest('hex')
-        visitors.add(token)
+        // Hash the visitor token the same way as the business's check-ins so
+        // journey overlap matches the same user across venues (period-stable).
+        visitors.add(hashVisitorToken(ci.userId, ANONYMIZATION_SALT))
       }
 
       venueMap.set(nodeId, { name: nodeName, visitors })
@@ -444,7 +443,7 @@ async function generateReportInternal(
   }
 
   // 4. Anonymize check-ins
-  const anonymizedCheckIns = anonymizeCheckIns(allRawCheckIns, periodStart, ANONYMIZATION_SALT)
+  const anonymizedCheckIns = anonymizeCheckIns(allRawCheckIns, ANONYMIZATION_SALT)
 
   // 5. Run analyzer modules
   const peakHours = analyzePeakHours(anonymizedCheckIns)
@@ -473,19 +472,19 @@ async function generateReportInternal(
 
   const musicProfile = analyzeMusicProfile(visitorTokens, musicPrefsMap)
 
-  // Repeat visitors: load previous period check-ins for comparison
-  const previousReport = await getPreviousReport(businessId, periodType, periodStart.split('T')[0]!)
+  // Repeat visitors: load previous period report + its persisted visitor tokens.
+  // Task 5.1 persists and exposes the tokens (previousReportData.visitorTokens);
+  // wiring them into the repeat-visitor analyzer is task 5.2.
+  const previousReportData = await getPreviousReport(businessId, periodType, periodStart.split('T')[0]!)
+  const previousReport = previousReportData?.report ?? null
   const currentVisitorTokens = new Set(visitorTokens)
 
-  // For repeat visitors, we need previous period visitor tokens
-  let previousVisitorTokens = new Set<string>()
-  if (previousReport) {
-    // Extract visitor count from previous report's crowd composition
-    // We can't reconstruct tokens, so use the previous report data
-    // For a proper implementation, we'd need to load previous period check-ins
-    // But since tokens rotate per period, we approximate from stored data
-    previousVisitorTokens = new Set<string>() // Will result in 0% repeat rate without prior raw data
-  }
+  // Prior-period hashed tokens persisted by task 5.1 (period-stable salt), so
+  // the analyzer can intersect periods for a real repeat rate. When no prior
+  // tokens exist (no prior report, or none stored), the set stays empty and the
+  // analyzer marks the rate unavailable (hasPriorData: false) instead of
+  // reporting a fabricated 0%.
+  const previousVisitorTokens = new Set(previousReportData?.visitorTokens ?? [])
 
   const repeatVisitors = analyzeRepeatVisitors(currentVisitorTokens, previousVisitorTokens)
 
@@ -497,17 +496,34 @@ async function generateReportInternal(
     pulseScore: computePulseScore(allRawCheckIns.length, crowdComposition.totalUniqueVisitors),
   }
 
-  // Previous metrics from stored report
+  // Previous metrics from stored report. The prior pulse score is read from the
+  // persisted `summary.pulseScore` (H4 fix — never a hardcoded 0). Reports
+  // generated before pulse persistence lack that field; in that case the prior
+  // pulse baseline is genuinely unknown, so the pulseScore trend is marked "no
+  // prior data" (below) rather than fabricating a +100% up delta from a 0/
+  // substituted baseline (Requirement 5.3).
+  const previousPulseScore = previousReport?.summary.pulseScore
+  const pulseScorePriorUnavailable = previousReport !== null && typeof previousPulseScore !== 'number'
   const previousMetrics: ReportMetrics | null = previousReport
     ? {
         totalCheckIns: previousReport.summary.totalCheckIns,
         uniqueVisitors: previousReport.crowdComposition.totalUniqueVisitors,
         repeatVisitorRate: previousReport.repeatVisitors.repeatRate,
-        pulseScore: 0, // Will be computed from previous report data
+        // Ignored for the trend when the prior pulse is unavailable (marked
+        // below); a real prior value flows through when present.
+        pulseScore: previousPulseScore ?? 0,
       }
     : null
 
-  const trends = analyzeTrends(currentMetrics, previousMetrics)
+  // Collect every metric whose prior baseline is genuinely unknown so its trend
+  // is marked "no prior data" (flat, no +100% from a 0/substituted baseline) and
+  // the Dashboard_UI omits the row. pulseScore (H4) when the prior report predates
+  // pulse persistence; repeatVisitorRate (H3, Requirement 4.5) when there are no
+  // prior-period visitor tokens to intersect, so the 0% is not a real computed value.
+  const unavailablePriorMetrics = new Set<string>()
+  if (pulseScorePriorUnavailable) unavailablePriorMetrics.add('pulseScore')
+  if (!repeatVisitors.hasPriorData) unavailablePriorMetrics.add('repeatVisitorRate')
+  const trends = analyzeTrends(currentMetrics, previousMetrics, unavailablePriorMetrics)
 
   // Benchmarks
   const categoryVenueMetrics = await loadCategoryVenueMetrics(businessId, nodes)
@@ -570,6 +586,9 @@ async function generateReportInternal(
       pulseState: computePulseState(allRawCheckIns.length),
       topGenre,
       headlineRecommendation,
+      // Persist the same pulse score used for the trend comparison so the next
+      // period reads a real previous value (Requirements 5.1, 5.2).
+      pulseScore: currentMetrics.pulseScore,
     },
     peakHours,
     crowdComposition,
@@ -590,8 +609,13 @@ async function generateReportInternal(
     return { skipped: 'pii' }
   }
 
-  // 8. Store report
+  // 8. Store report + its period-stable hashed visitor tokens (companion row,
+  //    server-side only, TTL) so the next period can intersect for repeat rate.
   await storeReport(report)
+  await storeReportTokens(businessId, periodType, periodStart, visitorTokens)
+  // Cache this period's metrics so the benchmark analyzer can compare this
+  // venue against comparable venues (read by loadCategoryVenueMetrics).
+  await storeBusinessMetrics(businessId, currentMetrics)
   console.log(`[generator] Report stored: reportId=${reportId}, business=${businessId}`)
 
   // 9. Send notifications (non-blocking — failures should not abort generation)

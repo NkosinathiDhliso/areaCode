@@ -75,7 +75,8 @@ describe('Feature: venue-intelligence-reports, Property 2: Peak Hours Distributi
       fc.property(checkInsArrayArb, (checkIns) => {
         const result = analyzePeakHours(checkIns)
         const maxCount = Math.max(...Object.values(result.dailyDistribution))
-        const peakDayCount = result.dailyDistribution[result.peakDay] ?? 0
+        // checkIns is non-empty (minLength 1), so peakDay is always a real day.
+        const peakDayCount = result.peakDay === null ? 0 : (result.dailyDistribution[result.peakDay] ?? 0)
         expect(peakDayCount).toBe(maxCount)
       }),
       { numRuns: 25 },

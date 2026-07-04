@@ -3,9 +3,11 @@
 
 import { ApiGatewayManagementApiClient, PostToConnectionCommand } from '@aws-sdk/client-apigatewaymanagementapi'
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb'
+import { DeleteCommand, QueryCommand as DocQueryCommand } from '@aws-sdk/lib-dynamodb'
 import { unmarshall } from '@aws-sdk/util-dynamodb'
 
 import { AWS_REGION, requireEnv } from '../config/env.js'
+import { documentClient } from '../db/dynamodb.js'
 
 const ddbClient = new DynamoDBClient({ region: AWS_REGION })
 
@@ -96,6 +98,47 @@ export async function broadcastToUser(userId: string, message: BroadcastMessage)
   await Promise.all(connections.map((conn) => sendToConnection(conn.connectionId, message)))
 
   console.log(`Broadcasted to ${connections.length} connections for user ${userId}`)
+}
+
+/**
+ * Delete every websocket-connections row belonging to a user, paginating over
+ * the UserIndex GSI's LastEvaluatedKey so no rows are missed. Used by the POPIA
+ * erasure processor (workers/cleanup.ts) so no personal data (userId) survives
+ * in the connections table. The table's primary key is `connectionId`, which
+ * the UserIndex GSI carries, so each row can be addressed for deletion. Uses
+ * `documentClient` (no manual marshall) for consistency with the erasure
+ * worker's other deletions. Returns the number of rows deleted.
+ */
+export async function deleteConnectionsByUser(userId: string): Promise<number> {
+  let deleted = 0
+  let cursor: Record<string, unknown> | undefined
+
+  do {
+    const result = await documentClient.send(
+      new DocQueryCommand({
+        TableName: CONNECTIONS_TABLE,
+        IndexName: 'UserIndex',
+        KeyConditionExpression: 'userId = :userId',
+        ProjectionExpression: 'connectionId',
+        ExpressionAttributeValues: { ':userId': userId },
+        ...(cursor ? { ExclusiveStartKey: cursor } : {}),
+      }),
+    )
+
+    for (const item of result.Items || []) {
+      await documentClient.send(
+        new DeleteCommand({
+          TableName: CONNECTIONS_TABLE,
+          Key: { connectionId: item['connectionId'] as string },
+        }),
+      )
+      deleted++
+    }
+
+    cursor = result.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (cursor)
+
+  return deleted
 }
 
 /**

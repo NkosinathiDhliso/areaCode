@@ -43,24 +43,29 @@ function toSAST(isoTimestamp: string): { hourOfDay: number; dayOfWeek: string } 
 // ============================================================================
 
 /**
- * Generate a one-way visitor token: SHA-256(userId + periodStart + salt).
- * This allows counting unique visitors and computing repeat rates across
- * periods without storing userId in the report.
+ * Generate a one-way visitor token: SHA-256(userId + salt).
+ *
+ * The salt is period-stable: it is deliberately NOT mixed with periodStart, so
+ * the same user produces the same token in every reporting period. That
+ * stability is what makes cross-period repeat-visitor intersection meaningful
+ * (a returning visitor maps to an identical token this period and last). Tokens
+ * are one-way hashes (no PII) and are only ever persisted server-side with a
+ * TTL, never returned to clients.
  */
-function hashVisitorToken(userId: string, periodStart: string, salt: string): string {
-  return createHash('sha256').update(`${userId}${periodStart}${salt}`).digest('hex')
+export function hashVisitorToken(userId: string, salt: string): string {
+  return createHash('sha256').update(`${userId}${salt}`).digest('hex')
 }
 
 /**
  * Anonymize raw check-ins by stripping all PII and producing
  * AnonymizedCheckIn[] with hashed visitor tokens and SAST time fields.
  */
-export function anonymizeCheckIns(rawCheckIns: RawCheckIn[], periodStart: string, salt: string): AnonymizedCheckIn[] {
+export function anonymizeCheckIns(rawCheckIns: RawCheckIn[], salt: string): AnonymizedCheckIn[] {
   return rawCheckIns.map((raw) => {
     const { hourOfDay, dayOfWeek } = toSAST(raw.checkedInAt)
 
     return {
-      visitorToken: hashVisitorToken(raw.userId, periodStart, salt),
+      visitorToken: hashVisitorToken(raw.userId, salt),
       nodeId: raw.nodeId,
       tier: raw.tier,
       checkedInAt: raw.checkedInAt,

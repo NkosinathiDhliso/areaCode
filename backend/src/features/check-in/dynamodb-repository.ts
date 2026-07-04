@@ -131,6 +131,46 @@ export async function getCheckInsByNode(
   return { checkIns, nextCursor }
 }
 
+/**
+ * Delete every check-in row belonging to a user, paginating over the UserIndex
+ * GSI's LastEvaluatedKey so no rows are missed on large histories. Used by the
+ * POPIA erasure processor (workers/cleanup.ts). The GSI always carries the base
+ * table key (checkInId + timestamp), so each row can be addressed for deletion.
+ * Returns the number of rows deleted.
+ */
+export async function deleteCheckInsByUser(userId: string): Promise<number> {
+  let deleted = 0
+  let cursor: Record<string, unknown> | undefined
+
+  do {
+    const result = await documentClient.send(
+      new QueryCommand({
+        TableName: TableNames.checkins,
+        IndexName: 'UserIndex',
+        KeyConditionExpression: 'userId = :userId',
+        ProjectionExpression: 'checkInId, #ts',
+        ExpressionAttributeNames: { '#ts': 'timestamp' },
+        ExpressionAttributeValues: { ':userId': userId },
+        ...(cursor ? { ExclusiveStartKey: cursor } : {}),
+      }),
+    )
+
+    for (const item of result.Items || []) {
+      await documentClient.send(
+        new DeleteCommand({
+          TableName: TableNames.checkins,
+          Key: { checkInId: item['checkInId'] as string, timestamp: item['timestamp'] as number },
+        }),
+      )
+      deleted++
+    }
+
+    cursor = result.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (cursor)
+
+  return deleted
+}
+
 export async function getRecentCheckInCount(userId: string, nodeId: string, hours: number): Promise<number> {
   const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
 
@@ -187,49 +227,28 @@ export async function getUserCheckInCount(userId: string): Promise<number> {
 // LEADERBOARD
 // ============================================================================
 
-export async function getLeaderboard(
-  cityId: string,
-  weekEnding: string,
-  limit: number = 100,
-): Promise<Array<{ userId: string; rank: number; checkInCount: number }>> {
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.appData,
-      KeyConditionExpression: 'pk = :pk',
-      ExpressionAttributeValues: {
-        ':pk': `LEADERBOARD#${cityId}#${weekEnding}`,
-      },
-      ScanIndexForward: true,
-      Limit: limit,
-    }),
-  )
-
-  return (result.Items || []).map((item, index) => ({
-    userId: item['userId'] as string,
-    rank: (item['rank'] as number) || index + 1,
-    checkInCount: (item['checkInCount'] as number) ?? 0,
-  }))
-}
-
-export async function updateLeaderboardEntry(
-  cityId: string,
-  weekEnding: string,
-  userId: string,
-  checkInCount: number,
-  rank: number,
-): Promise<void> {
+/**
+ * Increment a user's current-period leaderboard entry on check-in.
+ *
+ * Canonical, week-agnostic key (MUST match the read in social/repository.ts
+ * `getLeaderboardTop50` and the weekly reset worker so the three call sites can
+ * never drift): pk = LEADERBOARD#{cityId}, sk = USER#{userId}.
+ *
+ * A single atomic `ADD checkInCount :one` keeps the hot check-in path to one
+ * conditional-free write (no read-modify-write), and creates the row on first
+ * check-in. The weekly reset worker clears the partition, so no week is encoded
+ * in the key and no TTL is set here.
+ */
+export async function incrementLeaderboard(cityId: string, userId: string): Promise<void> {
   await documentClient.send(
-    new PutCommand({
+    new UpdateCommand({
       TableName: TableNames.appData,
-      Item: {
-        pk: `LEADERBOARD#${cityId}#${weekEnding}`,
-        sk: `RANK#${rank.toString().padStart(4, '0')}#${userId}`,
-        userId,
-        checkInCount,
-        rank,
-        cityId,
-        weekEnding,
-        updatedAt: new Date().toISOString(),
+      Key: { pk: `LEADERBOARD#${cityId}`, sk: `USER#${userId}` },
+      UpdateExpression: 'ADD checkInCount :one SET userId = :u, updatedAt = :t',
+      ExpressionAttributeValues: {
+        ':one': 1,
+        ':u': userId,
+        ':t': new Date().toISOString(),
       },
     }),
   )

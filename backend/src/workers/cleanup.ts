@@ -1,7 +1,10 @@
 // DynamoDB-backed cleanup worker (replaces Prisma)
-import { ScanCommand, DeleteCommand, UpdateCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb'
+import { ScanCommand, QueryCommand, DeleteCommand, UpdateCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../shared/db/dynamodb.js'
-import { deleteUser } from '../features/auth/dynamodb-repository.js'
+import { deleteUser, getUserById } from '../features/auth/dynamodb-repository.js'
+import { deleteCheckInsByUser } from '../features/check-in/dynamodb-repository.js'
+import { deleteConnectionsByUser } from '../shared/websocket/broadcast.js'
+import { deleteUserByUsername } from '../shared/cognito/client.js'
 
 /**
  * Cleanup worker , processes right-to-erasure queue + housekeeping.
@@ -140,46 +143,183 @@ async function sweepExpiredRows(args: {
   return deleted
 }
 
+/**
+ * Anchored delete of a single app-data partition. Queries the base table by
+ * `pk` (or a GSI1 partition by `gsi1pk`), paginates over `LastEvaluatedKey`,
+ * and `DeleteItem`s every returned row by its real pk/sk. Replaces the old
+ * unanchored `contains(pk, uid) OR contains(sk, uid)` full-table Scan (which
+ * also only read its first page): deletion is now complete regardless of table
+ * size and needs no table scan (R2.3, R2.4). A GSI projection always carries
+ * the base table's pk/sk, so rows found via GSI1 are still deletable by key.
+ */
+async function deleteAppDataPartition(partitionValue: string, opts?: { index: 'GSI1' }): Promise<number> {
+  const keyAttr = opts?.index === 'GSI1' ? 'gsi1pk' : 'pk'
+  let deleted = 0
+  let cursor: Record<string, unknown> | undefined
+
+  do {
+    const params: Record<string, unknown> = {
+      TableName: TableNames.appData,
+      KeyConditionExpression: `${keyAttr} = :pk`,
+      ExpressionAttributeValues: { ':pk': partitionValue },
+    }
+    if (opts?.index) params['IndexName'] = opts.index
+    if (cursor) params['ExclusiveStartKey'] = cursor
+
+    const page = await documentClient.send(new QueryCommand(params as any))
+    for (const item of page.Items || []) {
+      const pk = item['pk']
+      const sk = item['sk']
+      if (typeof pk === 'string' && typeof sk === 'string') {
+        await documentClient.send(new DeleteCommand({ TableName: TableNames.appData, Key: { pk, sk } }))
+        deleted++
+      }
+    }
+    cursor = page.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (cursor)
+
+  return deleted
+}
+
 export async function handler() {
   console.log('[cleanup] Starting cleanup worker')
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
   // ─── Process erasure requests older than 30 days ──────────────────────
-  const erasureResult = await documentClient.send(
-    new ScanCommand({
+  // Paginate the pending-request scan over LastEvaluatedKey (R2.3), collecting
+  // every page's requests before processing — same do/while + ExclusiveStartKey
+  // cursor pattern as `sweepExpiredRows` / `deleteAppDataPartition` above. A
+  // single Scan page would silently skip pending requests beyond the first page
+  // once the queue outgrows one page.
+  const erasureRequests: Array<Record<string, unknown>> = []
+  let erasureCursor: Record<string, unknown> | undefined
+  do {
+    const erasureParams: Record<string, unknown> = {
       TableName: TableNames.appData,
       FilterExpression: 'begins_with(pk, :prefix) AND #status = :pending AND requestedAt < :cutoff',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':prefix': 'ERASURE#', ':pending': 'pending', ':cutoff': thirtyDaysAgo },
-    }),
-  )
+    }
+    if (erasureCursor) erasureParams['ExclusiveStartKey'] = erasureCursor
+    const erasureResult = await documentClient.send(new ScanCommand(erasureParams as any))
+    for (const req of erasureResult.Items || []) erasureRequests.push(req)
+    erasureCursor = erasureResult.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (erasureCursor)
 
   let erasedCount = 0
-  for (const req of erasureResult.Items || []) {
+  for (const req of erasureRequests) {
     const userId = req['userId'] as string
     try {
-      // Delete user from users table
-      if (userId) await deleteUser(userId)
+      // Resolve the Cognito username/email from the user row. The consumer pool
+      // is keyed on email (see auth/service.ts: deleteUserByUsername('consumer',
+      // email)), and email is personal data under POPIA, so the Cognito deletion
+      // needs this value. The user row is the single source of truth for it, and
+      // the deletion order below guarantees the row still exists whenever this
+      // value is needed: every other store (checkins, websocket-connections,
+      // app-data, Cognito) is cleared BEFORE the users row, so any failure that
+      // leaves the request pending still leaves the users row intact for the
+      // next run to re-resolve the username. The users row is deleted last, only
+      // after Cognito is gone, so no run can orphan the Cognito account.
+      const userRow = userId ? await getUserById(userId) : null
+      const cognitoUsername = userRow?.email ?? userRow?.username
+      console.log(`[cleanup] Erasure ${userId}: cognito username resolved=${Boolean(cognitoUsername)}`)
 
-      // Delete related app_data items (follows, tokens, prefs, etc.)
-      const userItems = await documentClient.send(
-        new ScanCommand({
-          TableName: TableNames.appData,
-          FilterExpression: 'contains(pk, :uid) OR contains(sk, :uid)',
-          ExpressionAttributeValues: { ':uid': userId },
-        }),
-      )
-      for (const item of userItems.Items || []) {
-        await documentClient.send(
-          new DeleteCommand({
-            TableName: TableNames.appData,
-            Key: { pk: item['pk'] as string, sk: item['sk'] as string },
-          }),
-        )
+      // Delete the user's check-in history from the dedicated checkins table.
+      // Paginated over the UserIndex GSI so no rows are missed on large
+      // histories. A failure here throws and is caught below, leaving the
+      // request not-completed for retry (completion gating is task 2.6).
+      if (userId) {
+        const checkinsDeleted = await deleteCheckInsByUser(userId)
+        console.log(`[cleanup] Erasure ${userId}: checkins deleted=${checkinsDeleted}`)
       }
 
-      // Mark erasure as completed
+      // Delete the user's websocket-connections rows (keyed by userId via the
+      // UserIndex GSI) so no personal data survives in the connections table.
+      // Paginated inside the helper over LastEvaluatedKey. A failure here throws
+      // and is caught below, leaving the request not-completed for retry
+      // (completion gating is task 2.6).
+      if (userId) {
+        const connectionsDeleted = await deleteConnectionsByUser(userId)
+        console.log(`[cleanup] Erasure ${userId}: websocket connections deleted=${connectionsDeleted}`)
+      }
+
+      // Delete the user's app-data personal data. Every row lives in a real,
+      // anchored partition (one per row type across the feature repositories),
+      // so we Query each partition and DeleteItem every row — no unanchored
+      // contains() full-table scan (R2.4), paginated over LastEvaluatedKey so
+      // no row is missed on large partitions (R2.3). A failure here throws and
+      // is caught below, leaving the request not-completed for retry
+      // (completion gating is task 2.6).
+      //
+      // Deliberately NOT touched here:
+      //  - ERASURE#{userId} (the request row itself) — its own completion
+      //    update runs below (task 2.6); the old contains() scan wrongly
+      //    matched and deleted it, then resurrected it via the update.
+      //  - REDEMPTION#{id} (gsi1pk USER_REDEMPTIONS#{userId}) — financial
+      //    records under retention; keyed by redemptionId, not the user, so
+      //    the old scan never matched them either.
+      //  - ABUSE#{flagId} (sk USER#{userId}) — moderation/safety records with
+      //    no per-user anchor; deleting them would require the very full-table
+      //    scan R2.4 removes. Flagged, not silently dropped.
+      if (userId) {
+        // Rows the user owns (partition key IS the user).
+        const ownedPartitions = [
+          `USER#${userId}`, // consent (sk CONSENT#{id})
+          `FOLLOW#${userId}`, // outgoing follow edges
+          `BLOCK#${userId}`, // outgoing block edges
+          `NOTIF#${userId}`, // in-app notifications
+          `NOTIF_PREFS#${userId}`, // notification preferences
+          `USER_TOKEN#${userId}`, // web-push device tokens
+          `MILESTONE#${userId}`, // milestones / achievements
+          `COPTOUT#${userId}`, // campaign opt-outs
+        ]
+        // Rows owned by other entities that persist this user's id, anchored
+        // via the GSI1 partition that embeds the user (reverse edges + admin
+        // messages). Keeps the coverage the old contains(sk) scan had, still
+        // anchored (no full-table scan).
+        const referencingGsi1Partitions = [
+          `FOLLOWERS#${userId}`, // others following this user
+          `BLOCKED_BY#${userId}`, // others who blocked this user
+          `USER_MESSAGES#${userId}`, // admin messages addressed to this user
+        ]
+
+        let appDataDeleted = 0
+        for (const partition of ownedPartitions) {
+          appDataDeleted += await deleteAppDataPartition(partition)
+        }
+        for (const partition of referencingGsi1Partitions) {
+          appDataDeleted += await deleteAppDataPartition(partition, { index: 'GSI1' })
+        }
+        console.log(`[cleanup] Erasure ${userId}: app-data rows deleted=${appDataDeleted}`)
+      }
+
+      // Delete the user's Cognito consumer account. Email is personal data under
+      // POPIA, so the account must go too. Reuses the shared helper, which is
+      // idempotent on "user not found" (UserNotFoundException swallowed) but
+      // rethrows any other fault, so a real failure here throws and is caught
+      // below, leaving the request not-completed for retry (completion gating is
+      // task 2.6). Only attempt when a username was resolved above.
+      if (cognitoUsername) {
+        await deleteUserByUsername('consumer', cognitoUsername)
+        console.log(`[cleanup] Erasure ${userId}: cognito account deleted`)
+      }
+
+      // Delete the users row LAST — after every other store and the Cognito
+      // account are cleared. The users row is the single source of truth for
+      // the Cognito username, so deleting it last keeps the retry path correct:
+      // if any earlier step throws, the request stays pending (see catch below)
+      // with the users row intact, and the next run re-resolves the username and
+      // retries. Once this delete runs, Cognito is already gone, so no run can
+      // ever orphan the Cognito account. deleteUser is idempotent (no-ops on a
+      // missing row), so a retry after this point is safe.
+      if (userId) await deleteUser(userId)
+
+      // Mark erasure as completed. Reached ONLY after every deletion step
+      // (checkins, websocket-connections, app-data, Cognito, users row) has
+      // succeeded — any throw above skips this update and hits the catch, so the
+      // request stays 'pending' for the next run. All deletion steps are
+      // idempotent, so re-running after a partial success does not error.
       await documentClient.send(
         new UpdateCommand({
           TableName: TableNames.appData,

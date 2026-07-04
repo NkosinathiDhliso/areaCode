@@ -19,6 +19,15 @@ const URL_PATTERN = /https?:\/\/[^\s"',}]+/i
 // Field names that indicate PII when they contain string values
 const PII_FIELD_NAMES = ['userId', 'cognitoSub', 'displayName', 'phone', 'email', 'avatarUrl']
 
+// Structural identifiers that are legitimately UUID-shaped but are NOT personal
+// data: a report id, a business id, and a venue node id. They are opaque
+// resource identifiers, not people. Excluding them from the UUID content check
+// prevents a false positive that would otherwise flag every report (its own
+// `reportId`/`businessId`/`nodeId` are randomUUIDs) as PII and skip generation.
+// Person-identifying UUIDs (`userId`, `cognitoSub`) are still caught by the
+// PII_FIELD_NAMES check above and must never appear in a report.
+const ALLOWED_UUID_FIELDS = new Set(['reportId', 'businessId', 'nodeId'])
+
 // ============================================================================
 // Scanner Implementation
 // ============================================================================
@@ -27,12 +36,14 @@ const PII_FIELD_NAMES = ['userId', 'cognitoSub', 'displayName', 'phone', 'email'
  * Recursively scan a parsed JSON object for PII patterns.
  * Returns field paths where PII was detected.
  */
-function scanObject(obj: unknown, path: string, violations: string[]): void {
+function scanObject(obj: unknown, path: string, violations: string[], key?: string): void {
   if (obj === null || obj === undefined) return
 
   if (typeof obj === 'string') {
-    // Check string values against PII patterns
-    if (UUID_PATTERN.test(obj)) {
+    // Check string values against PII patterns. Skip the UUID check for
+    // structural identifier fields (reportId/businessId/nodeId) that are
+    // legitimately UUID-shaped resource ids, not personal data.
+    if (!(key !== undefined && ALLOWED_UUID_FIELDS.has(key)) && UUID_PATTERN.test(obj)) {
       violations.push(`${path}: UUID pattern detected`)
     }
     if (PHONE_PATTERN.test(obj)) {
@@ -49,7 +60,10 @@ function scanObject(obj: unknown, path: string, violations: string[]): void {
 
   if (Array.isArray(obj)) {
     for (let i = 0; i < obj.length; i++) {
-      scanObject(obj[i], `${path}[${i}]`, violations)
+      // Array elements inherit the array's field key so an array of structural
+      // ids (e.g. nodes[].nodeId is handled at the object level) still resolves
+      // its own key; primitives in a keyed array keep the array's key.
+      scanObject(obj[i], `${path}[${i}]`, violations, key)
     }
     return
   }
@@ -63,7 +77,7 @@ function scanObject(obj: unknown, path: string, violations: string[]): void {
         violations.push(`${fieldPath}: PII field name with string value`)
       }
 
-      scanObject(value, fieldPath, violations)
+      scanObject(value, fieldPath, violations, key)
     }
   }
 }

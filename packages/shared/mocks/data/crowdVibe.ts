@@ -171,6 +171,7 @@ export function buildBusinessMusicAudience(): BusinessMusicAudience {
   ]
 
   return {
+    hasInsufficientData: false,
     genreDistribution,
     archetypeBreakdown,
     peakArchetypeByTime,

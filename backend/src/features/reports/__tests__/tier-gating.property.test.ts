@@ -54,6 +54,7 @@ const reportSummaryArb = fc.record({
   pulseState: fc.constantFrom(...PULSE_STATES),
   topGenre: fc.option(fc.constantFrom(...GENRES), { nil: null }),
   headlineRecommendation: fc.string({ minLength: 1, maxLength: 200 }),
+  pulseScore: fc.integer({ min: 0, max: 100 }),
 })
 
 const peakHoursResultArb = fc.record({
@@ -70,12 +71,14 @@ const peakHoursResultArb = fc.record({
     { minLength: 0, maxLength: 3 },
   ),
   peakDay: fc.constantFrom(...DAYS_OF_WEEK),
+  hasInsufficientData: fc.boolean(),
 })
 
 const crowdCompositionResultArb = fc.record({
   tierPercentages: fc.constant(Object.fromEntries(TIERS_LIST.map((t) => [t, 20])) as Record<string, number>),
   tierUniqueCounts: fc.constant(Object.fromEntries(TIERS_LIST.map((t) => [t, 10])) as Record<string, number>),
   totalUniqueVisitors: fc.integer({ min: 0, max: 2500 }),
+  hasInsufficientData: fc.boolean(),
 })
 
 const musicProfileResultArb = fc.record({
@@ -89,6 +92,7 @@ const musicProfileResultArb = fc.record({
 
 const repeatVisitorResultArb = fc.record({
   repeatRate: safeDouble({ min: 0, max: 100 }),
+  hasPriorData: fc.boolean(),
   firstTimeVisitorCount: fc.integer({ min: 0, max: 1000 }),
   totalUniqueVisitors: fc.integer({ min: 0, max: 1000 }),
 })

@@ -46,4 +46,14 @@ export const TableNames = {
   },
 }
 
+/**
+ * True when a DynamoDB write failed its ConditionExpression, i.e. the
+ * legitimate "already exists / already claimed" signal. Every conditional
+ * write shares this one detector so callers can distinguish an expected
+ * conflict from a real (transient) failure that must surface.
+ */
+export function isConditionalCheckFailedError(err: unknown): boolean {
+  return (err as { name?: string } | null)?.name === 'ConditionalCheckFailedException'
+}
+
 export { client }

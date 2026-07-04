@@ -90,8 +90,12 @@ interface RedemptionRow {
  * Pull all redemptions for a business since a cutoff. Filters in-server
  * because there's no GSI on businessId for REDEMPTION# rows. With low
  * volume this is fine; if scans grow too costly we add a GSI later.
+ *
+ * Exported so the single redemption read path is reused by the Live panel's
+ * same-day `rewardsClaimed` count (`getLiveStats`) rather than re-scanning
+ * REDEMPTION# rows a second way (dry-reuse-no-duplication).
  */
-async function listRedemptionsForBusiness(businessId: string, sinceIso: string): Promise<RedemptionRow[]> {
+export async function listRedemptionsForBusiness(businessId: string, sinceIso: string): Promise<RedemptionRow[]> {
   const out: RedemptionRow[] = []
   let exclusiveStartKey: Record<string, unknown> | undefined
   do {

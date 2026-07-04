@@ -39,6 +39,7 @@
   "biz.rewards.slotWarning": "Slot count cannot be raised once live. Set a realistic number.",
   "biz.audience.title": "Audience Insights",
   "biz.audience.minUsers": "Minimum 20 unique visitors required",
+  "biz.audience.notEnoughData": "Not enough data yet",
   "biz.boost.title": "Boost Your Node",
   "biz.settings.title": "Settings",
   "biz.settings.subscription": "Subscription",

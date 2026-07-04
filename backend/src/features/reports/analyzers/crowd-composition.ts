@@ -1,6 +1,18 @@
 import type { AnonymizedCheckIn, CrowdCompositionResult } from '../types.js'
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+/**
+ * Minimum number of unique visitors required for meaningful crowd composition.
+ * Below this, tier percentages such as "100%" from a single check-in are not
+ * trustworthy. Mirrors the insufficient-data gates on the other analyzers
+ * (music-profile 5, benchmarks 3, journey 10).
+ */
+const MIN_VISITORS_FOR_DATA = 5
+
+// ============================================================================
 // Crowd Composition Analyzer
 // ============================================================================
 
@@ -20,6 +32,7 @@ export function analyzeCrowdComposition(checkIns: AnonymizedCheckIn[]): CrowdCom
       tierPercentages: {},
       tierUniqueCounts: {},
       totalUniqueVisitors: 0,
+      hasInsufficientData: true,
     }
   }
 
@@ -63,5 +76,6 @@ export function analyzeCrowdComposition(checkIns: AnonymizedCheckIn[]): CrowdCom
     tierPercentages,
     tierUniqueCounts,
     totalUniqueVisitors: allVisitors.size,
+    hasInsufficientData: allVisitors.size < MIN_VISITORS_FOR_DATA,
   }
 }

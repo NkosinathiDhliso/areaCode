@@ -8,6 +8,13 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i)
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const
 
+/**
+ * Minimum number of check-ins required for meaningful peak-hours analysis.
+ * Mirrors the insufficient-data gates on the other analyzers
+ * (music-profile 5, benchmarks 3, journey 10).
+ */
+const MIN_CHECKINS_FOR_DATA = 5
+
 // ============================================================================
 // Peak Hours Analyzer
 // ============================================================================
@@ -44,7 +51,7 @@ export function analyzePeakHours(checkIns: AnonymizedCheckIn[]): PeakHoursResult
   // Find top 3 contiguous peak hour windows
   const topWindows = findTopWindows(hourlyDistribution, 3)
 
-  // Find peak day
+  // Find peak day (null when there are no check-ins)
   const peakDay = findPeakDay(dailyDistribution)
 
   return {
@@ -52,6 +59,7 @@ export function analyzePeakHours(checkIns: AnonymizedCheckIn[]): PeakHoursResult
     dailyDistribution,
     topWindows,
     peakDay,
+    hasInsufficientData: checkIns.length < MIN_CHECKINS_FOR_DATA,
   }
 }
 
@@ -132,11 +140,12 @@ function findTopWindows(
 
 /**
  * Find the day of week with the highest check-in count.
- * Defaults to 'Monday' when all counts are zero.
+ * Returns null ("no peak day") when there are no check-ins, rather than
+ * defaulting to 'Monday' and implying a peak that does not exist.
  */
-function findPeakDay(dailyDistribution: Record<string, number>): string {
-  let peakDay: string = DAYS_OF_WEEK[0]
-  let maxCount = -1
+function findPeakDay(dailyDistribution: Record<string, number>): string | null {
+  let peakDay: string | null = null
+  let maxCount = 0
 
   for (const day of DAYS_OF_WEEK) {
     const count = dailyDistribution[day] ?? 0

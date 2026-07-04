@@ -78,6 +78,10 @@ export function generateRecommendations(report: ReportSections): RecommendationR
 function generatePeakHoursRecommendation(report: ReportSections): RecommendationResult['recommendations'][0] | null {
   const { peakHours } = report
 
+  // Suppress the staffing recommendation when peak-hours data is insufficient:
+  // a confident staffing claim from thin data would over-claim (honest-presence).
+  if (peakHours.hasInsufficientData) return null
+
   if (peakHours.topWindows.length === 0) return null
 
   // Compute average hourly count

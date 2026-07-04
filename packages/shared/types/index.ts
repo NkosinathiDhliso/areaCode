@@ -146,8 +146,35 @@ export interface CrowdVibeSnapshot {
   totalCheckedIn: number
 }
 
-// Business music audience data
+// ─── Business analytics: Insufficient_Data_State contract ───────────────────
+// A metric group is either a computed value or `null` (the wire signal for
+// "not enough data yet"). Music audience carries an explicit
+// `hasInsufficientData` flag. A hardcoded `0`/`{}`/`[]` is never a real value.
+// See .kiro/specs/business-intelligence-honesty/design.md and honest-presence.md.
+
+// Live panel payload: GET /v1/business/me/live-stats
+export interface LiveStats {
+  checkInsToday: number
+  totalCheckIns: number
+  rewardsClaimed: number
+  // null => pulse unavailable; the Live panel omits the tile rather than showing 0.
+  pulseScore: number | null
+}
+
+// Audience panel payload: GET /v1/business/me/audience
+export interface AudienceAnalytics {
+  totalUniqueVisitors: number
+  // null => not enough data yet; the panel renders its honest empty state.
+  repeatVsNew: { repeat: number; new: number } | null
+  tierDistribution: Record<string, number> | null
+  peakHours: string[] | null
+}
+
+// Business music audience data: GET /v1/business/me/audience/music
 export interface BusinessMusicAudience {
+  // true => not enough visitors have music prefs; MusicInsightsSection shows
+  // its honest "not enough music data" state.
+  hasInsufficientData: boolean
   genreDistribution: Partial<Record<MusicGenre, number>>
   archetypeBreakdown: Record<string, number>
   peakArchetypeByTime: Array<{

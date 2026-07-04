@@ -1,5 +1,6 @@
 // DynamoDB-backed Admin Repository (replaces Prisma)
 import { GetCommand, PutCommand, QueryCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+import type { ScanCommandInput } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
 import {
@@ -467,80 +468,79 @@ export async function reviewAbuseFlag(flagId: string) {
 // Simple KV cache for dashboard metrics (60s TTL)
 let metricsCache: { data: Record<string, unknown>; expiresAt: number } | null = null
 
+// Paginated COUNT: loops over LastEvaluatedKey, summing per-page Count until the
+// scan is exhausted, so the total reflects the whole table/filter rather than a
+// single Scan page. See data-integrity-ops-hardening (H5).
+// Exported for unit testing of the multi-page summation (H5, task 1.2).
+export async function countAll(params: ScanCommandInput): Promise<number> {
+  let total = 0
+  let exclusiveStartKey: Record<string, unknown> | undefined
+  do {
+    const result = await documentClient.send(
+      new ScanCommand({ ...params, Select: 'COUNT', ExclusiveStartKey: exclusiveStartKey }),
+    )
+    total += result.Count ?? 0
+    exclusiveStartKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (exclusiveStartKey)
+  return total
+}
+
 export async function getDashboardMetrics() {
   if (metricsCache && metricsCache.expiresAt > Date.now()) {
     return metricsCache.data
   }
 
-  // Count consumers
-  const usersResult = await documentClient.send(new ScanCommand({ TableName: TableNames.users, Select: 'COUNT' }))
-  const totalConsumers = usersResult.Count ?? 0
-
-  // Count businesses
-  const bizResult = await documentClient.send(new ScanCommand({ TableName: TableNames.businesses, Select: 'COUNT' }))
-  const totalBusinesses = bizResult.Count ?? 0
-
-  // Count all check-ins
-  const checkInsResult = await documentClient.send(new ScanCommand({ TableName: TableNames.checkins, Select: 'COUNT' }))
-  const totalCheckInsAllTime = checkInsResult.Count ?? 0
-
-  // Count today's check-ins
   const today = new Date().toISOString().slice(0, 10)
-  const todayResult = await documentClient.send(
-    new ScanCommand({
+
+  const [
+    totalConsumers,
+    totalBusinesses,
+    totalCheckInsAllTime,
+    totalCheckInsToday,
+    activeRewards,
+    pendingReports,
+    pendingErasures,
+    unreviewedAbuseFlags,
+  ] = await Promise.all([
+    // Count consumers
+    countAll({ TableName: TableNames.users }),
+    // Count businesses
+    countAll({ TableName: TableNames.businesses }),
+    // Count all check-ins
+    countAll({ TableName: TableNames.checkins }),
+    // Count today's check-ins
+    countAll({
       TableName: TableNames.checkins,
       FilterExpression: 'begins_with(checkedInAt, :today)',
       ExpressionAttributeValues: { ':today': today },
-      Select: 'COUNT',
     }),
-  )
-  const totalCheckInsToday = todayResult.Count ?? 0
-
-  // Count active rewards
-  const rewardsResult = await documentClient.send(
-    new ScanCommand({
+    // Count active rewards
+    countAll({
       TableName: TableNames.rewards,
       FilterExpression: 'isActive = :active',
       ExpressionAttributeValues: { ':active': true },
-      Select: 'COUNT',
     }),
-  )
-  const activeRewards = rewardsResult.Count ?? 0
-
-  // Count pending reports
-  const reportsResult = await documentClient.send(
-    new ScanCommand({
+    // Count pending reports
+    countAll({
       TableName: TableNames.appData,
       FilterExpression: 'begins_with(pk, :prefix) AND #status = :pending',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':prefix': 'REPORT#', ':pending': 'pending' },
-      Select: 'COUNT',
     }),
-  )
-  const pendingReports = reportsResult.Count ?? 0
-
-  // Count pending erasures
-  const erasureResult = await documentClient.send(
-    new ScanCommand({
+    // Count pending erasures
+    countAll({
       TableName: TableNames.appData,
       FilterExpression: 'begins_with(pk, :prefix) AND #status = :pending',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':prefix': 'ERASURE#', ':pending': 'pending' },
-      Select: 'COUNT',
     }),
-  )
-  const pendingErasures = erasureResult.Count ?? 0
-
-  // Count unreviewed abuse flags
-  const flagsResult = await documentClient.send(
-    new ScanCommand({
+    // Count unreviewed abuse flags
+    countAll({
       TableName: TableNames.appData,
       FilterExpression: 'begins_with(pk, :prefix) AND reviewed = :rev',
       ExpressionAttributeValues: { ':prefix': 'ABUSE#', ':rev': false },
-      Select: 'COUNT',
     }),
-  )
-  const unreviewedAbuseFlags = flagsResult.Count ?? 0
+  ])
 
   const data = {
     totalConsumers,

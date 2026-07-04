@@ -8,8 +8,17 @@ import {
   ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb'
-import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
+import { documentClient, TableNames, isConditionalCheckFailedError } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
+import { kvGet } from '../../shared/kv/dynamodb-kv.js'
+import { requireEnv } from '../../shared/config/env.js'
+import { listRedemptionsForBusiness } from './staff-leaderboard.js'
+import { analyzeCrowdComposition } from '../reports/analyzers/crowd-composition.js'
+import { analyzePeakHours } from '../reports/analyzers/peak-hours.js'
+import { analyzeMusicProfile } from '../reports/analyzers/music-profile.js'
+import { anonymizeCheckIns, type RawCheckIn } from '../reports/anonymize.js'
+import type { MusicPrefs } from '../reports/types.js'
+import type { AudienceAnalytics, BusinessMusicAudience, LiveStats, MusicGenre } from '@area-code/shared/types'
 import { randomBytes } from 'node:crypto'
 import {
   getBusinessById as getBusinessDynamo,
@@ -225,7 +234,18 @@ export async function deactivateBusinessRewards(businessId: string) {
 
 // ─── Live Stats ─────────────────────────────────────────────────────────────
 
-export async function getLiveStats(businessId: string) {
+/**
+ * SAST is UTC+2. Start of the current SAST calendar day expressed as a UTC ISO
+ * string, used to count "same-day" redemptions. Mirrors the SAST day-boundary
+ * arithmetic used by streaks / pulse-decay (00:00 SAST = 22:00 UTC prev day).
+ */
+const SAST_OFFSET_MS = 2 * 60 * 60 * 1000
+function startOfSastDayIso(now: number = Date.now()): string {
+  const sastDayStr = new Date(now + SAST_OFFSET_MS).toISOString().slice(0, 10)
+  return new Date(new Date(`${sastDayStr}T00:00:00Z`).getTime() - SAST_OFFSET_MS).toISOString()
+}
+
+export async function getLiveStats(businessId: string): Promise<LiveStats> {
   const nodesResult = await documentClient.send(
     new QueryCommand({
       TableName: TableNames.nodes,
@@ -234,18 +254,45 @@ export async function getLiveStats(businessId: string) {
       ExpressionAttributeValues: { ':bid': businessId },
     }),
   )
-  const nodeIds = (nodesResult.Items || []).map((n) => n['nodeId'] as string)
+  const nodes = (nodesResult.Items || []).map((n) => ({
+    nodeId: n['nodeId'] as string,
+    cityId: n['cityId'] as string | undefined,
+  }))
 
   let checkInsToday = 0
   let totalCheckIns = 0
-  for (const nid of nodeIds) {
-    const { checkIns: todayCIs } = await getCheckInsByNode(nid, { hours: 24 })
+  // Headline pulseScore is the MAX per-node decaying pulse (the business's
+  // most-alive venue), never a sum: a sum would break the 0-N scale the
+  // consumer map uses for a single node (Req 1.2). Genuine absence of every
+  // node's pulse row stays `null` -- never a fabricated 0 (Req 1.4).
+  let maxPulse: number | null = null
+  for (const { nodeId, cityId } of nodes) {
+    const { checkIns: todayCIs } = await getCheckInsByNode(nodeId, { hours: 24 })
     checkInsToday += todayCIs.length
-    const { checkIns: allCIs } = await getCheckInsByNode(nid, {})
+    const { checkIns: allCIs } = await getCheckInsByNode(nodeId, {})
     totalCheckIns += allCIs.length
+
+    // Reuse the same pulse KV read path the consumer map / pulse-decay worker
+    // use (`pulse:{cityId}:{nodeId}`). No silent catch: a KV failure must
+    // surface, not degrade into a fake 0 (no-fallbacks-no-legacy).
+    if (cityId) {
+      const scoreStr = await kvGet(`pulse:${cityId}:${nodeId}`)
+      if (scoreStr !== null) {
+        const score = parseFloat(scoreStr)
+        if (!Number.isNaN(score)) {
+          maxPulse = maxPulse === null ? score : Math.max(maxPulse, score)
+        }
+      }
+    }
   }
 
-  return { checkInsToday, rewardsClaimed: 0, pulseScore: 0, totalCheckIns }
+  // rewardsClaimed: real count of REDEMPTION# rows for this business redeemed
+  // on the current SAST day. Reuses the single redemption read path
+  // (`listRedemptionsForBusiness`) rather than a second REDEMPTION# scan.
+  const redemptions = await listRedemptionsForBusiness(businessId, startOfSastDayIso())
+  const rewardsClaimed = redemptions.length
+
+  return { checkInsToday, rewardsClaimed, pulseScore: maxPulse, totalCheckIns }
 }
 
 // ─── Business Nodes ─────────────────────────────────────────────────────────
@@ -264,7 +311,74 @@ export async function getNodesForBusiness(businessId: string) {
 
 // ─── Audience Analytics ─────────────────────────────────────────────────────
 
-export async function getAudienceAnalytics(businessId: string) {
+// Same anonymization salt the report pipeline uses (generator.ts). Dashboard
+// visitor tokens are ephemeral — never persisted, never returned to a client —
+// but deriving them through the one shared salt keeps token generation in a
+// single home (dry-reuse-no-duplication) and requireEnv crashes prod if the
+// var is unset rather than masking it with a default (no-fallbacks-no-legacy).
+const AUDIENCE_ANONYMIZATION_SALT = requireEnv('AREA_CODE_ANONYMIZATION_SALT', 'dev-anonymization-salt')
+
+/**
+ * Load user tiers via BatchGetItem, mirroring the report generator's
+ * `loadUserData` projection (dry-reuse-no-duplication). Returns userId -> tier.
+ * BatchGetItem caps at 100 keys per request. Reads that back a metric must
+ * surface failure rather than degrade to a silent default (no-fallbacks): the
+ * only default here is the base `local` tier for a genuinely tier-less user
+ * row, matching the generator's `?? 'local'`.
+ */
+async function loadUserTiers(userIds: string[]): Promise<Map<string, string>> {
+  const tierByUser = new Map<string, string>()
+  const batchSize = 100
+  for (let i = 0; i < userIds.length; i += batchSize) {
+    const batch = userIds.slice(i, i + batchSize)
+    const result = await documentClient.send(
+      new BatchGetCommand({
+        RequestItems: {
+          [TableNames.users]: {
+            Keys: batch.map((userId) => ({ userId })),
+            ProjectionExpression: 'userId, tier',
+          },
+        },
+      }),
+    )
+    const items = result.Responses?.[TableNames.users] ?? []
+    for (const item of items) {
+      const userId = item['userId'] as string
+      tierByUser.set(userId, (item['tier'] as string) ?? 'local')
+    }
+  }
+  return tierByUser
+}
+
+/**
+ * Format a peak-hours analyzer window as the "HH:00-HH:00" range string the
+ * Audience panel renders. `endHour` is the last full hour in the window, so the
+ * label's end is exclusive: hours 18,19,20 -> "18:00-21:00".
+ */
+function formatPeakWindow(window: { startHour: number; endHour: number }): string {
+  const pad = (h: number) => String(h).padStart(2, '0')
+  return `${pad(window.startHour)}:00-${pad((window.endHour + 1) % 24)}:00`
+}
+
+/**
+ * Load every check-in for a node, paginating past the per-page limit. The
+ * dashboard repeat/new definition (Req 2.1) needs the whole distinct-user
+ * history, not a single 50-row page.
+ */
+async function loadAllCheckInsForNode(nodeId: string): Promise<Array<{ userId: string; checkedInAt: string }>> {
+  const all: Array<{ userId: string; checkedInAt: string }> = []
+  let cursor: string | undefined
+  do {
+    const { checkIns, nextCursor } = await getCheckInsByNode(nodeId, { limit: 100, cursor })
+    for (const ci of checkIns) {
+      all.push({ userId: ci.userId, checkedInAt: ci.checkedInAt })
+    }
+    cursor = nextCursor
+  } while (cursor)
+  return all
+}
+
+export async function getAudienceAnalytics(businessId: string): Promise<AudienceAnalytics> {
   const nodesResult = await documentClient.send(
     new QueryCommand({
       TableName: TableNames.nodes,
@@ -273,29 +387,189 @@ export async function getAudienceAnalytics(businessId: string) {
       ExpressionAttributeValues: { ':bid': businessId },
     }),
   )
-  const nodeIds = (nodesResult.Items || []).map((n) => n['nodeId'] as string)
+  const nodes = (nodesResult.Items || []).map((n) => ({
+    nodeId: n['nodeId'] as string,
+  }))
 
-  const uniqueUserIds = new Set<string>()
-  for (const nid of nodeIds) {
-    const { checkIns } = await getCheckInsByNode(nid, {})
-    checkIns.forEach((ci) => uniqueUserIds.add(ci.userId))
+  // Load the full check-in history for every business node.
+  const rawCheckIns: Array<{ userId: string; nodeId: string; checkedInAt: string }> = []
+  for (const { nodeId } of nodes) {
+    const nodeCheckIns = await loadAllCheckInsForNode(nodeId)
+    for (const ci of nodeCheckIns) {
+      rawCheckIns.push({ userId: ci.userId, nodeId, checkedInAt: ci.checkedInAt })
+    }
   }
 
+  // repeatVsNew — dashboard definition (Req 2.1): a distinct user with more than
+  // one check-in is "repeat"; a distinct user with exactly one is "new".
+  // Computed directly from the loaded history by grouping distinct users, NOT
+  // via the report's cross-period token intersection (analyzeRepeatVisitors),
+  // which answers a different question and depends on per-period token salting.
+  const checkInsByUser = new Map<string, number>()
+  for (const ci of rawCheckIns) {
+    checkInsByUser.set(ci.userId, (checkInsByUser.get(ci.userId) ?? 0) + 1)
+  }
+  const totalUniqueVisitors = checkInsByUser.size
+  let repeat = 0
+  let newVisitors = 0
+  for (const count of checkInsByUser.values()) {
+    if (count > 1) repeat += 1
+    else newVisitors += 1
+  }
+
+  // Enrich with tier (BatchGet users, mirror generator loadUserData) so the
+  // reused analyzers see each visitor's real tier.
+  const tierByUser = await loadUserTiers([...checkInsByUser.keys()])
+  const enriched: RawCheckIn[] = rawCheckIns.map((ci) => ({
+    userId: ci.userId,
+    nodeId: ci.nodeId,
+    tier: tierByUser.get(ci.userId) ?? 'local',
+    checkedInAt: ci.checkedInAt,
+  }))
+
+  // Reuse the report analyzers for tierDistribution and peakHours
+  // (dry-reuse-no-duplication, Req 2.4). anonymizeCheckIns also performs the
+  // SAST hour/day conversion the peak-hours analyzer expects.
+  const anonymized = anonymizeCheckIns(enriched, AUDIENCE_ANONYMIZATION_SALT)
+  const crowd = analyzeCrowdComposition(anonymized)
+  const peaks = analyzePeakHours(anonymized)
+
+  // Below the display threshold each group is null (Req 2.5) so the Audience
+  // panel renders its honest "not enough data yet" state instead of zeroed or
+  // partial numbers. tierDistribution/peakHours key off the analyzers'
+  // hasInsufficientData flags; repeatVsNew reuses the crowd-composition
+  // visitor-count gate so all three groups appear/disappear together.
   return {
-    tierDistribution: {},
-    repeatVsNew: { repeat: 0, new: uniqueUserIds.size },
-    totalUniqueVisitors: uniqueUserIds.size,
-    peakHours: [],
+    totalUniqueVisitors,
+    repeatVsNew: crowd.hasInsufficientData ? null : { repeat, new: newVisitors },
+    tierDistribution: crowd.hasInsufficientData ? null : crowd.tierPercentages,
+    peakHours: peaks.hasInsufficientData ? null : peaks.topWindows.map(formatPeakWindow),
   }
 }
 
 // ─── Music Audience ─────────────────────────────────────────────────────────
 
-export async function getMusicAudience(_businessId: string) {
+/**
+ * Load user music preferences via BatchGetItem, mirroring the report
+ * generator's `loadUserData` music-prefs projection (dry-reuse-no-duplication).
+ * Returns userId -> MusicPrefs only for users who have declared genres; a user
+ * with no genres has no music preference to aggregate and is omitted. The `?? 50`
+ * dimension defaults match the generator so both pipelines see identical prefs.
+ */
+async function loadUserMusicPrefs(userIds: string[]): Promise<Map<string, MusicPrefs>> {
+  const prefsByUser = new Map<string, MusicPrefs>()
+  const batchSize = 100
+  for (let i = 0; i < userIds.length; i += batchSize) {
+    const batch = userIds.slice(i, i + batchSize)
+    const result = await documentClient.send(
+      new BatchGetCommand({
+        RequestItems: {
+          [TableNames.users]: {
+            Keys: batch.map((userId) => ({ userId })),
+            ProjectionExpression:
+              'userId, musicGenres, energy, cultural_rootedness, sophistication, edge, spirituality',
+          },
+        },
+      }),
+    )
+    const items = result.Responses?.[TableNames.users] ?? []
+    for (const item of items) {
+      const userId = item['userId'] as string
+      const genres = item['musicGenres'] as string[] | undefined
+      if (genres && genres.length > 0) {
+        prefsByUser.set(userId, {
+          energy: (item['energy'] as number) ?? 50,
+          cultural_rootedness: (item['cultural_rootedness'] as number) ?? 50,
+          sophistication: (item['sophistication'] as number) ?? 50,
+          edge: (item['edge'] as number) ?? 50,
+          spirituality: (item['spirituality'] as number) ?? 50,
+          genres,
+        })
+      }
+    }
+  }
+  return prefsByUser
+}
+
+export async function getMusicAudience(businessId: string): Promise<BusinessMusicAudience> {
+  const nodesResult = await documentClient.send(
+    new QueryCommand({
+      TableName: TableNames.nodes,
+      IndexName: 'BusinessIndex',
+      KeyConditionExpression: 'businessId = :bid',
+      ExpressionAttributeValues: { ':bid': businessId },
+    }),
+  )
+  const nodes = (nodesResult.Items || []).map((n) => ({ nodeId: n['nodeId'] as string }))
+
+  // Gather the period's visitors across every business node (same read path as
+  // getAudienceAnalytics). tier is irrelevant to the music profiler, so a base
+  // value keeps the RawCheckIn shape valid without an extra tier BatchGet.
+  const rawCheckIns: RawCheckIn[] = []
+  for (const { nodeId } of nodes) {
+    const nodeCheckIns = await loadAllCheckInsForNode(nodeId)
+    for (const ci of nodeCheckIns) {
+      rawCheckIns.push({ userId: ci.userId, nodeId, tier: 'local', checkedInAt: ci.checkedInAt })
+    }
+  }
+
+  // Derive anonymized visitor tokens through the one shared salt so token
+  // generation stays consistent with getAudienceAnalytics (dry-reuse).
+  const anonymized = anonymizeCheckIns(rawCheckIns, AUDIENCE_ANONYMIZATION_SALT)
+  const visitorTokens = [...new Set(anonymized.map((ci) => ci.visitorToken))]
+
+  // Load each distinct visitor's music prefs and key them by the anonymized
+  // token, exactly as the generator does before calling analyzeMusicProfile.
+  const uniqueUserIds = [...new Set(rawCheckIns.map((ci) => ci.userId))]
+  const prefsByUser = await loadUserMusicPrefs(uniqueUserIds)
+  const musicPrefsMap = new Map<string, MusicPrefs>()
+  for (let i = 0; i < rawCheckIns.length; i++) {
+    const prefs = prefsByUser.get(rawCheckIns[i]!.userId)
+    if (prefs) musicPrefsMap.set(anonymized[i]!.visitorToken, prefs)
+  }
+  const totalWithMusicPrefs = musicPrefsMap.size
+
+  // Reuse the report's music-profile analyzer for genre/archetype aggregation
+  // (dry-reuse-no-duplication, Req 3.2). It already gates on the minimum
+  // visitors-with-prefs (5) and returns hasInsufficientData (Req 3.3).
+  const profile = analyzeMusicProfile(visitorTokens, musicPrefsMap)
+
+  // Below the analyzer's min-data gate: honest insufficient-data state (Req 3.3)
+  // so MusicInsightsSection shows its "not enough music data" state instead of a
+  // stubbed permanent empty. Never a fabricated non-empty distribution.
+  if (profile.hasInsufficientData) {
+    return {
+      hasInsufficientData: true,
+      totalWithMusicPrefs,
+      genreDistribution: {},
+      archetypeBreakdown: {},
+      peakArchetypeByTime: [],
+    }
+  }
+
+  // Map analyzer output to the wire shape (Req 3.1). genreDistribution and
+  // archetypeBreakdown are whole-number percentages, matching how
+  // MusicInsightsSection renders them ("{count}%"). Genre percentages are the
+  // share of visitors-with-prefs who list each genre; dimension averages are
+  // already on a 0-100 scale (generator defaults each dimension to 50).
+  const genreDistribution: Partial<Record<MusicGenre, number>> = {}
+  for (const { genre, visitorCount } of profile.topGenres) {
+    genreDistribution[genre as MusicGenre] = Math.round((visitorCount / totalWithMusicPrefs) * 100)
+  }
+
+  const archetypeBreakdown: Record<string, number> = {}
+  for (const [dimension, avgScore] of Object.entries(profile.archetypeDimensions)) {
+    archetypeBreakdown[dimension] = Math.round(avgScore)
+  }
+
   return {
-    totalWithMusicPrefs: 0,
-    genreDistribution: {},
-    archetypeBreakdown: {},
+    hasInsufficientData: false,
+    totalWithMusicPrefs,
+    genreDistribution,
+    archetypeBreakdown,
+    // analyzeMusicProfile produces no per-time-segment archetypes and this task
+    // reuses that analyzer rather than reimplementing a second aggregation, so
+    // peakArchetypeByTime stays empty rather than fabricated.
     peakArchetypeByTime: [],
   }
 }
@@ -311,7 +585,10 @@ export async function getRecentRedemptions(businessId: string) {
       ExpressionAttributeValues: { ':prefix': 'REDEMPTION#' },
     }),
   )
-  return (result.Items || []).slice(0, 20)
+  // Scan has no inherent order; sort by redeemedAt desc so the 20 most recent are returned.
+  return (result.Items || [])
+    .sort((a, b) => String(b['redeemedAt']).localeCompare(String(a['redeemedAt'])))
+    .slice(0, 20)
 }
 
 // ─── Check-In Details ────────────────────────────────────────────────────────
@@ -452,10 +729,6 @@ export async function getRewardsForBusiness(businessId: string) {
 // compensating delete itself fails, we log and re-throw the *original*
 // error anyway — the next Yoco retry will land on the existing marker and
 // be treated as a duplicate.
-
-function isConditionalCheckFailedError(err: unknown): boolean {
-  return (err as { name?: string } | null)?.name === 'ConditionalCheckFailedException'
-}
 
 export async function putBoosterPurchaseWithMarker(args: {
   purchase: BoosterPurchaseRow

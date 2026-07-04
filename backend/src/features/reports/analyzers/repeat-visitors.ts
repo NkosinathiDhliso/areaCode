@@ -11,6 +11,12 @@ import type { RepeatVisitorResult } from '../types.js'
  * - repeatRate: percentage of current visitors who also visited in the previous period
  * - firstTimeVisitorCount: visitors in current period not seen in previous period
  * - totalUniqueVisitors: total unique visitors in the current period
+ * - hasPriorData: whether a previous-period visitor set was available at all
+ *
+ * When no prior-period tokens exist (empty previous set) the repeat rate cannot
+ * be honestly computed: intersection is forced to 0, which is not a real "0%
+ * returning". `hasPriorData: false` signals that so callers suppress the metric
+ * rather than presenting a fabricated 0%.
  *
  * Uses only anonymized data — visitor tokens are hashed, not userIds.
  */
@@ -19,6 +25,7 @@ export function analyzeRepeatVisitors(
   previousPeriodVisitors: Set<string>,
 ): RepeatVisitorResult {
   const totalUniqueVisitors = currentPeriodVisitors.size
+  const hasPriorData = previousPeriodVisitors.size > 0
 
   // Edge case: empty current set → repeatRate = 0
   if (totalUniqueVisitors === 0) {
@@ -26,6 +33,7 @@ export function analyzeRepeatVisitors(
       repeatRate: 0,
       firstTimeVisitorCount: 0,
       totalUniqueVisitors: 0,
+      hasPriorData,
     }
   }
 
@@ -44,5 +52,6 @@ export function analyzeRepeatVisitors(
     repeatRate,
     firstTimeVisitorCount,
     totalUniqueVisitors,
+    hasPriorData,
   }
 }

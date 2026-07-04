@@ -201,36 +201,60 @@ export async function getCityBySlug(slug: string) {
   return result.Item ? { id: result.Item['cityId'] ?? slug, slug, name: result.Item['name'] } : null
 }
 
+// Shared full-partition read + sort + rank for the canonical leaderboard key.
+// Both getLeaderboardTop50 and getUserLeaderboardRank read through this single helper so
+// their query, sort, and tiebreak can never drift (dry-reuse-no-duplication.md). Ranks are
+// assigned across the FULL sorted set, so callers get exact ranks even outside the top 50.
+async function readRankedLeaderboard(cityId: string, archetypeId?: string) {
+  // Canonical leaderboard key (must match the incrementer exactly):
+  //   pk = LEADERBOARD#{cityId}, sk = USER#{userId}, attribute checkInCount.
+  // The sort key is USER#{userId}, so DynamoDB cannot order by checkInCount. Read the
+  // full partition (paginated) and sort by checkInCount desc in memory.
+  const items: Record<string, unknown>[] = []
+  let lastEvaluatedKey: Record<string, unknown> | undefined
+
+  do {
+    const result = await documentClient.send(
+      new QueryCommand({
+        TableName: TableNames.appData,
+        KeyConditionExpression: 'pk = :pk',
+        ExpressionAttributeValues: { ':pk': `LEADERBOARD#${cityId}` },
+        ExclusiveStartKey: lastEvaluatedKey,
+      }),
+    )
+    for (const item of result.Items || []) items.push(item)
+    lastEvaluatedKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (lastEvaluatedKey)
+
+  // Archetype segment filter: applied after read, only when an archetypeId is supplied and
+  // stored on entries; otherwise the board is city-wide (behavior consistent with before).
+  const scoped = archetypeId ? items.filter((item) => item['archetypeId'] === archetypeId) : items
+
+  return (
+    scoped
+      .map((item) => ({
+        userId: item['userId'] as string,
+        checkInCount: (item['checkInCount'] as number) ?? 0,
+        archetypeId: (item['archetypeId'] as string) ?? undefined,
+        topVenueId: (item['topVenueId'] as string) ?? undefined,
+        topVenueName: (item['topVenueName'] as string) ?? undefined,
+      }))
+      // Sort desc by checkInCount; deterministic tiebreak by userId (ascending).
+      .sort((a, b) => b.checkInCount - a.checkInCount || a.userId.localeCompare(b.userId))
+      .map((entry, i) => ({ ...entry, rank: i + 1 }))
+  )
+}
+
 export async function getLeaderboardTop50(cityId: string, archetypeId?: string) {
-  // DynamoDB-backed leaderboard stored in app_data
-  const queryParams: Record<string, unknown> = {
-    TableName: TableNames.appData,
-    KeyConditionExpression: 'pk = :pk',
-    ExpressionAttributeValues: { ':pk': `LEADERBOARD#${cityId}` } as Record<string, unknown>,
-    ScanIndexForward: false,
-    Limit: 50,
-  }
-
-  // Apply filter expression for archetype segment (acceptable at <=50 entries)
-  if (archetypeId) {
-    queryParams['FilterExpression'] = 'archetypeId = :archetypeId'
-    ;(queryParams['ExpressionAttributeValues'] as Record<string, unknown>)[':archetypeId'] = archetypeId
-  }
-
-  const result = await documentClient.send(new QueryCommand(queryParams as any))
-  return (result.Items || []).map((item, i) => ({
-    userId: item['userId'] as string,
-    checkInCount: (item['checkInCount'] as number) ?? 0,
-    rank: i + 1,
-    archetypeId: (item['archetypeId'] as string) ?? undefined,
-    topVenueId: (item['topVenueId'] as string) ?? undefined,
-    topVenueName: (item['topVenueName'] as string) ?? undefined,
-  }))
+  // Ranks are assigned across the full sorted set, so the first 50 keep ranks 1..50.
+  return (await readRankedLeaderboard(cityId, archetypeId)).slice(0, 50)
 }
 
 export async function getUserLeaderboardRank(cityId: string, userId: string) {
-  const top = await getLeaderboardTop50(cityId)
-  const entry = top.find((e) => e.userId === userId)
+  // Reuse the same full-partition read/sort/rank so the viewer's exact rank is resolved
+  // even when they sit outside the top 50. Return null only when they have no entry.
+  const ranked = await readRankedLeaderboard(cityId)
+  const entry = ranked.find((e) => e.userId === userId)
   if (!entry) return null
   return { rank: entry.rank, checkInCount: entry.checkInCount }
 }

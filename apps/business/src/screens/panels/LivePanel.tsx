@@ -6,13 +6,7 @@ import { api } from '@area-code/shared/lib/api'
 import { getSocket } from '@area-code/shared/lib/socket'
 import { useSocketRoom } from '@area-code/shared/hooks/useSocketRoom'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
-import type { BusinessCheckinPayload } from '@area-code/shared/types'
-
-interface LiveStats {
-  checkInsToday: number
-  pulseScore: number
-  totalCheckIns: number
-}
+import type { BusinessCheckinPayload, LiveStats } from '@area-code/shared/types'
 
 interface LiveAvatar {
   username: string | undefined
@@ -88,12 +82,14 @@ export function LivePanel() {
           all-time total. Pulse leads - it is the honest "how alive" readout. */}
       {stats && (
         <div className="flex flex-row items-stretch justify-center gap-3">
-          <div className="flex-1 max-w-[160px] bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3 flex flex-col items-center gap-1">
-            <span className="text-[var(--text-primary)] text-2xl font-bold font-[Syne]">
-              {Math.round(stats.pulseScore)}
-            </span>
-            <span className="text-[var(--text-secondary)] text-xs">{t('biz.live.pulse', 'Pulse')}</span>
-          </div>
+          {stats.pulseScore !== null && (
+            <div className="flex-1 max-w-[160px] bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3 flex flex-col items-center gap-1">
+              <span className="text-[var(--text-primary)] text-2xl font-bold font-[Syne]">
+                {Math.round(stats.pulseScore)}
+              </span>
+              <span className="text-[var(--text-secondary)] text-xs">{t('biz.live.pulse', 'Pulse')}</span>
+            </div>
+          )}
           <div className="flex-1 max-w-[160px] bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3 flex flex-col items-center gap-1">
             <span className="text-[var(--text-primary)] text-2xl font-bold font-[Syne]">{stats.totalCheckIns}</span>
             <span className="text-[var(--text-secondary)] text-xs">{t('biz.live.totalCheckIns', 'All-time')}</span>

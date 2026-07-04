@@ -73,6 +73,7 @@ const peakHoursResultArb = fc.record({
     { minLength: 0, maxLength: 3 },
   ),
   peakDay: fc.constantFrom(...DAYS_OF_WEEK),
+  hasInsufficientData: fc.boolean(),
 })
 
 const crowdCompositionResultArb = fc.record({
@@ -83,6 +84,7 @@ const crowdCompositionResultArb = fc.record({
     .tuple(...TIERS.map((tier) => fc.integer({ min: 0, max: 500 }).map((count) => [tier, count] as const)))
     .map((entries) => Object.fromEntries(entries) as Record<string, number>),
   totalUniqueVisitors: fc.integer({ min: 0, max: 2500 }),
+  hasInsufficientData: fc.boolean(),
 })
 
 const musicProfileResultArb = fc.record({
@@ -103,6 +105,7 @@ const repeatVisitorResultArb = fc.record({
   repeatRate: safeDouble({ min: 0, max: 100 }),
   firstTimeVisitorCount: fc.integer({ min: 0, max: 1000 }),
   totalUniqueVisitors: fc.integer({ min: 0, max: 1000 }),
+  hasPriorData: fc.boolean(),
 })
 
 const trendDeltaArb = fc.record({
@@ -166,6 +169,7 @@ const reportSummaryArb = fc.record({
   pulseState: fc.constantFrom(...PULSE_STATES),
   topGenre: fc.option(fc.constantFrom(...GENRES), { nil: null }),
   headlineRecommendation: fc.string({ minLength: 1, maxLength: 300 }),
+  pulseScore: fc.integer({ min: 0, max: 100 }),
 })
 
 const reportArb: fc.Arbitrary<Report> = fc.record({

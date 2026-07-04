@@ -1,6 +1,6 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { AppError } from '../../shared/errors/AppError.js'
-import { AWS_REGION, DEV_MODE } from '../../shared/config/env.js'
+import { AWS_REGION, DEV_MODE, requireEnv } from '../../shared/config/env.js'
 import { decideBoostFloorWithMetric, type BoostMetricInput } from './floor-decision.js'
 import { classifyLifecycle, type Lifecycle } from '../rewards/lifecycle.js'
 import { deactivateNodesForBusiness } from '../nodes/dynamodb-repository.js'
@@ -223,7 +223,10 @@ export function getPlans() {
 const YOCO_API_BASE = 'https://payments.yoco.com/api'
 
 function getBusinessAppUrl(): string {
-  return process.env['BUSINESS_APP_URL'] ?? 'https://dbp54yxhyjvk0.amplifyapp.com'
+  // Required in prod: checkout redirect URLs must point at the real business
+  // portal, never a masking default (no-fallbacks-no-legacy.md). `requireEnv`
+  // crashes prod when unset; dev/test keep the local portal default.
+  return requireEnv('BUSINESS_APP_URL', 'http://localhost:3001')
 }
 
 async function createYocoCheckout(
@@ -387,12 +390,21 @@ export async function processYocoWebhook(
 ) {
   if (DEV_MODE) return { duplicate: false }
 
-  // Verify signature using raw body bytes for accuracy
-  const secret = process.env['YOCO_WEBHOOK_SECRET'] ?? process.env['YOCO_DEV_SECRET_KEY'] ?? ''
+  // Verify signature using raw body bytes for accuracy.
+  //
+  // Fail closed on a missing secret (`no-fallbacks-no-legacy.md`): a payment
+  // webhook must never be verified against a dev key or an empty string. With
+  // an empty secret the HMAC is still a non-empty digest, so the `!expected`
+  // guard would not catch it — reject before computing any HMAC instead.
+  const secret = process.env['YOCO_WEBHOOK_SECRET']
+  if (!secret) {
+    throw AppError.unauthorized('Invalid webhook signature')
+  }
+
   const bodyToSign = rawBody ?? JSON.stringify(payload)
   const expected = createHmac('sha256', secret).update(bodyToSign).digest('hex')
 
-  if (!signature || !expected) {
+  if (!signature) {
     throw AppError.unauthorized('Invalid webhook signature')
   }
 
