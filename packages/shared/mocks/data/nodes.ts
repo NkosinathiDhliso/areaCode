@@ -1,8 +1,12 @@
 import type { Node } from '../../types'
 
 /**
- * 12 Johannesburg venue nodes with accurate GPS coordinates.
- * Each node has a non-null businessId linking to a mock business.
+ * Mock venue nodes with accurate GPS coordinates. Covers Johannesburg plus the
+ * other South African provinces and a spread of global cities so the dev map
+ * can be exercised anywhere, not only Joburg. Each node has a non-null
+ * businessId linking to a mock business.
+ *
+ * Dev-only fixture data (VITE_DEV_MOCK). pulseScores live in `pulseScores.ts`.
  */
 
 const base = {
@@ -138,5 +142,315 @@ export const MOCK_NODES: Node[] = [
     lat: -26.1345,
     lng: 28.0685,
     businessId: 'mock-biz-5',
+  },
+
+  // ─── Gauteng · Pretoria ───────────────────────────────────────────────────
+  {
+    ...base,
+    id: 'mock-node-13',
+    name: 'Menlyn Park',
+    slug: 'menlyn-park',
+    category: 'retail',
+    lat: -25.7846,
+    lng: 28.2775,
+    businessId: 'mock-biz-7',
+  },
+  {
+    ...base,
+    id: 'mock-node-14',
+    name: 'Capital Craft',
+    slug: 'capital-craft',
+    category: 'nightlife',
+    lat: -25.7712,
+    lng: 28.2769,
+    businessId: 'mock-biz-3',
+  },
+  {
+    ...base,
+    id: 'mock-node-15',
+    name: 'Hazel Food Market',
+    slug: 'hazel-food-market',
+    category: 'food',
+    lat: -25.7625,
+    lng: 28.2588,
+    businessId: 'mock-biz-4',
+  },
+
+  // ─── Western Cape · Cape Town ─────────────────────────────────────────────
+  {
+    ...base,
+    id: 'mock-node-16',
+    name: 'Truth Coffee',
+    slug: 'truth-coffee',
+    category: 'coffee',
+    lat: -33.9271,
+    lng: 18.4249,
+    businessId: 'mock-biz-2',
+  },
+  {
+    ...base,
+    id: 'mock-node-17',
+    name: 'The Gin Bar',
+    slug: 'the-gin-bar',
+    category: 'nightlife',
+    lat: -33.9258,
+    lng: 18.4187,
+    businessId: 'mock-biz-8',
+  },
+  {
+    ...base,
+    id: 'mock-node-18',
+    name: 'V&A Waterfront',
+    slug: 'va-waterfront',
+    category: 'retail',
+    lat: -33.9036,
+    lng: 18.4207,
+    businessId: 'mock-biz-7',
+  },
+  {
+    ...base,
+    id: 'mock-node-19',
+    name: 'Zeitz MOCAA',
+    slug: 'zeitz-mocaa',
+    category: 'arts',
+    lat: -33.9076,
+    lng: 18.4231,
+    businessId: 'mock-biz-6',
+  },
+
+  // ─── KwaZulu-Natal · Durban ───────────────────────────────────────────────
+  {
+    ...base,
+    id: 'mock-node-20',
+    name: 'Circus Circus Beach Cafe',
+    slug: 'circus-circus-beach-cafe',
+    category: 'food',
+    lat: -29.8074,
+    lng: 31.0409,
+    businessId: 'mock-biz-1',
+  },
+  {
+    ...base,
+    id: 'mock-node-21',
+    name: 'Origin Coffee Roasting',
+    slug: 'origin-coffee-durban',
+    category: 'coffee',
+    lat: -29.8489,
+    lng: 31.0219,
+    businessId: 'mock-biz-2',
+  },
+  {
+    ...base,
+    id: 'mock-node-22',
+    name: 'Gateway Theatre of Shopping',
+    slug: 'gateway-theatre',
+    category: 'retail',
+    lat: -29.7256,
+    lng: 31.0662,
+    businessId: 'mock-biz-7',
+  },
+
+  // ─── Eastern Cape · Gqeberha ──────────────────────────────────────────────
+  {
+    ...base,
+    id: 'mock-node-23',
+    name: 'Boardwalk Casino',
+    slug: 'boardwalk-casino',
+    category: 'nightlife',
+    lat: -33.9846,
+    lng: 25.6673,
+    businessId: 'mock-biz-8',
+  },
+  {
+    ...base,
+    id: 'mock-node-24',
+    name: 'Vovo Telo Bakery',
+    slug: 'vovo-telo',
+    category: 'coffee',
+    lat: -33.9789,
+    lng: 25.6539,
+    businessId: 'mock-biz-2',
+  },
+
+  // ─── Free State · Bloemfontein ────────────────────────────────────────────
+  {
+    ...base,
+    id: 'mock-node-25',
+    name: 'Mystic Boer',
+    slug: 'mystic-boer',
+    category: 'nightlife',
+    lat: -29.1183,
+    lng: 26.2249,
+    businessId: 'mock-biz-3',
+  },
+  {
+    ...base,
+    id: 'mock-node-26',
+    name: 'Loch Logan Waterfront',
+    slug: 'loch-logan-waterfront',
+    category: 'retail',
+    lat: -29.1215,
+    lng: 26.2076,
+    businessId: 'mock-biz-7',
+  },
+
+  // ─── Mpumalanga · Mbombela ────────────────────────────────────────────────
+  {
+    ...base,
+    id: 'mock-node-27',
+    name: 'Ilanga Mall',
+    slug: 'ilanga-mall',
+    category: 'retail',
+    lat: -25.4557,
+    lng: 30.9702,
+    businessId: 'mock-biz-7',
+  },
+  {
+    ...base,
+    id: 'mock-node-28',
+    name: 'Mediterranean Coffee',
+    slug: 'mediterranean-coffee',
+    category: 'coffee',
+    lat: -25.4713,
+    lng: 30.9756,
+    businessId: 'mock-biz-2',
+  },
+
+  // ─── Limpopo · Polokwane ──────────────────────────────────────────────────
+  {
+    ...base,
+    id: 'mock-node-29',
+    name: 'Mall of the North',
+    slug: 'mall-of-the-north',
+    category: 'retail',
+    lat: -23.8464,
+    lng: 29.4645,
+    businessId: 'mock-biz-7',
+  },
+  {
+    ...base,
+    id: 'mock-node-30',
+    name: 'Cafe Pavilion',
+    slug: 'cafe-pavilion',
+    category: 'food',
+    lat: -23.9008,
+    lng: 29.4525,
+    businessId: 'mock-biz-4',
+  },
+
+  // ─── North West · Rustenburg ──────────────────────────────────────────────
+  {
+    ...base,
+    id: 'mock-node-31',
+    name: 'Waterfall Mall',
+    slug: 'waterfall-mall',
+    category: 'retail',
+    lat: -25.6841,
+    lng: 27.2559,
+    businessId: 'mock-biz-7',
+  },
+
+  // ─── Northern Cape · Kimberley ────────────────────────────────────────────
+  {
+    ...base,
+    id: 'mock-node-32',
+    name: 'The Big Hole',
+    slug: 'the-big-hole',
+    category: 'arts',
+    lat: -28.7411,
+    lng: 24.7628,
+    businessId: 'mock-biz-6',
+  },
+
+  // ─── Global sites ─────────────────────────────────────────────────────────
+  {
+    ...base,
+    id: 'mock-node-33',
+    name: 'Ministry of Sound',
+    slug: 'ministry-of-sound',
+    category: 'nightlife',
+    lat: 51.4952,
+    lng: -0.0997,
+    businessId: 'mock-biz-8',
+  },
+  {
+    ...base,
+    id: 'mock-node-34',
+    name: 'Blue Note Jazz Club',
+    slug: 'blue-note-jazz-club',
+    category: 'nightlife',
+    lat: 40.7308,
+    lng: -74.0006,
+    businessId: 'mock-biz-3',
+  },
+  {
+    ...base,
+    id: 'mock-node-35',
+    name: 'Golden Gai',
+    slug: 'golden-gai',
+    category: 'nightlife',
+    lat: 35.6939,
+    lng: 139.7047,
+    businessId: 'mock-biz-8',
+  },
+  {
+    ...base,
+    id: 'mock-node-36',
+    name: 'Opera Bar',
+    slug: 'opera-bar',
+    category: 'nightlife',
+    lat: -33.8571,
+    lng: 151.2151,
+    businessId: 'mock-biz-3',
+  },
+  {
+    ...base,
+    id: 'mock-node-37',
+    name: 'Rio Scenarium',
+    slug: 'rio-scenarium',
+    category: 'arts',
+    lat: -22.9053,
+    lng: -43.1811,
+    businessId: 'mock-biz-6',
+  },
+  {
+    ...base,
+    id: 'mock-node-38',
+    name: 'Java House Nairobi',
+    slug: 'java-house-nairobi',
+    category: 'coffee',
+    lat: -1.2833,
+    lng: 36.8172,
+    businessId: 'mock-biz-2',
+  },
+  {
+    ...base,
+    id: 'mock-node-39',
+    name: 'The Dubai Mall',
+    slug: 'the-dubai-mall',
+    category: 'retail',
+    lat: 25.1972,
+    lng: 55.2796,
+    businessId: 'mock-biz-7',
+  },
+  {
+    ...base,
+    id: 'mock-node-40',
+    name: 'Le Comptoir General',
+    slug: 'le-comptoir-general',
+    category: 'nightlife',
+    lat: 48.8712,
+    lng: 2.3676,
+    businessId: 'mock-biz-8',
+  },
+  {
+    ...base,
+    id: 'mock-node-41',
+    name: 'Terrazza Borromini',
+    slug: 'terrazza-borromini',
+    category: 'nightlife',
+    lat: 41.8992,
+    lng: 12.4731,
+    businessId: 'mock-biz-8',
   },
 ]

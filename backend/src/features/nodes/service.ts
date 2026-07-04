@@ -10,6 +10,7 @@ import * as nodesDynamo from './dynamodb-repository.js'
 import { findBusinessById } from '../business/repository.js'
 import { emitNodeCreated } from '../../shared/socket/events.js'
 import { getLivePresenceCount } from '../presence/repository.js'
+import { DEV_NODES } from './dev-nodes.js'
 
 // Tiers that count as 'paid' — nodes from these businesses appear on the public map.
 const PAID_TIERS = new Set(['starter', 'growth', 'pro', 'payg'])
@@ -41,148 +42,15 @@ function getNodeState(score: number): string {
   return 'dormant'
 }
 
-// ─── Dev Mock Data ──────────────────────────────────────────────────────────
-
-const DEV_NODES = [
-  {
-    id: 'dev-1',
-    name: 'Father Coffee',
-    slug: 'father-coffee',
-    category: 'coffee',
-    lat: -26.1834,
-    lng: 28.0172,
-    pulseScore: 8,
-    state: 'quiet',
-    citySlug: 'johannesburg',
-  },
-  {
-    id: 'dev-2',
-    name: 'Doubleshot Coffee',
-    slug: 'doubleshot-coffee',
-    category: 'coffee',
-    lat: -26.1838,
-    lng: 28.0168,
-    pulseScore: 0,
-    state: 'dormant',
-    citySlug: 'johannesburg',
-  },
-  {
-    id: 'dev-3',
-    name: "Kitchener's Bar",
-    slug: 'kitcheners-bar',
-    category: 'nightlife',
-    lat: -26.1931,
-    lng: 28.0348,
-    pulseScore: 72,
-    state: 'popping',
-    citySlug: 'johannesburg',
-  },
-  {
-    id: 'dev-4',
-    name: 'Taboo Nightclub',
-    slug: 'taboo-nightclub',
-    category: 'nightlife',
-    lat: -26.1085,
-    lng: 28.0572,
-    pulseScore: 65,
-    state: 'popping',
-    citySlug: 'johannesburg',
-  },
-  {
-    id: 'dev-5',
-    name: 'Sandton City',
-    slug: 'sandton-city',
-    category: 'shopping',
-    lat: -26.1073,
-    lng: 28.052,
-    pulseScore: 18,
-    state: 'active',
-    citySlug: 'johannesburg',
-  },
-  {
-    id: 'dev-6',
-    name: 'Arts on Main',
-    slug: 'arts-on-main',
-    category: 'culture',
-    lat: -26.2048,
-    lng: 28.0565,
-    pulseScore: 55,
-    state: 'buzzing',
-    citySlug: 'johannesburg',
-  },
-  {
-    id: 'dev-7',
-    name: "Nando's Rosebank",
-    slug: 'nandos-rosebank',
-    category: 'food',
-    lat: -26.14565,
-    lng: 28.04325,
-    pulseScore: 45,
-    state: 'buzzing',
-    citySlug: 'johannesburg',
-  },
-  {
-    id: 'dev-8',
-    name: 'Neighbourgoods Market',
-    slug: 'neighbourgoods-market',
-    category: 'food',
-    lat: -26.1925,
-    lng: 28.0335,
-    pulseScore: 25,
-    state: 'active',
-    citySlug: 'johannesburg',
-  },
-  {
-    id: 'dev-9',
-    name: 'The Grillhouse',
-    slug: 'the-grillhouse',
-    category: 'food',
-    lat: -26.1468,
-    lng: 28.0418,
-    pulseScore: 38,
-    state: 'buzzing',
-    citySlug: 'johannesburg',
-  },
-  {
-    id: 'dev-10',
-    name: 'Virgin Active Sandton',
-    slug: 'virgin-active-sandton',
-    category: 'fitness',
-    lat: -26.1068,
-    lng: 28.0528,
-    pulseScore: 3,
-    state: 'quiet',
-    citySlug: 'johannesburg',
-  },
-  {
-    id: 'dev-11',
-    name: 'Planet Fitness Melrose',
-    slug: 'planet-fitness-melrose',
-    category: 'fitness',
-    lat: -26.1345,
-    lng: 28.0685,
-    pulseScore: 5,
-    state: 'quiet',
-    citySlug: 'johannesburg',
-  },
-  {
-    id: 'dev-12',
-    name: 'Keyes Art Mile',
-    slug: 'keyes-art-mile',
-    category: 'culture',
-    lat: -26.1492,
-    lng: 28.0408,
-    pulseScore: 12,
-    state: 'active',
-    citySlug: 'johannesburg',
-  },
-]
-
 // ─── Node Queries ───────────────────────────────────────────────────────────
 
 export async function getNodesByCitySlug(citySlug: string) {
   if (DEV_MODE) {
-    return DEV_NODES.filter((n) => n.citySlug === citySlug).map((n) => ({
+    // In dev, surface every mock venue regardless of the requested city slug so
+    // the map can be exercised across all provinces and the global sample sites,
+    // not only the user's default city. Prod stays city-scoped via the repo.
+    void citySlug
+    return DEV_NODES.map((n) => ({
       id: n.id,
       name: n.name,
       slug: n.slug,
@@ -253,7 +121,7 @@ export async function getNodePublic(nodeSlug: string) {
     return {
       name: node.name,
       category: node.category,
-      city: 'Johannesburg',
+      city: node.cityName,
       pulseScore: node.pulseScore,
       activeRewardCount: 2,
       ogImage: null,
@@ -308,7 +176,7 @@ export async function getTrendingNodes(limit = 10): Promise<{ items: TrendingIte
     return {
       items: sorted.map((n) => ({
         name: n.name,
-        area: 'Johannesburg',
+        area: n.cityName,
         state: getNodeState(n.pulseScore),
         checkIns: Math.ceil(n.pulseScore / 5),
         nodeId: n.id,

@@ -210,7 +210,19 @@ register('GET', '/v1/nodes/:nodeSlug/public', ({ pathParams }) => {
 })
 
 register('GET', '/v1/nodes/:nodeId/rewards', ({ pathParams }) => {
-  return state.rewards.filter((r) => r.nodeId === pathParams['nodeId'] && r.isActive)
+  const items = state.rewards.filter((r) => r.nodeId === pathParams['nodeId'] && r.isActive)
+  return { items }
+})
+
+// Honest presence read (mirrors backend `getNodePresence`): only venues that
+// are genuinely alive report a live count; quiet/dormant venues report 0 so the
+// map never fakes a crowd. Count is derived from the mock pulse the same way the
+// node list seeds `liveCheckInCount`.
+register('GET', '/v1/nodes/:nodeId/presence', ({ pathParams }) => {
+  const nodeId = pathParams['nodeId']!
+  const score = state.pulseScores[nodeId] ?? 0
+  const livePresenceCount = score >= 31 ? Math.max(1, Math.round(score / 10)) : 0
+  return { nodeId, livePresenceCount }
 })
 
 register('GET', '/v1/nodes/:citySlug', () => MOCK_NODES)
