@@ -1,0 +1,3 @@
+# Area Code Admin — private, authenticated portal. Do not index or crawl.
+User-agent: *
+Disallow: /
