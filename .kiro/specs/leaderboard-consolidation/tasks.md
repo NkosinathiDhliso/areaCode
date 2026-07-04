@@ -17,7 +17,8 @@ serve the same key, fix the reset to paginate, remove the dead code, then verify
   - [x] 1.2 Call it from the check-in service as a best-effort fan-out
     - Await on the live path; log-and-continue on failure like other fan-outs; never block the check-in response.
     - _Requirements: 2.1, 2.3, 2.4_
-  - [ ]\* 1.3 Unit test the atomic update shape and best-effort behavior
+  - [x]\* 1.3 Unit test the atomic update shape and best-effort behavior
+    - Covered by `social/__tests__/leaderboard-key-drift.test.ts`.
     - _Requirements: 2.1, 2.4_
 
 - [x] 2. Consumer read serves the canonical key (H6)
@@ -45,8 +46,9 @@ serve the same key, fix the reset to paginate, remove the dead code, then verify
   - Remove `updateLeaderboardEntry` and `getLeaderboard` (week-keyed) from `check-in/dynamodb-repository.ts` after re-confirming zero call sites.
   - _Requirements: 1.2_
 
-- [ ]\* 5. Key-drift regression guard
+- [x]\* 5. Key-drift regression guard
   - Test asserting the incrementer key and the read key are the same string built from `cityId`.
+  - Implemented in `social/__tests__/leaderboard-key-drift.test.ts` (incrementer pk === read pk).
   - _Requirements: 1.1, 1.3_
 
 - [x] 6. Final checkpoint — verify
