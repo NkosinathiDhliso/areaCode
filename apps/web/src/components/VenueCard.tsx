@@ -58,7 +58,7 @@ export const VenueCard = memo(function VenueCard({ vm, category, isActive = fals
       aria-pressed={isActive}
       aria-label={`${vm.name}, ${vm.isFirstIn ? beFirstLabel : countText}`}
       className={`glass-raised flex flex-col items-start gap-2 rounded-2xl px-4 py-3 w-full text-left transition-all duration-150 active:scale-95 focus:outline-none focus-visible:border-[var(--accent)] ${
-        isActive ? 'border-[var(--accent)] ring-1 ring-[var(--accent)]' : 'border-[var(--border)]'
+        isActive ? 'border-[var(--accent)] ring-1 ring-[var(--accent)] bg-[var(--accent)]/10' : 'border-[var(--border)]'
       }`}
     >
       <div className="flex flex-row items-center gap-2 w-full min-w-0">

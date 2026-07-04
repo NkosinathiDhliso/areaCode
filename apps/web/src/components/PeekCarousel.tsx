@@ -162,6 +162,12 @@ export function PeekCarousel({
       .filter((n): n is NonNullable<typeof n> => n !== undefined)
     const { visible, showMore } = deriveBrowseStrip(allNodes, browseState.visibleCount)
     const visibleIds = new Set(visible.map((n) => n.id))
+    // Always surface the Active_Venue's card, even if it ranks beyond the
+    // current progressive-reveal depth. A map-node tap can select any venue in
+    // the order; without this its card would be absent from the collapsed strip
+    // and the selection highlight would have nothing to show. It keeps its
+    // ranked position because we filter the ordered `carouselOrderVMs`.
+    if (activeVenueId && !visibleIds.has(activeVenueId)) visibleIds.add(activeVenueId)
     return {
       visibleVMs: carouselOrderVMs.filter((vm) => visibleIds.has(vm.id)),
       showMore,
@@ -379,6 +385,37 @@ function BrowseMode({
   onEnterCommit,
 }: BrowseModeProps) {
   const { t } = useTranslation()
+
+  // Keep the selected venue's card in view. When selection changes from any
+  // source - a map-node tap, search, or the flick arrows - smoothly centre its
+  // card in the horizontal strip so the active-card highlight is always
+  // visible, tying the carousel to the map selection. Only the strip's own
+  // horizontal scroll is touched (never the page or the sheet).
+  const stripRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!activeVenueId) return
+    const container = stripRef.current
+    if (!container) return
+    // Match on the dataset rather than a dynamic attribute selector so we don't
+    // depend on `CSS.escape` (absent in some environments) or worry about id
+    // escaping.
+    const cards = container.querySelectorAll<HTMLElement>('[data-venue-card]')
+    let card: HTMLElement | null = null
+    for (const c of cards) {
+      if (c.dataset.venueCard === activeVenueId) {
+        card = c
+        break
+      }
+    }
+    const wrapper = card?.parentElement
+    if (!wrapper) return
+    const cardRect = wrapper.getBoundingClientRect()
+    const contRect = container.getBoundingClientRect()
+    const delta = cardRect.left + cardRect.width / 2 - (contRect.left + contRect.width / 2)
+    if (Math.abs(delta) < 1) return
+    container.scrollBy({ left: delta, behavior: 'smooth' })
+  }, [activeVenueId, carouselOrderVMs])
+
   // Back-to-recommended cue, shown whenever the strip is scoped to the viewport
   // (the user has panned/zoomed to explore an area) so there is always a way
   // home to the citywide recommendations.
@@ -415,7 +452,11 @@ function BrowseMode({
           in-viewport cards are reachable; selection is driven by tap, swipe,
           and the FlickControls below. In collapsed (top 2) view, a "Keep
           exploring" card follows the venue cards as the third element (R4.2). */}
-      <div className="flex flex-row gap-3 overflow-x-auto pb-1 -mx-1 px-1" style={{ scrollbarWidth: 'none' }}>
+      <div
+        ref={stripRef}
+        className="flex flex-row gap-3 overflow-x-auto pb-1 -mx-1 px-1"
+        style={{ scrollbarWidth: 'none' }}
+      >
         {carouselOrderVMs.map((vm) => {
           const category = nodeCategoryOf(vm.id)
           if (!category) return null
