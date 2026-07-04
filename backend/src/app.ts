@@ -69,6 +69,13 @@ export async function buildApp() {
     }
     void reply.header('X-Content-Type-Options', 'nosniff')
     void reply.header('Referrer-Policy', 'strict-origin-when-cross-origin')
+    // This is a JSON API: responses are never rendered as documents, so a
+    // lockdown CSP and frame denial are safe (they can't break API clients)
+    // and close clickjacking / resource-injection vectors on error pages or
+    // any accidental HTML response. Frontend (document) CSP is configured at
+    // the Amplify hosting layer, not here.
+    void reply.header('X-Frame-Options', 'DENY')
+    void reply.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'")
   })
 
   // CORS
