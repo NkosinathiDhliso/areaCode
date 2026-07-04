@@ -428,6 +428,13 @@ export interface MapInstance {
     offset?: [number, number]
     duration?: number
     /**
+     * Zoom level at the peak of the flight path (Mapbox `flyTo` `minZoom`). The
+     * camera pulls back to this zoom mid-flight, then returns to the
+     * destination zoom - the "rise up, fly over, descend" arc used for the 3D
+     * dramatic venue-switch fly-through. Does not change where the camera ends.
+     */
+    minZoom?: number
+    /**
      * Easing curve for the camera move, matching Mapbox's `easing` option:
      * maps animation progress `t` (0-1) to eased progress. Lets store-driven
      * fly-tos carry the shared `cameraEasing` motion signature.
@@ -436,6 +443,12 @@ export interface MapInstance {
   }): void
   setFeatureState(feature: { source: string; id: string }, state: Record<string, unknown>): void
   getZoom(): number
+  /**
+   * Current camera pitch in degrees (0 = top-down/flat, higher = tilted 3D).
+   * Optional so lightweight test stubs need not implement it; callers treat an
+   * absent reader as "pitch unknown / flat".
+   */
+  getPitch?(): number
   getBounds(): { toArray(): [[number, number], [number, number]] }
 }
 

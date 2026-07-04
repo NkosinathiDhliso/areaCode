@@ -334,6 +334,7 @@ function buildMapInstance(map: mapboxgl.Map): MapInstance {
         if (opts.zoom !== undefined) flyOpts['zoom'] = opts.zoom
         if (opts.offset !== undefined) flyOpts['offset'] = opts.offset
         if (opts.duration !== undefined) flyOpts['duration'] = opts.duration
+        if (opts.minZoom !== undefined) flyOpts['minZoom'] = opts.minZoom
         if (opts.easing !== undefined) flyOpts['easing'] = opts.easing
         map.flyTo(flyOpts as Parameters<typeof map.flyTo>[0])
       } catch {
@@ -346,6 +347,13 @@ function buildMapInstance(map: mapboxgl.Map): MapInstance {
         return map.getZoom()
       } catch {
         return DEFAULT_ZOOM
+      }
+    },
+    getPitch: () => {
+      try {
+        return map.getPitch()
+      } catch {
+        return PITCH_FLAT
       }
     },
     getBounds: () => ({

@@ -129,6 +129,38 @@ export const INITIAL_BROWSE_COUNT = 2
  */
 export const BROWSE_STEP = 1
 
+// ─── 3D fly-through (dramatic venue-switch camera) ───────────────────────────
+//
+// When the map is tilted (3D) and the user steps between venues, the camera
+// arcs - rising up off the rooftops, sweeping across the city, then descending
+// onto the next venue - instead of a flat pan. The arc peak (`minZoom` on the
+// fly-to) forces this "lift off and fly over" read even for venues that are
+// close together, while the destination zoom stays the user's current zoom so
+// the map-carousel "preserve the user's zoom" contract holds. In flat (2D) mode
+// or under Reduced_Motion the arc is skipped and the move stays a direct glide.
+
+/**
+ * Minimum camera pitch (degrees) for the dramatic fly-through arc to engage.
+ * Flat mode holds pitch 0; 3D mode holds >= 62 (see `pitchRamp.PITCH_3D`), so
+ * this threshold cleanly separates the two without reading any 3D toggle state.
+ */
+export const FLY_THROUGH_MIN_PITCH = 10
+
+/**
+ * How many zoom levels the camera pulls back to at the peak of the fly-through
+ * arc. Larger = the camera rises higher and the sweep across the city reads as
+ * more cinematic. The destination zoom is unchanged; this only shapes the path.
+ */
+export const FLY_THROUGH_ZOOM_DIP = 2.2
+
+/**
+ * Floor for the fly-through arc peak zoom. Kept above {@link MIN_MARKER_ZOOM}
+ * so venues stay legible (as dots/glyphs, never Constellation beams) through
+ * the sweep, and so a step between two street-zoom venues never yanks the
+ * camera out to the country overview.
+ */
+export const FLY_THROUGH_PEAK_ZOOM_FLOOR = 9
+
 /**
  * Minimum map-center movement (metres) before a user pan/zoom flips the browse
  * scope from `recommended` to `area`. Filters out accidental micro-drags and

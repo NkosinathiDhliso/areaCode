@@ -52,6 +52,56 @@ describe('Feature: map-discovery-experience, Property 7: Camera move on Active_V
   })
 })
 
+describe('Feature: map-discovery-experience, dramatic 3D fly-through on venue switch', () => {
+  // A map stub that reports a pitch and zoom so the fly-through arc can engage.
+  const tiltedMap = (pitch: number, zoom: number): FakeMap =>
+    ({ flyTo: vi.fn(), getPitch: () => pitch, getZoom: () => zoom }) as unknown as FakeMap
+
+  it('arcs (minZoom peak below current zoom) when tilted into 3D and preserving zoom', () => {
+    fc.assert(
+      fc.property(latArb, lngArb, fc.double({ min: 13, max: 22, noNaN: true }), (lat, lng, zoom) => {
+        const map = tiltedMap(62, zoom)
+        moveCameraToActive(map, node(lat, lng), { reducedMotion: false })
+
+        const arg = map.flyTo.mock.calls[0]![0]
+        expect(arg.minZoom).toBeDefined()
+        expect(arg.minZoom!).toBeLessThan(zoom)
+        // Destination zoom is preserved (the arc only shapes the path).
+        expect(arg.zoom).toBeUndefined()
+      }),
+    )
+  })
+
+  it('does not arc in flat (2D) mode', () => {
+    const map = tiltedMap(0, 15)
+    moveCameraToActive(map, node(0, 0), { reducedMotion: false })
+    expect(map.flyTo.mock.calls[0]![0].minZoom).toBeUndefined()
+  })
+
+  it('does not arc under Reduced_Motion even when tilted', () => {
+    const map = tiltedMap(62, 15)
+    moveCameraToActive(map, node(0, 0), { reducedMotion: true })
+    const arg = map.flyTo.mock.calls[0]![0]
+    expect(arg.minZoom).toBeUndefined()
+    expect(arg.duration).toBe(0)
+  })
+
+  it('does not arc when an explicit target zoom is set (cold-open dive / commit)', () => {
+    const map = tiltedMap(62, 15)
+    moveCameraToActive(map, node(0, 0), { reducedMotion: false, zoom: 13 })
+    const arg = map.flyTo.mock.calls[0]![0]
+    expect(arg.minZoom).toBeUndefined()
+    expect(arg.zoom).toBe(13)
+  })
+
+  it('skips the arc when the venue is already near the legibility floor', () => {
+    // At zoom 9 the peak floor (9) leaves no meaningful dip, so glide directly.
+    const map = tiltedMap(62, 9)
+    moveCameraToActive(map, node(0, 0), { reducedMotion: false })
+    expect(map.flyTo.mock.calls[0]![0].minZoom).toBeUndefined()
+  })
+})
+
 describe('Feature: map-discovery-experience, Property 16: Recenter is gated on position freshness', () => {
   it('canRecenter is true iff a finite capture time is within the window', () => {
     fc.assert(

@@ -16,7 +16,13 @@
 import type { MapInstance, Node } from '@area-code/shared/types'
 
 import { cameraEasing, cameraMotion } from './cameraEasing'
-import { POSITION_FRESHNESS_WINDOW, SHEET_FOCUS_OFFSET_RATIO } from './carouselConstants'
+import {
+  FLY_THROUGH_MIN_PITCH,
+  FLY_THROUGH_PEAK_ZOOM_FLOOR,
+  FLY_THROUGH_ZOOM_DIP,
+  POSITION_FRESHNESS_WINDOW,
+  SHEET_FOCUS_OFFSET_RATIO,
+} from './carouselConstants'
 
 /**
  * Estimated height (px) of the top chrome that overlays the map - the search
@@ -120,6 +126,47 @@ export interface MoveCameraOptions {
 }
 
 /**
+ * Peak zoom for a dramatic 3D fly-through, or `undefined` when the move should
+ * stay a direct glide.
+ *
+ * The arc engages only when the camera is tilted into 3D (pitch at or above
+ * {@link FLY_THROUGH_MIN_PITCH}) and the caller is preserving the user's zoom
+ * (no explicit target `zoom` - the browse "step between venues" case). It pulls
+ * the flight path back by {@link FLY_THROUGH_ZOOM_DIP} zoom levels, floored at
+ * {@link FLY_THROUGH_PEAK_ZOOM_FLOOR}, so the camera rises off the rooftops,
+ * sweeps across the city, and descends onto the next venue. The destination
+ * zoom is untouched, honouring the map-carousel "preserve the user's zoom"
+ * contract - only the path in between is shaped.
+ *
+ * Returns `undefined` (no arc) when: the map is flat/2D, pitch or zoom cannot
+ * be read (test stubs, torn-down map), or the venue is already so far out that
+ * a dip would be imperceptible or would drop below the legibility floor.
+ */
+function flyThroughPeakZoom(map: MapInstance): number | undefined {
+  let pitch: number
+  try {
+    pitch = map.getPitch?.() ?? 0
+  } catch {
+    return undefined
+  }
+  if (!Number.isFinite(pitch) || pitch < FLY_THROUGH_MIN_PITCH) return undefined
+
+  let currentZoom: number
+  try {
+    currentZoom = map.getZoom()
+  } catch {
+    return undefined
+  }
+  if (!Number.isFinite(currentZoom)) return undefined
+
+  const peak = Math.max(currentZoom - FLY_THROUGH_ZOOM_DIP, FLY_THROUGH_PEAK_ZOOM_FLOOR)
+  // A dip smaller than half a zoom level does not read as a fly-through; skip it
+  // so a near-floor venue glides directly rather than doing a token bob.
+  if (currentZoom - peak < 0.5) return undefined
+  return peak
+}
+
+/**
  * Move the Map_Canvas camera to the Active_Venue, applying the
  * Sheet_Focus_Offset so the venue is not occluded by the open Peek_Carousel.
  *
@@ -128,6 +175,12 @@ export interface MoveCameraOptions {
  * a jump, no animated transition) when Reduced_Motion is set (Requirements 1.5,
  * 8.5). The underlying `MapInstance.flyTo` already fails open if the map has
  * been torn down, so callers need no extra guarding.
+ *
+ * When the map is tilted into 3D and the move preserves the user's zoom
+ * (stepping between venues), the flight path arcs up and over the city - a
+ * dramatic fly-through rather than a flat pan - via {@link flyThroughPeakZoom}.
+ * Reduced_Motion and an explicit target `zoom` (cold-open dive, commit-zoom)
+ * both keep the direct move.
  *
  * Validates: Requirements 1.4, 1.5, 8.5
  */
@@ -138,11 +191,16 @@ export function moveCameraToActive(map: MapInstance, node: Node, { reducedMotion
   // default animated fly-to (no explicit duration). Spread so `easing` reaches
   // the adapter without the MapInstance option literal rejecting it.
   const motion = { easing: cameraEasing, ...(reducedMotion ? { duration: 0 } : {}) }
+
+  // Dramatic 3D fly-through arc, only when animating and preserving the zoom.
+  const peakZoom = !reducedMotion && zoom === undefined ? flyThroughPeakZoom(map) : undefined
+
   map.flyTo({
     center: [node.lng, node.lat],
     offset: sheetFocusOffset(markerApexOffset(node.id)),
     ...motion,
     ...(zoom !== undefined ? { zoom } : {}),
+    ...(peakZoom !== undefined ? { minZoom: peakZoom } : {}),
   })
 }
 
