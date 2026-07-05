@@ -107,6 +107,25 @@ Manual gates (not verifiable by script)
 ==========================================
 ```
 
+## Resolution note (2026-07-05)
+
+All three FAILs below are fixed and verified:
+
+- Root cause 1: missing table env vars on `reward-evaluator` and `pulse-decay`.
+  Fixed in Terraform (full table closure per worker) and applied.
+- Root cause 2 (masked by 1): the worker Lambdas sat in a VPC with no NAT and
+  no DynamoDB gateway endpoint, so every AWS or HTTPS call hung to timeout.
+  All workers now run outside the VPC, matching the api/presence-expiry
+  pattern. See the "Not in VPC" notes in `infra/environments/prod/main.tf`.
+- The DLQ (grown to 11) was redriven after the fix; all messages processed in
+  ~600ms with no errors and the queue is at 0. `pulse-decay` completes cleanly
+  on schedule.
+
+A re-run inside 24h of the fix still shows the two worker-error FAILs because
+the check scans a trailing 24h log window; they age out on their own. The
+seed-data WARNs (venue count, gets coverage, placeholder venue names) and the
+four manual gates remain open.
+
 ## Follow-up items (every FAIL and WARN)
 
 These are reported, not fixed. Fixing seed-data, DLQ, worker-config, and content

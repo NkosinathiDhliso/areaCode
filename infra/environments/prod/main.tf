@@ -843,12 +843,15 @@ module "lambda_reward_evaluator" {
   memory_size   = 256
   environment_variables = {
     AREA_CODE_ENV = local.env
-    # Tables this worker touches (repository: rewards + app-data; the push
-    # fallback reads tokens from app-data). Table-name env vars must always be
-    # set in prod (no-fallbacks-no-legacy) - missing REWARDS_TABLE was the
-    # 2026-07-03 go-live FAIL and the reward-eval DLQ backlog root cause.
+    # Full table closure: rewards + redemption/city rows in app-data, node
+    # lookup (getNodeById), and per-user check-in counts. Table-name env vars
+    # must always be set in prod (no-fallbacks-no-legacy); missing
+    # REWARDS_TABLE was the 2026-07-03 go-live FAIL and the reward-eval DLQ
+    # backlog root cause.
     REWARDS_TABLE  = aws_dynamodb_table.rewards.name
     APP_DATA_TABLE = aws_dynamodb_table.app_data.name
+    NODES_TABLE    = aws_dynamodb_table.nodes.name
+    CHECKINS_TABLE = aws_dynamodb_table.checkins.name
     # Web push (VAPID) - reward-earned delivery always falls back to push from
     # Lambda (no in-process socket).
     AREA_CODE_VAPID_PUBLIC_KEY  = var.vapid_public_key
