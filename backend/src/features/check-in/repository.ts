@@ -1,8 +1,8 @@
 // DynamoDB-backed Check-In Repository (replaces Prisma)
-import { GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+import { GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import * as dynamo from './dynamodb-repository.js'
-import { getUserById, updateUser } from '../auth/dynamodb-repository.js'
+import { updateUser } from '../auth/dynamodb-repository.js'
 import { toSASTDate } from './streak.js'
 
 export async function getNodeWithCity(nodeId: string) {
