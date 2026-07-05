@@ -19,13 +19,17 @@
 // Bump CACHE_VERSION whenever the precache list or strategy changes so old
 // caches are cleared on activate.
 
-const CACHE_VERSION = 'v2'
+const CACHE_VERSION = 'v3'
 const CACHE_NAME = `area-code-${CACHE_VERSION}`
 
 // The minimal shell needed for a cold offline boot. Hashed JS/CSS bundles are
 // cached on demand at runtime (their URLs change every build, so listing them
-// here would be stale immediately).
-const PRECACHE_URLS = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/favicon.ico']
+// here would be stale immediately). '/' is deliberately NOT precached: the
+// shell lives only under '/index.html', which networkFirstNavigation refreshes
+// on every successful online navigation. A second install-time copy under '/'
+// would shadow that fresher shell in offline fallbacks and serve entry-chunk
+// URLs from a long-gone deploy (blank page on reopen).
+const PRECACHE_URLS = ['/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/favicon.ico']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -75,11 +79,20 @@ function cacheFirst(request) {
 function networkFirstNavigation(request) {
   return fetch(request)
     .then((response) => {
-      const copy = response.clone()
-      void caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy))
+      // Only an OK response may become the offline shell. Caching a 503
+      // (mid-deploy) or a captive-portal login page here would poison every
+      // offline boot until the next successful navigation.
+      if (response.ok) {
+        const copy = response.clone()
+        void caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy))
+      }
       return response
     })
-    .catch(() => caches.match(request).then((cached) => cached || caches.match('/index.html')))
+    .catch(() =>
+      // '/index.html' first: it is refreshed on every successful online
+      // navigation, so it always references the newest deploy's entry chunks.
+      caches.match('/index.html').then((cached) => cached || caches.match(request)),
+    )
 }
 
 self.addEventListener('fetch', (event) => {

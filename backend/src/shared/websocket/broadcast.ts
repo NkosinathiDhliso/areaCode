@@ -8,7 +8,6 @@ import { unmarshall } from '@aws-sdk/util-dynamodb'
 
 import { AWS_REGION, requireEnv } from '../config/env.js'
 import { documentClient } from '../db/dynamodb.js'
-import type { VenueMomentum } from '@area-code/shared/types'
 
 const ddbClient = new DynamoDBClient({ region: AWS_REGION })
 
@@ -33,7 +32,7 @@ async function getApiClient(): Promise<ApiGatewayManagementApiClient> {
   })
 }
 
-async function sendToConnection(connectionId: string, message: BroadcastMessage): Promise<void> {
+export async function sendToConnection(connectionId: string, message: BroadcastMessage): Promise<void> {
   const client = await getApiClient()
 
   try {
@@ -58,9 +57,10 @@ async function sendToConnection(connectionId: string, message: BroadcastMessage)
 // ============================================================================
 
 /**
- * Broadcast a message to all connections in a room (e.g., city:capetown)
+ * Broadcast a message to all connections in a room (e.g., city:capetown).
+ * Returns the number of connections the message was fanned out to.
  */
-export async function broadcastToRoom(roomId: string, message: BroadcastMessage): Promise<void> {
+export async function broadcastToRoom(roomId: string, message: BroadcastMessage): Promise<number> {
   const result = await ddbClient.send(
     new QueryCommand({
       TableName: CONNECTIONS_TABLE,
@@ -77,12 +77,15 @@ export async function broadcastToRoom(roomId: string, message: BroadcastMessage)
   await Promise.all(connections.map((conn) => sendToConnection(conn.connectionId, message)))
 
   console.log(`Broadcasted to ${connections.length} connections in room ${roomId}`)
+  return connections.length
 }
 
 /**
- * Broadcast a message to all connections for a specific user
+ * Broadcast a message to all connections for a specific user.
+ * Returns the number of connections the message was fanned out to, so callers
+ * can fall back to push delivery when the user has no live socket.
  */
-export async function broadcastToUser(userId: string, message: BroadcastMessage): Promise<void> {
+export async function broadcastToUser(userId: string, message: BroadcastMessage): Promise<number> {
   const result = await ddbClient.send(
     new QueryCommand({
       TableName: CONNECTIONS_TABLE,
@@ -99,6 +102,26 @@ export async function broadcastToUser(userId: string, message: BroadcastMessage)
   await Promise.all(connections.map((conn) => sendToConnection(conn.connectionId, message)))
 
   console.log(`Broadcasted to ${connections.length} connections for user ${userId}`)
+  return connections.length
+}
+
+/**
+ * Count live connections in a room without sending anything. Used to defer
+ * expensive emits when nobody is listening (e.g. live-archetype ticks).
+ */
+export async function countRoomConnections(roomId: string): Promise<number> {
+  const result = await ddbClient.send(
+    new QueryCommand({
+      TableName: CONNECTIONS_TABLE,
+      IndexName: 'RoomIndex',
+      KeyConditionExpression: 'roomId = :roomId',
+      ExpressionAttributeValues: {
+        ':roomId': { S: roomId },
+      },
+      Select: 'COUNT',
+    }),
+  )
+  return result.Count ?? 0
 }
 
 /**
@@ -142,213 +165,6 @@ export async function deleteConnectionsByUser(userId: string): Promise<number> {
   return deleted
 }
 
-/**
- * Broadcast a pulse update to all users in a city
- */
-export async function broadcastPulseUpdate(
-  citySlug: string,
-  nodeId: string,
-  pulseScore: number,
-  state: string,
-  checkInCount: number,
-): Promise<void> {
-  await broadcastToRoom(`city:${citySlug}`, {
-    type: 'node:pulse_update',
-    payload: {
-      nodeId,
-      pulseScore,
-      state,
-      checkInCount,
-    },
-  })
-}
-
-/**
- * Broadcast the honest live-presence count for a venue to all users in a city
- * over the existing API Gateway WebSocket transport (no new transport).
- *
- * Dedicated `node:presence_update` event carrying only `{ nodeId,
- * livePresenceCount, cause }` — no consumer identity (Requirements 7.4, 10.4).
- * Does NOT repurpose `node:pulse_update.checkInCount` (founder decision 13.4 /
- * Requirement 8.4). Best-effort fan-out: callers wrap this so a failure is
- * logged and never rolls back the committed check-in / check-out / expiry
- * (Requirement 7.5).
- */
-export async function broadcastPresenceUpdate(
-  citySlug: string,
-  nodeId: string,
-  livePresenceCount: number,
-  cause: 'check_in' | 'check_out' | 'expiry',
-  momentum?: VenueMomentum,
-): Promise<void> {
-  await broadcastToRoom(`city:${citySlug}`, {
-    type: 'node:presence_update',
-    payload: {
-      nodeId,
-      livePresenceCount,
-      cause,
-      ...(momentum ? { momentum } : {}),
-    },
-  })
-}
-
-/**
- * Broadcast a state surge (e.g., quiet -> active)
- */
-export async function broadcastStateSurge(
-  citySlug: string,
-  nodeId: string,
-  fromState: string,
-  toState: string,
-): Promise<void> {
-  await broadcastToRoom(`city:${citySlug}`, {
-    type: 'node:state_surge',
-    payload: {
-      nodeId,
-      fromState,
-      toState,
-    },
-  })
-}
-
-/**
- * Broadcast a toast notification
- */
-export async function broadcastToast(
-  citySlug: string,
-  toast: {
-    type: string
-    message: string
-    nodeId?: string
-    nodeLat?: number
-    nodeLng?: number
-    avatarUrl?: string
-  },
-): Promise<void> {
-  await broadcastToRoom(`city:${citySlug}`, {
-    type: 'toast:new',
-    payload: toast,
-  })
-}
-
-/**
- * Broadcast reward claimed notification
- */
-export async function broadcastRewardClaimed(
-  citySlug: string,
-  payload: {
-    rewardId: string
-    rewardTitle: string
-    redemptionCode: string
-    codeExpiresAt: string
-  },
-): Promise<void> {
-  await broadcastToRoom(`city:${citySlug}`, {
-    type: 'reward:claimed',
-    payload,
-  })
-}
-
-/**
- * Broadcast reward slots update
- */
-export async function broadcastRewardSlotsUpdate(
-  citySlug: string,
-  rewardId: string,
-  slotsRemaining: number,
-): Promise<void> {
-  await broadcastToRoom(`city:${citySlug}`, {
-    type: 'reward:slots_update',
-    payload: {
-      rewardId,
-      slotsRemaining,
-    },
-  })
-}
-
-/**
- * Broadcast leaderboard update to a specific user
- */
-export async function broadcastLeaderboardUpdate(userId: string, rank: number, delta: number): Promise<void> {
-  await broadcastToUser(userId, {
-    type: 'leaderboard:update',
-    payload: {
-      userId,
-      rank,
-      delta,
-    },
-  })
-}
-
-/**
- * Broadcast business check-in notification
- */
-export async function broadcastBusinessCheckin(
-  businessId: string,
-  payload: {
-    nodeId: string
-    nodeName: string
-    checkInCount: number
-    avatarUrl?: string
-    username?: string
-  },
-): Promise<void> {
-  await broadcastToRoom(`business:${businessId}`, {
-    type: 'business:checkin',
-    payload,
-  })
-}
-
-/**
- * Broadcast business reward claimed notification
- */
-export async function broadcastBusinessRewardClaimed(
-  businessId: string,
-  payload: {
-    nodeId: string
-    nodeName: string
-    rewardId: string
-    rewardTitle: string
-  },
-): Promise<void> {
-  await broadcastToRoom(`business:${businessId}`, {
-    type: 'business:reward_claimed',
-    payload,
-  })
-}
-
-/**
- * Broadcast friend check-in notification
- */
-export async function broadcastFriendCheckin(
-  userId: string,
-  payload: {
-    message: string
-    userId: string
-    nodeId: string
-    avatarUrl?: string
-  },
-): Promise<void> {
-  await broadcastToUser(userId, {
-    type: 'toast:friend_checkin',
-    payload: {
-      type: 'checkin',
-      ...payload,
-    },
-  })
-}
-
-/**
- * Broadcast friend checkout notification. Emitted when a mutual friend checks
- * out (manual) or their presence expires so the client can remove them from the
- * friends-at-venue store (honest presence — Requirement 3.5).
- */
-export async function broadcastFriendCheckout(
-  recipientUserId: string,
-  payload: { userId: string; nodeId: string },
-): Promise<void> {
-  await broadcastToUser(recipientUserId, {
-    type: 'friend:checkout',
-    payload,
-  })
-}
+// Event-shaped emitters (pulse updates, toasts, reward events, ...) live in
+// one home: backend/src/shared/socket/events.ts. They delegate to
+// broadcastToRoom / broadcastToUser above.

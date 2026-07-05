@@ -576,8 +576,6 @@ export interface ServerToClientEvents {
 export interface ClientToServerEvents {
   'room:join': (payload: { room: string }) => void
   'room:leave': (payload: { room: string }) => void
-  'presence:join': (payload: { nodeId: string }) => void
-  'presence:leave': (payload: { nodeId: string }) => void
 }
 
 // Reward proximity (for node detail "one more visit" line)

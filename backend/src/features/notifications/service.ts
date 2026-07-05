@@ -1,7 +1,6 @@
 import { kvGet, kvIncr } from '../../shared/kv/dynamodb-kv.js'
 import * as repo from './repository.js'
-import { getIO } from '../../shared/socket/server.js'
-import { userRoom } from '../../shared/socket/rooms.js'
+import { emitNotificationNew, emitToUser } from '../../shared/socket/events.js'
 import {
   NOTIFICATION_PREFERENCE_DEFAULTS as DEFAULTS,
   type NotificationPreferenceKey,
@@ -110,28 +109,19 @@ export async function sendNotification(options: SendNotificationOptions): Promis
     }
   }
 
-  // 2. Deliver via WebSocket or push
-  const io = getIO()
-  const room = userRoom(userId)
-  // In serverless contexts (Lambda) there's no in-process Socket.io server,
-  // so fall straight through to push-token delivery.
-  const sockets = io ? await io.in(room).fetchSockets() : []
+  // 2. Deliver via WebSocket (live connections tracked in DynamoDB) or push
+  const reached = await emitNotificationNew(userId, {
+    type,
+    title,
+    body,
+    data,
+    createdAt: new Date().toISOString(),
+  })
 
   let deliveryChannel: 'socket' | 'push' | 'none' = 'none'
   let pushCount = 0
 
-  if (io && sockets.length > 0) {
-    // Deliver via WebSocket
-    io.to(room).emit(
-      'notification:new' as 'reward:claimed',
-      {
-        type,
-        title,
-        body,
-        data,
-        createdAt: new Date().toISOString(),
-      } as never,
-    )
+  if (reached > 0) {
     deliveryChannel = 'socket'
   } else {
     // Fallback to push
@@ -191,12 +181,8 @@ export async function sendNotification(options: SendNotificationOptions): Promis
  * `sendNotification()` which adds preference checking and history persistence.
  */
 export async function notifyUser(userId: string, event: string, payload: Record<string, unknown>) {
-  const io = getIO()
-  const room = userRoom(userId)
-  const sockets = io ? await io.in(room).fetchSockets() : []
-
-  if (io && sockets.length > 0) {
-    io.to(room).emit(event as 'reward:claimed', payload as never)
+  const reached = await emitToUser(userId, event, payload)
+  if (reached > 0) {
     return { delivered: 'socket' }
   }
 

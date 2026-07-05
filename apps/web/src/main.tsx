@@ -33,13 +33,13 @@ const queryClient = new QueryClient({
 })
 
 async function bootstrap() {
-  // Initialize error monitoring first (non-blocking)
-  try {
-    const { initRum } = await import('@area-code/shared/lib/rum')
-    await initRum()
-  } catch {
-    // RUM init failed - app continues without monitoring
-  }
+  // Error monitoring is fire-and-forget: never let a slow or failed RUM chunk
+  // download delay first paint (a blank screen on slow mobile networks).
+  void import('@area-code/shared/lib/rum')
+    .then(({ initRum }) => initRum())
+    .catch(() => {
+      // RUM init failed - app continues without monitoring
+    })
 
   if (import.meta.env.VITE_DEV_MOCK === 'true') {
     try {

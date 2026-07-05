@@ -85,7 +85,7 @@ export async function handler() {
       }
 
       if (oldState !== newState) {
-        emitStateChange(city.slug, {
+        await emitStateChange(city.slug, {
           nodeId,
           state: newState as 'dormant' | 'quiet' | 'active' | 'buzzing' | 'popping',
         })

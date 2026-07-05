@@ -36,8 +36,7 @@ import {
   reconcileCounter,
   recordPresenceSample,
 } from '../features/presence/repository.js'
-import { broadcastPresenceUpdate } from '../shared/websocket/broadcast.js'
-import { emitFriendCheckout } from '../shared/socket/events.js'
+import { emitFriendCheckout, emitPresenceUpdate } from '../shared/socket/events.js'
 import { getMutualFollowIds, getFollowingIds } from '../features/social/repository.js'
 import { canEmitIdentity } from '../shared/privacy/privacy-guard.js'
 
@@ -108,9 +107,9 @@ export async function handler() {
           if (canEmit) {
             const followingIds = await getFollowingIds(record.userId)
             const friendIds = await getMutualFollowIds(record.userId, followingIds)
-            for (const friendId of friendIds) {
-              emitFriendCheckout(friendId, { userId: record.userId, nodeId })
-            }
+            await Promise.allSettled(
+              [...friendIds].map((friendId) => emitFriendCheckout(friendId, { userId: record.userId, nodeId })),
+            )
           }
         } catch (err) {
           console.warn(`[presence-expiry] friend:checkout emit failed for user ${record.userId}: ${String(err)}`)
@@ -129,13 +128,14 @@ export async function handler() {
       // Record the reconciled count so expiry-driven departures feed the honest
       // momentum trend (a venue emptying overnight reads as "winding down").
       const momentum = await recordPresenceSample(nodeId, count, now)
-      try {
-        await broadcastPresenceUpdate(city.slug, nodeId, count, 'expiry', momentum)
-      } catch (err) {
-        // Best-effort fan-out: a broadcast failure must never roll back the
-        // committed expiry (Requirement 7.5 spirit).
-        console.error(`[presence-expiry] Failed to broadcast presence update for node ${nodeId}`, err)
-      }
+      // Best-effort fan-out: emitPresenceUpdate logs and swallows failures, so
+      // a broadcast error never rolls back the committed expiry (Req 7.5).
+      await emitPresenceUpdate(city.slug, {
+        nodeId,
+        livePresenceCount: count,
+        cause: 'expiry',
+        momentum,
+      })
     }
   }
 

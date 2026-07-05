@@ -5,8 +5,6 @@ import {
   emitToast,
   emitBusinessRewardClaimed,
 } from '../shared/socket/events.js'
-import { userRoom } from '../shared/socket/rooms.js'
-import { getIO } from '../shared/socket/server.js'
 import { classifyLifecycle, isClaimEligible } from '../features/rewards/lifecycle.js'
 import { isConditionalCheckFailedError } from '../shared/db/dynamodb.js'
 import * as repo from './reward-evaluator-repository.js'
@@ -126,20 +124,17 @@ async function emitClaimEvents(
   const slots = reward.totalSlots ?? null
   const slotsRemaining = slots !== null ? slots - (reward.claimedCount ?? 0) - 1 : null
 
-  const io = getIO()
-  // No socket server in serverless: skip the live presence check and emit
-  // through emitRewardClaimed regardless (which itself no-ops without io).
-  const sockets = io ? await io.in(userRoom(userId)).fetchSockets() : []
+  // Socket-first: emitRewardClaimed reports how many live connections it
+  // reached; when the user has no live socket, fall back to a push.
+  const reached = await emitRewardClaimed(userId, {
+    rewardId: reward.id,
+    rewardTitle: reward.title,
+    redemptionCode: code,
+    codeExpiresAt,
+    nodeName: reward.node?.name ?? '',
+  })
 
-  if (sockets.length > 0) {
-    emitRewardClaimed(userId, {
-      rewardId: reward.id,
-      rewardTitle: reward.title,
-      redemptionCode: code,
-      codeExpiresAt,
-      nodeName: reward.node?.name ?? '',
-    })
-  } else {
+  if (reached === 0) {
     // Deliver via push notification (Expo / Web Push)
     const { canSendRewardPush, incrementRewardPushCount, notifyUser } =
       await import('../features/notifications/service.js')
@@ -158,15 +153,15 @@ async function emitClaimEvents(
   }
 
   if (slotsRemaining !== null) {
-    emitRewardSlotsUpdate(nodeId, {
-      rewardId: reward.id,
-      slotsRemaining: Math.max(0, slotsRemaining),
-    })
+    const citySlug = reward.node?.city?.slug
+    if (citySlug) {
+      await emitRewardSlotsUpdate(citySlug, {
+        rewardId: reward.id,
+        slotsRemaining: Math.max(0, slotsRemaining),
+      })
 
-    if (slotsRemaining <= 5 && slotsRemaining >= 0) {
-      const citySlug = reward.node?.city?.slug
-      if (citySlug) {
-        emitToast(citySlug, {
+      if (slotsRemaining <= 5 && slotsRemaining >= 0) {
+        await emitToast(citySlug, {
           type: 'reward_pressure',
           message: `Only ${slotsRemaining} left for ${reward.title} at ${reward.node?.name ?? 'Unknown'}`,
           nodeId,
@@ -177,7 +172,7 @@ async function emitClaimEvents(
 
   // Emit to business room if node is owned by a business
   if (reward.node?.businessId) {
-    emitBusinessRewardClaimed(reward.node.businessId, {
+    await emitBusinessRewardClaimed(reward.node.businessId, {
       nodeId,
       nodeName: reward.node.name,
       rewardId: reward.id,

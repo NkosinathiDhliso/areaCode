@@ -224,53 +224,56 @@ function devAuthPayload(token: string, allowedRoles: AuthRole[]): AuthPayload {
 }
 
 /**
+ * Verify a raw bearer token against the given pool(s). The single verification
+ * path for Fastify routes (via requireAuth) AND non-Fastify contexts such as
+ * the WebSocket $connect Lambda.
+ *
+ * Prod: routes to the matching pool based on the issuer claim, falling back to
+ * trying every allowed pool (verification still rejects forged issuers).
+ * Dev mode: parses the `dev-…` token grammar and fails closed when the token
+ * names a role outside `roles` — mirroring how a staff-pool token fails
+ * business-pool verification with 401 in prod.
+ */
+export async function verifyBearerToken(token: string, roles: AuthRole[]): Promise<AuthPayload> {
+  if (DEV_MODE) {
+    const payload = devAuthPayload(token, roles)
+    if (!roles.includes(payload.role)) {
+      throw AppError.unauthorized('Invalid or expired token')
+    }
+    return payload
+  }
+
+  const matchedRole = poolFromIssuer(token, roles)
+  const orderedRoles = matchedRole ? [matchedRole] : roles
+
+  let lastError: Error | null = null
+  for (const role of orderedRoles) {
+    try {
+      return await verifyToken(token, role)
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err))
+    }
+  }
+
+  throw lastError instanceof AppError ? lastError : AppError.unauthorized('Invalid or expired token')
+}
+
+/**
  * Creates a Fastify preHandler that verifies JWT for the given role(s).
  * Attaches `request.auth` with the verified payload.
  */
 export function requireAuth(...roles: AuthRole[]) {
   return async (request: FastifyRequest, _reply: FastifyReply) => {
-    // Dev mode: accept any Bearer token and create a mock auth payload
-    if (DEV_MODE) {
-      const authHeader = request.headers.authorization
-      const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : ''
-      const payload = devAuthPayload(token, roles)
-      // Mirror prod: a token only authenticates on a route whose allowed roles
-      // include the token's pool. In prod a staff-pool token fails business-pool
-      // verification (401); here the legacy positional form always yields
-      // roles[0] (always allowed), while a structured token naming a role
-      // outside `roles` is rejected. Fail closed.
-      if (!roles.includes(payload.role)) {
-        throw AppError.unauthorized('Invalid or expired token')
-      }
-      ;(request as FastifyRequest & { auth: AuthPayload }).auth = payload
-      return
-    }
-
     const authHeader = request.headers.authorization
-    if (!authHeader?.startsWith('Bearer ')) {
+
+    // Dev mode accepts a missing/plain header (mock token grammar).
+    if (!DEV_MODE && !authHeader?.startsWith('Bearer ')) {
       throw AppError.unauthorized('Missing or invalid Authorization header')
     }
 
-    const token = authHeader.slice(7)
-
-    // Route to the matching pool based on the issuer claim, falling back
-    // to trying every allowed pool if the issuer doesn't match anything
-    // (e.g. token from an unknown source — verification will reject it).
-    const matchedRole = poolFromIssuer(token, roles)
-    const orderedRoles = matchedRole ? [matchedRole] : roles
-
-    let lastError: Error | null = null
-    for (const role of orderedRoles) {
-      try {
-        const payload = await verifyToken(token, role)
-        ;(request as FastifyRequest & { auth: AuthPayload }).auth = payload
-        return
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err))
-      }
-    }
-
-    throw lastError instanceof AppError ? lastError : AppError.unauthorized('Invalid or expired token')
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : ''
+    const payload = await verifyBearerToken(token, roles)
+    ;(request as FastifyRequest & { auth: AuthPayload }).auth = payload
   }
 }
 

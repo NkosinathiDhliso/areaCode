@@ -6,40 +6,63 @@ import type {
   BusinessCheckinDetailPayload,
   BusinessRewardClaimedPayload,
   TierChangedPayload,
+  LiveArchetypeBranch,
 } from './types.js'
-import { getIO } from './server.js'
-import { cityRoom, nodeRoom, userRoom, businessRoom } from './rooms.js'
+import { broadcastToRoom, broadcastToUser } from '../websocket/broadcast.js'
+import { cityRoom, businessRoom } from './rooms.js'
 
 /**
- * Typed event emitters for Socket.io broadcasts.
+ * Typed realtime event emitters. The single emit path for every feature and
+ * worker: each emitter fans out over the API Gateway WebSocket transport via
+ * broadcastToRoom / broadcastToUser (connections tracked in DynamoDB).
  *
- * Every emitter no-ops when no Socket.io server is attached (Lambda).
- * Realtime fan-out is a UX enhancement, never a correctness invariant —
- * the source-of-truth state has already been committed to DynamoDB by
- * the time these are called. In Lambda we rely on API Gateway WebSocket
- * fan-out instead; that path is plumbed separately. Throwing here would
- * 500 perfectly successful writes (e.g. a check-in that hit the DB but
- * couldn't broadcast its pulse update).
+ * Best-effort by contract: the source-of-truth state has already been
+ * committed to DynamoDB by the time these are called, so a fan-out failure is
+ * logged loudly and swallowed here — it must never roll back or 500 the write
+ * that triggered it.
+ *
+ * Callers MUST await these. Lambda freezes the process as soon as the handler
+ * returns, so a fire-and-forget emit is silently lost.
+ *
+ * Each emitter resolves to the number of connections reached (0 on failure),
+ * so callers that care (e.g. push fallback) can react.
  */
 
-export function emitPulseUpdate(
+async function safeRoomBroadcast(room: string, type: string, payload: Record<string, unknown>): Promise<number> {
+  try {
+    return await broadcastToRoom(room, { type, payload })
+  } catch (error) {
+    console.error(`Realtime broadcast failed (${type} -> ${room}):`, error)
+    return 0
+  }
+}
+
+async function safeUserBroadcast(userId: string, type: string, payload: Record<string, unknown>): Promise<number> {
+  try {
+    return await broadcastToUser(userId, { type, payload })
+  } catch (error) {
+    console.error(`Realtime broadcast failed (${type} -> user ${userId}):`, error)
+    return 0
+  }
+}
+
+export async function emitPulseUpdate(
   citySlug: string,
   payload: { nodeId: string; pulseScore: number; checkInCount: number; state: NodeState },
-) {
-  getIO()?.to(cityRoom(citySlug)).emit('node:pulse_update', payload)
+): Promise<number> {
+  return safeRoomBroadcast(cityRoom(citySlug), 'node:pulse_update', payload)
 }
 
 /**
- * Emit the honest live-presence count for a venue over Socket.io.
+ * Emit the honest live-presence count for a venue.
  *
  * Dedicated event carrying only `{ nodeId, livePresenceCount, cause }` — no
  * consumer identity (Requirements 7.4, 10.4). Does NOT repurpose
  * `node:pulse_update.checkInCount` (founder decision 13.4 / Requirement 8.4).
- * Best-effort like every emitter here: no-ops when no Socket.io server is
- * attached (Lambda), and a fan-out failure never rolls back the committed
- * check-in / check-out / expiry (Requirement 7.5).
+ * A fan-out failure never rolls back the committed check-in / check-out /
+ * expiry (Requirement 7.5).
  */
-export function emitPresenceUpdate(
+export async function emitPresenceUpdate(
   citySlug: string,
   payload: {
     nodeId: string
@@ -47,22 +70,25 @@ export function emitPresenceUpdate(
     cause: 'check_in' | 'check_out' | 'expiry'
     momentum?: VenueMomentum
   },
-) {
-  getIO()?.to(cityRoom(citySlug)).emit('node:presence_update', payload)
+): Promise<number> {
+  return safeRoomBroadcast(cityRoom(citySlug), 'node:presence_update', payload)
 }
 
-export function emitStateSurge(
+export async function emitStateSurge(
   citySlug: string,
   payload: { nodeId: string; fromState: NodeState; toState: NodeState },
-) {
-  getIO()?.to(cityRoom(citySlug)).emit('node:state_surge', payload)
+): Promise<number> {
+  return safeRoomBroadcast(cityRoom(citySlug), 'node:state_surge', payload)
 }
 
-export function emitStateChange(citySlug: string, payload: { nodeId: string; state: NodeState }) {
-  getIO()?.to(cityRoom(citySlug)).emit('node:state_change', payload)
+export async function emitStateChange(
+  citySlug: string,
+  payload: { nodeId: string; state: NodeState },
+): Promise<number> {
+  return safeRoomBroadcast(cityRoom(citySlug), 'node:state_change', payload)
 }
 
-export function emitNodeCreated(
+export async function emitNodeCreated(
   citySlug: string,
   payload: {
     id: string
@@ -75,11 +101,11 @@ export function emitNodeCreated(
     nodeColour?: string
     isVerified?: boolean
   },
-) {
-  getIO()?.to(cityRoom(citySlug)).emit('node:created', payload)
+): Promise<number> {
+  return safeRoomBroadcast(cityRoom(citySlug), 'node:created', payload)
 }
 
-export function emitToast(
+export async function emitToast(
   citySlug: string,
   payload: {
     type: ToastType
@@ -89,11 +115,11 @@ export function emitToast(
     nodeLng?: number
     avatarUrl?: string
   },
-) {
-  getIO()?.to(cityRoom(citySlug)).emit('toast:new', payload)
+): Promise<number> {
+  return safeRoomBroadcast(cityRoom(citySlug), 'toast:new', payload)
 }
 
-export function emitRewardClaimed(
+export async function emitRewardClaimed(
   userId: string,
   payload: {
     rewardId: string
@@ -102,27 +128,41 @@ export function emitRewardClaimed(
     codeExpiresAt: string
     nodeName?: string
   },
-) {
-  getIO()?.to(userRoom(userId)).emit('reward:claimed', payload)
+): Promise<number> {
+  return safeUserBroadcast(userId, 'reward:claimed', payload)
 }
 
-export function emitRewardSlotsUpdate(nodeId: string, payload: { rewardId: string; slotsRemaining: number }) {
-  getIO()?.to(nodeRoom(nodeId)).emit('reward:slots_update', payload)
+/**
+ * Slots updates fan out to the city room: clients filter by rewardId, and the
+ * city room is the one consumers are actually joined to (there is no
+ * node-scoped room membership in the connections table).
+ */
+export async function emitRewardSlotsUpdate(
+  citySlug: string,
+  payload: { rewardId: string; slotsRemaining: number },
+): Promise<number> {
+  return safeRoomBroadcast(cityRoom(citySlug), 'reward:slots_update', payload)
 }
 
-export function emitLeaderboardUpdate(userId: string, payload: { userId: string; rank: number; delta: number }) {
-  getIO()?.to(userRoom(userId)).emit('leaderboard:update', payload)
+export async function emitLeaderboardUpdate(
+  userId: string,
+  payload: { userId: string; rank: number; delta: number },
+): Promise<number> {
+  return safeUserBroadcast(userId, 'leaderboard:update', payload)
 }
 
-export function emitBusinessCheckin(businessId: string, payload: BusinessCheckinPayload) {
-  getIO()?.to(businessRoom(businessId)).emit('business:checkin', payload)
+export async function emitBusinessCheckin(businessId: string, payload: BusinessCheckinPayload): Promise<number> {
+  return safeRoomBroadcast(businessRoom(businessId), 'business:checkin', { ...payload })
 }
 
-export function emitBusinessRewardClaimed(businessId: string, payload: BusinessRewardClaimedPayload) {
-  getIO()?.to(businessRoom(businessId)).emit('business:reward_claimed', payload)
+export async function emitBusinessRewardClaimed(
+  businessId: string,
+  payload: BusinessRewardClaimedPayload,
+): Promise<number> {
+  return safeRoomBroadcast(businessRoom(businessId), 'business:reward_claimed', { ...payload })
 }
 
-export function emitFriendToast(
+export async function emitFriendToast(
   userId: string,
   payload: {
     type: ToastType
@@ -131,8 +171,8 @@ export function emitFriendToast(
     nodeId: string
     avatarUrl?: string
   },
-) {
-  getIO()?.to(userRoom(userId)).emit('toast:friend_checkin', payload)
+): Promise<number> {
+  return safeUserBroadcast(userId, 'toast:friend_checkin', payload)
 }
 
 /**
@@ -141,14 +181,55 @@ export function emitFriendToast(
  * uses this to call `removeFriendPresence(nodeId, userId)` so the taste-match
  * score stays honest (Requirement 3.5).
  */
-export function emitFriendCheckout(recipientUserId: string, payload: { userId: string; nodeId: string }) {
-  getIO()?.to(userRoom(recipientUserId)).emit('friend:checkout', payload)
+export async function emitFriendCheckout(
+  recipientUserId: string,
+  payload: { userId: string; nodeId: string },
+): Promise<number> {
+  return safeUserBroadcast(recipientUserId, 'friend:checkout', payload)
 }
 
-export function emitBusinessCheckinDetail(businessId: string, payload: BusinessCheckinDetailPayload) {
-  getIO()?.to(businessRoom(businessId)).emit('business:checkin_detail', payload)
+export async function emitBusinessCheckinDetail(
+  businessId: string,
+  payload: BusinessCheckinDetailPayload,
+): Promise<number> {
+  return safeRoomBroadcast(businessRoom(businessId), 'business:checkin_detail', { ...payload })
 }
 
-export function emitTierChanged(userId: string, payload: TierChangedPayload) {
-  getIO()?.to(userRoom(userId)).emit('tier:changed', payload)
+export async function emitTierChanged(userId: string, payload: TierChangedPayload): Promise<number> {
+  return safeUserBroadcast(userId, 'tier:changed', { ...payload })
+}
+
+/**
+ * Emit a Live_Archetype change for a venue to its city room (R7.11).
+ */
+export async function emitArchetypeChange(
+  citySlug: string,
+  payload: { nodeId: string; liveArchetypeId: string; branch: LiveArchetypeBranch },
+): Promise<number> {
+  return safeRoomBroadcast(cityRoom(citySlug), 'node:archetype_change', payload)
+}
+
+/**
+ * Emit an in-app notification to a user's live connections. Returns the number
+ * of connections reached so the notification service can fall back to push.
+ */
+export async function emitNotificationNew(
+  userId: string,
+  payload: {
+    type: string
+    title: string
+    body: string
+    data: Record<string, unknown>
+    createdAt: string
+  },
+): Promise<number> {
+  return safeUserBroadcast(userId, 'notification:new', payload)
+}
+
+/**
+ * Emit an arbitrary user-directed event. Prefer a typed emitter above; this
+ * exists for the notification service's generic `notifyUser` delivery path.
+ */
+export async function emitToUser(userId: string, event: string, payload: Record<string, unknown>): Promise<number> {
+  return safeUserBroadcast(userId, event, payload)
 }

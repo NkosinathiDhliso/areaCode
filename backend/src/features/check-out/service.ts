@@ -88,7 +88,7 @@ export async function processCheckOut(userId: string, input: CheckOutInput): Pro
       // Record the observation; a departure makes the count fall, which is the
       // only honest basis for a "winding down" trend (honest-presence rule 5).
       const momentum = await recordPresenceSample(input.nodeId, livePresenceCount, now)
-      emitPresenceUpdate(citySlug, {
+      await emitPresenceUpdate(citySlug, {
         nodeId: input.nodeId,
         livePresenceCount,
         cause: 'check_out',
@@ -107,9 +107,9 @@ export async function processCheckOut(userId: string, input: CheckOutInput): Pro
     if (canEmit) {
       const followingIds = await getFollowingIds(userId)
       const friendIds = await getMutualFollowIds(userId, followingIds)
-      for (const friendId of friendIds) {
-        emitFriendCheckout(friendId, { userId, nodeId: input.nodeId })
-      }
+      await Promise.allSettled(
+        [...friendIds].map((friendId) => emitFriendCheckout(friendId, { userId, nodeId: input.nodeId })),
+      )
     }
   } catch (err) {
     console.warn(`[check-out] friend:checkout emit failed: ${String(err)}`)

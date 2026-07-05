@@ -80,7 +80,7 @@ export async function buildApp() {
 
   // CORS
   const { allowedOrigins } = await import('./shared/security/origins.js')
-  void app.register(cors, {
+  await app.register(cors, {
     origin: allowedOrigins(),
     credentials: false,
   })

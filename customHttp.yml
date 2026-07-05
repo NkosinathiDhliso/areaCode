@@ -1,0 +1,37 @@
+# Repository-root custom headers for all four Amplify apps (web, business,
+# staff, admin). Amplify ignores `customHeaders` inside app-level amplify.yml
+# files for monorepo apps; this file is the mechanism it actually honors.
+# Verified live 2026-07-05: prod served Amplify defaults (max-age=0) instead
+# of the amplify.yml headers, so those blocks were dead config.
+customHeaders:
+  # Hashed Vite build artifacts. Content-addressed URLs, safe to cache forever.
+  - pattern: '/assets/**'
+    headers:
+      - key: 'Cache-Control'
+        value: 'public, max-age=31536000, immutable'
+  # HTML entry and the service worker must never be cached by the browser,
+  # otherwise clients keep referencing chunk hashes from a previous deploy.
+  - pattern: '/index.html'
+    headers:
+      - key: 'Cache-Control'
+        value: 'no-cache, no-store, must-revalidate'
+  - pattern: '/'
+    headers:
+      - key: 'Cache-Control'
+        value: 'no-cache, no-store, must-revalidate'
+  - pattern: '/sw.js'
+    headers:
+      - key: 'Cache-Control'
+        value: 'no-cache, no-store, must-revalidate'
+  - pattern: '/manifest.webmanifest'
+    headers:
+      - key: 'Cache-Control'
+        value: 'no-cache, no-store, must-revalidate'
+  - pattern: '**/*'
+    headers:
+      - key: 'X-Frame-Options'
+        value: 'DENY'
+      - key: 'X-Content-Type-Options'
+        value: 'nosniff'
+      - key: 'Referrer-Policy'
+        value: 'strict-origin-when-cross-origin'

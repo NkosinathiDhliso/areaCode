@@ -31,7 +31,7 @@
  *     - `getCounter` (presence-integrity read path) is mocked directly so the
  *       presence-read call count is observable for the read-budget and
  *       flag-off assertions.
- *     - `getIO` is stubbed with a fake Socket.io server so emission and the
+ *     - `emitArchetypeChange` / `countRoomConnections` are stubbed so emission and the
  *       subscriber check are observable.
  *   The feature flags are driven through the real `setFeatureFlagOverride`
  *   test seam (the module's dedicated override mechanism) so the genuine
@@ -91,16 +91,12 @@ const mocks = vi.hoisted(() => {
   // Presence-integrity read path (the honest present count).
   const getCounter = vi.fn(async (_nodeId: string) => 0)
 
-  // Fake Socket.io server.
-  const emitMock = vi.fn()
-  const fetchSocketsMock = vi.fn(async () => [{ id: 'socket-1' }] as Array<{ id: string }>)
-  const ioMock = {
-    in: vi.fn(() => ({ fetchSockets: fetchSocketsMock })),
-    to: vi.fn(() => ({ emit: emitMock })),
-  }
-  const getIO = vi.fn((): typeof ioMock | null => ioMock)
+  // Realtime fan-out stubs: emitArchetypeChange and the room-count read.
+  // 1 subscriber by default so the emit path is exercised.
+  const emitMock = vi.fn(async () => 1)
+  const countConnectionsMock = vi.fn(async () => 1)
 
-  return { reads, updates, state, sendMock, getCounter, emitMock, fetchSocketsMock, ioMock, getIO }
+  return { reads, updates, state, sendMock, getCounter, emitMock, countConnectionsMock }
 })
 
 vi.mock('../../shared/db/dynamodb.js', () => ({
@@ -117,8 +113,12 @@ vi.mock('../../features/presence/repository.js', () => ({
   getCounter: mocks.getCounter,
 }))
 
-vi.mock('../../shared/socket/server.js', () => ({
-  getIO: mocks.getIO,
+vi.mock('../../shared/socket/events.js', () => ({
+  emitArchetypeChange: mocks.emitMock,
+}))
+
+vi.mock('../../shared/websocket/broadcast.js', () => ({
+  countRoomConnections: mocks.countConnectionsMock,
 }))
 
 // Import AFTER mocks so the module-level singletons pick up the stubs.
@@ -186,11 +186,9 @@ beforeEach(() => {
   mocks.getCounter.mockReset()
   mocks.getCounter.mockResolvedValue(0)
   mocks.emitMock.mockClear()
-  mocks.fetchSocketsMock.mockClear()
-  mocks.fetchSocketsMock.mockResolvedValue([{ id: 'socket-1' }])
-  mocks.ioMock.in.mockClear()
-  mocks.ioMock.to.mockClear()
-  mocks.getIO.mockReturnValue(mocks.ioMock)
+  mocks.emitMock.mockResolvedValue(1)
+  mocks.countConnectionsMock.mockClear()
+  mocks.countConnectionsMock.mockResolvedValue(1)
 
   // The evaluator short-circuits on `live_vibe_on_map` first — keep it ON for
   // every case.
@@ -306,7 +304,7 @@ describe('emission only on archetype change, payload shape (R4.2)', () => {
     expect(outcome.changed).toBe(true)
     expect(outcome.emitted).toBe(true)
     expect(mocks.emitMock).toHaveBeenCalledTimes(1)
-    expect(mocks.emitMock).toHaveBeenCalledWith('node:archetype_change', {
+    expect(mocks.emitMock).toHaveBeenCalledWith(CITY_SLUG, {
       nodeId: NODE_ID,
       liveArchetypeId: CATALOG_ARCHETYPE,
       branch: 'crowd_live',
@@ -501,11 +499,11 @@ describe('e2e lifecycle: cold-start → fill → empty (R1.1, R2.1, R2.4, R3.1, 
     }
   }
 
-  /** Grab the single emitted `node:archetype_change` payload from the fake io. */
+  /** Grab the single emitted `node:archetype_change` payload from the stub. */
   function lastEmittedPayload(): Record<string, unknown> {
     expect(mocks.emitMock).toHaveBeenCalledTimes(1)
     const call = mocks.emitMock.mock.calls[0]!
-    expect(call[0]).toBe('node:archetype_change')
+    expect(call[0]).toBe(CITY_SLUG)
     return call[1] as Record<string, unknown>
   }
 

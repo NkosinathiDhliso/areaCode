@@ -20,6 +20,14 @@ const HEARTBEAT_INTERVAL_MS = 300_000 // 5 minutes, safely under the 10-min idle
 const BASE_RECONNECT_DELAY_MS = 1000
 const MAX_RECONNECT_DELAY_MS = 30_000
 
+// API Gateway WebSocket route keys cannot contain colons, so the app-level
+// event names map to the deployed route keys (infra/modules/websocket/main.tf,
+// handled in backend/src/lambdas/websocket.ts).
+const ROUTE_KEY_BY_EVENT: Record<keyof ClientToServerEvents, string> = {
+  'room:join': 'joinroom',
+  'room:leave': 'leaveroom',
+}
+
 class WebSocketManager {
   private ws: WebSocket | null = null
   private _url: string
@@ -209,7 +217,11 @@ class WebSocketManager {
 
   // Emit client events - queued if not yet connected, sent immediately if open
   emit<K extends keyof ClientToServerEvents>(event: K, payload: Parameters<ClientToServerEvents[K]>[0]): void {
-    const message = { action: event, payload }
+    // API Gateway selects the route from $request.body.action, and route keys
+    // cannot contain colons - map the app-level event names to the deployed
+    // route keys (infra/modules/websocket/main.tf). An unmapped action would
+    // silently land in $default and be ignored by the backend.
+    const message = { action: ROUTE_KEY_BY_EVENT[event], payload }
 
     if (this.ws?.readyState !== WebSocket.OPEN) {
       this.pendingQueue.push(message)

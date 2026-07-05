@@ -130,7 +130,7 @@ export async function preResetHandler() {
       const prefs = await getNotificationPreferences(entry.userId)
       if (prefs && prefs['leaderboardPrewarning']) {
         const { emitToast } = await import('../shared/socket/events.js')
-        emitToast(city.slug, {
+        await emitToast(city.slug, {
           type: 'leaderboard',
           message: `Ranks reset tonight! You're #${entry.rank} with ${entry.checkInCount} check-ins.`,
           nodeId: '',

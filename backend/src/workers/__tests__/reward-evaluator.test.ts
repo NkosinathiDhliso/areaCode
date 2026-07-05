@@ -37,13 +37,12 @@ const mocks = vi.hoisted(() => {
     countCheckInsTodayAtNode: vi.fn(async () => 0),
     getRecentCheckInsForStreak: vi.fn(async () => []),
     hasCheckInInWindow: vi.fn(async () => false),
-    // Socket server: no io in the unit environment.
-    getIO: vi.fn(() => null),
-    // Socket event emitters (no-ops; not reached in either branch under test).
-    emitRewardClaimed: vi.fn(),
-    emitRewardSlotsUpdate: vi.fn(),
-    emitToast: vi.fn(),
-    emitBusinessRewardClaimed: vi.fn(),
+    // Socket event emitters resolve to the number of connections reached;
+    // 1 = socket delivery succeeded, so the push fallback stays untouched.
+    emitRewardClaimed: vi.fn(async () => 1),
+    emitRewardSlotsUpdate: vi.fn(async () => 1),
+    emitToast: vi.fn(async () => 1),
+    emitBusinessRewardClaimed: vi.fn(async () => 1),
   }
 })
 
@@ -55,10 +54,6 @@ vi.mock('../reward-evaluator-repository.js', () => ({
   countCheckInsTodayAtNode: mocks.countCheckInsTodayAtNode,
   getRecentCheckInsForStreak: mocks.getRecentCheckInsForStreak,
   hasCheckInInWindow: mocks.hasCheckInInWindow,
-}))
-
-vi.mock('../../shared/socket/server.js', () => ({
-  getIO: mocks.getIO,
 }))
 
 vi.mock('../../shared/socket/events.js', () => ({
@@ -107,7 +102,7 @@ function conditionalCheckError() {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.getIO.mockReturnValue(null)
+  mocks.emitRewardClaimed.mockResolvedValue(1)
   mocks.countUserCheckInsAtNode.mockResolvedValue(1)
   mocks.incrementClaimedCount.mockResolvedValue({})
   vi.spyOn(console, 'error').mockImplementation(() => {})

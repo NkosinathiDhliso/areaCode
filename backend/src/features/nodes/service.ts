@@ -312,7 +312,7 @@ export async function businessCreateNode(
 
   // Broadcast to everyone viewing the map for this city so the new node appears instantly
   try {
-    emitNodeCreated(city.slug, {
+    await emitNodeCreated(city.slug, {
       id: node.nodeId,
       name: node.name,
       slug: node.slug,

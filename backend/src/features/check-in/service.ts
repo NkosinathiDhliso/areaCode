@@ -230,7 +230,7 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
       legend: ['All benefits unlocked', 'Legend badge', 'Exclusive events'],
     }
     try {
-      emitTierChanged(userId, {
+      await emitTierChanged(userId, {
         oldTier,
         newTier,
         benefits: TIER_BENEFITS[newTier] ?? [],
@@ -321,7 +321,7 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
   // 7. Emit socket events (best-effort; never fail the check-in over fan-out)
   try {
     if (citySlug) {
-      emitPulseUpdate(citySlug, {
+      await emitPulseUpdate(citySlug, {
         nodeId: input.nodeId,
         pulseScore,
         checkInCount: dailyCount,
@@ -340,7 +340,7 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
         // count series (filling up / winding down). Rising here reflects a real
         // arrival; the label only claims a trend once the series supports it.
         const momentum = await recordPresenceSample(input.nodeId, livePresenceCount, presenceNowSeconds)
-        emitPresenceUpdate(citySlug, {
+        await emitPresenceUpdate(citySlug, {
           nodeId: input.nodeId,
           livePresenceCount,
           cause: 'check_in',
@@ -349,7 +349,7 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
       }
 
       // Always emit anonymous city toast , no identity fields
-      emitToast(citySlug, {
+      await emitToast(citySlug, {
         type: 'checkin',
         message: `${node.name} is heating up , ${dailyCount} check-ins`,
         nodeId: input.nodeId,
@@ -383,9 +383,7 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
               friendPayload.avatarUrl = user.avatarUrl
             }
             // Live in-app toast for friends with an open socket.
-            for (const friendId of friendIds) {
-              emitFriendToast(friendId, friendPayload)
-            }
+            await Promise.allSettled([...friendIds].map((friendId) => emitFriendToast(friendId, friendPayload)))
             // "Come join us" push for friends who are NOT currently in the app.
             // `sendNotification` is socket-primary / push-fallback and persists
             // to the notification center, so an offline friend still gets the
@@ -450,7 +448,7 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
       // Sanitize payload to ensure only privacy-safe fields are emitted
       const sanitizedPayload = sanitizeForBusiness(businessPayload)
 
-      emitBusinessCheckin(
+      await emitBusinessCheckin(
         node.businessId,
         sanitizedPayload as {
           nodeId: string
@@ -461,7 +459,7 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
         },
       )
 
-      emitBusinessCheckinDetail(node.businessId, {
+      await emitBusinessCheckinDetail(node.businessId, {
         nodeId: input.nodeId,
         nodeName: node.name,
         displayName: canShowIdentity ? (user?.displayName ?? undefined) : undefined,

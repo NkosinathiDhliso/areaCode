@@ -116,18 +116,6 @@ resource "aws_apigatewayv2_route" "leave_room" {
   target    = "integrations/${aws_apigatewayv2_integration.websocket.id}"
 }
 
-resource "aws_apigatewayv2_route" "presence_join" {
-  api_id    = aws_apigatewayv2_api.websocket.id
-  route_key = "presencejoin"
-  target    = "integrations/${aws_apigatewayv2_integration.websocket.id}"
-}
-
-resource "aws_apigatewayv2_route" "presence_leave" {
-  api_id    = aws_apigatewayv2_api.websocket.id
-  route_key = "presenceleave"
-  target    = "integrations/${aws_apigatewayv2_integration.websocket.id}"
-}
-
 # Deployment
 resource "aws_apigatewayv2_deployment" "websocket" {
   api_id = aws_apigatewayv2_api.websocket.id
@@ -138,8 +126,6 @@ resource "aws_apigatewayv2_deployment" "websocket" {
     aws_apigatewayv2_route.default,
     aws_apigatewayv2_route.join_room,
     aws_apigatewayv2_route.leave_room,
-    aws_apigatewayv2_route.presence_join,
-    aws_apigatewayv2_route.presence_leave,
   ]
 
   lifecycle {

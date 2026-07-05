@@ -57,6 +57,15 @@ interface ApiError {
   statusCode: number
 }
 
+// Outcome of a refresh attempt. `rejected` is true only when the refresh
+// endpoint definitively refused the refresh token (4xx, excluding 408/429).
+// Network errors, timeouts, throttling, and 5xx are transient: the session
+// may still be valid, so callers must never log the user out on those.
+interface RefreshResult {
+  token: string | null
+  rejected: boolean
+}
+
 // ─── JWT expiry helpers ──────────────────────────────────────────────────────
 // Decode the payload of a JWT without verification (we only need `exp`).
 // This avoids importing a full JWT library on the client.
@@ -101,7 +110,7 @@ class ApiClient {
   private getRefreshToken: (() => string | null) | null = null
   private onTokenRefreshed: ((token: string) => void) | null = null
   private onAuthExpired: (() => void) | null = null
-  private refreshing: Promise<string | null> | null = null
+  private refreshing: Promise<RefreshResult> | null = null
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl
@@ -136,20 +145,27 @@ class ApiClient {
     this.refreshPath = path
   }
 
-  private async tryRefreshToken(): Promise<string | null> {
+  private async tryRefreshToken(): Promise<RefreshResult> {
     if (this.refreshing) return this.refreshing
 
     const refreshToken = this.getRefreshToken?.()
-    if (!refreshToken) return null
+    // No refresh token at all: nothing to refresh with, session is dead.
+    if (!refreshToken) return { token: null, rejected: true }
 
-    this.refreshing = (async () => {
+    this.refreshing = (async (): Promise<RefreshResult> => {
       try {
         const res = await fetch(`${this.baseUrl}${this.refreshPath}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken }),
         })
-        if (!res.ok) return null
+        if (!res.ok) {
+          // 5xx / 408 / 429 are transient (cold start, throttling) - the
+          // refresh token may still be perfectly valid. Only a definitive
+          // 4xx answer means the session is dead.
+          const transient = res.status >= 500 || res.status === 408 || res.status === 429
+          return { token: null, rejected: !transient }
+        }
         const data = (await res.json()) as { accessToken?: string }
         if (data.accessToken) {
           this.onTokenRefreshed?.(data.accessToken)
@@ -161,11 +177,13 @@ class ApiClient {
               /* swallow */
             }
           }
-          return data.accessToken
+          return { token: data.accessToken, rejected: false }
         }
-        return null
+        return { token: null, rejected: true }
       } catch {
-        return null
+        // Network failure (offline, DNS, aborted). A reopened PWA on a flaky
+        // connection lands here - the session must survive it.
+        return { token: null, rejected: false }
       } finally {
         this.refreshing = null
       }
@@ -188,11 +206,17 @@ class ApiClient {
 
     // Token is expired or about to expire - refresh proactively
     if (this.getRefreshToken) {
-      const newToken = await this.tryRefreshToken()
-      if (newToken) return newToken
-      // Refresh failed - session is dead
-      this.onAuthExpired?.()
-      return null
+      const result = await this.tryRefreshToken()
+      if (result.token) return result.token
+      if (result.rejected) {
+        // The refresh endpoint definitively refused - session is dead.
+        this.onAuthExpired?.()
+        return null
+      }
+      // Transient failure (offline, cold start, throttle): keep the session.
+      // Return the stale token; per-request 401 handling retries the refresh
+      // once the network is back.
+      return token
     }
     return token
   }
@@ -211,11 +235,11 @@ class ApiClient {
     let token: string | null = this.getToken?.() ?? null
     if (isTokenExpiringSoon(token) && this.getRefreshToken) {
       const refreshed = await this.tryRefreshToken()
-      if (refreshed) {
-        token = refreshed
+      if (refreshed.token) {
+        token = refreshed.token
       } else {
         // Refresh failed - let the request go with the stale token so the
-        // 401 path below can trigger onAuthExpired cleanly.
+        // 401 path below can decide between retry and session end.
       }
     }
 
@@ -265,9 +289,9 @@ class ApiClient {
     // On 401, try refreshing the token once (fallback for edge cases where
     // proactive refresh didn't fire, e.g. clock skew)
     if (response.status === 401 && this.getRefreshToken) {
-      const newToken = await this.tryRefreshToken()
-      if (newToken) {
-        headers['Authorization'] = `Bearer ${newToken}`
+      const result = await this.tryRefreshToken()
+      if (result.token) {
+        headers['Authorization'] = `Bearer ${result.token}`
         const retry = await fetch(`${this.baseUrl}${path}`, {
           method,
           headers,
@@ -277,9 +301,17 @@ class ApiClient {
           if (retry.status === 204) return undefined as T
           return retry.json() as Promise<T>
         }
+        // A fresh token that still gets 401 means the server rejects this
+        // session - end it. Any other retry failure (403, 5xx) is not a
+        // session problem; surface the retry's error below instead.
+        if (retry.status === 401) this.onAuthExpired?.()
+        response = retry
+      } else if (result.rejected) {
+        // The refresh endpoint definitively refused - session is dead.
+        this.onAuthExpired?.()
       }
-      // Refresh failed, session is dead
-      this.onAuthExpired?.()
+      // Transient refresh failure (offline, cold start): keep the session and
+      // throw the original 401 below; screens treat it as a normal error.
     }
 
     if (!response.ok) {

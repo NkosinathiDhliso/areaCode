@@ -1,23 +1,39 @@
 // WebSocket Lambda Handler for API Gateway
-// Manages connections, rooms, and broadcasts events
+// Registers connections with verified identity and manages room membership.
+//
+// Contract with the frontend (packages/shared/lib/websocket.ts):
+//   - The client connects with ?token=...&citySlug=... query params. Identity
+//     (userId / businessId) is derived ONLY from the verified JWT; any
+//     client-supplied identity params are ignored.
+//   - The client's app-level `room:join` / `room:leave` events are mapped by
+//     the client to the `joinroom` / `leaveroom` route keys, because API
+//     Gateway route keys cannot contain colons.
+//   - Fan-out (broadcastToRoom / broadcastToUser in
+//     shared/websocket/broadcast.ts) reads the roomId / userId attributes this
+//     handler writes. A connection that never lands here receives nothing.
 
 import {
-  ApiGatewayManagementApiClient,
-  PostToConnectionCommand,
-  DeleteConnectionCommand,
-} from '@aws-sdk/client-apigatewaymanagementapi'
-import { DynamoDBClient, PutItemCommand, DeleteItemCommand, QueryCommand, ScanCommand } from '@aws-sdk/client-dynamodb'
+  DynamoDBClient,
+  PutItemCommand,
+  DeleteItemCommand,
+  GetItemCommand,
+  UpdateItemCommand,
+} from '@aws-sdk/client-dynamodb'
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb'
 
 import { AWS_REGION, requireEnv } from '../shared/config/env.js'
+import { verifyBearerToken, type AuthPayload } from '../shared/middleware/auth.js'
+import { cityRoom, businessRoom, isRoomAllowed, VALID_CITY_SLUGS } from '../shared/socket/rooms.js'
+import { sendToConnection } from '../shared/websocket/broadcast.js'
 
 const ddbClient = new DynamoDBClient({ region: AWS_REGION })
 
 // Connection management table
 const CONNECTIONS_TABLE = requireEnv('CONNECTIONS_TABLE', 'area-code-dev-websocket-connections')
 
-// WebSocket API endpoint (for sending messages back)
-const WEBSOCKET_ENDPOINT = process.env['WEBSOCKET_ENDPOINT']
+// API Gateway hard-caps any WebSocket connection at 2 hours; the generous TTL
+// only exists so dead rows the $disconnect handler missed still expire.
+const CONNECTION_TTL_SECONDS = 86400
 
 interface WebSocketEvent {
   requestContext: {
@@ -27,6 +43,7 @@ interface WebSocketEvent {
     stage: string
     domainName: string
   }
+  queryStringParameters?: Record<string, string | undefined>
   body?: string
 }
 
@@ -42,7 +59,7 @@ interface WebSocketContext {
 // HANDLERS
 // ============================================================================
 
-export async function handler(event: WebSocketEvent, context: WebSocketContext): Promise<any> {
+export async function handler(event: WebSocketEvent, _context: WebSocketContext): Promise<unknown> {
   const { routeKey, connectionId } = event.requestContext
 
   console.log(`WebSocket ${routeKey}: ${connectionId}`)
@@ -57,12 +74,10 @@ export async function handler(event: WebSocketEvent, context: WebSocketContext):
         return await handleJoinRoom(connectionId, event)
       case 'leaveroom':
         return await handleLeaveRoom(connectionId, event)
-      case 'presencejoin':
-        return await handlePresenceJoin(connectionId, event)
-      case 'presenceleave':
-        return await handlePresenceLeave(connectionId, event)
       case '$default':
-        return await handleDefault(connectionId, event)
+        // Heartbeat pings and unknown actions land here; a 200 resets the
+        // API Gateway idle timer, which is the point of the client's ping.
+        return { statusCode: 200, body: 'OK' }
       default:
         return { statusCode: 400, body: 'Unknown route' }
     }
@@ -76,27 +91,64 @@ export async function handler(event: WebSocketEvent, context: WebSocketContext):
 // CONNECT / DISCONNECT
 // ============================================================================
 
-async function handleConnect(connectionId: string, event: WebSocketEvent): Promise<any> {
-  // Extract auth token from query string if present
-  const queryString = event.requestContext?.stage
-  // Store connection with TTL (1 day)
-  const ttl = Math.floor(Date.now() / 1000) + 86400
+async function handleConnect(connectionId: string, event: WebSocketEvent): Promise<unknown> {
+  const params = event.queryStringParameters ?? {}
+  const token = params['token']
+
+  // Verify identity when a token is presented. Fail closed: a presented but
+  // invalid token rejects the connection; the client reconnects with a fresh
+  // token after its refresh cycle. No token connects anonymously (city rooms
+  // only - the live map is public data).
+  let identity: AuthPayload | null = null
+  if (token) {
+    try {
+      identity = await verifyBearerToken(token, ['consumer', 'business', 'staff', 'admin'])
+    } catch {
+      return { statusCode: 401, body: 'Unauthorized' }
+    }
+  }
+
+  const item: Record<string, unknown> = {
+    connectionId,
+    connectedAt: new Date().toISOString(),
+    ttl: Math.floor(Date.now() / 1000) + CONNECTION_TTL_SECONDS,
+  }
+
+  // City room from the (validated) query param; consumers may also join or
+  // switch later via joinroom.
+  const citySlug = params['citySlug']
+  if (citySlug && VALID_CITY_SLUGS.has(citySlug)) {
+    item['roomId'] = cityRoom(citySlug)
+  }
+
+  if (identity) {
+    if (identity.role === 'consumer') {
+      // userId powers broadcastToUser (reward codes, friend toasts, tier
+      // changes) via the UserIndex GSI.
+      item['userId'] = identity.userId
+    }
+    if (identity.role === 'business') {
+      // The operator IS the venue (userId === businessId). Auto-join their
+      // own business room so live check-ins arrive without an extra hop.
+      item['businessId'] = identity.userId
+      item['roomId'] = businessRoom(identity.userId)
+    }
+    if (identity.role === 'staff' && identity.businessId) {
+      item['businessId'] = identity.businessId
+    }
+  }
 
   await ddbClient.send(
     new PutItemCommand({
       TableName: CONNECTIONS_TABLE,
-      Item: marshall({
-        connectionId,
-        connectedAt: new Date().toISOString(),
-        ttl,
-      }),
+      Item: marshall(item),
     }),
   )
 
   return { statusCode: 200, body: 'Connected' }
 }
 
-async function handleDisconnect(connectionId: string): Promise<any> {
+async function handleDisconnect(connectionId: string): Promise<unknown> {
   await ddbClient.send(
     new DeleteItemCommand({
       TableName: CONNECTIONS_TABLE,
@@ -111,207 +163,66 @@ async function handleDisconnect(connectionId: string): Promise<any> {
 // ROOM MANAGEMENT
 // ============================================================================
 
-async function handleJoinRoom(connectionId: string, event: WebSocketEvent): Promise<any> {
+async function handleJoinRoom(connectionId: string, event: WebSocketEvent): Promise<unknown> {
   if (!event.body) return { statusCode: 400, body: 'Missing body' }
 
-  const data = JSON.parse(event.body)
-  const { room, userId, citySlug } = data.payload || {}
+  const data = JSON.parse(event.body) as { payload?: { room?: unknown } }
+  const room = data.payload?.room
 
-  if (!room) return { statusCode: 400, body: 'Missing room' }
+  if (!room || typeof room !== 'string') return { statusCode: 400, body: 'Missing room' }
 
-  // Update connection record with room info
-  const ttl = Math.floor(Date.now() / 1000) + 86400
-
-  await ddbClient.send(
-    new PutItemCommand({
+  // Authorise against the identity verified at $connect - never against
+  // anything in the message body.
+  const existing = await ddbClient.send(
+    new GetItemCommand({
       TableName: CONNECTIONS_TABLE,
-      Item: marshall({
-        connectionId,
-        roomId: room,
-        userId: userId || null,
-        citySlug: citySlug || null,
-        joinedAt: new Date().toISOString(),
-        ttl,
+      Key: marshall({ connectionId }),
+    }),
+  )
+  const row = existing.Item ? unmarshall(existing.Item) : {}
+
+  if (!isRoomAllowed(room, { businessId: row['businessId'] as string | undefined })) {
+    return { statusCode: 403, body: 'Room not allowed' }
+  }
+
+  // Targeted update: never PutItem here, that would wipe the verified
+  // identity attributes written at $connect.
+  await ddbClient.send(
+    new UpdateItemCommand({
+      TableName: CONNECTIONS_TABLE,
+      Key: marshall({ connectionId }),
+      UpdateExpression: 'SET roomId = :room, joinedAt = :at, #ttl = :ttl',
+      ExpressionAttributeNames: { '#ttl': 'ttl' },
+      ExpressionAttributeValues: marshall({
+        ':room': room,
+        ':at': new Date().toISOString(),
+        ':ttl': Math.floor(Date.now() / 1000) + CONNECTION_TTL_SECONDS,
       }),
     }),
   )
 
-  // Acknowledge
-  await sendToConnection(connectionId, {
-    type: 'room:joined',
-    payload: { room },
-  })
+  await sendToConnection(connectionId, { type: 'room:joined', payload: { room } })
 
   return { statusCode: 200, body: 'Joined room' }
 }
 
-async function handleLeaveRoom(connectionId: string, event: WebSocketEvent): Promise<any> {
-  if (!event.body) return { statusCode: 400, body: 'Missing body' }
+async function handleLeaveRoom(connectionId: string, event: WebSocketEvent): Promise<unknown> {
+  let room: string | undefined
+  if (event.body) {
+    const data = JSON.parse(event.body) as { payload?: { room?: unknown } }
+    if (typeof data.payload?.room === 'string') room = data.payload.room
+  }
 
-  const data = JSON.parse(event.body)
-  const { room } = data.payload || {}
-
-  // Remove room from connection
   await ddbClient.send(
-    new PutItemCommand({
+    new UpdateItemCommand({
       TableName: CONNECTIONS_TABLE,
-      Item: marshall({
-        connectionId,
-        roomId: null,
-        leftAt: new Date().toISOString(),
-      }),
+      Key: marshall({ connectionId }),
+      UpdateExpression: 'REMOVE roomId SET leftAt = :at',
+      ExpressionAttributeValues: marshall({ ':at': new Date().toISOString() }),
     }),
   )
 
-  await sendToConnection(connectionId, {
-    type: 'room:left',
-    payload: { room },
-  })
+  await sendToConnection(connectionId, { type: 'room:left', payload: { room: room ?? null } })
 
   return { statusCode: 200, body: 'Left room' }
-}
-
-// ============================================================================
-// PRESENCE MANAGEMENT
-// ============================================================================
-
-async function handlePresenceJoin(connectionId: string, event: WebSocketEvent): Promise<any> {
-  if (!event.body) return { statusCode: 400, body: 'Missing body' }
-
-  const data = JSON.parse(event.body)
-  const { nodeId } = data.payload || {}
-
-  // Update connection with presence info
-  await ddbClient.send(
-    new PutItemCommand({
-      TableName: CONNECTIONS_TABLE,
-      Item: marshall({
-        connectionId,
-        nodeId,
-        presenceAt: new Date().toISOString(),
-      }),
-    }),
-  )
-
-  return { statusCode: 200, body: 'Presence joined' }
-}
-
-async function handlePresenceLeave(connectionId: string, event: WebSocketEvent): Promise<any> {
-  await ddbClient.send(
-    new PutItemCommand({
-      TableName: CONNECTIONS_TABLE,
-      Item: marshall({
-        connectionId,
-        nodeId: null,
-        presenceLeftAt: new Date().toISOString(),
-      }),
-    }),
-  )
-
-  return { statusCode: 200, body: 'Presence left' }
-}
-
-// ============================================================================
-// DEFAULT HANDLER
-// ============================================================================
-
-async function handleDefault(connectionId: string, event: WebSocketEvent): Promise<any> {
-  console.log('Default route:', event.body)
-  return { statusCode: 200, body: 'OK' }
-}
-
-// ============================================================================
-// BROADCAST HELPERS (called by other lambdas)
-// ============================================================================
-
-interface BroadcastMessage {
-  type: string
-  payload: Record<string, unknown>
-}
-
-async function sendToConnection(connectionId: string, message: BroadcastMessage): Promise<void> {
-  const endpoint = WEBSOCKET_ENDPOINT || process.env['WEBSOCKET_API_ENDPOINT']
-  if (!endpoint) {
-    console.error('No WebSocket endpoint configured')
-    return
-  }
-
-  const client = new ApiGatewayManagementApiClient({
-    region: AWS_REGION,
-    endpoint,
-  })
-
-  try {
-    await client.send(
-      new PostToConnectionCommand({
-        ConnectionId: connectionId,
-        Data: JSON.stringify(message),
-      }),
-    )
-  } catch (error: any) {
-    if (error.name === 'GoneException') {
-      // Connection is dead, clean it up
-      await ddbClient.send(
-        new DeleteItemCommand({
-          TableName: CONNECTIONS_TABLE,
-          Key: marshall({ connectionId }),
-        }),
-      )
-    } else {
-      throw error
-    }
-  }
-}
-
-// Export for use by other lambdas
-export async function broadcastToRoom(roomId: string, message: BroadcastMessage): Promise<void> {
-  // Query all connections in room
-  const result = await ddbClient.send(
-    new QueryCommand({
-      TableName: CONNECTIONS_TABLE,
-      IndexName: 'RoomIndex',
-      KeyConditionExpression: 'roomId = :roomId',
-      ExpressionAttributeValues: marshall({ ':roomId': roomId }),
-    }),
-  )
-
-  const connections = result.Items?.map((item) => unmarshall(item)) || []
-
-  // Send to all connections in parallel
-  await Promise.all(connections.map((conn) => sendToConnection(conn.connectionId, message)))
-
-  console.log(`Broadcasted to ${connections.length} connections in room ${roomId}`)
-}
-
-export async function broadcastToUser(userId: string, message: BroadcastMessage): Promise<void> {
-  // Query all connections for user
-  const result = await ddbClient.send(
-    new QueryCommand({
-      TableName: CONNECTIONS_TABLE,
-      IndexName: 'UserIndex',
-      KeyConditionExpression: 'userId = :userId',
-      ExpressionAttributeValues: marshall({ ':userId': userId }),
-    }),
-  )
-
-  const connections = result.Items?.map((item) => unmarshall(item)) || []
-
-  await Promise.all(connections.map((conn) => sendToConnection(conn.connectionId, message)))
-
-  console.log(`Broadcasted to ${connections.length} connections for user ${userId}`)
-}
-
-export async function broadcastToAll(message: BroadcastMessage): Promise<void> {
-  // Scan all connections (use sparingly for small user bases)
-  const result = await ddbClient.send(
-    new ScanCommand({
-      TableName: CONNECTIONS_TABLE,
-    }),
-  )
-
-  const connections = result.Items?.map((item) => unmarshall(item)) || []
-
-  await Promise.all(connections.map((conn) => sendToConnection(conn.connectionId, message)))
-
-  console.log(`Broadcasted to ${connections.length} total connections`)
 }

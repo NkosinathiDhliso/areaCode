@@ -179,6 +179,48 @@
       }
     </style>
 
+    <!-- Stale-shell recovery. If a hashed /assets/ entry script or stylesheet
+         fails to load, this page is an old shell referencing a purged deploy
+         and React never boots (a blank page the in-app handlers cannot catch).
+         Clear the service worker caches and reload once to fetch fresh HTML.
+         One-shot per tab session so a genuine outage cannot loop reloads. -->
+    <script>
+      window.addEventListener(
+        'error',
+        function (event) {
+          var el = event.target
+          if (!el || !el.tagName) return
+          var url = el.src || el.href || ''
+          if (typeof url !== 'string' || url.indexOf('/assets/') === -1) return
+          var KEY = '__ac_shell_reload__'
+          try {
+            if (sessionStorage.getItem(KEY) === '1') return
+            sessionStorage.setItem(KEY, '1')
+          } catch (e) {
+            /* private mode: still attempt one recovery */
+          }
+          var reload = function () {
+            window.location.reload()
+          }
+          if (window.caches && window.caches.keys) {
+            caches
+              .keys()
+              .then(function (keys) {
+                return Promise.all(
+                  keys.map(function (key) {
+                    return caches.delete(key)
+                  }),
+                )
+              })
+              .then(reload, reload)
+          } else {
+            reload()
+          }
+        },
+        true,
+      )
+    </script>
+
     <!-- Font preloading - prevent layout shift -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

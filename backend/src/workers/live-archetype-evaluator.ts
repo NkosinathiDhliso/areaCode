@@ -37,7 +37,8 @@ import { GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 import { getCounter } from '../features/presence/repository.js'
 import { cityRoom } from '../shared/socket/rooms.js'
-import { getIO } from '../shared/socket/server.js'
+import { emitArchetypeChange } from '../shared/socket/events.js'
+import { countRoomConnections } from '../shared/websocket/broadcast.js'
 
 import { getFeatureFlag } from '@area-code/shared/lib/featureGating'
 import { resolveLiveArchetype, type LiveArchetypeCheckIn } from '@area-code/shared/lib/liveArchetype'
@@ -310,16 +311,13 @@ async function writeLastArchetype(nodeId: string, archetypeId: string, branch: L
   )
 }
 
-/** Returns the number of sockets currently joined to the city room. Always
- *  resolves to `0` when running outside a long-running Socket.io context
- *  (e.g. a true Lambda). The fan-out then defers per R11.5 and the cache
- *  update remains the source of truth for the next reconnect. */
+/** Returns the number of live WebSocket connections joined to the city room
+ *  (connections table RoomIndex). On a query failure the fan-out defers per
+ *  R11.5 and the cache update remains the source of truth for the next
+ *  reconnect. */
 async function citySubscriberCount(citySlug: string): Promise<number> {
-  const io = getIO()
-  if (!io) return 0
   try {
-    const sockets = await io.in(cityRoom(citySlug)).fetchSockets()
-    return sockets.length
+    return await countRoomConnections(cityRoom(citySlug))
   } catch {
     return 0
   }
@@ -468,8 +466,7 @@ export async function evaluateLiveArchetype(event: EvaluationTickEvent): Promise
     }
   }
 
-  const io = getIO()
-  io?.to(cityRoom(event.citySlug)).emit('node:archetype_change', {
+  await emitArchetypeChange(event.citySlug, {
     nodeId: event.nodeId,
     liveArchetypeId: newArchetypeId,
     branch,

@@ -62,10 +62,10 @@ export async function evaluateCityNodes(cityId: string, citySlug: string) {
       const currIdx = stateOrder.indexOf(currentState)
 
       if (currIdx > prevIdx) {
-        emitStateSurge(citySlug, { nodeId, fromState: prevState, toState: currentState })
+        await emitStateSurge(citySlug, { nodeId, fromState: prevState, toState: currentState })
 
         if (currentState === 'popping') {
-          emitToast(citySlug, { type: 'surge', message: 'A spot just hit peak energy nearby', nodeId })
+          await emitToast(citySlug, { type: 'surge', message: 'A spot just hit peak energy nearby', nodeId })
         }
 
         surgeCount++

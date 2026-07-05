@@ -145,9 +145,15 @@ feature repositories).
 ## Real-time
 
 - WebSocket API Gateway with Lambda handler. Connection tracking in DynamoDB
-  (websocket-connections table).
-- Route keys: `joinroom`, `leaveroom`, `presencejoin`, `presenceleave`. They
-  cannot contain colons.
+  (websocket-connections table). $connect verifies the JWT and stores the
+  server-derived identity (userId / businessId); fan-out reads those
+  attributes via broadcastToRoom / broadcastToUser
+  (`backend/src/shared/websocket/broadcast.ts`). Emitters live once in
+  `backend/src/shared/socket/events.ts` and MUST be awaited (Lambda freezes
+  on return; a fire-and-forget emit is lost).
+- Route keys: `joinroom`, `leaveroom`. Route keys cannot contain colons, so
+  the client maps app-level `room:join` / `room:leave` to them
+  (`ROUTE_KEY_BY_EVENT` in `packages/shared/lib/websocket.ts`).
 - Frontend: `packages/shared/lib/websocket.ts` singleton. No-op when
   `VITE_WEBSOCKET_URL` is not set.
 
