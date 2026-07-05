@@ -830,15 +830,17 @@ module "lambda_api" {
 # via the `$default` API Gateway integration. The retired Terraform blocks were
 # removed; see git history if historical reference is needed.
 
+# Not in VPC: the VPC has no NAT (banned, serverless-only.md) and no DynamoDB
+# gateway endpoint, so an in-VPC Lambda has no route to DynamoDB or the public
+# web-push/Expo endpoints - every invocation hung to timeout (found 2026-07-05
+# redriving the reward-eval DLQ). All working Lambdas (api, presence-expiry,
+# campaign-sender, streak-reminder) run outside the VPC; workers match that.
 module "lambda_reward_evaluator" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "reward-evaluator"
-  timeout                = 30
-  memory_size            = 256
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "reward-evaluator"
+  timeout       = 30
+  memory_size   = 256
   environment_variables = {
     AREA_CODE_ENV = local.env
     # Tables this worker touches (repository: rewards + app-data; the push
@@ -855,15 +857,13 @@ module "lambda_reward_evaluator" {
   }
 }
 
+# Not in VPC: see lambda_reward_evaluator note (dead-end VPC, no DDB route).
 module "lambda_pulse_decay" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "pulse-decay"
-  timeout                = 120
-  memory_size            = 256
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "pulse-decay"
+  timeout       = 120
+  memory_size   = 256
   environment_variables = {
     AREA_CODE_ENV = local.env
     USERS_TABLE   = aws_dynamodb_table.users.name
@@ -949,44 +949,48 @@ module "lambda_streak_reminder" {
   }
 }
 
+# Not in VPC: see lambda_reward_evaluator note (dead-end VPC, no DDB route).
 module "lambda_leaderboard_reset" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "leaderboard-reset"
-  timeout                = 120
-  memory_size            = 256
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "leaderboard-reset"
+  timeout       = 120
+  memory_size   = 256
   environment_variables = {
     AREA_CODE_ENV = local.env
+    # Leaderboard entries, history, and notification prefs all live in app-data.
+    APP_DATA_TABLE = aws_dynamodb_table.app_data.name
   }
 }
 
+# Not in VPC: see lambda_reward_evaluator note (dead-end VPC, no DDB route).
 module "lambda_partition_manager" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "partition-manager"
-  timeout                = 60
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "partition-manager"
+  timeout       = 60
   environment_variables = {
     AREA_CODE_ENV = local.env
   }
 }
 
+# Not in VPC: see lambda_reward_evaluator note (dead-end VPC, no DDB route).
 module "lambda_cleanup" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "cleanup"
-  timeout                = 120
-  memory_size            = 256
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "cleanup"
+  timeout       = 120
+  memory_size   = 256
   environment_variables = {
     AREA_CODE_ENV = local.env
+    # POPIA erasure sweep touches users, check-ins, app-data, live socket
+    # connections, and the consumer Cognito pool.
+    USERS_TABLE                             = aws_dynamodb_table.users.name
+    CHECKINS_TABLE                          = aws_dynamodb_table.checkins.name
+    APP_DATA_TABLE                          = aws_dynamodb_table.app_data.name
+    CONNECTIONS_TABLE                       = module.websocket.connections_table_name
+    AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID = local.consumer_pool_id
+    AREA_CODE_COGNITO_CONSUMER_CLIENT_ID    = local.consumer_client_id
   }
 }
 
@@ -1089,16 +1093,14 @@ module "lambda_campaign_sender" {
 # schedule-transition-tick.ts). The evaluator is short-circuited to a no-op
 # while `LIVE_VIBE_ON_MAP_FLAG` is "false" (R12.5) so this can ship before
 # the canary flip without consuming DynamoDB budget.
+# Not in VPC: see lambda_reward_evaluator note (dead-end VPC, no DDB route).
 module "lambda_schedule_transition_tick" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "schedule-transition-tick"
-  handler                = "index.handler"
-  timeout                = 60
-  memory_size            = 256
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "schedule-transition-tick"
+  handler       = "index.handler"
+  timeout       = 60
+  memory_size   = 256
   environment_variables = {
     AREA_CODE_ENV         = local.env
     MUSIC_SCHEDULES_TABLE = aws_dynamodb_table.music_schedules.name

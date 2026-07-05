@@ -509,16 +509,16 @@ resource "aws_dynamodb_table" "music_schedules" {
 # =============================================================================
 
 # Monolith API Lambda — serves all Fastify routes via API Gateway catch-all
+# Lambdas run outside the VPC: it has no NAT (banned, serverless-only.md) and
+# no DynamoDB gateway endpoint, so an in-VPC Lambda has no route to DynamoDB or
+# public HTTPS - every call hung to timeout (found 2026-07-05 in prod).
 module "lambda_api" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "api"
-  handler                = "index.handler"
-  timeout                = 30
-  memory_size            = 512
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "api"
+  handler       = "index.handler"
+  timeout       = 30
+  memory_size   = 512
   environment_variables = {
     AREA_CODE_ENV         = local.env
     USERS_TABLE           = aws_dynamodb_table.users.name
@@ -549,28 +549,22 @@ module "lambda_api" {
 }
 
 module "lambda_reward_evaluator" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "reward-evaluator"
-  timeout                = 30
-  memory_size            = 256
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "reward-evaluator"
+  timeout       = 30
+  memory_size   = 256
   environment_variables = {
     AREA_CODE_ENV = local.env
   }
 }
 
 module "lambda_pulse_decay" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "pulse-decay"
-  timeout                = 120
-  memory_size            = 256
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "pulse-decay"
+  timeout       = 120
+  memory_size   = 256
   environment_variables = {
     AREA_CODE_ENV = local.env
     USERS_TABLE   = aws_dynamodb_table.users.name
@@ -651,55 +645,43 @@ module "lambda_streak_reminder" {
 }
 
 module "lambda_leaderboard_reset" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "leaderboard-reset"
-  timeout                = 120
-  memory_size            = 256
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "leaderboard-reset"
+  timeout       = 120
+  memory_size   = 256
   environment_variables = {
     AREA_CODE_ENV = local.env
   }
 }
 
 module "lambda_partition_manager" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "partition-manager"
-  timeout                = 60
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "partition-manager"
+  timeout       = 60
   environment_variables = {
     AREA_CODE_ENV = local.env
   }
 }
 
 module "lambda_cleanup" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "cleanup"
-  timeout                = 120
-  memory_size            = 256
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "cleanup"
+  timeout       = 120
+  memory_size   = 256
   environment_variables = {
     AREA_CODE_ENV = local.env
   }
 }
 
 module "lambda_run_migration" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "run-migration"
-  timeout                = 120
-  memory_size            = 256
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "run-migration"
+  timeout       = 120
+  memory_size   = 256
   environment_variables = {
     AREA_CODE_ENV = local.env
   }
@@ -718,14 +700,11 @@ module "lambda_yoco_webhook" {
 
 # Report dispatcher Lambda — triggered by EventBridge, fans out SQS messages per business
 module "lambda_report_dispatcher" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "report-dispatcher"
-  timeout                = 30
-  memory_size            = 256
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "report-dispatcher"
+  timeout       = 30
+  memory_size   = 256
   environment_variables = {
     AREA_CODE_ENV              = local.env
     BUSINESSES_TABLE           = aws_dynamodb_table.businesses.name
@@ -737,14 +716,11 @@ module "lambda_report_dispatcher" {
 
 # Report generator Lambda — SQS-triggered worker, generates one report per business
 module "lambda_report_generator" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "report-generator"
-  timeout                = 120
-  memory_size            = 512
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "report-generator"
+  timeout       = 120
+  memory_size   = 512
   environment_variables = {
     AREA_CODE_ENV                = local.env
     USERS_TABLE                  = aws_dynamodb_table.users.name
@@ -764,14 +740,11 @@ module "lambda_report_generator" {
 # quota filters, then fans batches of <=100 recipients out to the campaign-send
 # queue. (Mirrors the reports dispatcher pattern.)
 module "lambda_campaign_dispatcher" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "campaign-dispatcher"
-  timeout                = 60
-  memory_size            = 512
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "campaign-dispatcher"
+  timeout       = 60
+  memory_size   = 512
   environment_variables = {
     AREA_CODE_ENV                     = local.env
     USERS_TABLE                       = aws_dynamodb_table.users.name
@@ -787,14 +760,11 @@ module "lambda_campaign_dispatcher" {
 # push (existing push-sender queue) and/or email (SES), and writes one
 # anonymized send record per recipient. (Mirrors the reports generator pattern.)
 module "lambda_campaign_sender" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "campaign-sender"
-  timeout                = 120
-  memory_size            = 512
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "campaign-sender"
+  timeout       = 120
+  memory_size   = 512
   environment_variables = {
     AREA_CODE_ENV                = local.env
     USERS_TABLE                  = aws_dynamodb_table.users.name
@@ -814,15 +784,12 @@ module "lambda_campaign_sender" {
 # while `LIVE_VIBE_ON_MAP_FLAG` is "false" (R12.5) so this can ship before
 # the canary flip without consuming DynamoDB budget.
 module "lambda_schedule_transition_tick" {
-  source                 = "../../modules/lambda"
-  env                    = local.env
-  function_name          = "schedule-transition-tick"
-  handler                = "index.handler"
-  timeout                = 60
-  memory_size            = 256
-  lambda_in_vpc          = true
-  vpc_subnet_ids         = module.vpc.private_subnet_ids
-  vpc_security_group_ids = module.vpc.lambda_security_group_ids
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "schedule-transition-tick"
+  handler       = "index.handler"
+  timeout       = 60
+  memory_size   = 256
   environment_variables = {
     AREA_CODE_ENV         = local.env
     MUSIC_SCHEDULES_TABLE = aws_dynamodb_table.music_schedules.name
