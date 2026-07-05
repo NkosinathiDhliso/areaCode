@@ -392,8 +392,17 @@ function BrowseMode({
   // visible, tying the carousel to the map selection. Only the strip's own
   // horizontal scroll is touched (never the page or the sheet).
   const stripRef = useRef<HTMLDivElement>(null)
+  // Tracks the venue we have already centred for. Centring is a
+  // selection-change behaviour only: revealing more cards via "Keep exploring"
+  // grows `carouselOrderVMs` without changing the Active_Venue, and must not
+  // yank the strip back to the (usually first) active card - which read as
+  // "jumping back to the beginning venue" after scrolling right to the card.
+  const centeredForRef = useRef<string | null>(null)
   useEffect(() => {
     if (!activeVenueId) return
+    // Same Active_Venue as last centre (e.g. a "Keep exploring" reveal): leave
+    // the user's scroll position untouched.
+    if (centeredForRef.current === activeVenueId) return
     const container = stripRef.current
     if (!container) return
     // Match on the dataset rather than a dynamic attribute selector so we don't
@@ -408,7 +417,11 @@ function BrowseMode({
       }
     }
     const wrapper = card?.parentElement
+    // Card not mounted yet (order updated in the same render the selection
+    // changed): leave the ref unset so this retries once the card appears.
     if (!wrapper) return
+    // Selection handled for this venue; further reveals will not re-centre it.
+    centeredForRef.current = activeVenueId
     const cardRect = wrapper.getBoundingClientRect()
     const contRect = container.getBoundingClientRect()
     const delta = cardRect.left + cardRect.width / 2 - (contRect.left + contRect.width / 2)
