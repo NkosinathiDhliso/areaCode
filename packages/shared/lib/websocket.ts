@@ -11,16 +11,25 @@ type EventCallback = (payload: any) => void
 type LifecycleEvent = 'connect' | 'disconnect' | 'connect_error'
 type AnyEventKey = keyof ServerToClientEvents | LifecycleEvent
 
+// API Gateway WebSocket closes a connection after 10 minutes with no traffic in
+// either direction (and hard-caps any connection at 2 hours). Sending a small
+// app-level message well inside that window resets the idle timer. Without it
+// every idle socket is culled every 10 minutes, producing an endless
+// connect/disconnect/reconnect loop.
+const HEARTBEAT_INTERVAL_MS = 300_000 // 5 minutes, safely under the 10-min idle cap
+const BASE_RECONNECT_DELAY_MS = 1000
+const MAX_RECONNECT_DELAY_MS = 30_000
+
 class WebSocketManager {
   private ws: WebSocket | null = null
   private _url: string
   private reconnectAttempts = 0
-  private maxReconnectAttempts = 5
-  private reconnectDelay = 1000
+  private reconnectDelay = BASE_RECONNECT_DELAY_MS
   private listeners: Map<AnyEventKey, Set<EventCallback>> = new Map()
   private isConnecting = false
   private pendingQueue: Array<{ action: string; payload: unknown }> = []
   private unsubTokenRefresh: (() => void) | null = null
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
   constructor(url: string) {
     this._url = url
@@ -38,6 +47,7 @@ class WebSocketManager {
     if (this._url === newUrl) return
     this._url = newUrl
     this.reconnectAttempts = 0
+    this.stopHeartbeat()
     // Close existing connection - onclose will NOT auto-reconnect because
     // we call connect() explicitly below.
     if (this.ws) {
@@ -68,6 +78,7 @@ class WebSocketManager {
         console.log('WebSocket connected')
         this.reconnectAttempts = 0
         this.isConnecting = false
+        this.startHeartbeat()
         this.emitLifecycle('connect')
         const queued = this.pendingQueue.splice(0)
         for (const msg of queued) {
@@ -87,6 +98,7 @@ class WebSocketManager {
       this.ws.onclose = () => {
         console.log('WebSocket disconnected')
         this.isConnecting = false
+        this.stopHeartbeat()
         this.emitLifecycle('disconnect')
         this.attemptReconnect()
       }
@@ -103,19 +115,37 @@ class WebSocketManager {
   }
 
   private attemptReconnect(): void {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('Max reconnection attempts reached')
-      return
-    }
-
+    // Retry indefinitely with exponential backoff capped at MAX_RECONNECT_DELAY_MS.
+    // A realtime client that permanently gives up after a transient server hiccup
+    // strands the user with a dead socket until an unrelated event happens to
+    // rebuild it - the backoff ceiling keeps retries gentle without abandoning.
     this.reconnectAttempts++
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1)
+    const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), MAX_RECONNECT_DELAY_MS)
 
     console.log(`Reconnecting in ${delay}ms... (attempt ${this.reconnectAttempts})`)
 
     setTimeout(() => {
       this.connect()
     }, delay)
+  }
+
+  /** Keep the connection past API Gateway's 10-minute idle timeout. */
+  private startHeartbeat(): void {
+    this.stopHeartbeat()
+    this.heartbeatTimer = setInterval(() => {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        // Unknown action routes to `$default`, which acks with 200 and, crucially,
+        // resets the idle timer. Sent raw so it never enters the pending queue.
+        this.ws.send(JSON.stringify({ action: 'ping' }))
+      }
+    }, HEARTBEAT_INTERVAL_MS)
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer)
+      this.heartbeatTimer = null
+    }
   }
 
   /** Subscribe to token refresh events so the socket reconnects with the new token. */
@@ -190,6 +220,7 @@ class WebSocketManager {
   }
 
   disconnect(): void {
+    this.stopHeartbeat()
     this.unsubTokenRefresh?.()
     this.unsubTokenRefresh = null
     if (this.ws) {
