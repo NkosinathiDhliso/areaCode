@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next'
 
 type Segment = 'lapsed' | 'first_timers' | 'regulars' | 'all_past_visitors'
 type Channel = 'push' | 'email'
-type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'cancelled' | 'failed'
+type CampaignStatus = 'draft' | 'sending' | 'sent' | 'cancelled' | 'failed'
 
 interface CampaignSummary {
   campaignId: string
@@ -19,7 +19,6 @@ interface CampaignSummary {
   title: string
   channels: Channel[]
   createdAt: string
-  scheduledAt?: string
   sentAt?: string
   recipients: number
   delivered: number
@@ -64,7 +63,7 @@ const TIER_CAN_SEND = (tier: BusinessProfile['tier']): boolean => tier === 'grow
 
 function statusColor(status: CampaignStatus): string {
   if (status === 'sent') return 'var(--success, #22c55e)'
-  if (status === 'sending' || status === 'scheduled') return 'var(--accent)'
+  if (status === 'sending') return 'var(--accent)'
   if (status === 'failed') return 'var(--danger, #ef4444)'
   return 'var(--text-muted)'
 }

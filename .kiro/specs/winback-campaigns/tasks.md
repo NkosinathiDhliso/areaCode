@@ -38,7 +38,7 @@ Binding constraints throughout: **no SMS / no phone** (`.kiro/steering/no-sms-no
     - Create `backend/src/features/campaigns/types.ts`
     - Define interfaces: `Campaign`, `CampaignStatus`, `Segment`, `CreateCampaignInput`, `CampaignSummary`, `CampaignWithAnalytics`, `CampaignAnalytics`, `RecipientEstimate`, `CampaignSendRecord`, `CampaignSendMessage`, `DispatchCampaignEvent`
     - Define Zod `createCampaignBodySchema`: `segment` enum (`lapsed`/`first_timers`/`regulars`/`all_past_visitors`), `title` ≤80, `body` ≤500, `channels` array with element enum **exactly** `['push','email']`, `nodeIds` non-empty, optional `rewardId`, optional `lapsedWindowDays` int 7–90, optional `reportId`
-    - Define `sendCampaignBodySchema` (optional `scheduledAt` ISO) and pagination query schema
+    - Define the pagination query schema (send takes no request body — send-now only)
     - There MUST be no phone/SMS field anywhere in these types (Constraint C1)
     - _Requirements: 1.2, 1.4, 5.3, 5.4_
 
@@ -100,7 +100,7 @@ Binding constraints throughout: **no SMS / no phone** (`.kiro/steering/no-sms-no
 - [x] 5. Implement delivery pipeline (dispatcher + sender)
   - [x] 5.1 Implement campaign dispatcher Lambda
     - Create `backend/src/features/campaigns/dispatcher.ts`
-    - Handle `DispatchCampaignEvent`; assert campaign is `sending` (send-now) or a due `scheduled`
+    - Handle `DispatchCampaignEvent`; assert campaign is `sending` (send-now)
     - Resolve segment → consent/opt-out filter → frequency-cap filter → quota assertion
     - Tokenize recipients; chunk into batches of ≤100; publish one SQS message per batch with `{ campaignId, businessId, recipients:[{token,userId}] }`
     - Persist targeted/filtered counts on the campaign run
@@ -135,8 +135,8 @@ Binding constraints throughout: **no SMS / no phone** (`.kiro/steering/no-sms-no
 
 - [x] 7. Implement campaign service (lifecycle, quotas, analytics)
   - [x] 7.1 Implement campaign persistence + lifecycle
-    - In `service.ts` + `repository.ts`: `createCampaign` (status `draft`, `pk=CAMPAIGN#<businessId>`, GSI1 list keys, TTL 13 months), `listCampaigns`, `getCampaign`, `cancelCampaign` (only `draft`/`scheduled`)
-    - `sendCampaign`: validate node ownership and optional `rewardId` ownership; transition `draft`→`sending` (now) or `scheduled` (future `scheduledAt`); reject re-send of `sending`/`sent`
+    - In `service.ts` + `repository.ts`: `createCampaign` (status `draft`, `pk=CAMPAIGN#<businessId>`, GSI1 list keys, TTL 13 months), `listCampaigns`, `getCampaign`, `cancelCampaign` (only `draft`)
+    - `sendCampaign`: validate node ownership and optional `rewardId` ownership; transition `draft`→`sending`; reject re-send of `sending`/`sent`
     - _Requirements: 1.1, 1.3, 1.5, 1.6, 8.1, 8.2, 8.4, 8.5, 8.6_
 
   - [x] 7.2 Implement send-quota enforcement
@@ -182,53 +182,53 @@ Binding constraints throughout: **no SMS / no phone** (`.kiro/steering/no-sms-no
     - Assert: starter/payg send → upgrade-required and 0 dispatched; growth/pro → permitted subject to quota; verify auth, permission, and end-to-end create→send→analytics with stubbed `sendNotification`/SES
     - **Validates: Requirements 9.1, 9.2**
 
-- [ ] 9. Checkpoint — Ensure all tests pass
+- [x] 9. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 10. Add Terraform infrastructure for campaign delivery
-  - [ ] 10.1 Add campaign-dispatcher Lambda
+- [x] 10. Add Terraform infrastructure for campaign delivery
+  - [x] 10.1 Add campaign-dispatcher Lambda
     - Add `module "lambda_campaign_dispatcher"` in `infra/environments/dev/main.tf` using `../../modules/lambda`, arm64, timeout=60, memory=512
     - Env vars for table names, SQS queue URL, campaign salt; IAM read on checkins/nodes/users, read/write app-data, SQS send to campaign-send queue
     - No VPC Interface Endpoints, no NAT, no always-on resources (C2)
     - _Requirements: 10.1, 10.5, 14.1_
 
-  - [ ] 10.2 Add campaign-sender Lambda
+  - [x] 10.2 Add campaign-sender Lambda
     - Add `module "lambda_campaign_sender"` arm64, timeout=120, memory=512
     - IAM: SES send, read users (verified email), read/write app-data, WebSocket manage (for `sendNotification` socket path), SQS receive/delete on campaign-send queue
     - _Requirements: 5.1, 5.2, 10.2, 10.5_
 
-  - [ ] 10.3 Add SQS campaign-send queue + DLQ
+  - [x] 10.3 Add SQS campaign-send queue + DLQ
     - Add `module "sqs_campaign_send"` using `../../modules/sqs`, visibility_timeout=150, max_receive_count=2, with DLQ
     - Wire event source mapping to campaign-sender Lambda
     - _Requirements: 10.4_
 
-  - [ ] 10.4 Add EventBridge scheduled-campaign tick
-    - Add `campaign-scheduled-tick`: `rate(5 minutes)` triggering campaign-dispatcher to pick up due `scheduled` campaigns
-    - _Requirements: 8.3_
+    - NOTE: scheduled-send was descoped and removed (see requirement 8 note). Delivery is
+      send-now only, so no EventBridge tick is needed. The dispatcher is async-invoked
+      directly by the service on send-now.
 
-  - [ ] 10.5 Mirror infrastructure into prod environment
-    - Replicate 10.1–10.4 in `infra/environments/prod/main.tf` (no ECS/RDS/ElastiCache/ALB/NAT; budget unchanged)
+  - [x] 10.5 Mirror infrastructure into prod environment
+    - Replicate 10.1–10.3 in `infra/environments/prod/main.tf` (no ECS/RDS/ElastiCache/ALB/NAT; budget unchanged)
     - _Requirements: 14.1, C2_
 
-- [ ] 11. Implement dashboard CampaignsPanel and report one-tap hook
-  - [ ] 11.1 Add "campaigns" panel to business dashboard navigation
+- [x] 11. Implement dashboard CampaignsPanel and report one-tap hook
+  - [x] 11.1 Add "campaigns" panel to business dashboard navigation
     - Add `'campaigns'` to `DashboardPanel` type, `PANELS`, `PANEL_LABELS`, and `PANEL_PERMISSIONS` (`manage_campaigns`) in `BusinessDashboard.tsx` / `businessStore.ts`
     - Add lazy import + `renderPanel()` case; add i18n key `biz.panel.campaigns`
     - _Requirements: 13.1_
 
-  - [ ] 11.2 Create CampaignsPanel component
+  - [x] 11.2 Create CampaignsPanel component
     - Create `apps/business/src/screens/panels/CampaignsPanel.tsx`
-    - Composer: segment select, title/body, channel toggles (push/email only), optional reward attach, recipient estimate preview (post-filter), send-now / schedule
+    - Composer: segment select, title/body, channel toggles (push/email only), optional reward attach, recipient estimate preview (post-filter), send-now
     - History list with status + headline analytics (recipients, delivered, attributed return visits)
     - Starter/payg → teaser with locked controls + upgrade prompt
     - _Requirements: 13.2, 13.3, 13.4, 13.5_
 
-  - [ ] 11.3 Wire one-tap win-back from report retention recommendation
+  - [x] 11.3 Wire one-tap win-back from report retention recommendation
     - In `ReportsPanel.tsx`, render a "Create win-back campaign" CTA next to `retention`-type recommendations; opening the composer pre-filled with `lapsed` segment, report `nodeIds`, suggested copy, and `reportId`
     - For starter/payg, replace CTA with upgrade prompt
     - _Requirements: 4.1, 4.2, 4.3, 4.4_
 
-- [ ] 12. Final checkpoint — Ensure all tests pass
+- [x] 12. Final checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

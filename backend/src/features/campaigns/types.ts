@@ -14,7 +14,7 @@ import { z } from 'zod'
 // ----------------------------------------------------------------------------
 
 /** Lifecycle states of a campaign. */
-export type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'cancelled' | 'failed'
+export type CampaignStatus = 'draft' | 'sending' | 'sent' | 'cancelled' | 'failed'
 
 /** Audience segments resolvable against the business's own past visitors. */
 export type Segment = 'lapsed' | 'first_timers' | 'regulars' | 'all_past_visitors'
@@ -85,9 +85,8 @@ export interface Campaign {
   /** Originating Venue Intelligence Report, when created from a recommendation. */
   reportId?: string
 
-  // Scheduling / lifecycle timestamps (ISO 8601)
+  // Lifecycle timestamps (ISO 8601)
   createdAt: string
-  scheduledAt?: string
   sentAt?: string
 
   /** Attribution window for return-visit measurement. Default 14 days. */
@@ -151,7 +150,6 @@ export interface CampaignSummary {
   title: string
   channels: CampaignChannel[]
   createdAt: string
-  scheduledAt?: string
   sentAt?: string
   /** Headline analytics surfaced in the list (Requirement 13.3). */
   recipients: number
@@ -235,15 +233,6 @@ export const createCampaignBodySchema = z.object({
   reportId: z.string().min(1).optional(),
 })
 
-/**
- * Body schema for `POST /v1/business/me/campaigns/:campaignId/send`.
- * Omitting `scheduledAt` sends immediately; a future ISO 8601 timestamp
- * schedules the send.
- */
-export const sendCampaignBodySchema = z.object({
-  scheduledAt: z.string().datetime().optional(),
-})
-
 /** Query schema for `GET /v1/business/me/campaigns` (paginated list). */
 export const campaignListQuerySchema = z.object({
   cursor: z.string().optional(),
@@ -288,7 +277,6 @@ export const unsubscribeQuerySchema = z.object({
 // Inferred body/query types
 // ----------------------------------------------------------------------------
 
-export type SendCampaignBody = z.infer<typeof sendCampaignBodySchema>
 export type CampaignListQuery = z.infer<typeof campaignListQuerySchema>
 export type CampaignIdParams = z.infer<typeof campaignIdParamsSchema>
 export type CampaignOptOutBody = z.infer<typeof campaignOptOutBodySchema>

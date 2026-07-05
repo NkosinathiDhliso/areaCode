@@ -12,11 +12,9 @@ import type { Campaign, CampaignSendMessage, DispatchCampaignEvent } from './typ
 // ============================================================================
 // Win-Back Campaigns — Campaign Dispatcher Lambda
 // ----------------------------------------------------------------------------
-// Invoked async on send-now (directly by the campaign service) and by the
-// EventBridge 5-minute tick for due `scheduled` campaigns. The dispatcher:
+// Invoked async on send-now (directly by the campaign service). The dispatcher:
 //
-//   1. Loads the campaign and asserts it is dispatchable (status `sending`, or
-//      a `scheduled` campaign whose `scheduledAt` has passed).
+//   1. Loads the campaign and asserts it is dispatchable (status `sending`).
 //   2. Resolves the segment to a deduplicated set of userIds.
 //   3. Filters by marketing consent + opt-out (Requirements 6.1, 6.2).
 //   4. Filters by the platform-wide frequency cap (Requirement 7.1).
@@ -91,18 +89,12 @@ export function tokenizeRecipients(
  *
  * - `sending`: send-now path — the service has already locked the campaign by
  *   transitioning it to `sending`.
- * - `scheduled`: only when `scheduledAt` has passed (the EventBridge tick path).
- * - anything else (`draft`/`sent`/`sending`-already-run/`cancelled`/`failed`):
- *   not dispatchable. A `sent` campaign in particular must never re-dispatch
- *   (Requirement 8.6 / Property 9).
+ * - anything else (`draft`/`sent`/`cancelled`/`failed`): not dispatchable. A
+ *   `sent` campaign in particular must never re-dispatch (Requirement 8.6 /
+ *   Property 9).
  */
-export function isDispatchable(campaign: Pick<Campaign, 'status' | 'scheduledAt'>, nowMs: number): boolean {
-  if (campaign.status === 'sending') return true
-  if (campaign.status === 'scheduled') {
-    if (!campaign.scheduledAt) return false
-    return new Date(campaign.scheduledAt).getTime() <= nowMs
-  }
-  return false
+export function isDispatchable(campaign: Pick<Campaign, 'status'>): boolean {
+  return campaign.status === 'sending'
 }
 
 // ----------------------------------------------------------------------------
@@ -142,8 +134,8 @@ async function resolveBusinessTier(businessId: string): Promise<string> {
  * Campaign dispatcher Lambda handler.
  *
  * Idempotent with respect to campaign status: a campaign that is not
- * dispatchable (already `sent`, `cancelled`, still `draft`, or a `scheduled`
- * campaign that is not yet due) is skipped without publishing any messages.
+ * dispatchable (already `sent`, `cancelled`, or still `draft`) is skipped
+ * without publishing any messages.
  */
 export async function handler(event: DispatchCampaignEvent): Promise<void> {
   const { businessId, campaignId } = event
@@ -163,10 +155,8 @@ export async function handler(event: DispatchCampaignEvent): Promise<void> {
     return
   }
 
-  if (!isDispatchable(campaign, nowMs)) {
-    console.log(
-      `[campaign-dispatcher] skip — not dispatchable status=${campaign.status} scheduledAt=${campaign.scheduledAt ?? 'none'}`,
-    )
+  if (!isDispatchable(campaign)) {
+    console.log(`[campaign-dispatcher] skip — not dispatchable status=${campaign.status}`)
     return
   }
 

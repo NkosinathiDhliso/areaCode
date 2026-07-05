@@ -99,7 +99,7 @@ export class CampaignAlreadySentError extends AppError {
   }
 }
 
-/** Send attempted from a non-draft, non-resendable state (e.g. cancelled/failed/scheduled). */
+/** Send attempted from a non-draft, non-resendable state (e.g. cancelled/failed). */
 export class CampaignNotSendableError extends AppError {
   constructor(campaignId: string, status: string) {
     super(409, 'invalid_state', `Campaign ${campaignId} cannot be sent from status '${status}'`)
@@ -107,7 +107,7 @@ export class CampaignNotSendableError extends AppError {
   }
 }
 
-/** Cancel attempted on a campaign that is not `draft` or `scheduled` (Requirement 8.4). */
+/** Cancel attempted on a campaign that is not `draft` (Requirement 8.4). */
 export class CampaignNotCancellableError extends AppError {
   constructor(campaignId: string, status: string) {
     super(409, 'invalid_state', `Campaign ${campaignId} cannot be cancelled from status '${status}'`)
@@ -312,27 +312,24 @@ export async function createCampaign(businessId: string, input: CreateCampaignIn
 }
 
 /**
- * Send or schedule a `draft` campaign (Requirements 8.2, 8.6).
+ * Send a `draft` campaign immediately (Requirements 8.2, 8.6).
  *
  * - Re-validates node + reward ownership at send time.
- * - A future `scheduledAt` transitions the campaign to `scheduled` (the
- *   EventBridge tick will dispatch it when due — task 10.4); no dispatch now.
- * - Otherwise transitions to `sending`, stamps `sentAt`, and async-invokes the
+ * - Transitions to `sending`, stamps `sentAt`, and async-invokes the
  *   campaign-dispatcher Lambda for fan-out.
  * - Re-sending a `sending`/`sent` campaign is rejected (Property 9); sending
  *   from any other non-draft state is rejected as invalid.
  *
- * Send-quota enforcement (task 7.2, §6): on the send-now path the realistic
- * eligible count is resolved (segment → consent → frequency cap) and asserted
- * against the business's remaining monthly quota BEFORE the `sending`
- * transition. If it would exceed, a `CampaignQuotaExceededError` (409
- * `quota_exceeded`, with `remaining`) is thrown and the campaign neither
- * transitions nor dispatches — and no quota is consumed (never truncate,
- * Requirements 9.3, 9.4 / Property 8). The dispatcher's `reserveQuota` remains
- * the atomic backstop that actually consumes the counter at fan-out. Scheduled
- * sends are quota-checked by the dispatcher when they become due.
+ * Send-quota enforcement (task 7.2, §6): the realistic eligible count is
+ * resolved (segment → consent → frequency cap) and asserted against the
+ * business's remaining monthly quota BEFORE the `sending` transition. If it
+ * would exceed, a `CampaignQuotaExceededError` (409 `quota_exceeded`, with
+ * `remaining`) is thrown and the campaign neither transitions nor dispatches —
+ * and no quota is consumed (never truncate, Requirements 9.3, 9.4 / Property 8).
+ * The dispatcher's `reserveQuota` remains the atomic backstop that actually
+ * consumes the counter at fan-out.
  */
-export async function sendCampaign(businessId: string, campaignId: string, scheduledAt?: string): Promise<Campaign> {
+export async function sendCampaign(businessId: string, campaignId: string): Promise<Campaign> {
   const campaign = await getCampaignById(businessId, campaignId)
   if (!campaign) throw new CampaignNotFoundError(campaignId)
 
@@ -340,7 +337,7 @@ export async function sendCampaign(businessId: string, campaignId: string, sched
   if (campaign.status === 'sending' || campaign.status === 'sent') {
     throw new CampaignAlreadySentError(campaignId)
   }
-  // Only a draft may be sent or scheduled.
+  // Only a draft may be sent.
   if (campaign.status !== 'draft') {
     throw new CampaignNotSendableError(campaignId, campaign.status)
   }
@@ -350,17 +347,6 @@ export async function sendCampaign(businessId: string, campaignId: string, sched
   await assertRewardOwned(businessId, campaign.rewardId)
 
   const nowMs = Date.now()
-  const isFutureSchedule = !!scheduledAt && new Date(scheduledAt).getTime() > nowMs
-
-  if (isFutureSchedule) {
-    const scheduled: Campaign = {
-      ...campaign,
-      status: 'scheduled',
-      scheduledAt,
-    }
-    await putCampaign(scheduled)
-    return scheduled
-  }
 
   // Send-now quota guard (Requirements 9.3, 9.4 / Property 8). Resolve the
   // realistic eligible count and assert it fits the remaining monthly quota
@@ -381,7 +367,7 @@ export async function sendCampaign(businessId: string, campaignId: string, sched
 }
 
 /**
- * Cancel a `draft` or `scheduled` campaign (Requirement 8.4).
+ * Cancel a `draft` campaign (Requirement 8.4).
  *
  * A campaign already `sending`, `sent`, `cancelled`, or `failed` is NOT
  * cancellable and is rejected with `CampaignNotCancellableError`.
@@ -390,7 +376,7 @@ export async function cancelCampaign(businessId: string, campaignId: string): Pr
   const campaign = await getCampaignById(businessId, campaignId)
   if (!campaign) throw new CampaignNotFoundError(campaignId)
 
-  if (campaign.status !== 'draft' && campaign.status !== 'scheduled') {
+  if (campaign.status !== 'draft') {
     throw new CampaignNotCancellableError(campaignId, campaign.status)
   }
 
@@ -436,7 +422,6 @@ export async function listCampaigns(
       title: c.title,
       channels: c.channels,
       createdAt: c.createdAt,
-      scheduledAt: c.scheduledAt,
       sentAt: c.sentAt,
       recipients: analytics.messagesAttempted,
       delivered: analytics.deliveredPush + analytics.deliveredEmail + analytics.deliveredBoth,

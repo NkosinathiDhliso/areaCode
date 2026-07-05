@@ -378,7 +378,6 @@ export async function putCampaign(campaign: Campaign): Promise<void> {
         segment: campaign.segment,
         title: campaign.title,
         createdAt: campaign.createdAt,
-        scheduledAt: campaign.scheduledAt,
         sentAt: campaign.sentAt,
       },
     }),

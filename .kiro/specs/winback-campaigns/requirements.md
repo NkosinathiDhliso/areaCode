@@ -12,8 +12,8 @@ The feature is gated by business tier: growth and pro tiers can create and send 
 
 ## Glossary
 
-- **Campaign**: A business-authored message targeting a defined audience segment of the business's past visitors, delivered once (immediately or scheduled) through email and/or push. Stored as a document in the app-data DynamoDB table.
-- **Campaign_Service**: The service-layer module under `backend/src/features/campaigns/service.ts` that creates, validates, schedules, and manages campaigns.
+- **Campaign**: A business-authored message targeting a defined audience segment of the business's past visitors, delivered once (immediately) through email and/or push. Stored as a document in the app-data DynamoDB table.
+- **Campaign_Service**: The service-layer module under `backend/src/features/campaigns/service.ts` that creates, validates, and manages campaigns.
 - **Campaign_API**: The Fastify API routes under `/v1/business/me/campaigns` that serve campaign management to the business dashboard.
 - **Segment**: A rule that resolves to a set of the business's past visitors based on their check-in history and loyalty tier. The four supported segments are `lapsed`, `first_timers`, `regulars`, and `all_past_visitors`.
 - **Segment_Resolver**: The module that converts a Segment definition plus the business's nodes into a deduplicated set of target consumer userIds, using existing check-in data only.
@@ -121,14 +121,14 @@ The feature is gated by business tier: growth and pro tiers can create and send 
 
 ### Requirement 8: Campaign Lifecycle
 
-**User Story:** As a business owner, I want to draft, send or schedule, and cancel campaigns, so that I have control over what goes out and when.
+**User Story:** As a business owner, I want to draft, send, and cancel campaigns, so that I have control over what goes out.
 
 #### Acceptance Criteria
 
-1. THE Campaign_Service SHALL model each Campaign with a status of `draft`, `scheduled`, `sending`, `sent`, `cancelled`, or `failed`.
-2. THE Campaign_API SHALL expose `POST /v1/business/me/campaigns/:campaignId/send` that transitions a `draft` Campaign to `sending` (immediate) or `scheduled` (when a future `scheduledAt` is provided).
-3. WHEN a Campaign is `scheduled`, THE Campaign_Dispatcher SHALL begin delivery within 5 minutes after `scheduledAt` is reached, triggered by an EventBridge schedule.
-4. THE Campaign_API SHALL expose `POST /v1/business/me/campaigns/:campaignId/cancel` that transitions a `draft` or `scheduled` Campaign to `cancelled`; a Campaign already in `sending` or `sent` SHALL NOT be cancellable.
+1. THE Campaign_Service SHALL model each Campaign with a status of `draft`, `sending`, `sent`, `cancelled`, or `failed`.
+2. THE Campaign_API SHALL expose `POST /v1/business/me/campaigns/:campaignId/send` that transitions a `draft` Campaign to `sending` (immediate delivery).
+3. Scheduled (future-dated) sending is out of scope. Delivery is send-now only; there is no `scheduled` status and no EventBridge schedule tick. (Descoped per `.kiro/steering/no-fallbacks-no-legacy.md`; add when a real customer needs it.)
+4. THE Campaign_API SHALL expose `POST /v1/business/me/campaigns/:campaignId/cancel` that transitions a `draft` Campaign to `cancelled`; a Campaign already in `sending` or `sent` SHALL NOT be cancellable.
 5. WHEN delivery completes, THE Campaign_Service SHALL transition the Campaign to `sent` and record final send counts.
 6. THE Campaign_Service SHALL prevent a Campaign from being sent more than once (a `sent` or `sending` Campaign SHALL reject a second send request).
 

@@ -6,9 +6,9 @@
  * stubbed:
  *   - createCampaign: draft status, key fields, defaults, 13-month TTL, zeroed
  *     counts, and ownership rejection creating no campaign (R1.1, 1.3, 1.5, 1.6)
- *   - sendCampaign: draft→sending (now) with dispatcher invoke; draft→scheduled
- *     (future); re-send of sending/sent rejected (R8.2, 8.6 / Property 9)
- *   - cancelCampaign: draft/scheduled→cancelled; otherwise rejected (R8.4)
+ *   - sendCampaign: draft→sending with dispatcher invoke; re-send of
+ *     sending/sent rejected (R8.2, 8.6 / Property 9)
+ *   - cancelCampaign: draft→cancelled; otherwise rejected (R8.4)
  *   - getCampaign/listCampaigns: analytics from stored counts, 404 on missing
  *
  * The only consumer identifier handled is the transient `userId` in the
@@ -267,26 +267,6 @@ describe('sendCampaign', () => {
     expect(mocks.lambdaSend).not.toHaveBeenCalled()
   })
 
-  it('schedules when a future scheduledAt is provided (no dispatch now)', async () => {
-    process.env[CAMPAIGN_DISPATCHER_FUNCTION_ENV] = 'campaign-dispatcher-fn'
-    mocks.getCampaignById.mockResolvedValue(makeCampaign({ status: 'draft' }))
-    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString()
-
-    const result = await sendCampaign(BUSINESS_ID, 'camp-1', future)
-
-    expect(result.status).toBe('scheduled')
-    expect(result.scheduledAt).toBe(future)
-    expect(mocks.lambdaSend).not.toHaveBeenCalled()
-  })
-
-  it('sends now when scheduledAt is in the past', async () => {
-    mocks.getCampaignById.mockResolvedValue(makeCampaign({ status: 'draft' }))
-    const past = new Date(Date.now() - 60 * 1000).toISOString()
-
-    const result = await sendCampaign(BUSINESS_ID, 'camp-1', past)
-    expect(result.status).toBe('sending')
-  })
-
   it.each<CampaignStatus>(['sending', 'sent'])(
     'rejects re-send of a %s campaign (R8.6 / Property 9)',
     async (status) => {
@@ -315,8 +295,8 @@ describe('sendCampaign', () => {
 // ─── cancelCampaign ───────────────────────────────────────────────────────────
 
 describe('cancelCampaign', () => {
-  it.each<CampaignStatus>(['draft', 'scheduled'])('cancels a %s campaign', async (status) => {
-    mocks.getCampaignById.mockResolvedValue(makeCampaign({ status }))
+  it('cancels a draft campaign', async () => {
+    mocks.getCampaignById.mockResolvedValue(makeCampaign({ status: 'draft' }))
     const result = await cancelCampaign(BUSINESS_ID, 'camp-1')
     expect(result.status).toBe('cancelled')
     expect(mocks.putCampaign).toHaveBeenCalledTimes(1)
@@ -487,18 +467,6 @@ describe('sendCampaign — send-quota enforcement (R9.3, R9.4 / Property 8)', ()
 
     const result = await sendCampaign(BUSINESS_ID, 'camp-1')
     expect(result.status).toBe('sending')
-  })
-
-  it('does not run the quota guard for a future-scheduled send (dispatcher checks when due)', async () => {
-    mocks.getCampaignById.mockResolvedValue(makeCampaign({ status: 'draft' }))
-    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString()
-
-    const result = await sendCampaign(BUSINESS_ID, 'camp-1', future)
-
-    expect(result.status).toBe('scheduled')
-    // No eligible-count resolution or quota read for a scheduled send.
-    expect(mocks.resolveSegmentWithMeta).not.toHaveBeenCalled()
-    expect(mocks.kvGet).not.toHaveBeenCalled()
   })
 
   it('counts the realistic post-filter eligible set, not the raw segment size', async () => {

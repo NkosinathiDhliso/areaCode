@@ -19,19 +19,12 @@ import {
 import { assertCanSendCampaigns } from './tier-gating.js'
 import {
   createCampaignBodySchema,
-  sendCampaignBodySchema,
   campaignListQuerySchema,
   campaignIdParamsSchema,
   campaignOptOutBodySchema,
   unsubscribeQuerySchema,
 } from './types.js'
-import type {
-  CampaignListQuery,
-  CampaignIdParams,
-  SendCampaignBody,
-  CampaignOptOutBody,
-  UnsubscribeQuery,
-} from './types.js'
+import type { CampaignListQuery, CampaignIdParams, CampaignOptOutBody, UnsubscribeQuery } from './types.js'
 import { verifyUnsubscribeToken } from './unsubscribe.js'
 
 // ============================================================================
@@ -140,7 +133,7 @@ export async function campaignRoutes(app: FastifyInstance) {
     },
   )
 
-  // POST /v1/business/me/campaigns/:campaignId/send — send now or schedule
+  // POST /v1/business/me/campaigns/:campaignId/send — send now
   // (Requirement 8.2). Tier-gated: starter/payg → 402 upgrade_required (9.2).
   app.post(
     '/v1/business/me/campaigns/:campaignId/send',
@@ -148,13 +141,12 @@ export async function campaignRoutes(app: FastifyInstance) {
       preHandler: [
         requireAuth('business', 'staff'),
         requireBusinessPermission(CAMPAIGN_PERMISSION),
-        validate({ params: campaignIdParamsSchema, body: sendCampaignBodySchema }),
+        validate({ params: campaignIdParamsSchema }),
       ],
     },
     async (request) => {
       const { businessId } = getBusinessRole(request)
       const params = request.params as CampaignIdParams
-      const body = request.body as SendCampaignBody
 
       // Tier gate FIRST — resolve the effective tier (honouring trial expiry,
       // matching the service's quota guard) and reject starter/payg with a 402
@@ -163,11 +155,11 @@ export async function campaignRoutes(app: FastifyInstance) {
       const tier = getEffectiveTier((business ?? {}) as { tier?: string; trialEndsAt?: string | null })
       assertCanSendCampaigns(tier)
 
-      return sendCampaign(businessId, params.campaignId, body.scheduledAt)
+      return sendCampaign(businessId, params.campaignId)
     },
   )
 
-  // POST /v1/business/me/campaigns/:campaignId/cancel — cancel draft/scheduled
+  // POST /v1/business/me/campaigns/:campaignId/cancel — cancel draft
   // (Requirement 8.4).
   app.post(
     '/v1/business/me/campaigns/:campaignId/cancel',

@@ -303,48 +303,37 @@ describe('Feature: winback-campaigns, Property 9: Send Idempotency', () => {
     /**
      * **Validates: Requirement 8.6**
      *
-     * For any campaign already in `sending` or `sent` (random ids, with or
-     * without a `scheduledAt`), `sendCampaign` rejects with
-     * `CampaignAlreadySentError` BEFORE any state transition or fan-out — so
-     * `putCampaign` and the dispatcher Lambda are never invoked. This holds the
-     * send-once guarantee no matter how many times send is retried.
+     * For any campaign already in `sending` or `sent` (random ids),
+     * `sendCampaign` rejects with `CampaignAlreadySentError` BEFORE any state
+     * transition or fan-out — so `putCampaign` and the dispatcher Lambda are
+     * never invoked. This holds the send-once guarantee no matter how many
+     * times send is retried.
      */
     process.env[CAMPAIGN_DISPATCHER_FUNCTION_ENV] = 'campaign-dispatcher-fn'
 
     const sentStatusArb: fc.Arbitrary<CampaignStatus> = fc.constantFrom('sending', 'sent')
     const idArb = fc.string({ minLength: 1, maxLength: 24 }).filter((s) => s.trim().length > 0)
-    // Either send-now (undefined) or a future/past schedule — guard fires regardless.
-    const scheduledAtArb = fc.option(
-      fc.integer({ min: -3 * MS_PER_DAY, max: 30 * MS_PER_DAY }).map((off) => new Date(Date.now() + off).toISOString()),
-      { nil: undefined },
-    )
 
     try {
       await fc.assert(
-        fc.asyncProperty(
-          sentStatusArb,
-          idArb,
-          idArb,
-          scheduledAtArb,
-          async (status, businessId, campaignId, scheduledAt) => {
-            mocks.putCampaign.mockClear()
-            mocks.lambdaSend.mockClear()
-            mocks.getCampaignById.mockResolvedValue(makeCampaign({ campaignId, businessId, status }))
+        fc.asyncProperty(sentStatusArb, idArb, idArb, async (status, businessId, campaignId) => {
+          mocks.putCampaign.mockClear()
+          mocks.lambdaSend.mockClear()
+          mocks.getCampaignById.mockResolvedValue(makeCampaign({ campaignId, businessId, status }))
 
-            let thrown: unknown
-            try {
-              await sendCampaign(businessId, campaignId, scheduledAt)
-            } catch (e) {
-              thrown = e
-            }
+          let thrown: unknown
+          try {
+            await sendCampaign(businessId, campaignId)
+          } catch (e) {
+            thrown = e
+          }
 
-            expect(thrown).toBeInstanceOf(CampaignAlreadySentError)
-            expect((thrown as CampaignAlreadySentError).statusCode).toBe(409)
-            // No additional messages dispatched: no write, no fan-out.
-            expect(mocks.putCampaign).not.toHaveBeenCalled()
-            expect(mocks.lambdaSend).not.toHaveBeenCalled()
-          },
-        ),
+          expect(thrown).toBeInstanceOf(CampaignAlreadySentError)
+          expect((thrown as CampaignAlreadySentError).statusCode).toBe(409)
+          // No additional messages dispatched: no write, no fan-out.
+          expect(mocks.putCampaign).not.toHaveBeenCalled()
+          expect(mocks.lambdaSend).not.toHaveBeenCalled()
+        }),
         { numRuns: 25 },
       )
     } finally {

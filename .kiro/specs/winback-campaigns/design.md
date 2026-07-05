@@ -46,10 +46,6 @@ flowchart TB
         FASTIFY[Fastify monolith Lambda<br/>/v1/business/me/campaigns ...]
     end
 
-    subgraph Scheduling
-        EB[EventBridge<br/>scheduled-campaign tick<br/>every 5 min]
-    end
-
     subgraph Delivery
         DISPATCH[campaign-dispatcher Lambda<br/>resolve segment<br/>consent + freq-cap filter<br/>quota check<br/>fan-out batches]
         SQS[SQS: campaign-send queue<br/>≤100 recipients per message]
@@ -73,7 +69,6 @@ flowchart TB
     REACT --> FASTIFY
     REPORTS --> FASTIFY
     FASTIFY -->|send now| DISPATCH
-    EB -->|scheduled due| DISPATCH
     DISPATCH -->|read| CHECKINS
     DISPATCH -->|read| USERS
     DISPATCH -->|read| NODES
@@ -91,7 +86,7 @@ flowchart TB
 ### Delivery Flow
 
 1. Owner creates a Campaign (`draft`) via the composer. The API estimates recipient count by resolving the segment and applying consent/cap filters (without sending).
-2. Owner sends now or schedules. Send-now invokes the dispatcher directly (async); schedule writes `scheduledAt` and the EventBridge 5-minute tick picks it up when due.
+2. Owner sends now. Send-now invokes the dispatcher directly (async). (Scheduled/future-dated sending is out of scope; see requirement 8.)
 3. The **dispatcher** resolves the segment to userIds, filters by marketing consent + opt-out + frequency cap, checks the monthly send quota, derives anonymized tokens, and publishes SQS batches.
 4. Each **sender** invocation delivers a batch: push through `sendNotification`, email through `sendCampaignEmail`, writing one `Campaign_Send_Record` per recipient and incrementing the frequency-cap counter once per recipient.
 5. When all batches drain, the campaign flips to `sent` with final counts. Analytics (including Attributed Return Visits) are computed on read.
@@ -100,7 +95,7 @@ flowchart TB
 
 ### 1. Campaign Dispatcher Lambda (`backend/src/features/campaigns/dispatcher.ts`)
 
-Invoked async on send-now and by the EventBridge tick for due scheduled campaigns.
+Invoked async on send-now (directly by the campaign service).
 
 ```typescript
 interface DispatchCampaignEvent {
@@ -108,7 +103,7 @@ interface DispatchCampaignEvent {
   campaignId: string
 }
 
-// 1. Load campaign, assert status is 'sending' or due 'scheduled'
+// 1. Load campaign, assert status is 'sending'
 // 2. resolveSegment(campaign) -> userIds
 // 3. filterByConsentAndOptOut(userIds, businessId) -> consented
 // 4. filterByFrequencyCap(consented) -> eligible
@@ -180,7 +175,7 @@ Opt-out rows: `pk = COPTOUT#<userId>`, `sk = COPTOUT#<businessId>` for per-busin
 ```typescript
 function createCampaign(businessId: string, input: CreateCampaignInput): Promise<Campaign>
 function estimateRecipients(businessId: string, campaignId: string): Promise<RecipientEstimate>
-function sendCampaign(businessId: string, campaignId: string, scheduledAt?: string): Promise<Campaign>
+function sendCampaign(businessId: string, campaignId: string): Promise<Campaign>
 function cancelCampaign(businessId: string, campaignId: string): Promise<Campaign>
 function getCampaign(businessId: string, campaignId: string): Promise<CampaignWithAnalytics>
 function listCampaigns(businessId: string, opts): Promise<{ items: CampaignSummary[]; nextCursor?: string }>
@@ -196,8 +191,8 @@ POST   /v1/business/me/campaigns                      create draft
 GET    /v1/business/me/campaigns                       list (paginated)
 GET    /v1/business/me/campaigns/:campaignId           detail + analytics
 POST   /v1/business/me/campaigns/:campaignId/estimate   recipient estimate (post-filter)
-POST   /v1/business/me/campaigns/:campaignId/send       send now or schedule
-POST   /v1/business/me/campaigns/:campaignId/cancel     cancel draft/scheduled
+POST   /v1/business/me/campaigns/:campaignId/send       send now
+POST   /v1/business/me/campaigns/:campaignId/cancel     cancel draft
 ```
 
 Consumer-facing opt-out (under consumer auth, or a signed unsubscribe token for email links):
@@ -239,7 +234,7 @@ ttl:    <createdAt + 13 months>
 campaignId, businessId, status,
 segment, lapsedWindowDays?, nodeIds[],
 title, body, channels[], rewardId?, reportId?,
-scheduledAt?, sentAt?, attributionWindowDays,
+sentAt?, attributionWindowDays,
 campaignSalt,                 (per-campaign hash salt; not a secret, rotates token space)
 counts: { targeted, filteredConsent, filteredFreqCap, attempted,
           deliveredPush, deliveredEmail, deliveredBoth, noChannel, failed }
@@ -375,14 +370,13 @@ _For any_ business tier, when the tier is starter or payg the send endpoint SHAL
 
 ### Delivery Errors
 
-| Scenario                               | Handling                                                                      | Recovery                                                          |
-| -------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Dispatcher fails before fan-out        | Campaign left in `sending`; async invocation retried; CloudWatch error metric | Manual re-trigger; idempotent (no batches published yet)          |
-| Single recipient delivery fails        | Record `failed`, continue batch                                               | Counted in analytics; no retry of individual recipient            |
-| Sender invocation fails                | SQS retry ×2 → DLQ; other batches unaffected                                  | DLQ redrive                                                       |
-| Recipient has no push token, push-only | Record `no_channel`, no other channel attempted                               | Expected; surfaced in analytics                                   |
-| Email send (SES) throttled             | SDK retry/backoff; on hard fail record `failed`                               | DLQ for whole batch on invocation failure                         |
-| Scheduled tick misses                  | EventBridge alarm on errors                                                   | Next 5-min tick re-evaluates due campaigns (idempotent on status) |
+| Scenario                               | Handling                                                                      | Recovery                                                 |
+| -------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Dispatcher fails before fan-out        | Campaign left in `sending`; async invocation retried; CloudWatch error metric | Manual re-trigger; idempotent (no batches published yet) |
+| Single recipient delivery fails        | Record `failed`, continue batch                                               | Counted in analytics; no retry of individual recipient   |
+| Sender invocation fails                | SQS retry ×2 → DLQ; other batches unaffected                                  | DLQ redrive                                              |
+| Recipient has no push token, push-only | Record `no_channel`, no other channel attempted                               | Expected; surfaced in analytics                          |
+| Email send (SES) throttled             | SDK retry/backoff; on hard fail record `failed`                               | DLQ for whole batch on invocation failure                |
 
 ### API Errors
 
