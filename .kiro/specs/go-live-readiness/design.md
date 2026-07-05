@@ -38,6 +38,21 @@ The script asserts against this shape rather than re-deriving it:
 Johannesburg bounding box: lat -26.5 to -25.9, lng 27.7 to 28.4 (generous,
 catches swapped/zeroed coordinates, not survey-grade).
 
+### Backend end-to-end sweep (worker error scan window)
+
+The backend sweep adds a WebSocket handshake, all four Cognito pools, and an
+ERROR scan across the worker log groups. The worker scan does not use a blind
+24h window: it scans from the later of (24h ago) and the worker's last deploy
+time (`aws lambda get-function-configuration` LastModified). A worker fixed and
+redeployed emits its last pre-fix ERROR before the deploy, so a fixed 24h window
+reports a false FAIL for up to a day against code that no longer runs. Scoping to
+"since deploy" makes a verified fix read PASS immediately and honestly. When the
+deploy time cannot be read (no permission, missing function, unparseable
+timestamp), the scan keeps the full 24h window rather than narrowing on an
+unproven assumption. The spec-pinned API error scan (Req 1.2) stays at a fixed
+24h: it is the always-on request path, where a full day of real-traffic errors
+is the intended signal.
+
 Commit-ancestry for build parity: compare the Amplify job `commitId` with
 `git merge-base --is-ancestor c047c94 <commitId>` when the commit exists
 locally; if unknown, report the SHA and mark the check WARN, not PASS.

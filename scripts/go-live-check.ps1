@@ -754,10 +754,55 @@ foreach ($poolSpec in $cognitoPools) {
     Test-CognitoPool -Pool $poolSpec.Pool -AssertMfaNotRequired $poolSpec.AssertMfaNotRequired
 }
 
-# 9.3 Worker error scan: the same 24h ERROR filter as 3.2, looped over the
-# worker log groups. Lambda function names differ from some SQS queue names, so
-# the log-group names use the real Lambda names: the campaign worker Lambda is
-# `campaign-sender` (queue: campaign-send) and the report worker Lambda is
+# Get-FunctionLastModifiedMs returns the Lambda's last-deploy time as epoch ms,
+# or $null when unresolved (CLI absent, no permission, missing function, or an
+# unparseable timestamp). Used to scope the worker error scan to "since the last
+# deploy": a worker fixed and redeployed emits its final pre-fix ERROR before
+# the deploy, so counting those against the new code is a false FAIL that lingers
+# for up to 24h. LastModified advances on ANY code or config update (env var /
+# VPC change), which is exactly the shape of the fixes this scan must clear.
+function Get-FunctionLastModifiedMs {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$LogGroupName
+    )
+
+    if (-not $script:awsAvailable) { return $null }
+
+    # Log group /aws/lambda/<fn> -> function name <fn>.
+    $prefix = "/aws/lambda/"
+    $functionName = $LogGroupName
+    if ($LogGroupName.StartsWith($prefix)) {
+        $functionName = $LogGroupName.Substring($prefix.Length)
+    }
+
+    $cfg = Invoke-AwsJson -AwsArgs @(
+        "lambda", "get-function-configuration",
+        "--function-name", $functionName,
+        "--region", $Region
+    )
+    if ($null -eq $cfg -or [string]::IsNullOrEmpty($cfg.LastModified)) { return $null }
+
+    # LastModified is ISO-8601 (e.g. 2026-07-05T10:30:00.000+0000). Parse to
+    # epoch ms; any parse failure yields $null (deploy time cannot be verified).
+    try {
+        $dto = [DateTimeOffset]::Parse(
+            $cfg.LastModified,
+            [System.Globalization.CultureInfo]::InvariantCulture,
+            [System.Globalization.DateTimeStyles]::AssumeUniversal
+        )
+        return $dto.ToUnixTimeMilliseconds()
+    }
+    catch {
+        return $null
+    }
+}
+
+# 9.3 Worker error scan: an ERROR filter looped over the worker log groups,
+# scoped to the deploy-aware window below. Lambda function names differ from
+# some SQS queue names, so the log-group names use the real Lambda names: the
+# campaign worker Lambda is `campaign-sender` (queue: campaign-send) and the
+# report worker Lambda is
 # `report-generator` (queue: report-generation). There is NO push-sender worker
 # Lambda (the push-sender SQS queue is drained by the campaign-sender Lambda),
 # so no `area-code-prod-push-sender` log group exists and none is scanned.
@@ -778,7 +823,20 @@ foreach ($workerLogGroup in $workerLogGroups) {
         continue
     }
 
-    $workerStartMs = [DateTimeOffset]::UtcNow.AddHours(-24).ToUnixTimeMilliseconds()
+    # Scan window: the last 24h, but never earlier than this worker's last
+    # deploy. A fix redeployed 2h ago scans only the last 2h, so a final ERROR
+    # from the retired code does not produce a false FAIL against the new code.
+    # When the deploy time cannot be read, keep the full 24h window (honest: we
+    # cannot prove the code is newer, so we do not narrow the scan).
+    $defaultStartMs = [DateTimeOffset]::UtcNow.AddHours(-24).ToUnixTimeMilliseconds()
+    $workerStartMs = $defaultStartMs
+    $scanWindowText = "last 24h"
+    $lastModMs = Get-FunctionLastModifiedMs -LogGroupName $workerLogGroup
+    if ($null -ne $lastModMs -and $lastModMs -gt $defaultStartMs) {
+        $workerStartMs = $lastModMs
+        $deployTime = ([DateTimeOffset]::FromUnixTimeMilliseconds($lastModMs)).UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ")
+        $scanWindowText = "since deploy $deployTime"
+    }
     $workerArgs = @(
         "logs", "filter-log-events",
         "--log-group-name", $workerLogGroup,
@@ -794,7 +852,7 @@ foreach ($workerLogGroup in $workerLogGroups) {
     else {
         $workerEvents = @($workerResult.events)
         if ($workerEvents.Count -eq 0) {
-            Write-Check -Status "PASS" -Name "Worker errors $workerLogGroup" -Detail "no ERROR events in last 24h"
+            Write-Check -Status "PASS" -Name "Worker errors $workerLogGroup" -Detail "no ERROR events $scanWindowText"
         }
         else {
             $firstMessage = "$($workerEvents[0].message)".Trim()
@@ -802,7 +860,7 @@ foreach ($workerLogGroup in $workerLogGroups) {
             if ($firstMessage.Length -gt $maxLen) {
                 $firstMessage = $firstMessage.Substring(0, $maxLen) + "..."
             }
-            $detail = "$($workerEvents.Count) ERROR event(s) in last 24h; first: $firstMessage"
+            $detail = "$($workerEvents.Count) ERROR event(s) $scanWindowText; first: $firstMessage"
             Write-Check -Status "FAIL" -Name "Worker errors $workerLogGroup" -Detail $detail
         }
     }
