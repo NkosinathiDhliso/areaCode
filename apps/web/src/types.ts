@@ -5,6 +5,7 @@ export type AppRoute =
   | 'feed'
   | 'friends'
   | 'profile'
+  | 'settings'
   | 'privacy'
   | 'notifications'
   | 'notification-settings'

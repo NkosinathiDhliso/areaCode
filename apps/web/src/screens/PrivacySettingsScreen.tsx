@@ -51,7 +51,7 @@ export function PrivacySettingsScreen({ onNavigate }: PrivacySettingsScreenProps
       {/* Header with back button */}
       <div className="flex flex-row items-center gap-3 mb-6">
         <button
-          onClick={() => onNavigate('profile')}
+          onClick={() => onNavigate('settings')}
           className="text-[var(--text-muted)] text-sm transition-all active:scale-95"
           aria-label={t('privacy.back')}
         >

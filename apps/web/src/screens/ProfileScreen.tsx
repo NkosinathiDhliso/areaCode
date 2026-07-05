@@ -1,23 +1,17 @@
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
+import { Settings } from 'lucide-react'
 import { api } from '@area-code/shared/lib/api'
-import { useErrorStore } from '@area-code/shared/stores/errorStore'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useUserStore } from '@area-code/shared/stores/userStore'
-import { useTheme } from '@area-code/shared/hooks/useTheme'
-import type { ThemePreference } from '@area-code/shared/hooks/useTheme'
 import { useUnclaimedRewards } from '@area-code/shared/hooks'
-import { useAppUpdate } from '@area-code/shared/hooks'
 import { TierBadge } from '@area-code/shared/components/TierBadge'
 import { TierProgressBar } from '@area-code/shared/components/TierProgressBar'
 import { StreakDisplay } from '@area-code/shared/components/StreakDisplay'
 import { Avatar } from '@area-code/shared/components/Avatar'
-import { PrivacyIndicator } from '@area-code/shared/components/PrivacyIndicator'
 import { RedemptionCodeCard } from '@area-code/shared/components/RedemptionCodeCard'
-import { Spinner } from '@area-code/shared/components/Spinner'
 import { TIER_PERMANENCE_SHORT } from '@area-code/shared/constants/legal'
-import type { User, PrivacyLevel } from '@area-code/shared/types'
+import type { User } from '@area-code/shared/types'
 import type { AppRoute } from '../types'
 import { StreamingSection } from '../components/StreamingSection'
 
@@ -28,20 +22,15 @@ interface ProfileScreenProps {
 export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   const { t } = useTranslation()
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
-  const logout = useConsumerAuthStore((s) => s.logout)
   const user = useUserStore((s) => s.user)
   const tier = useUserStore((s) => s.tier)
   const totalCheckIns = useUserStore((s) => s.totalCheckIns)
   const streakCount = useUserStore((s) => s.streakCount)
   const setUser = useUserStore((s) => s.setUser)
-  const { preference, setPreference } = useTheme()
-  const { updating, updateApp } = useAppUpdate()
   // The consumer's wallet of earned-but-unredeemed get codes. Lives here now
   // that the standalone gets tab is gone; it is pure utility (a code to show
   // staff), not a discovery surface.
   const { rewards: earnedCodes } = useUnclaimedRewards()
-  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false)
-  const [deletingAccount, setDeletingAccount] = useState(false)
 
   const { data: profile } = useQuery({
     queryKey: ['user', 'me'],
@@ -53,12 +42,6 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
       }
       return u
     },
-    staleTime: 60_000,
-  })
-
-  const { data: privacyData } = useQuery({
-    queryKey: ['privacy'],
-    queryFn: () => api.get<{ privacyLevel: PrivacyLevel }>('/v1/users/me/privacy'),
     staleTime: 60_000,
   })
 
@@ -88,12 +71,6 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
     queryFn: () => api.get<StreakData>('/v1/users/me/streak'),
     staleTime: 60_000,
   })
-
-  function handleLogout() {
-    void api.post('/v1/auth/logout', {}).catch(() => {})
-    logout()
-    onNavigate('map')
-  }
 
   const displayUser = profile ?? user
 
@@ -129,6 +106,13 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
           <p className="text-[var(--text-muted)] text-sm">@{displayUser?.username}</p>
         </div>
         <TierBadge tier={tier} />
+        <button
+          onClick={() => onNavigate('settings')}
+          aria-label={t('profile.settings')}
+          className="w-11 h-11 flex items-center justify-center text-[var(--text-secondary)] transition-all active:scale-95"
+        >
+          <Settings size={22} strokeWidth={2} />
+        </button>
       </div>
 
       <p className="text-[var(--text-muted)] text-xs mb-6">{TIER_PERMANENCE_SHORT}</p>
@@ -186,154 +170,6 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
       <NavLink label={t('profile.checkInHistory', 'Check-in History')} onClick={() => onNavigate('history')} />
       <NavLink label={t('profile.notifications', 'Notifications')} onClick={() => onNavigate('notifications')} />
       <NavLink label={t('friends.title')} onClick={() => onNavigate('friends')} />
-      <NavLink
-        label={t('privacy.settings.link')}
-        onClick={() => onNavigate('privacy')}
-        trailing={privacyData ? <PrivacyIndicator privacyLevel={privacyData.privacyLevel} /> : undefined}
-      />
-
-      <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 mb-3">
-        <h3 className="text-[var(--text-secondary)] text-xs font-medium uppercase tracking-wider mb-3">
-          {t('profile.appearance')}
-        </h3>
-        <div className="flex flex-row gap-2">
-          {(['auto', 'light', 'dark'] as ThemePreference[]).map((opt) => (
-            <button
-              key={opt}
-              onClick={() => setPreference(opt)}
-              className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all duration-150 ${
-                preference === opt
-                  ? 'gradient-accent'
-                  : 'bg-[var(--bg-raised)] text-[var(--text-secondary)] border border-[var(--border)]'
-              }`}
-            >
-              {t(`profile.theme.${opt}`)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 mb-3">
-        <h3 className="text-[var(--text-secondary)] text-xs font-medium uppercase tracking-wider mb-3">
-          {t('profile.app', 'App')}
-        </h3>
-        <button
-          onClick={() => void updateApp()}
-          disabled={updating}
-          className="w-full flex flex-row items-center justify-between text-left disabled:opacity-60"
-        >
-          <span className="text-[var(--text-primary)] text-sm font-medium">
-            {updating ? t('profile.updating', 'Updating…') : t('profile.checkForUpdates', 'Check for updates')}
-          </span>
-          {updating ? (
-            <Spinner size="sm" />
-          ) : (
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="var(--text-muted)"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="23 4 23 10 17 10" />
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-            </svg>
-          )}
-        </button>
-        <p className="text-[var(--text-muted)] text-xs mt-2">
-          {t('profile.updateHint', 'Reloads the app with the latest version.')}
-        </p>
-      </div>
-
-      <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 mb-3">
-        {/* Full data export (POPIA compliance) */}
-        <button
-          onClick={() => {
-            void api
-              .get<Record<string, unknown>>('/v1/users/me/data-export')
-              .then((data) => {
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = url
-                a.download = `area-code-data-export-${new Date().toISOString().slice(0, 10)}.json`
-                a.click()
-                URL.revokeObjectURL(url)
-              })
-              .catch(() => {
-                useErrorStore.getState().showError(t('profile.exportFailed', "Couldn't download your data. Try again."))
-              })
-          }}
-          className="w-full text-left text-[var(--text-primary)] text-sm py-2"
-        >
-          {t('profile.downloadData', 'Download my data')}
-        </button>
-      </div>
-
-      <button
-        onClick={handleLogout}
-        className="w-full border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl py-3 text-sm mt-4"
-      >
-        {t('auth.gated.signOut')}
-      </button>
-
-      <button
-        onClick={() => setShowDeleteAccountConfirm(true)}
-        className="w-full text-[var(--danger)] text-sm mt-4 mb-4"
-      >
-        {t('profile.deleteAccount', 'Delete my account')}
-      </button>
-
-      {/* Delete account confirmation dialog */}
-      {showDeleteAccountConfirm && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-5">
-          <div className="bg-[var(--bg-modal)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
-            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
-              {t('profile.deleteAccountTitle', 'Delete your account?')}
-            </h3>
-            <p className="text-[var(--text-secondary)] text-sm mb-4">
-              {t(
-                'profile.deleteAccountBody',
-                'This will permanently delete your account, check-in history, rewards, and all associated data. This action cannot be undone.',
-              )}
-            </p>
-            <div className="flex flex-row gap-3">
-              <button
-                onClick={() => setShowDeleteAccountConfirm(false)}
-                className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
-              >
-                {t('common.cancel', 'Cancel')}
-              </button>
-              <button
-                onClick={() => {
-                  setDeletingAccount(true)
-                  void api
-                    .delete('/v1/users/me')
-                    .then(() => {
-                      logout()
-                      onNavigate('landing')
-                    })
-                    .catch(() => {
-                      setDeletingAccount(false)
-                      setShowDeleteAccountConfirm(false)
-                    })
-                }}
-                disabled={deletingAccount}
-                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2"
-              >
-                {deletingAccount ? (
-                  <Spinner size="sm" className="border-white border-t-transparent" />
-                ) : (
-                  t('profile.deleteAccountConfirm', 'Delete account')
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

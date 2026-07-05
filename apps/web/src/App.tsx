@@ -21,6 +21,7 @@ import { LeaderboardScreen } from './screens/LeaderboardScreen'
 import { FeedScreen } from './screens/FeedScreen'
 import { FriendsScreen } from './screens/FriendsScreen'
 import { ProfileScreen } from './screens/ProfileScreen'
+import { SettingsScreen } from './screens/SettingsScreen'
 import { PrivacySettingsScreen } from './screens/PrivacySettingsScreen'
 import { NotificationCenter } from './screens/NotificationCenter'
 import { NotificationSettings } from './screens/NotificationSettings'
@@ -60,6 +61,7 @@ const ROUTE_PATHS: Record<AppRoute, string> = {
   feed: '/feed',
   friends: '/friends',
   profile: '/profile',
+  settings: '/settings',
   privacy: '/privacy',
   notifications: '/notifications',
   'notification-settings': '/notifications/settings',
@@ -83,6 +85,7 @@ function pathToRoute(path: string): AppRoute {
   if (path === '/feed') return 'feed'
   if (path === '/friends') return 'friends'
   if (path === '/profile') return 'profile'
+  if (path === '/settings') return 'settings'
   if (path === '/privacy') return 'privacy'
   if (path === '/notifications/settings') return 'notification-settings'
   if (path === '/notifications') return 'notifications'
@@ -284,6 +287,7 @@ function AppContent() {
     'feed',
     'friends',
     'profile',
+    'settings',
     'privacy',
     'notifications',
     'notification-settings',
@@ -316,6 +320,7 @@ function AppContent() {
             {activeRoute === 'feed' && <FeedScreen onNavigate={setRoute} />}
             {activeRoute === 'friends' && <FriendsScreen />}
             {activeRoute === 'profile' && <ProfileScreen onNavigate={setRoute} />}
+            {activeRoute === 'settings' && <SettingsScreen onNavigate={setRoute} />}
             {activeRoute === 'privacy' && <PrivacySettingsScreen onNavigate={setRoute} />}
             {activeRoute === 'notifications' && <NotificationCenter onNavigate={setRoute} />}
             {activeRoute === 'notification-settings' && <NotificationSettings onNavigate={setRoute} />}
