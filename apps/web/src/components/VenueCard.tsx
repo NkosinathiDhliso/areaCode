@@ -6,6 +6,7 @@ import type { VenueCardVM } from '../lib/carouselConstants'
 import { getPulseStateColour } from '../lib/mapHelpers'
 
 import { ArchetypeGlyph } from './ArchetypeGlyph'
+import { MomentumBadge } from './MomentumBadge'
 
 /**
  * Compact Browse_Mode card for the Peek-Carousel strip.
@@ -48,6 +49,14 @@ export const VenueCard = memo(function VenueCard({ vm, category, isActive = fals
   const hereNowLabel = t('venueCard.hereNow', 'here now')
   const beFirstLabel = t('venueCard.beFirst', 'Be the first in')
   const countText = `${vm.liveCheckInCount} ${hereNowLabel}`
+  // The momentum badge icon is aria-hidden, so the trend is surfaced textually
+  // through the card's aria-label for screen-reader parity.
+  const momentumLabel =
+    vm.momentum === 'filling_up'
+      ? t('momentum.fillingUp', 'Filling up')
+      : vm.momentum === 'winding_down'
+        ? t('momentum.windingDown', 'Winding down')
+        : null
 
   return (
     <button
@@ -56,7 +65,7 @@ export const VenueCard = memo(function VenueCard({ vm, category, isActive = fals
       data-venue-card={vm.id}
       data-pulse-state={vm.pulseState}
       aria-pressed={isActive}
-      aria-label={`${vm.name}, ${vm.isFirstIn ? beFirstLabel : countText}`}
+      aria-label={`${vm.name}, ${vm.isFirstIn ? beFirstLabel : countText}${momentumLabel ? `, ${momentumLabel}` : ''}`}
       className={`glass-raised flex flex-col items-start gap-2 rounded-2xl px-4 py-3 w-full text-left transition-all duration-150 active:scale-95 focus:outline-none focus-visible:border-[var(--accent)] ${
         isActive ? 'border-[var(--accent)] ring-1 ring-[var(--accent)] bg-[var(--accent)]/10' : 'border-[var(--border)]'
       }`}
@@ -80,13 +89,18 @@ export const VenueCard = memo(function VenueCard({ vm, category, isActive = fals
         </h3>
       </div>
 
-      {vm.isFirstIn ? (
-        <span className="text-[var(--text-secondary)] text-xs font-medium">{beFirstLabel}</span>
-      ) : (
-        <span className="text-xs font-medium" style={{ color: pulseColour }}>
-          <span className="font-semibold">{vm.liveCheckInCount}</span> {hereNowLabel}
-        </span>
-      )}
+      <div className="flex flex-row items-center gap-2 flex-wrap">
+        {vm.isFirstIn ? (
+          <span className="text-[var(--text-secondary)] text-xs font-medium">{beFirstLabel}</span>
+        ) : (
+          <span className="text-xs font-medium" style={{ color: pulseColour }}>
+            <span className="font-semibold">{vm.liveCheckInCount}</span> {hereNowLabel}
+          </span>
+        )}
+        {/* Honest momentum ("filling up" / "winding down"): a first-class "go now"
+            trigger. Renders only when the backend measured a real trend. */}
+        <MomentumBadge momentum={vm.momentum} />
+      </div>
     </button>
   )
 })

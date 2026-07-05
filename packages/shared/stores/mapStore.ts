@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
-import type { Node, MapInstance, LiveArchetypeBranch } from '../types'
+import type { Node, MapInstance, LiveArchetypeBranch, VenueMomentum } from '../types'
 
 interface MapStore {
   nodes: Record<string, Node>
@@ -37,6 +37,14 @@ interface MapStore {
    */
   friendsAtVenue: Record<string, string[]>
   /**
+   * Honest presence momentum per node (filling up / winding down / steady),
+   * populated by the `node:presence_update` socket event and the REST presence
+   * seed. Only `filling_up` / `winding_down` surface a label; `steady` (also the
+   * "no trend to claim" value) renders nothing. Derived server-side from real
+   * check-ins plus departures (honest-presence rule 5), never fabricated.
+   */
+  momentum: Record<string, VenueMomentum>
+  /**
    * Whether a venue has at least one live event or offer get. Derived from
    * the rewards-near-me response via `deriveHasLiveGets`. Used as priority-4
    * signal in the lexicographic ranking (R5.1, R5.2).
@@ -59,8 +67,11 @@ interface MapStore {
    * `pulseScores` untouched, because the presence event carries no pulse score.
    * The presence value drives the map's "people here now" surface and takes
    * precedence over the cumulative `node:pulse_update.checkInCount` (R7.1, R8.3).
+   * Optionally carries the honest momentum from the same payload; when omitted
+   * (e.g. an optimistic self-check-in that cannot know the trend) any cached
+   * momentum is left untouched and corrected by the next live event.
    */
-  setLivePresenceCount: (nodeId: string, livePresenceCount: number) => void
+  setLivePresenceCount: (nodeId: string, livePresenceCount: number, momentum?: VenueMomentum) => void
   /**
    * Store the live-resolved Archetype id and (optionally) its Resolution_Branch
    * for a node. The branch is written alongside the id from the same
@@ -103,6 +114,7 @@ export const useMapStore = create<MapStore>()(
     archetypeBranches: {},
     checkInCounts: {},
     friendsAtVenue: {},
+    momentum: {},
     hasLiveGets: {},
     mapInstance: null,
     focusNodeId: null,
@@ -129,9 +141,12 @@ export const useMapStore = create<MapStore>()(
           state.checkInCounts[nodeId] = checkInCount
         }
       }),
-    setLivePresenceCount: (nodeId, livePresenceCount) =>
+    setLivePresenceCount: (nodeId, livePresenceCount, momentum) =>
       set((state) => {
         state.checkInCounts[nodeId] = livePresenceCount
+        if (momentum !== undefined) {
+          state.momentum[nodeId] = momentum
+        }
       }),
     setArchetypeId: (nodeId, id, branch) =>
       set((state) => {

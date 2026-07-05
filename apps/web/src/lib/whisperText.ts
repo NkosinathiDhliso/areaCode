@@ -1,4 +1,4 @@
-import type { Node } from '@area-code/shared/types'
+import type { Node, VenueMomentum } from '@area-code/shared/types'
 
 import { getNodeState } from './mapHelpers'
 
@@ -14,8 +14,13 @@ const MOMENTUM_THRESHOLD = 31
  *
  * Ranked per discovery-DNA hierarchy:
  *   1. Belonging: friends at venue (honest, real mutual-friend data)
- *   2. Momentum: pulse is high/rising (buzzing or popping state)
+ *   2. Momentum: the honest presence trend ("Filling up"), then high pulse
+ *      (buzzing or popping state)
  *   3. Aliveness: fallback using pulse state label
+ *
+ * Only `filling_up` whispers; `winding_down` is honest but is not a pull, so
+ * the brush whisper says less rather than surfacing an anti-magnet (cards and
+ * the venue detail still show it for comparison).
  *
  * Honest-presence compliant: never claims "your crowd" without real
  * friend presence data. Under-claims, never over-claims.
@@ -27,6 +32,7 @@ export function computeWhisperText(
     pulseScores: Record<string, number>
     checkInCounts: Record<string, number>
     friendsAtVenue: Record<string, string[]>
+    momentum?: Record<string, VenueMomentum>
   },
 ): string | null {
   if (!node) return null
@@ -42,7 +48,13 @@ export function computeWhisperText(
     return `Your crowd \u00b7 ${name}`
   }
 
-  // 2. Momentum: venue is buzzing/popping or high check-in count
+  // 2. Momentum: a measured rising trend beats a static pulse label. Backed by
+  // the server-derived presence series (real arrivals), never fabricated.
+  if (mapState.momentum?.[nodeId] === 'filling_up') {
+    return `Filling up · ${name}`
+  }
+
+  // Then: venue is buzzing/popping or high check-in count
   if (pulseScore >= MOMENTUM_THRESHOLD || state === 'buzzing' || state === 'popping') {
     if (state === 'popping') return `Popping \u00b7 ${name}`
     return `Buzzing \u00b7 ${name}`

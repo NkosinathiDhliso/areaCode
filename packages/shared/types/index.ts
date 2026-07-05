@@ -1,6 +1,16 @@
 // Node states
 export type NodeState = 'dormant' | 'quiet' | 'active' | 'buzzing' | 'popping'
 
+/**
+ * Honest presence momentum for a venue: whether the Live_Presence_Count is
+ * rising, falling, or flat over a trailing window. Derived only from real
+ * check-ins plus real departures (check-out + expiry), so `winding_down` can
+ * never be shown without a genuine way for people to leave (honest-presence
+ * rule 5). `steady` is also the "not enough data to claim a trend" value, so a
+ * surface renders no momentum label rather than over-claiming.
+ */
+export type VenueMomentum = 'filling_up' | 'winding_down' | 'steady'
+
 // Node categories
 export type NodeCategory = 'food' | 'coffee' | 'nightlife' | 'retail' | 'fitness' | 'arts'
 

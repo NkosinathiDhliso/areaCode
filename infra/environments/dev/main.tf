@@ -621,6 +621,27 @@ resource "aws_iam_role_policy" "presence_expiry_websocket" {
   })
 }
 
+# Streak-at-risk reminder — arm64 Lambda on an EventBridge daily SAST-evening
+# schedule (churn-defences). Scans streak-holders and pushes the "your streak is
+# about to break" nudge to opted-in users who have not checked in today. Not in
+# VPC: it only calls public AWS endpoints (DynamoDB) and web-push/Expo over
+# HTTPS, matching presence-expiry.
+module "lambda_streak_reminder" {
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "streak-reminder"
+  timeout       = 120
+  memory_size   = 256
+  # Dev has no VAPID keys configured, so web push is a no-op here (sendWebPush
+  # returns early); the reminder still writes to the notification center.
+  environment_variables = {
+    AREA_CODE_ENV  = local.env
+    USERS_TABLE    = aws_dynamodb_table.users.name
+    CHECKINS_TABLE = aws_dynamodb_table.checkins.name
+    APP_DATA_TABLE = aws_dynamodb_table.app_data.name
+  }
+}
+
 module "lambda_leaderboard_reset" {
   source                 = "../../modules/lambda"
   env                    = local.env
@@ -888,6 +909,7 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
     cleanup           = module.lambda_cleanup.role_name
     websocket         = module.lambda_websocket.role_name
     presence_expiry   = module.lambda_presence_expiry.role_name
+    streak_reminder   = module.lambda_streak_reminder.role_name
   }
 
   name = "dynamodb-access"
@@ -1349,6 +1371,12 @@ module "eventbridge_schedules" {
       schedule_expression  = "rate(5 minutes)"
       lambda_arn           = module.lambda_presence_expiry.function_arn
       lambda_function_name = module.lambda_presence_expiry.function_name
+    }
+    streak-reminder = {
+      description          = "Streak-at-risk reminder daily 18:00 SAST (16:00 UTC)"
+      schedule_expression  = "cron(0 16 * * ? *)"
+      lambda_arn           = module.lambda_streak_reminder.function_arn
+      lambda_function_name = module.lambda_streak_reminder.function_name
     }
     leaderboard-reset = {
       description          = "Weekly leaderboard reset Monday 00:00 SAST (Sunday 22:00 UTC)"

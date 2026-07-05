@@ -8,6 +8,7 @@ import { unmarshall } from '@aws-sdk/util-dynamodb'
 
 import { AWS_REGION, requireEnv } from '../config/env.js'
 import { documentClient } from '../db/dynamodb.js'
+import type { VenueMomentum } from '@area-code/shared/types'
 
 const ddbClient = new DynamoDBClient({ region: AWS_REGION })
 
@@ -178,6 +179,7 @@ export async function broadcastPresenceUpdate(
   nodeId: string,
   livePresenceCount: number,
   cause: 'check_in' | 'check_out' | 'expiry',
+  momentum?: VenueMomentum,
 ): Promise<void> {
   await broadcastToRoom(`city:${citySlug}`, {
     type: 'node:presence_update',
@@ -185,6 +187,7 @@ export async function broadcastPresenceUpdate(
       nodeId,
       livePresenceCount,
       cause,
+      ...(momentum ? { momentum } : {}),
     },
   })
 }

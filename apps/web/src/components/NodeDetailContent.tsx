@@ -15,6 +15,7 @@ import { getCtaInfo } from '../lib/checkInCta'
 import { ArchetypeGlyph } from './ArchetypeGlyph'
 import { CrowdVibeSection } from './CrowdVibeSection'
 import { DirectionsSheet } from './DirectionsSheet'
+import { MomentumBadge } from './MomentumBadge'
 import { QrScannerSheet } from './QrScannerSheet'
 
 /**
@@ -85,6 +86,10 @@ export const NodeDetailContent = memo(function NodeDetailContent({
   const archetypeId = useMapStore(
     (s) => (node ? s.archetypeIds[node.id] : undefined) ?? node?.defaultArchetypeId ?? DEFAULT_ARCHETYPE_ID,
   )
+  // Honest presence momentum for this venue (filling up / winding down). Seeded
+  // by the REST presence read and kept live by `node:presence_update`; renders
+  // nothing unless a real trend was measured (honest-presence rule 5).
+  const momentum = useMapStore((s) => (node ? s.momentum[node.id] : undefined))
   // Active_Presence for this node: drives whether the Check_Out_CTA replaces
   // the check-in CTA. Read from the shared presence store, never fabricated
   // (honest-presence-ui R1.1, R1.2, R3).
@@ -383,6 +388,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
             <span className="text-[var(--text-primary)] text-sm font-medium">
               {resolveArchetypeDisplayName(archetypeId)}
             </span>
+            <MomentumBadge momentum={momentum} size="md" />
           </div>
 
           {/* Crowd Vibe section */}

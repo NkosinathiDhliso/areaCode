@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 
 import { getSocket } from '../lib/socket'
 import { useMapStore } from '../stores/mapStore'
-import type { NodeState } from '../types'
+import type { NodeState, VenueMomentum } from '../types'
 
 export function useNodePulse(token?: string, opts?: { citySlug?: string }) {
   const updateNodePulse = useMapStore((s) => s.updateNodePulse)
@@ -24,8 +24,9 @@ export function useNodePulse(token?: string, opts?: { citySlug?: string }) {
       nodeId: string
       livePresenceCount: number
       cause: 'check_in' | 'check_out' | 'expiry'
+      momentum?: VenueMomentum
     }) => {
-      setLivePresenceCount(payload.nodeId, payload.livePresenceCount)
+      setLivePresenceCount(payload.nodeId, payload.livePresenceCount, payload.momentum)
     }
 
     socket.on('node:pulse_update', handler)

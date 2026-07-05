@@ -213,6 +213,7 @@ export function useCarouselSelection({
   const pulseScores = useMapStore((s) => s.pulseScores)
   const checkInCounts = useMapStore((s) => s.checkInCounts)
   const archetypeIds = useMapStore((s) => s.archetypeIds)
+  const momentum = useMapStore((s) => s.momentum)
   const focusNodeId = useMapStore((s) => s.focusNodeId)
   const setFocusNodeId = useMapStore((s) => s.setFocusNodeId)
 
@@ -607,13 +608,13 @@ export function useCarouselSelection({
     return carouselOrder
       .map((id) => nodes[id])
       .filter((n): n is Node => n !== undefined)
-      .map((n) => toVenueCardVM(n, checkInCounts, pulseScores, archetypeIds))
-  }, [carouselOrder, nodes, checkInCounts, pulseScores, archetypeIds])
+      .map((n) => toVenueCardVM(n, checkInCounts, pulseScores, archetypeIds, momentum))
+  }, [carouselOrder, nodes, checkInCounts, pulseScores, archetypeIds, momentum])
 
   const activeVenue = activeVenueId ? (nodes[activeVenueId] ?? null) : null
   const activeVenueVM = useMemo<VenueCardVM | null>(
-    () => (activeVenue ? toVenueCardVM(activeVenue, checkInCounts, pulseScores, archetypeIds) : null),
-    [activeVenue, checkInCounts, pulseScores, archetypeIds],
+    () => (activeVenue ? toVenueCardVM(activeVenue, checkInCounts, pulseScores, archetypeIds, momentum) : null),
+    [activeVenue, checkInCounts, pulseScores, archetypeIds, momentum],
   )
 
   const nearbyCount = Math.max(0, carouselOrder.length - (activeVenueId ? 1 : 0))

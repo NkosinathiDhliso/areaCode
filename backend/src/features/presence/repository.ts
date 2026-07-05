@@ -25,8 +25,11 @@
 // evaluated at check-in time and discarded before any record is constructed.
 import { UpdateCommand, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
+import { kvGet, kvSet } from '../../shared/kv/dynamodb-kv.js'
 import { livePresenceCount } from './read-model.js'
+import { deriveMomentum, pruneSamples, MOMENTUM_WINDOW_SECONDS, type PresenceSample } from './momentum.js'
 import type { PresenceRecord, PresenceState } from '../check-out/types.js'
+import type { VenueMomentum } from '@area-code/shared/types'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -429,4 +432,58 @@ export async function reconcileCounter(nodeId: string, now: number): Promise<num
   const count = await getLivePresenceCount(nodeId, now)
   await setCounter(nodeId, count)
   return count
+}
+
+// ─── Momentum sample series (honest "filling up / winding down") ─────────────
+
+/**
+ * TTL for the sample series row: the trailing window plus a small grace so a
+ * quiet venue's series expires on its own rather than lingering. Once it
+ * expires, `getMomentum` honestly reports `steady` (no trend to claim).
+ */
+const MOMENTUM_SAMPLES_TTL_SECONDS = MOMENTUM_WINDOW_SECONDS + 5 * 60
+
+/** KV key for a venue's rolling Live_Presence_Count sample series. */
+function samplesKey(nodeId: string): string {
+  return `presence:samples:${nodeId}`
+}
+
+/** Read and window a venue's stored samples. A corrupt cache row degrades to []. */
+async function readSamples(nodeId: string, now: number): Promise<PresenceSample[]> {
+  const raw = await kvGet(samplesKey(nodeId))
+  if (!raw) return []
+  let parsed: PresenceSample[]
+  try {
+    parsed = JSON.parse(raw) as PresenceSample[]
+  } catch {
+    // Cache-shape resilience only (not error masking): a malformed sample row
+    // is a stale/garbled cache value, so start the series fresh rather than
+    // fail the count broadcast. kvGet infra errors still propagate.
+    return []
+  }
+  return pruneSamples(parsed, now)
+}
+
+/**
+ * Append the latest authoritative Live_Presence_Count observation to the
+ * venue's rolling series, prune to the trailing window, persist, and return the
+ * honest momentum. Called from every site that recomputes the count (check-in,
+ * check-out, expiry) so the trend is measured only from real presence changes.
+ */
+export async function recordPresenceSample(nodeId: string, count: number, now: number): Promise<VenueMomentum> {
+  const samples = await readSamples(nodeId, now)
+  samples.push({ t: now, count })
+  const pruned = pruneSamples(samples, now)
+  await kvSet(samplesKey(nodeId), JSON.stringify(pruned), MOMENTUM_SAMPLES_TTL_SECONDS)
+  return deriveMomentum(pruned, now)
+}
+
+/**
+ * Read a venue's current momentum without recording a new observation. Used by
+ * the presence read API to seed the label on first paint. Returns `steady` when
+ * there is no recent series (no trend to claim).
+ */
+export async function getMomentum(nodeId: string, now: number): Promise<VenueMomentum> {
+  const samples = await readSamples(nodeId, now)
+  return deriveMomentum(samples, now)
 }

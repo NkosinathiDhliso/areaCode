@@ -30,7 +30,12 @@ import { ScanCommand } from '@aws-sdk/lib-dynamodb'
 
 import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 import { writeDwellRow } from '../features/presence/dwell-sink.js'
-import { endPresenceByExpiry, queryDuePresenceRecords, reconcileCounter } from '../features/presence/repository.js'
+import {
+  endPresenceByExpiry,
+  queryDuePresenceRecords,
+  reconcileCounter,
+  recordPresenceSample,
+} from '../features/presence/repository.js'
 import { broadcastPresenceUpdate } from '../shared/websocket/broadcast.js'
 import { emitFriendCheckout } from '../shared/socket/events.js'
 import { getMutualFollowIds, getFollowingIds } from '../features/social/repository.js'
@@ -121,8 +126,11 @@ export async function handler() {
       // Reconcile the cached counter to the authoritative record-derived count,
       // then best-effort broadcast the honest count with cause 'expiry'.
       const count = await reconcileCounter(nodeId, now)
+      // Record the reconciled count so expiry-driven departures feed the honest
+      // momentum trend (a venue emptying overnight reads as "winding down").
+      const momentum = await recordPresenceSample(nodeId, count, now)
       try {
-        await broadcastPresenceUpdate(city.slug, nodeId, count, 'expiry')
+        await broadcastPresenceUpdate(city.slug, nodeId, count, 'expiry', momentum)
       } catch (err) {
         // Best-effort fan-out: a broadcast failure must never roll back the
         // committed expiry (Requirement 7.5 spirit).

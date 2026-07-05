@@ -61,7 +61,16 @@ describe('toVenueCardVM', () => {
       pulseState: 'buzzing',
       archetypeId: 'archetype-festival-spirit',
       isFirstIn: false,
+      momentum: 'steady',
     })
+  })
+
+  it('surfaces the momentum from the momentum map, defaulting to steady', () => {
+    expect(toVenueCardVM(makeNode(), { 'node-1': 5 }, { 'node-1': 35 }, {}, { 'node-1': 'filling_up' }).momentum).toBe(
+      'filling_up',
+    )
+    // Missing entry → steady (no trend to claim).
+    expect(toVenueCardVM(makeNode(), { 'node-1': 5 }, { 'node-1': 35 }, {}).momentum).toBe('steady')
   })
 
   it('renders the "be the first in" state when the live count is zero', () => {

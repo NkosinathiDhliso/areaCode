@@ -841,6 +841,17 @@ module "lambda_reward_evaluator" {
   vpc_security_group_ids = module.vpc.lambda_security_group_ids
   environment_variables = {
     AREA_CODE_ENV = local.env
+    # Tables this worker touches (repository: rewards + app-data; the push
+    # fallback reads tokens from app-data). Table-name env vars must always be
+    # set in prod (no-fallbacks-no-legacy) - missing REWARDS_TABLE was the
+    # 2026-07-03 go-live FAIL and the reward-eval DLQ backlog root cause.
+    REWARDS_TABLE  = aws_dynamodb_table.rewards.name
+    APP_DATA_TABLE = aws_dynamodb_table.app_data.name
+    # Web push (VAPID) - reward-earned delivery always falls back to push from
+    # Lambda (no in-process socket).
+    AREA_CODE_VAPID_PUBLIC_KEY  = var.vapid_public_key
+    AREA_CODE_VAPID_PRIVATE_KEY = var.vapid_private_key
+    AREA_CODE_VAPID_SUBJECT     = "mailto:tech@areacode.co.za"
   }
 }
 
@@ -856,6 +867,10 @@ module "lambda_pulse_decay" {
   environment_variables = {
     AREA_CODE_ENV = local.env
     USERS_TABLE   = aws_dynamodb_table.users.name
+    # Decay state lives in app-data; the sweep walks nodes. Missing
+    # APP_DATA_TABLE was a 2026-07-03 go-live FAIL (worker crashed at startup).
+    APP_DATA_TABLE = aws_dynamodb_table.app_data.name
+    NODES_TABLE    = aws_dynamodb_table.nodes.name
   }
 }
 
@@ -909,6 +924,29 @@ resource "aws_iam_role_policy" "presence_expiry_websocket" {
       }
     ]
   })
+}
+
+# Streak-at-risk reminder — arm64 Lambda on an EventBridge daily SAST-evening
+# schedule (churn-defences). Scans streak-holders and pushes the "your streak is
+# about to break" nudge to opted-in users who have not checked in today. Not in
+# VPC: it only calls public AWS endpoints (DynamoDB) and web-push/Expo over
+# HTTPS, matching presence-expiry.
+module "lambda_streak_reminder" {
+  source        = "../../modules/lambda"
+  env           = local.env
+  function_name = "streak-reminder"
+  timeout       = 120
+  memory_size   = 256
+  environment_variables = {
+    AREA_CODE_ENV  = local.env
+    USERS_TABLE    = aws_dynamodb_table.users.name
+    CHECKINS_TABLE = aws_dynamodb_table.checkins.name
+    APP_DATA_TABLE = aws_dynamodb_table.app_data.name
+    # Web push (VAPID) — reminder falls back to push for backgrounded users.
+    AREA_CODE_VAPID_PUBLIC_KEY  = var.vapid_public_key
+    AREA_CODE_VAPID_PRIVATE_KEY = var.vapid_private_key
+    AREA_CODE_VAPID_SUBJECT     = "mailto:tech@areacode.co.za"
+  }
 }
 
 module "lambda_leaderboard_reset" {
@@ -1134,6 +1172,7 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
     cleanup           = module.lambda_cleanup.role_name
     websocket         = module.lambda_websocket.role_name
     presence_expiry   = module.lambda_presence_expiry.role_name
+    streak_reminder   = module.lambda_streak_reminder.role_name
   }
 
   name = "dynamodb-access"
@@ -1599,6 +1638,12 @@ module "eventbridge_schedules" {
       schedule_expression  = "rate(5 minutes)"
       lambda_arn           = module.lambda_presence_expiry.function_arn
       lambda_function_name = module.lambda_presence_expiry.function_name
+    }
+    streak-reminder = {
+      description          = "Streak-at-risk reminder daily 18:00 SAST (16:00 UTC)"
+      schedule_expression  = "cron(0 16 * * ? *)"
+      lambda_arn           = module.lambda_streak_reminder.function_arn
+      lambda_function_name = module.lambda_streak_reminder.function_name
     }
     leaderboard-reset = {
       description          = "Weekly leaderboard reset Monday 00:00 SAST"

@@ -1,6 +1,7 @@
 import type {
   NodeState,
   ToastType,
+  VenueMomentum,
   BusinessCheckinPayload,
   BusinessCheckinDetailPayload,
   BusinessRewardClaimedPayload,
@@ -40,7 +41,12 @@ export function emitPulseUpdate(
  */
 export function emitPresenceUpdate(
   citySlug: string,
-  payload: { nodeId: string; livePresenceCount: number; cause: 'check_in' | 'check_out' | 'expiry' },
+  payload: {
+    nodeId: string
+    livePresenceCount: number
+    cause: 'check_in' | 'check_out' | 'expiry'
+    momentum?: VenueMomentum
+  },
 ) {
   getIO()?.to(cityRoom(citySlug)).emit('node:presence_update', payload)
 }

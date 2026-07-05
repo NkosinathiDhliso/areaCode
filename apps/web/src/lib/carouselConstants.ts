@@ -9,7 +9,7 @@
  * Feature: map-discovery-experience
  */
 
-import type { Node, NodeState } from '@area-code/shared/types'
+import type { Node, NodeState, VenueMomentum } from '@area-code/shared/types'
 
 import { getNodeState } from './mapHelpers'
 
@@ -199,6 +199,12 @@ export interface VenueCardVM {
   archetypeId: string
   /** True when the live count is zero → render the "be the first in" affordance. */
   isFirstIn: boolean
+  /**
+   * Honest presence momentum from `mapStore.momentum`. Only `filling_up` /
+   * `winding_down` surface a label; `steady` (the default when there is no
+   * trend) renders nothing.
+   */
+  momentum: VenueMomentum
 }
 
 /**
@@ -214,6 +220,7 @@ export function toVenueCardVM(
   checkInCounts: Record<string, number>,
   pulseScores: Record<string, number>,
   archetypeIds: Record<string, string>,
+  momentumByNode: Record<string, VenueMomentum> = {},
 ): VenueCardVM {
   const liveCheckInCount = checkInCounts[node.id] ?? 0
   const pulseState = getNodeState(pulseScores[node.id] ?? 0)
@@ -226,5 +233,6 @@ export function toVenueCardVM(
     pulseState,
     archetypeId,
     isFirstIn: liveCheckInCount === 0,
+    momentum: momentumByNode[node.id] ?? 'steady',
   }
 }

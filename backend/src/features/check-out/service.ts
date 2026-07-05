@@ -16,7 +16,7 @@
 // reward in this release: this service exposes no reward coupling whatsoever.
 import { AppError } from '../../shared/errors/AppError.js'
 import { getUserById } from '../auth/repository.js'
-import { endPresenceByCheckOut, getLivePresenceCount } from '../presence/repository.js'
+import { endPresenceByCheckOut, getLivePresenceCount, recordPresenceSample } from '../presence/repository.js'
 import { writeDwellRow } from '../presence/dwell-sink.js'
 import { getNodeWithCity } from '../check-in/repository.js'
 import { emitPresenceUpdate, emitFriendCheckout } from '../../shared/socket/events.js'
@@ -85,10 +85,14 @@ export async function processCheckOut(userId: string, input: CheckOutInput): Pro
     const citySlug = node?.city?.slug ?? ''
     if (citySlug) {
       const livePresenceCount = await getLivePresenceCount(input.nodeId, now)
+      // Record the observation; a departure makes the count fall, which is the
+      // only honest basis for a "winding down" trend (honest-presence rule 5).
+      const momentum = await recordPresenceSample(input.nodeId, livePresenceCount, now)
       emitPresenceUpdate(citySlug, {
         nodeId: input.nodeId,
         livePresenceCount,
         cause: 'check_out',
+        momentum,
       })
     }
   } catch (err) {

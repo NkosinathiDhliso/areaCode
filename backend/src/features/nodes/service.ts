@@ -9,8 +9,9 @@ import * as repo from './repository.js'
 import * as nodesDynamo from './dynamodb-repository.js'
 import { findBusinessById } from '../business/repository.js'
 import { emitNodeCreated } from '../../shared/socket/events.js'
-import { getLivePresenceCount } from '../presence/repository.js'
+import { getLivePresenceCount, getMomentum } from '../presence/repository.js'
 import { DEV_NODES } from './dev-nodes.js'
+import type { VenueMomentum } from '@area-code/shared/types'
 
 // Tiers that count as 'paid' — nodes from these businesses appear on the public map.
 const PAID_TIERS = new Set(['starter', 'growth', 'pro', 'payg'])
@@ -569,12 +570,18 @@ export async function getNodeRewards(nodeId: string) {
  * counter over the record query, excludes expired-but-unswept records, and
  * returns 0 honestly with no decayed or historical substitution.
  */
-export async function getNodePresence(nodeId: string): Promise<{ nodeId: string; livePresenceCount: number }> {
+export async function getNodePresence(
+  nodeId: string,
+): Promise<{ nodeId: string; livePresenceCount: number; momentum: VenueMomentum }> {
   if (DEV_MODE) {
-    // No presence table in dev — report 0 honestly rather than substitute a value.
-    return { nodeId, livePresenceCount: 0 }
+    // No presence table in dev — report 0 / steady honestly rather than
+    // substitute a value.
+    return { nodeId, livePresenceCount: 0, momentum: 'steady' }
   }
   const now = Math.floor(Date.now() / 1000)
   const livePresenceCount = await getLivePresenceCount(nodeId, now)
-  return { nodeId, livePresenceCount }
+  // Seed the honest momentum label on first paint; kept live afterwards by
+  // `node:presence_update`. `steady` when there is no recent trend to claim.
+  const momentum = await getMomentum(nodeId, now)
+  return { nodeId, livePresenceCount, momentum }
 }

@@ -3,6 +3,7 @@ import { GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import * as dynamo from './dynamodb-repository.js'
 import { getUserById, updateUser } from '../auth/dynamodb-repository.js'
+import { toSASTDate } from './streak.js'
 
 export async function getNodeWithCity(nodeId: string) {
   const result = await documentClient.send(new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } }))
@@ -95,12 +96,8 @@ export async function incrementTotalCheckIns(userId: string) {
 }
 
 // ─── Streak Tracking ────────────────────────────────────────────────────────
-
-function toSASTDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  const sast = new Date(date.getTime() + 2 * 60 * 60 * 1000) // UTC+2
-  return sast.toISOString().slice(0, 10)
-}
+// SAST day math lives in ./streak.ts so the reminder worker and this tracker
+// agree on where "today" begins (dry-reuse-no-duplication).
 
 export async function updateStreak(userId: string): Promise<number> {
   const { checkIns } = await dynamo.getCheckInsByUser(userId, { limit: 100 })

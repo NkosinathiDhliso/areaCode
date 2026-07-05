@@ -1,6 +1,6 @@
 import { api } from '@area-code/shared/lib/api'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
-import type { Node } from '@area-code/shared/types'
+import type { Node, VenueMomentum } from '@area-code/shared/types'
 import { useEffect } from 'react'
 
 import { RECOMMENDED_LIMIT } from '../lib/carouselConstants'
@@ -26,6 +26,7 @@ const SEED_CONCURRENCY = 5
 interface PresenceRead {
   nodeId: string
   livePresenceCount: number
+  momentum?: VenueMomentum
 }
 
 /**
@@ -104,7 +105,7 @@ export function usePresenceSeeding(nodes: Node[]): void {
         // Honest 0 (R4.3): write the read value exactly as returned, including
         // 0. Never substitute a decayed pulse value or a cumulative historical
         // tally to make a quiet venue look occupied.
-        if (!cancelled) setLivePresenceCount(res.nodeId, res.livePresenceCount)
+        if (!cancelled) setLivePresenceCount(res.nodeId, res.livePresenceCount, res.momentum)
       } catch {
         // R4.4: a per-venue read failure leaves that node unseeded so the
         // `node:presence_update` socket event can populate it later. The

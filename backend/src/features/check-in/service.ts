@@ -16,7 +16,7 @@ import { getUserById } from '../auth/repository.js'
 import { canEmitIdentity, sanitizeForBusiness } from '../../shared/privacy/privacy-guard.js'
 import { runAbuseChecks } from './abuse.js'
 import * as repo from './repository.js'
-import { createOrRefreshPresence, getLivePresenceCount } from '../presence/repository.js'
+import { createOrRefreshPresence, getLivePresenceCount, recordPresenceSample } from '../presence/repository.js'
 import { expiryWindowSeconds } from '../presence/window.js'
 import { getUserCheckInCountAtNode, incrementLeaderboard } from './dynamodb-repository.js'
 import { PutCommand } from '@aws-sdk/lib-dynamodb'
@@ -336,10 +336,15 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
       // caught by the surrounding best-effort block and never fails the check-in.
       if (presenceOpened) {
         const livePresenceCount = await getLivePresenceCount(input.nodeId, presenceNowSeconds)
+        // Record the observation and derive honest momentum from the trailing
+        // count series (filling up / winding down). Rising here reflects a real
+        // arrival; the label only claims a trend once the series supports it.
+        const momentum = await recordPresenceSample(input.nodeId, livePresenceCount, presenceNowSeconds)
         emitPresenceUpdate(citySlug, {
           nodeId: input.nodeId,
           livePresenceCount,
           cause: 'check_in',
+          momentum,
         })
       }
 
@@ -377,9 +382,39 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
             if (user?.avatarUrl) {
               friendPayload.avatarUrl = user.avatarUrl
             }
+            // Live in-app toast for friends with an open socket.
             for (const friendId of friendIds) {
               emitFriendToast(friendId, friendPayload)
             }
+            // "Come join us" push for friends who are NOT currently in the app.
+            // `sendNotification` is socket-primary / push-fallback and persists
+            // to the notification center, so an offline friend still gets the
+            // nudge. In Lambda there is no in-process socket, so it reliably
+            // falls through to their push tokens.
+            //
+            // The `followedUserCheckin` switch (off by default) gates this. We
+            // check it up front and skip the send entirely for opted-out
+            // friends, rather than letting `sendNotification` write a
+            // preference-blocked history row for every friend check-in — that
+            // would clutter the notification center on a high-frequency event.
+            const { sendNotification, getPreferences } = await import('../notifications/service.js')
+            // Fan out in parallel so a long friend list adds one round-trip of
+            // latency to the check-in path, not one per friend. allSettled
+            // keeps per-friend isolation: one failure never blocks the rest.
+            await Promise.allSettled(
+              [...friendIds].map(async (friendId) => {
+                const prefs = await getPreferences(friendId)
+                if ((prefs as { followedUserCheckin?: boolean }).followedUserCheckin !== true) return
+                await sendNotification({
+                  userId: friendId,
+                  type: 'friend_checkin',
+                  title: `${displayName} just checked in`,
+                  body: `${displayName} is at ${node.name} right now.`,
+                  data: { nodeId: input.nodeId, userId },
+                  skipPreferenceCheck: true,
+                })
+              }),
+            )
           }
         }
       } catch {

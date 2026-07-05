@@ -768,7 +768,8 @@ $workerLogGroups = @(
     "/aws/lambda/area-code-prod-presence-expiry",
     "/aws/lambda/area-code-prod-pulse-decay",
     "/aws/lambda/area-code-prod-campaign-sender",
-    "/aws/lambda/area-code-prod-report-generator"
+    "/aws/lambda/area-code-prod-report-generator",
+    "/aws/lambda/area-code-prod-streak-reminder"
 )
 
 foreach ($workerLogGroup in $workerLogGroups) {

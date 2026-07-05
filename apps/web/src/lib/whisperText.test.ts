@@ -32,6 +32,7 @@ function makeMapState(
     pulseScores: Record<string, number>
     checkInCounts: Record<string, number>
     friendsAtVenue: Record<string, string[]>
+    momentum: Record<string, 'filling_up' | 'winding_down' | 'steady'>
   }> = {},
 ) {
   return {
@@ -106,6 +107,28 @@ describe('computeWhisperText', () => {
     })
     const result = computeWhisperText('node-1', node, state)
     expect(result).toBeNull()
+  })
+
+  it('returns filling-up whisper from real presence momentum, above pulse labels', () => {
+    const node = makeNode({ name: 'Rising Spot' })
+    const state = makeMapState({
+      pulseScores: { 'node-1': 70 },
+      checkInCounts: { 'node-1': 12 },
+      momentum: { 'node-1': 'filling_up' },
+    })
+    const result = computeWhisperText('node-1', node, state)
+    expect(result).toBe('Filling up · Rising Spot')
+  })
+
+  it('never whispers winding-down (honest but not a pull)', () => {
+    const node = makeNode({ name: 'Fading Spot' })
+    const state = makeMapState({
+      pulseScores: { 'node-1': 35 },
+      checkInCounts: { 'node-1': 6 },
+      momentum: { 'node-1': 'winding_down' },
+    })
+    const result = computeWhisperText('node-1', node, state)
+    expect(result).toBe('Buzzing · Fading Spot')
   })
 
   it('prioritises belonging over momentum', () => {

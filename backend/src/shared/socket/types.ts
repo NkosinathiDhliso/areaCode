@@ -7,6 +7,13 @@ export type NodeState = 'dormant' | 'quiet' | 'active' | 'buzzing' | 'popping'
 export type ToastType = 'surge' | 'city_pulse' | 'reward_pressure' | 'checkin' | 'reward_new' | 'streak' | 'leaderboard'
 
 /**
+ * Honest presence momentum. Mirrors `VenueMomentum` in
+ * `packages/shared/types/index.ts`; duplicated here for standalone builds, the
+ * same way `NodeState` / `LiveArchetypeBranch` are.
+ */
+export type VenueMomentum = 'filling_up' | 'winding_down' | 'steady'
+
+/**
  * Branch tag returned alongside `node:archetype_change`. Mirrors
  * `LiveArchetypeBranch` in `packages/shared/types/index.ts` (kept in
  * sync per R7.11) so the consumer client can debug which Live_Archetype
@@ -74,6 +81,12 @@ export interface ServerToClientEvents {
     nodeId: string
     livePresenceCount: number
     cause: 'check_in' | 'check_out' | 'expiry'
+    /**
+     * Honest momentum derived from the trailing count series. Optional so an
+     * emitter that has not computed it (or has no trend) omits it and the
+     * client shows no momentum label rather than over-claiming.
+     */
+    momentum?: VenueMomentum
   }) => void
   'node:state_surge': (payload: { nodeId: string; fromState: NodeState; toState: NodeState }) => void
   'node:state_change': (payload: { nodeId: string; state: NodeState }) => void
