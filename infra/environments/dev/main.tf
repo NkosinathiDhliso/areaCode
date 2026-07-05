@@ -33,6 +33,14 @@ locals {
   env = "dev"
 }
 
+# Declared for parity with prod: deploy-serverless.ps1 passes -var git_sha for
+# every environment. Dev does not wire it anywhere yet.
+variable "git_sha" {
+  description = "Git commit SHA for release tracking"
+  type        = string
+  default     = "unknown"
+}
+
 # --- VPC (kept for Lambda VPC access — VPC itself is free) ---
 module "vpc" {
   source             = "../../modules/vpc"
