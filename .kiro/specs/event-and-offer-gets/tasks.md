@@ -94,13 +94,6 @@ The implementation language is **TypeScript** for backend and frontend, matching
 - [x] 7. Final checkpoint
   - Ensure all tests pass (`fast-check` property tests and unit tests). Build the backend and the `apps/web` bundle. Ask the user if questions arise.
 
-- [ ] 8. Commit and sync everything
-  - Stage **all** changes in the working tree, including in-progress and unrelated items (`git add -A`) so nothing is left behind.
-  - Before committing, scan the staged set for secrets (`.env`, credential files, tokens) and unstage/exclude any that appear; flag them rather than committing them.
-  - Commit on a feature branch (e.g. `feat/event-and-offer-gets`) with a descriptive message summarising the feature and noting the R5 monetization invariant; do not commit directly to `main`/`master`.
-  - Push the branch with upstream tracking (`git push -u origin feat/event-and-offer-gets`) so everything is synced to the remote, and open a pull request (`gh pr create`) with a summary of changes, what was tested, and any follow-ups (e.g. the deferred non-check-in claim path).
-  - _Requirements: all (delivery step)_
-
 ## Notes
 
 - Tasks marked with `*` are optional; none here are — all are core.
@@ -123,8 +116,7 @@ The implementation language is **TypeScript** for backend and frontend, matching
     { "id": 4, "tasks": ["4.5", "5.1"] },
     { "id": 5, "tasks": ["5.2", "6.1"] },
     { "id": 6, "tasks": ["6.2"] },
-    { "id": 7, "tasks": ["7"] },
-    { "id": 8, "tasks": ["8"] }
+    { "id": 7, "tasks": ["7"] }
   ]
 }
 ```
