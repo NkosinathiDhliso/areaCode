@@ -1,4 +1,5 @@
 import { BottomSheet } from '@area-code/shared/components/BottomSheet'
+import { haptic } from '@area-code/shared/lib/haptics'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import type { NodeCategory, NodeState, Reward } from '@area-code/shared/types'
 import { ChevronDown, ChevronUp, Compass } from 'lucide-react'
@@ -9,6 +10,7 @@ import type { UseCarouselSelectionResult } from '../hooks/useCarouselSelection'
 import { DRAG_AXIS_THRESHOLD, INITIAL_BROWSE_COUNT } from '../lib/carouselConstants'
 import { browseReducer, deriveBrowseStrip } from '../lib/carouselRanking'
 import { classifyDrag } from '../lib/gestureClassifier'
+import { createLongPressHandlers } from '../lib/longPress'
 
 import { FlickControls } from './FlickControls'
 import { NodeDetailContent } from './NodeDetailContent'
@@ -122,6 +124,7 @@ export function PeekCarousel({
     setSwipeInProgress,
     browseScope,
     showRecommended,
+    enterSpotlight,
   } = selection
 
   // ── Browse strip progressive reveal state (Top N + More) ─────────────────
@@ -180,7 +183,35 @@ export function PeekCarousel({
   // pointer-up and a rewards-row horizontal drag can be routed to native scroll.
   const dragStartRef = useRef<{ x: number; y: number; inRewards: boolean } | null>(null)
 
+  // ── Spotlight long-press (R3) ─────────────────────────────────────────────
+  // A card hold isolates that venue on the map. The core keeps mutable timer /
+  // fired state, so create it once and keep it stable across renders. The
+  // onLongPress closure reads enterSpotlight and mode through refs updated every
+  // render so it always sees the current values.
+  const enterSpotlightRef = useRef(enterSpotlight)
+  enterSpotlightRef.current = enterSpotlight
+  const modeRef = useRef(mode)
+  modeRef.current = mode
+  const spotlightLongPressRef = useRef<ReturnType<typeof createLongPressHandlers> | null>(null)
+  if (spotlightLongPressRef.current === null) {
+    spotlightLongPressRef.current = createLongPressHandlers({
+      onLongPress: (e) => {
+        // Browse_Mode only (R3.4): not the Constellation peek, Keep exploring,
+        // or FlickControls.
+        if (modeRef.current !== 'browse') return
+        const target = e.target
+        if (!(target instanceof Element)) return
+        const cardEl = target.closest('[data-venue-card]')
+        const id = cardEl instanceof HTMLElement ? cardEl.dataset.venueCard : undefined
+        if (!id) return
+        enterSpotlightRef.current(id)
+        haptic(8)
+      },
+    })
+  }
+
   const handlePointerDown = (e: ReactPointerEvent) => {
+    spotlightLongPressRef.current?.onPointerDown(e.nativeEvent)
     const target = e.target
     const inRewards = target instanceof Element && target.closest('[data-rewards-row]') !== null
     dragStartRef.current = { x: e.clientX, y: e.clientY, inRewards }
@@ -189,7 +220,14 @@ export function PeekCarousel({
     if (mode === 'browse') setSwipeInProgress(true)
   }
 
+  // Movement-cancel path (R3.2): a drag past tolerance (an in-progress swipe or
+  // sheet gesture) cancels the hold.
+  const handlePointerMove = (e: ReactPointerEvent) => {
+    spotlightLongPressRef.current?.onPointerMove(e.nativeEvent)
+  }
+
   const handlePointerEnd = (e: ReactPointerEvent) => {
+    spotlightLongPressRef.current?.onPointerUp(e.nativeEvent)
     const start = dragStartRef.current
     dragStartRef.current = null
     if (mode === 'browse') setSwipeInProgress(false)
@@ -255,11 +293,14 @@ export function PeekCarousel({
         data-peek-carousel
         data-mode={mode}
         onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
-        onPointerCancel={() => {
+        onPointerCancel={(e) => {
+          spotlightLongPressRef.current?.onPointerCancel(e.nativeEvent)
           dragStartRef.current = null
           if (mode === 'browse') setSwipeInProgress(false)
         }}
+        onContextMenu={(e) => spotlightLongPressRef.current?.onContextMenu(e.nativeEvent)}
       >
         {/* Active_Venue announcer for assistive technology (R8.3 / Property 14). */}
         <div role="status" aria-live="polite" style={SR_ONLY}>
@@ -283,6 +324,10 @@ export function PeekCarousel({
             onShowRecommended={showRecommended}
             nodeCategoryOf={(id) => nodes[id]?.category ?? null}
             onCardSelect={(id) => {
+              // A fired hold (Spotlight_Mode) must not also select (R3.2).
+              // didFire() is single-shot: it consumes the click that follows a
+              // fired hold. This is the sole consumer on the select path.
+              if (spotlightLongPressRef.current?.didFire()) return
               // Cards are selection-only: tapping any card sets the Active_Venue
               // (which flies the camera to it). Details/Commit_Mode open only via
               // the dedicated "View details" control, never from a card tap.

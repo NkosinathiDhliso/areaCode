@@ -1,5 +1,5 @@
 import { TIER_SIZE_MULTIPLIER } from '@area-code/shared/constants'
-import { useLocationStore, useMapStore } from '@area-code/shared/stores'
+import { useLocationStore, useMapStore, useSelectionStore } from '@area-code/shared/stores'
 import { useUserStore } from '@area-code/shared/stores/userStore'
 import type { Node, NodeCategory, NodeState } from '@area-code/shared/types'
 import mapboxgl from 'mapbox-gl'
@@ -10,6 +10,7 @@ import { ArchetypeGlyph } from '../components/ArchetypeGlyph'
 import { canRecenter } from '../lib/cameraControl'
 import { DEFAULT_ARCHETYPE_ID, GLYPH_ZOOM_THRESHOLD, PULSE_TEMPO } from '../lib/carouselConstants'
 import { vibeRank } from '../lib/carouselRanking'
+import { createLongPressHandlers } from '../lib/longPress'
 import { getNodeState, getCategoryColour } from '../lib/mapHelpers'
 import {
   beamContainerSize,
@@ -169,6 +170,32 @@ function getGlyphSize(state: NodeState, score: number): number {
   return Math.min(base + score * 0.3, base * 1.8)
 }
 
+/**
+ * Wire the glyph hit target's input listeners: a click selects the venue, and
+ * an optional long-press opens Spotlight_Mode. A fired hold suppresses the
+ * click's `onTap` via {@link LongPressHandlers.didFire} so a long-press never
+ * doubles as a select (R2.3). The pointer + contextmenu listeners drive the
+ * shared long-press core - no timer is reimplemented here.
+ */
+function wireGlyphHit(glyphHit: HTMLElement, onTap: () => void, onLongPress?: () => void): void {
+  const longPress = onLongPress ? createLongPressHandlers({ onLongPress: () => onLongPress() }) : null
+  glyphHit.addEventListener('mousedown', (e) => e.stopPropagation())
+  glyphHit.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true })
+  if (longPress) {
+    glyphHit.addEventListener('pointerdown', (e) => longPress.onPointerDown(e as PointerEvent))
+    glyphHit.addEventListener('pointermove', (e) => longPress.onPointerMove(e as PointerEvent))
+    glyphHit.addEventListener('pointerup', (e) => longPress.onPointerUp(e as PointerEvent))
+    glyphHit.addEventListener('pointercancel', (e) => longPress.onPointerCancel(e as PointerEvent))
+    glyphHit.addEventListener('pointerleave', (e) => longPress.onPointerLeave(e as PointerEvent))
+    glyphHit.addEventListener('contextmenu', (e) => longPress.onContextMenu(e))
+  }
+  glyphHit.addEventListener('click', (e) => {
+    e.stopPropagation()
+    if (longPress?.didFire()) return
+    onTap()
+  })
+}
+
 function buildMarkerElement(
   node: Node,
   glyphSize: number,
@@ -179,6 +206,7 @@ function buildMarkerElement(
   onTap: () => void,
   beamOptions: BeamVisualOptions = {},
   onCommitZoom?: () => void,
+  onLongPress?: () => void,
 ): HTMLDivElement {
   const cfg = STATE_CONFIG[state]
   const tierScale = beamOptions.tierBaseScale ?? 1
@@ -290,12 +318,7 @@ function buildMarkerElement(
     background: 'transparent',
     zIndex: '3',
   })
-  glyphHit.addEventListener('mousedown', (e) => e.stopPropagation())
-  glyphHit.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true })
-  glyphHit.addEventListener('click', (e) => {
-    e.stopPropagation()
-    onTap()
-  })
+  wireGlyphHit(glyphHit, onTap, onLongPress)
   glyphWrapper.appendChild(glyphHit)
 
   const glyphHost = document.createElement('div')
@@ -568,6 +591,8 @@ export interface MapMarkerExtras {
   is3D?: boolean
   brushedNodeId?: string | null
   onCommitZoom?: (node: Node) => void
+  /** Fired on a long-press of a glyph marker to enter Spotlight_Mode (R2.1). */
+  onGlyphLongPress?: (node: Node) => void
 }
 
 /** 3D pitch multiplier for Constellation beam height (matches useMapInit). */
@@ -589,13 +614,18 @@ export function useMapMarkers(
   activeVenueId: string | null = null,
   extras: MapMarkerExtras = {},
 ) {
-  const { is3D = true, brushedNodeId = null, onCommitZoom } = extras
+  const { is3D = true, brushedNodeId = null, onCommitZoom, onGlyphLongPress } = extras
   const nodes = useMapStore((s) => s.nodes)
   const pulseScores = useMapStore((s) => s.pulseScores)
   const checkInCounts = useMapStore((s) => s.checkInCounts)
   const archetypeIds = useMapStore((s) => s.archetypeIds)
   const hasLiveGets = useMapStore((s) => s.hasLiveGets)
   const consumerArchetypeId = useUserStore((s) => s.user?.archetypeId ?? null)
+  // Spotlight_Mode: when set, the marker layer narrows its membership set to
+  // this single venue (R4.1, R4.2). Same reconcile path - no parallel renderer
+  // (no-fallbacks-no-legacy.md). The spotlit marker keeps its normal
+  // presentation; only membership changes (R4.4).
+  const spotlightVenueId = useSelectionStore((s) => s.spotlightVenueId)
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map())
   // Per-marker React roots used to render <ArchetypeGlyph> inside each
   // marker. Tracked in parallel with `markersRef` so we can unmount the
@@ -606,6 +636,8 @@ export function useMapMarkers(
   onNodeTapRef.current = onNodeTap
   const onCommitZoomRef = useRef(onCommitZoom)
   onCommitZoomRef.current = onCommitZoom
+  const onGlyphLongPressRef = useRef(onGlyphLongPress)
+  onGlyphLongPressRef.current = onGlyphLongPress
 
   const beamOptionsFor = useCallback(
     (nodeId: string, zoom: number, glyphSize: number): BeamVisualOptions => {
@@ -730,11 +762,16 @@ export function useMapMarkers(
 
       const nodeArray = Object.values(nodes)
       const filtered = categoryFilter ? nodeArray.filter((n) => n.category === categoryFilter) : nodeArray
+      // Spotlight_Mode narrows membership to the spotlit venue before the
+      // vibeRank / beam-cap pipeline, so the whole membership set respects the
+      // isolation. The removal loop below then tears down every non-member
+      // marker on enter and the full set rebuilds on exit (R4.1, R4.2).
+      const visible = spotlightVenueId ? filtered.filter((n) => n.id === spotlightVenueId) : filtered
 
       const positionFresh = canRecenter(useLocationStore.getState().capturedAt, Date.now())
       const mapState = useMapStore.getState()
       const ranked = vibeRank({
-        venues: filtered,
+        venues: visible,
         pulseScores: mapState.pulseScores,
         checkInCounts: mapState.checkInCounts,
         lastKnownPosition: useLocationStore.getState().lastKnownPosition,
@@ -746,7 +783,7 @@ export function useMapMarkers(
       })
       const beamCap = constellationVisibleIds(ranked, curZoom, activeVenueId, pulseScores)
 
-      const filteredIds = new Set(filtered.filter((n) => beamCap === null || beamCap.has(n.id)).map((n) => n.id))
+      const filteredIds = new Set(visible.filter((n) => beamCap === null || beamCap.has(n.id)).map((n) => n.id))
 
       for (const [id, marker] of markersRef.current) {
         if (!filteredIds.has(id)) {
@@ -760,7 +797,7 @@ export function useMapMarkers(
         }
       }
 
-      for (const node of filtered) {
+      for (const node of visible) {
         if (beamCap !== null && !beamCap.has(node.id)) continue
 
         const score = pulseScores[node.id] ?? 0
@@ -811,6 +848,7 @@ export function useMapMarkers(
           () => onNodeTapRef.current(node),
           beamOptionsFor(node.id, curZoom, glyphSize),
           () => onCommitZoomRef.current?.(node),
+          onGlyphLongPressRef.current ? () => onGlyphLongPressRef.current?.(node) : undefined,
         )
 
         const marker = new mapboxgl.Marker({
@@ -870,6 +908,7 @@ export function useMapMarkers(
     hasLiveGets,
     consumerArchetypeId,
     beamOptionsFor,
+    spotlightVenueId,
   ])
 
   // Tear down every glyph root on unmount so a remount of the map screen

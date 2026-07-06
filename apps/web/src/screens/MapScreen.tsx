@@ -1,6 +1,7 @@
 import { useGeolocation, useNodeArchetype, useCityPulseToast, useCheckOut } from '@area-code/shared/hooks'
 import { api } from '@area-code/shared/lib/api'
 import { useLiveVibeOnMap } from '@area-code/shared/lib/featureGating'
+import { haptic } from '@area-code/shared/lib/haptics'
 import {
   useMapStore,
   useConsumerAuthStore,
@@ -37,7 +38,7 @@ import { useOverlayCoordinator } from '../hooks/useOverlayCoordinator'
 import { usePresenceSeeding } from '../hooks/usePresenceSeeding'
 import { USER_VIEW_ZOOM } from '../lib/cameraControl'
 import { cameraMotion } from '../lib/cameraEasing'
-import { MIN_MARKER_ZOOM } from '../lib/carouselConstants'
+import { MIN_MARKER_ZOOM, SPOTLIGHT_EXIT_ZOOM_DELTA, shouldExitSpotlight } from '../lib/carouselConstants'
 import { getNodeState } from '../lib/mapHelpers'
 import type { AppRoute } from '../types'
 
@@ -151,6 +152,9 @@ export function MapScreen({ onNavigate, active }: MapScreenProps) {
     dismiss,
     mode: carouselMode,
     commitZoom,
+    enterSpotlight,
+    exitSpotlight,
+    spotlightVenueId,
   } = selection
 
   const { brushedNodeId, whisperText } = useConstellationSweep(mapRef, mapReady)
@@ -164,6 +168,79 @@ export function MapScreen({ onNavigate, active }: MapScreenProps) {
     },
     [onMarkerTap, commitZoom],
   )
+
+  // Glyph long-press → Spotlight_Mode. Read live zoom from the map at fire time
+  // so the gate reflects the current tier, not a stale render value. Spotlight
+  // is a dot/glyph-tier affordance only; at Constellation zoom the long-press
+  // does nothing (R2.4, R8.1).
+  const handleGlyphLongPress = useCallback(
+    (node: Node) => {
+      let zoom = 0
+      try {
+        zoom = mapRef.current?.getZoom() ?? 0
+      } catch {
+        return
+      }
+      if (zoom < MIN_MARKER_ZOOM) return
+      enterSpotlight(node.id)
+      haptic(8)
+    },
+    [mapRef, enterSpotlight],
+  )
+
+  // Entry-zoom capture for the zoom-out exit predicate (R7.1). The store stays
+  // map-free (D11); the map read belongs to this screen, which owns the map
+  // instance. On the null-to-id transition record the live zoom; the zoom-out
+  // exit effect (task 7.3) reads this ref. Clear it on exit.
+  const spotlightEntryZoomRef = useRef<number | null>(null)
+  const prevSpotlightRef = useRef<string | null>(null)
+  useEffect(() => {
+    const prev = prevSpotlightRef.current
+    prevSpotlightRef.current = spotlightVenueId
+    if (prev === null && spotlightVenueId !== null) {
+      try {
+        spotlightEntryZoomRef.current = mapRef.current?.getZoom() ?? null
+      } catch {
+        spotlightEntryZoomRef.current = null
+      }
+    } else if (spotlightVenueId === null) {
+      spotlightEntryZoomRef.current = null
+    }
+  }, [spotlightVenueId, mapRef])
+
+  // ── Zoom-out exit (R7.1, R7.2, R8.1) ──
+  // While spotlit, a user zoom-out past SPOTLIGHT_EXIT_ZOOM_DELTA below the
+  // entry zoom (or below MIN_MARKER_ZOOM into Constellation) releases the
+  // spotlight. Evaluate only user-gesture zoom events: the entry fly-through
+  // arc dips zoom by FLY_THROUGH_ZOOM_DIP (2.2), which exceeds the 1.5 exit
+  // delta, so scoring programmatic frames would false-exit during the spotlight
+  // fly-to (design D7). Mirror the existing moveend originalEvent guard.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady || spotlightVenueId === null) return
+    const handler = (e: object) => {
+      if (!(e as { originalEvent?: unknown }).originalEvent) return
+      const entryZoom = spotlightEntryZoomRef.current
+      if (entryZoom === null) return
+      let currentZoom = entryZoom
+      try {
+        currentZoom = map.getZoom()
+      } catch {
+        return
+      }
+      if (shouldExitSpotlight(entryZoom, currentZoom, SPOTLIGHT_EXIT_ZOOM_DELTA)) {
+        exitSpotlight()
+      }
+    }
+    map.on('zoom', handler)
+    return () => {
+      try {
+        map.off('zoom', handler)
+      } catch {
+        /* map torn down */
+      }
+    }
+  }, [mapRef, mapReady, spotlightVenueId, exitSpotlight])
 
   // Socket subscriptions, citySlug passed for anonymous room join
   useMapSockets(citySlug, accessToken ?? undefined, userId)
@@ -293,10 +370,19 @@ export function MapScreen({ onNavigate, active }: MapScreenProps) {
     mapRef.current?.zoomOut(cameraMotion(400))
   }, [mapRef])
 
+  // Recenter is an exit gesture for Spotlight_Mode (R7.3). Lift the isolation
+  // first, then run the normal recenter fly-to (R6.3: the recenter's own
+  // fly-to proceeds as normal; other exits do not move the camera).
+  const handleRecenter = useCallback(() => {
+    exitSpotlight()
+    recenterUser()
+  }, [exitSpotlight, recenterUser])
+
   useMapMarkers(mapRef, categoryFilter, handleMarkerTap, mapReady, activeVenueId, {
     is3D,
     brushedNodeId,
     onCommitZoom: handleCommitZoom,
+    onGlyphLongPress: handleGlyphLongPress,
   })
 
   // Pinch past Embers while in Constellation peek → full browse funnel.
@@ -477,7 +563,7 @@ export function MapScreen({ onNavigate, active }: MapScreenProps) {
           bearing={bearing}
           onToggle3D={() => setPitch3D(!is3D)}
           onResetNorth={resetNorth}
-          onRecenter={recenterUser}
+          onRecenter={handleRecenter}
           onZoomIn={handleZoomIn}
           onZoomOut={handleZoomOut}
           lastKnownPositionFreshAt={lastKnownPositionCapturedAt}
@@ -519,7 +605,16 @@ export function MapScreen({ onNavigate, active }: MapScreenProps) {
       )}
 
       <ToastOverlay />
-      <WhisperChip text={whisperText} />
+      {/* Spotlight exit hint reuses the WhisperChip (R9.1-R9.3). Sweep whispers
+          only occur at Constellation zoom and spotlight only exists at or above
+          MIN_MARKER_ZOOM, so the two texts are mutually exclusive; precedence is
+          whisperText ?? spotlightHint. */}
+      <WhisperChip
+        text={
+          whisperText ??
+          (spotlightVenueId ? t('map.spotlightHint', 'Spotlight on. Zoom out or recenter to exit') : null)
+        }
+      />
       {overlay.showNudge && <ProximityNudgeBanner onNavigate={onNavigate} />}
 
       {celebration && (

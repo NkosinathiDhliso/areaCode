@@ -20,12 +20,13 @@ function reset(): void {
     carouselOrder: [],
     openedFromFocus: false,
     lastVenueId: null,
+    spotlightVenueId: null,
   })
 }
 
 beforeEach(reset)
 
-describe('Feature: map-discovery-experience, Property 3: Single Active_Venue invariant', () => {
+describe('Feature: spotlight-mode, Property 3: Single Active_Venue invariant (+ spotlight I1/I2)', () => {
   const idArb = fc.constantFrom('a', 'b', 'c', 'd')
   const opArb = fc.oneof(
     idArb.map((id) => ({ k: 'select' as const, id })),
@@ -36,6 +37,8 @@ describe('Feature: map-discovery-experience, Property 3: Single Active_Venue inv
     fc.constant({ k: 'reopen' as const }),
     fc.constant({ k: 'toggle' as const }),
     fc.uniqueArray(idArb, { maxLength: 4 }).map((order) => ({ k: 'order' as const, order })),
+    idArb.map((id) => ({ k: 'enterSpotlight' as const, id })),
+    fc.constant({ k: 'exitSpotlight' as const }),
   )
 
   it('keeps (the sheet is open) <=> (an Active_Venue is set) after any operation sequence', () => {
@@ -69,10 +72,26 @@ describe('Feature: map-discovery-experience, Property 3: Single Active_Venue inv
             case 'order':
               s.setOrder(op.order)
               break
+            case 'enterSpotlight':
+              s.enterSpotlight(op.id)
+              break
+            case 'exitSpotlight':
+              s.exitSpotlight()
+              break
           }
           const st = useSelectionStore.getState()
           expect(['closed', 'constellation', 'browse', 'commit']).toContain(st.mode)
           expect(st.mode === 'closed').toBe(st.activeVenueId === null)
+          // Spotlight invariant I1 (R1.4): a closed carousel never leaves a
+          // stale isolation.
+          if (st.mode === 'closed') {
+            expect(st.spotlightVenueId).toBeNull()
+          }
+          // Spotlight invariant I2 (R1.5): a set spotlight always tracks the
+          // Active_Venue.
+          if (st.spotlightVenueId !== null) {
+            expect(st.spotlightVenueId).toBe(st.activeVenueId)
+          }
         }
       }),
       { numRuns: 300 },
@@ -180,5 +199,65 @@ describe('Feature: map-discovery-experience, Property 5 (cont.)', () => {
     useSelectionStore.getState().setOrder(['a', 'b'])
     useSelectionStore.getState().step(1)
     expect(useSelectionStore.getState().activeVenueId).toBe('x')
+  })
+})
+
+describe('Feature: spotlight-mode, spotlight actions (R1.1-R1.5)', () => {
+  it('exitSpotlight preserves the selection (only the isolation lifts)', () => {
+    reset()
+    const store = useSelectionStore.getState()
+    store.setOrder(['a', 'b', 'c'])
+    store.enterSpotlight('b')
+    expect(useSelectionStore.getState().spotlightVenueId).toBe('b')
+    expect(useSelectionStore.getState().activeVenueId).toBe('b')
+    expect(useSelectionStore.getState().mode).toBe('browse')
+
+    useSelectionStore.getState().exitSpotlight()
+    expect(useSelectionStore.getState().spotlightVenueId).toBeNull()
+    expect(useSelectionStore.getState().activeVenueId).toBe('b')
+    expect(useSelectionStore.getState().mode).toBe('browse')
+    expect(useSelectionStore.getState().lastVenueId).toBe('b')
+  })
+
+  it('dismiss clears the spotlight and closes the carousel (I1)', () => {
+    reset()
+    useSelectionStore.getState().enterSpotlight('b')
+    useSelectionStore.getState().dismiss()
+    expect(useSelectionStore.getState().spotlightVenueId).toBeNull()
+    expect(useSelectionStore.getState().mode).toBe('closed')
+  })
+
+  it('toggleOpen (close branch) clears the spotlight (I1)', () => {
+    reset()
+    useSelectionStore.getState().enterSpotlight('b') // opens browse
+    expect(useSelectionStore.getState().mode).toBe('browse')
+    useSelectionStore.getState().toggleOpen() // close
+    expect(useSelectionStore.getState().spotlightVenueId).toBeNull()
+    expect(useSelectionStore.getState().mode).toBe('closed')
+  })
+
+  it('selectVenue with a different id clears the spotlight (I2 exit intent)', () => {
+    reset()
+    useSelectionStore.getState().enterSpotlight('a')
+    useSelectionStore.getState().selectVenue('b', 'search')
+    expect(useSelectionStore.getState().spotlightVenueId).toBeNull()
+    expect(useSelectionStore.getState().activeVenueId).toBe('b')
+  })
+
+  it('selectVenue with the same id keeps the spotlight', () => {
+    reset()
+    useSelectionStore.getState().enterSpotlight('a')
+    useSelectionStore.getState().selectVenue('a', 'marker')
+    expect(useSelectionStore.getState().spotlightVenueId).toBe('a')
+  })
+
+  it('step is a no-op while spotlit (stale-order race guard)', () => {
+    reset()
+    const store = useSelectionStore.getState()
+    store.setOrder(['a', 'b', 'c'])
+    store.enterSpotlight('a')
+    useSelectionStore.getState().step(1)
+    expect(useSelectionStore.getState().activeVenueId).toBe('a')
+    expect(useSelectionStore.getState().spotlightVenueId).toBe('a')
   })
 })

@@ -175,6 +175,36 @@ export const AREA_SCOPE_MIN_MOVE_M = 400
  */
 export const AREA_SCOPE_MIN_ZOOM_DELTA = 0.35
 
+// ─── Spotlight mode exit ─────────────────────────────────────────────────────
+
+/**
+ * Zoom-out distance (in zoom levels) below the zoom recorded at spotlight entry
+ * that ends spotlight. Zooming out this far reads as the consumer stepping back
+ * from a single venue to compare the wider scene, so spotlight releases.
+ */
+export const SPOTLIGHT_EXIT_ZOOM_DELTA = 1.5
+
+/**
+ * Pure decision for whether spotlight should exit given the zoom at entry and
+ * the current zoom. Two exit conditions, either one is enough:
+ *
+ * 1. Zoom-out delta: the user has zoomed out by at least `delta` levels from
+ *    `entryZoom` (stepping back to compare venues).
+ * 2. Constellation floor: `currentZoom` has crossed below {@link MIN_MARKER_ZOOM},
+ *    where markers give way to Constellation beams, so a single-venue spotlight
+ *    no longer applies.
+ *
+ * Kept pure (no React, Mapbox, or store access) so it can be property-tested
+ * directly against the acceptance criteria.
+ */
+export function shouldExitSpotlight(
+  entryZoom: number,
+  currentZoom: number,
+  delta: number = SPOTLIGHT_EXIT_ZOOM_DELTA,
+): boolean {
+  return currentZoom < MIN_MARKER_ZOOM || entryZoom - currentZoom >= delta
+}
+
 /**
  * Live_Archetype id used when no live value has arrived for a node and the node
  * carries no `defaultArchetypeId`. Mirrors R7.8's eclectic-fallback rule so the

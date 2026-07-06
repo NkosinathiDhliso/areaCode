@@ -138,6 +138,12 @@ export interface UseCarouselSelectionResult {
   browseScope: BrowseScope
   /** Return to the citywide `recommended` scope (the "Back to recommended" cue). */
   showRecommended: () => void
+  /** The isolated venue id while Spotlight_Mode is active, or null. */
+  spotlightVenueId: string | null
+  /** Enter Spotlight_Mode: isolate a single venue in the strip (store passthrough). */
+  enterSpotlight: (id: string) => void
+  /** Exit Spotlight_Mode; re-baselines the viewport and recomputes the order. */
+  exitSpotlight: () => void
 }
 
 /** Reads `prefers-reduced-motion: reduce`, defaulting to false off-DOM. */
@@ -225,6 +231,7 @@ export function useCarouselSelection({
   const openedFromFocus = useSelectionStore((s) => s.openedFromFocus)
   const carouselOrder = useSelectionStore((s) => s.carouselOrder)
   const lastVenueId = useSelectionStore((s) => s.lastVenueId)
+  const spotlightVenueId = useSelectionStore((s) => s.spotlightVenueId)
   const selectVenueRaw = useSelectionStore((s) => s.selectVenue)
   const stepRaw = useSelectionStore((s) => s.step)
   const enterCommit = useSelectionStore((s) => s.enterCommit)
@@ -233,6 +240,8 @@ export function useCarouselSelection({
   const dismiss = useSelectionStore((s) => s.dismiss)
   const reopenLastRaw = useSelectionStore((s) => s.reopenLast)
   const setOrder = useSelectionStore((s) => s.setOrder)
+  const enterSpotlightRaw = useSelectionStore((s) => s.enterSpotlight)
+  const exitSpotlightRaw = useSelectionStore((s) => s.exitSpotlight)
 
   const reducedMotionValue = reducedMotion ?? detectReducedMotion()
 
@@ -268,6 +277,12 @@ export function useCarouselSelection({
   // (R6.5) - except when it no longer matches the filter, in which case it is
   // intentionally excluded so the filter-reassignment effect can take over.
   const computeOrder = useCallback((): string[] => {
+    // Spotlight_Mode: collapse the strip to the single isolated venue while
+    // spotlight is set (R5.1). Step and swipe naturally no-op on a length-1
+    // order (also store-guarded per R1.5).
+    const spotlightId = useSelectionStore.getState().spotlightVenueId
+    if (spotlightId) return [spotlightId]
+
     const mapState = useMapStore.getState()
     const allNodes = Object.values(mapState.nodes)
     const filtered = categoryFilter ? allNodes.filter((n) => n.category === categoryFilter) : allNodes
@@ -544,6 +559,10 @@ export function useCarouselSelection({
   )
 
   const notifyViewportChanged = useCallback(() => {
+    // Spotlight_Mode: panning/zooming around the isolated venue must not flip the
+    // browse scope to area or recompute the order (R5.2).
+    if (useSelectionStore.getState().spotlightVenueId) return
+
     const map = useMapStore.getState().mapInstance
     let zoom = MAP_ARRIVAL_ZOOM
     try {
@@ -585,6 +604,23 @@ export function useCarouselSelection({
     snapshotViewport()
     recomputeOrder()
   }, [setBrowseScope, snapshotViewport, recomputeOrder])
+
+  // Enter Spotlight_Mode: isolate the venue in the strip (store passthrough).
+  const enterSpotlight = useCallback(
+    (id: string) => {
+      enterSpotlightRaw(id)
+    },
+    [enterSpotlightRaw],
+  )
+
+  // Exit Spotlight_Mode, then re-baseline the viewport and recompute the order.
+  // Panning done while spotlit must not retroactively flip the browse scope to
+  // area the instant isolation lifts (D12 / R5.4).
+  const exitSpotlight = useCallback(() => {
+    exitSpotlightRaw()
+    snapshotViewport()
+    recomputeOrder()
+  }, [exitSpotlightRaw, snapshotViewport, recomputeOrder])
 
   // Reset to the recommended scope whenever the carousel closes, so each fresh
   // open leads with the citywide recommendations rather than a stale area view.
@@ -644,5 +680,8 @@ export function useCarouselSelection({
     notifyViewportChanged,
     browseScope,
     showRecommended,
+    spotlightVenueId,
+    enterSpotlight,
+    exitSpotlight,
   }
 }

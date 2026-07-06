@@ -32,6 +32,15 @@ export interface SelectionState {
    * instead). Null when nothing has been selected yet this session.
    */
   lastVenueId: string | null
+  /**
+   * The venue isolated on the map (Spotlight_Mode), or null. While set, every
+   * other marker is hidden and the Browse_Mode strip collapses to this one
+   * venue. Independent of {@link mode}: a spotlight can be held in Browse or
+   * Commit. Invariants: `mode === 'closed'` implies `spotlightVenueId === null`
+   * (I1); `spotlightVenueId !== null` implies `spotlightVenueId ===
+   * activeVenueId` (I2). Client-memory only; never persisted.
+   */
+  spotlightVenueId: string | null
   selectVenue: (id: string, source: SelectionSource) => void
   step: (dir: 1 | -1) => void
   enterCommit: () => void
@@ -55,6 +64,20 @@ export interface SelectionState {
    */
   toggleOpen: () => void
   setOrder: (order: string[]) => void
+  /**
+   * Enter Spotlight_Mode: isolate the map to `id` and make it the Active_Venue.
+   * Mirrors the {@link selectVenue} shape: sets `activeVenueId` and
+   * `lastVenueId` to `id`, resets `openedFromFocus` to false, and opens
+   * Browse_Mode when the carousel is closed (preserving the current open mode
+   * otherwise).
+   */
+  enterSpotlight: (id: string) => void
+  /**
+   * Exit Spotlight_Mode, restoring the full marker set. The venue stays
+   * selected: `activeVenueId`, `mode`, and `lastVenueId` are left unchanged;
+   * only `spotlightVenueId` is cleared.
+   */
+  exitSpotlight: () => void
 }
 
 /**
@@ -80,6 +103,7 @@ export const useSelectionStore = create<SelectionState>()(
     carouselOrder: [],
     openedFromFocus: false,
     lastVenueId: null,
+    spotlightVenueId: null,
 
     // Sets the Active_Venue from any input source. Opens Peek_Carousel into
     // Browse_Mode when it was closed, and preserves the current open mode
@@ -88,6 +112,12 @@ export const useSelectionStore = create<SelectionState>()(
     // Focus_Signal so the lighter backdrop can be applied (Requirement 15.3).
     selectVenue: (id, source) =>
       set((state) => {
+        // Selecting a different venue (from any source, including search and
+        // Focus_Signal) is an exit intent: lift the isolation. Selecting the
+        // spotlit venue again keeps the spotlight (invariant I2).
+        if (id !== state.spotlightVenueId) {
+          state.spotlightVenueId = null
+        }
         state.activeVenueId = id
         state.lastVenueId = id
         state.openedFromFocus = source === 'focus'
@@ -101,6 +131,12 @@ export const useSelectionStore = create<SelectionState>()(
     // empty or the current Active_Venue is not present in the order.
     step: (dir) =>
       set((state) => {
+        // Stale-order race guard (D6): while spotlit, the carousel order
+        // collapses to one venue but the order write is asynchronous. A step
+        // against a stale multi-venue order would move `activeVenueId` off the
+        // spotlit venue (breaking invariant I2), so stepping is a no-op while
+        // Spotlight_Mode is held.
+        if (state.spotlightVenueId !== null) return
         const { carouselOrder, activeVenueId } = state
         if (carouselOrder.length === 0) return
         const currentIndex = activeVenueId === null ? -1 : carouselOrder.indexOf(activeVenueId)
@@ -145,6 +181,8 @@ export const useSelectionStore = create<SelectionState>()(
         state.activeVenueId = null
         state.mode = 'closed'
         state.openedFromFocus = false
+        // A closed carousel never leaves a stale isolation (invariant I1).
+        state.spotlightVenueId = null
       }),
 
     // Re-open the carousel on the last dismissed venue (Browse_Mode). No-op
@@ -170,6 +208,8 @@ export const useSelectionStore = create<SelectionState>()(
           state.activeVenueId = null
           state.mode = 'closed'
           state.openedFromFocus = false
+          // A closed carousel never leaves a stale isolation (invariant I1).
+          state.spotlightVenueId = null
           return
         }
         // Open in Browse_Mode on the last venue, else the first in the order.
@@ -184,6 +224,30 @@ export const useSelectionStore = create<SelectionState>()(
     setOrder: (order) =>
       set((state) => {
         state.carouselOrder = order
+      }),
+
+    // Enter Spotlight_Mode. Mirrors the `selectVenue` shape (sets active +
+    // last, opens Browse when closed, clears `openedFromFocus`) and records
+    // the isolated venue. Exit lifts the isolation without dropping the
+    // selection (see `exitSpotlight`).
+    enterSpotlight: (id) =>
+      set((state) => {
+        state.spotlightVenueId = id
+        state.activeVenueId = id
+        state.lastVenueId = id
+        state.openedFromFocus = false
+        if (state.mode === 'closed') {
+          state.mode = 'browse'
+        }
+      }),
+
+    // Exit Spotlight_Mode: clear only the isolation. The venue remains the
+    // Active_Venue (activeVenueId, mode, lastVenueId are untouched) so the
+    // full marker set and carousel order restore around the still-selected
+    // venue.
+    exitSpotlight: () =>
+      set((state) => {
+        state.spotlightVenueId = null
       }),
   })),
 )
