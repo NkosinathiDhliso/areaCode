@@ -204,7 +204,10 @@ export function PeekCarousel({
         const cardEl = target.closest('[data-venue-card]')
         const id = cardEl instanceof HTMLElement ? cardEl.dataset.venueCard : undefined
         if (!id) return
-        enterSpotlightRef.current(id)
+        // A card hold is "take me there": isolate AND dive the camera into
+        // the venue at SPOTLIGHT_DIVE_ZOOM (never zooming out). The glyph
+        // hold stays pan-only - the node is already under the user's finger.
+        enterSpotlightRef.current(id, { dive: true })
         haptic(8)
       },
     })

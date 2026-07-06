@@ -16,6 +16,7 @@ import {
   RECOMMENDED_LIMIT,
   AREA_SCOPE_MIN_MOVE_M,
   AREA_SCOPE_MIN_ZOOM_DELTA,
+  SPOTLIGHT_DIVE_ZOOM,
   toVenueCardVM,
   type VenueCardVM,
 } from '../lib/carouselConstants'
@@ -140,8 +141,14 @@ export interface UseCarouselSelectionResult {
   showRecommended: () => void
   /** The isolated venue id while Spotlight_Mode is active, or null. */
   spotlightVenueId: string | null
-  /** Enter Spotlight_Mode: isolate a single venue in the strip (store passthrough). */
-  enterSpotlight: (id: string) => void
+  /**
+   * Enter Spotlight_Mode: isolate a single venue in the strip. With
+   * `{ dive: true }` (the Venue_Card hold) the camera also flies into the
+   * venue at `SPOTLIGHT_DIVE_ZOOM`, never zooming out. Without it (the glyph
+   * hold) the camera behaviour is unchanged: pan-only via the existing
+   * Active_Venue fly-to, preserving the user's zoom.
+   */
+  enterSpotlight: (id: string, opts?: { dive?: boolean }) => void
   /** Exit Spotlight_Mode; re-baselines the viewport and recomputes the order. */
   exitSpotlight: () => void
 }
@@ -605,12 +612,33 @@ export function useCarouselSelection({
     recomputeOrder()
   }, [setBrowseScope, snapshotViewport, recomputeOrder])
 
-  // Enter Spotlight_Mode: isolate the venue in the strip (store passthrough).
+  // Enter Spotlight_Mode: isolate the venue in the strip. A dive (Venue_Card
+  // hold) also flies the camera into the venue at SPOTLIGHT_DIVE_ZOOM, never
+  // zooming out: a user already closer than the dive zoom keeps their zoom and
+  // gets a pan-only move. The dive issues its own camera move here, so it marks
+  // the Active_Venue change as camera-handled (prevActiveRef) - otherwise the
+  // fly-to-on-change effect would fire a second, zoom-less move that cancels
+  // the dive mid-flight.
   const enterSpotlight = useCallback(
-    (id: string) => {
+    (id: string, opts?: { dive?: boolean }) => {
       enterSpotlightRaw(id)
+      if (!opts?.dive) return
+      const map = useMapStore.getState().mapInstance
+      const node = useMapStore.getState().nodes[id]
+      // Map or node not ready: leave prevActiveRef untouched so the normal
+      // fly-to effect still frames the venue (without the dive zoom).
+      if (!map || !node) return
+      prevActiveRef.current = id
+      let zoom = SPOTLIGHT_DIVE_ZOOM
+      try {
+        zoom = Math.max(map.getZoom?.() ?? SPOTLIGHT_DIVE_ZOOM, SPOTLIGHT_DIVE_ZOOM)
+      } catch {
+        /* map read failed - fly to the dive zoom */
+      }
+      moveCameraToActive(map, node, { reducedMotion: reducedMotionValue, zoom })
+      ;(map as MapWithOnce).once?.('moveend', snapshotViewport)
     },
-    [enterSpotlightRaw],
+    [enterSpotlightRaw, reducedMotionValue, snapshotViewport],
   )
 
   // Exit Spotlight_Mode, then re-baseline the viewport and recompute the order.

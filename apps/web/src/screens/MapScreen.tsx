@@ -232,10 +232,26 @@ export function MapScreen({ onNavigate, active }: MapScreenProps) {
         exitSpotlight()
       }
     }
+    // Re-baseline the entry zoom when a programmatic zoom settles (no
+    // originalEvent): the card-hold dive flies to SPOTLIGHT_DIVE_ZOOM after
+    // entry, and measuring the exit delta from the pre-dive zoom would demand
+    // a 4+ level zoom-out to release. After the settle, "zoom out 1.5 from
+    // where the dive left you" holds for every enter path.
+    const settleHandler = (e: object) => {
+      if ((e as { originalEvent?: unknown }).originalEvent) return
+      if (spotlightEntryZoomRef.current === null) return
+      try {
+        spotlightEntryZoomRef.current = map.getZoom()
+      } catch {
+        /* map torn down */
+      }
+    }
     map.on('zoom', handler)
+    map.on('zoomend', settleHandler)
     return () => {
       try {
         map.off('zoom', handler)
+        map.off('zoomend', settleHandler)
       } catch {
         /* map torn down */
       }

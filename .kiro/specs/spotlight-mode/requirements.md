@@ -4,10 +4,11 @@
 
 Long-press a venue glyph on the map, or a Venue_Card in the Peek_Carousel, to
 "spotlight" that one venue: every other marker is filtered off the map, the
-camera frames the chosen venue at the user's current zoom, and the isolation
-holds until the user zooms out, taps Recenter, or navigates away. It is a
-focused, distraction-free look at a single place, then a clean return to
-normal browse.
+camera frames the chosen venue (a glyph hold preserves the user's zoom; a
+card hold dives into the venue at `SPOTLIGHT_DIVE_ZOOM`, R6), and the
+isolation holds until the user zooms out, taps Recenter, or navigates away.
+It is a focused, distraction-free look at a single place, then a clean
+return to normal browse.
 
 The word "focus" is already taken in this codebase (`focusNodeId`,
 `openedFromFocus`, Focus_Signal, `SelectionSource = 'focus'`) and means
@@ -139,7 +140,8 @@ Constellation peek card (spotlight is not offered at Constellation zoom,
 R8), the "Keep exploring" card, FlickControls, or any other control.
 
 3.5. Long-pressing the already-active venue's card SHALL enter spotlight on
-it without changing the selection (and without a camera move, R6.2).
+it without changing the selection, and SHALL still dive the camera into it
+(R6.4): the hold on a card always reads as "take me there".
 
 ---
 
@@ -200,22 +202,42 @@ exploration move the instant the isolation lifts.
 
 ## Requirement 6: Camera behaviour
 
+The two triggers carry different camera intent. A glyph hold happens on the
+map itself: the node is already under the user's finger at their chosen
+zoom, so the hold is a lens, not a move. A Venue_Card hold happens on the
+strip, away from the node: it is a "take me there" gesture, so the camera
+dives into the venue.
+
 ### Acceptance Criteria
 
-6.1. Entering spotlight on a venue that is not the current Active_Venue
-SHALL reuse the existing "fly to Active_Venue on change" effect (via
-`moveCameraToActive`, Sheet_Focus_Offset and Reduced_Motion honoured). No
-new camera code path. The move preserves the user's current zoom, matching
-the map-carousel "preserve the user's zoom" contract; spotlight is a lens,
-not a zoom action.
+6.1. **Glyph hold**: entering spotlight from a marker glyph SHALL reuse the
+existing "fly to Active_Venue on change" effect (via `moveCameraToActive`,
+Sheet_Focus_Offset and Reduced_Motion honoured). No new camera code path.
+The move preserves the user's current zoom, matching the map-carousel
+"preserve the user's zoom" contract.
 
-6.2. Entering spotlight on the already-active venue SHALL NOT move the
-camera (the venue was framed when it was selected; the user may have
-deliberately repositioned since, and yanking the camera on a hold would
-punish inspection).
+6.2. **Glyph hold on the already-active venue** SHALL NOT move the camera
+(the venue was framed when it was selected; the user may have deliberately
+repositioned since, and yanking the camera on a hold would punish
+inspection).
 
 6.3. Exiting spotlight SHALL NOT move the camera (except when the exit came
 from the Recenter tap, whose own recenter fly-to proceeds as normal).
+
+6.4. **Card hold (dive)**: entering spotlight from a Venue_Card SHALL fly
+the camera into the venue at `SPOTLIGHT_DIVE_ZOOM` (new constant in
+`carouselConstants.ts`, value 16, a street-level close-up past
+`GLYPH_ZOOM_THRESHOLD`), via the same `moveCameraToActive` helper
+(Sheet_Focus_Offset and Reduced_Motion honoured). The dive SHALL never zoom
+OUT: when the user's current zoom already exceeds `SPOTLIGHT_DIVE_ZOOM`,
+their zoom is preserved and the move is pan-only. The dive applies whether
+or not the card's venue was already the Active_Venue.
+
+6.5. The dive SHALL issue exactly one camera move: the hook's
+`enterSpotlight(id, { dive: true })` performs the move itself and marks the
+Active_Venue change as camera-handled (`prevActiveRef`), so the
+fly-to-on-change effect does not issue a second, zoom-less move that would
+cancel the dive mid-flight.
 
 ---
 
@@ -241,6 +263,13 @@ decision is the pure predicate
 by `FLY_THROUGH_ZOOM_DIP` (2.2) zoom levels mid-animation, which exceeds the
 1.5 exit delta; evaluating programmatic zoom frames would false-exit the
 spotlight during its own entry fly-to.
+
+7.2.1. The entry-zoom baseline SHALL re-record when a programmatic zoom
+settles while spotlit (`zoomend` without `originalEvent`). The card-hold
+dive (R6.4) raises the zoom after entry; measuring the exit delta from the
+pre-dive zoom would demand a 4+ level zoom-out to release. After the
+re-baseline, "zoom out `SPOTLIGHT_EXIT_ZOOM_DELTA` from where the camera
+settled" holds identically for every enter path.
 
 7.3. **Recenter**: tapping the Recenter control SHALL exit spotlight
 (before or with the recenter fly-to), regardless of whether the recenter

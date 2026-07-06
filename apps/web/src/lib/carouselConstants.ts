@@ -175,7 +175,17 @@ export const AREA_SCOPE_MIN_MOVE_M = 400
  */
 export const AREA_SCOPE_MIN_ZOOM_DELTA = 0.35
 
-// ─── Spotlight mode exit ─────────────────────────────────────────────────────
+// ─── Spotlight mode ──────────────────────────────────────────────────────────
+
+/**
+ * Zoom the camera dives to when spotlight is entered from a Venue_Card hold
+ * (the "take me there" gesture): a street-level close-up of the single
+ * isolated venue, well past {@link GLYPH_ZOOM_THRESHOLD}. The dive never zooms
+ * OUT: when the user is already closer than this, their zoom is preserved and
+ * the move is pan-only. The glyph-hold trigger does not dive at all (the node
+ * is already under the user's finger at their chosen zoom).
+ */
+export const SPOTLIGHT_DIVE_ZOOM = 16
 
 /**
  * Zoom-out distance (in zoom levels) below the zoom recorded at spotlight entry

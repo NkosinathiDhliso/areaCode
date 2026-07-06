@@ -103,3 +103,19 @@ DRAG_AXIS_THRESHOLD, onLongPress })` returning pointer + contextmenu
   - [x] 9.5 Marker-layer test: exactly one marker while spotlit, full
         filtered set restored on exit
   - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
+
+- [x] 10. Card-hold camera dive (amendment: D1/D4/D11/D14, R6.4, R6.5, R7.2.1)
+  - [x] 10.1 Add `SPOTLIGHT_DIVE_ZOOM = 16` to `carouselConstants.ts`
+  - [x] 10.2 `useCarouselSelection.enterSpotlight(id, opts?: { dive?: boolean })`:
+        with `dive`, fly via `moveCameraToActive` at
+        `max(currentZoom, SPOTLIGHT_DIVE_ZOOM)` (never zoom out) and advance
+        `prevActiveRef` so the fly-to-on-change effect does not issue a
+        second, zoom-less move
+  - [x] 10.3 `PeekCarousel` card hold passes `{ dive: true }`; glyph hold
+        unchanged (pan-only, preserve zoom)
+  - [x] 10.4 `MapScreen`: re-baseline the spotlight entry zoom on
+        programmatic `zoomend` (no `originalEvent`) so the zoom-out exit
+        delta measures from where the dive settled
+  - [ ]\* 10.5 Harness test: dive flies with `zoom = max(current, 16)` and
+    the fly-to-on-change effect issues no second move
+  - _Requirements: 6.4, 6.5, 7.2.1_
