@@ -43,3 +43,10 @@ export {
   type LiveArchetypeResult,
   type LiveArchetypeCheckIn,
 } from './liveArchetype'
+export {
+  createRapidTapDetector,
+  TROPHY_TAP_COUNT,
+  TROPHY_TAP_GAP_MS,
+  type RapidTapOptions,
+  type RapidTapDetector,
+} from './rapidTap'

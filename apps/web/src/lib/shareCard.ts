@@ -10,7 +10,7 @@
  * a PNG Blob suitable for the Web Share API.
  */
 
-import { getArchetypeDisplayName } from '@area-code/shared/constants'
+import { getArchetypeDisplayName, getTierLabel } from '@area-code/shared/constants'
 import type { Tier } from '@area-code/shared/types'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -77,14 +77,6 @@ const TIER_COLOURS: Record<Tier, string> = {
   legend: '#ef4444',
 }
 
-const TIER_LABELS: Record<Tier, string> = {
-  local: 'Local',
-  regular: 'Regular',
-  fixture: 'Fixture',
-  institution: 'Institution',
-  legend: 'Legend',
-}
-
 // ─── Pure data builder (Property 9 target) ───────────────────────────────────
 
 /**
@@ -105,7 +97,7 @@ export function buildShareCardData(stats: ConsumerStats): ShareCardData {
     archetypeName,
     archetypeGlyph,
     tier: stats.tier,
-    tierLabel: TIER_LABELS[stats.tier],
+    tierLabel: getTierLabel(stats.tier),
     weeklyCheckInCount: stats.weeklyCheckInCount,
     topVenueName: stats.topVenueName,
     displayName: stats.displayName ?? null,
@@ -253,7 +245,7 @@ export async function generateShareCard(data: ShareCardData): Promise<Blob> {
 }
 
 /**
- * Render a milestone share card (e.g. "7-day streak", "Moved up to Fixture").
+ * Render a milestone share card (e.g. "7-day streak", "Moved up to Patron").
  * Reuses the branded canvas layout. Contains only the milestone text, so it
  * exposes no other user's data (R11.5.3).
  */

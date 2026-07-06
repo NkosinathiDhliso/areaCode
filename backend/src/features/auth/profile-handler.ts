@@ -88,12 +88,24 @@ export async function profileRoutes(app: FastifyInstance) {
     const currentIdx = TIER_LEVELS.indexOf(currentLevel)
     const nextLevel = currentIdx < TIER_LEVELS.length - 1 ? TIER_LEVELS[currentIdx + 1] : null
 
+    // Benefits audit (honest-presence: under-claim, never over-claim). Only
+    // capabilities backed by working code today are listed; a line that cannot
+    // be pointed at shipped functionality is removed, not softened.
+    // Backed today:
+    //   - 'Access to basic rewards': GET /v1/rewards/near-me + claim flow,
+    //     available to every consumer.
+    //   - 'Profile badge': the rank badge (TierBadge) rendered on the profile.
+    // Removed as aspirational (no code gates rewards, leaderboard, or venue
+    // access by consumer rank): 'Priority reward access', 'Exclusive venue
+    // rewards', 'Leaderboard boost', 'VIP rewards', 'Early access to new
+    // venues', 'All benefits unlocked', 'Legend-only rewards', 'Permanent
+    // leaderboard status'.
     const tierBenefits: Record<string, string[]> = {
       local: ['Access to basic rewards'],
-      regular: ['Priority reward access', 'Profile badge'],
-      fixture: ['Exclusive venue rewards', 'Leaderboard boost'],
-      institution: ['VIP rewards', 'Early access to new venues'],
-      legend: ['All benefits unlocked', 'Legend-only rewards', 'Permanent leaderboard status'],
+      regular: ['Profile badge'],
+      fixture: [],
+      institution: [],
+      legend: [],
     }
 
     return {

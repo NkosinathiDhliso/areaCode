@@ -1,16 +1,9 @@
+import { getTierLabel } from '../constants/tier-levels'
 import type { Tier } from '../types'
 import { Text } from './primitives'
 
 interface TierBadgeProps {
   tier: Tier
-}
-
-const TIER_LABELS: Record<Tier, string> = {
-  local: 'Local',
-  regular: 'Regular',
-  fixture: 'Fixture',
-  institution: 'Institution',
-  legend: 'Legend',
 }
 
 const TIER_STYLES: Record<Tier, string> = {
@@ -28,14 +21,14 @@ export function TierBadge({ tier }: TierBadgeProps) {
         className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-white animate-shimmer"
         style={{ background: 'var(--tier-legend)', backgroundSize: '200% 100%' }}
       >
-        {TIER_LABELS[tier]}
+        {getTierLabel(tier)}
       </Text>
     )
   }
 
   return (
     <Text className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${TIER_STYLES[tier]}`}>
-      {TIER_LABELS[tier]}
+      {getTierLabel(tier)}
     </Text>
   )
 }

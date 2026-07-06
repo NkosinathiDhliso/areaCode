@@ -16,8 +16,8 @@
 // surfaces `truncated: true` so callers can warn that the estimate is bounded.
 // ============================================================================
 
+import { getTier } from '@area-code/shared/constants/tier-levels'
 import { getCheckInsByNode } from '../check-in/dynamodb-repository.js'
-import { getTierForCount } from '../check-in/repository.js'
 import type { Segment } from './types.js'
 
 /** Input to the segment resolver. */
@@ -57,8 +57,8 @@ const PAGE_SIZE = 100
 
 /**
  * Loyalty tiers that count as `regular` or higher (Requirement 3.2). Derived by
- * reusing the platform's existing tier computation (`getTierForCount`) rather
- * than re-deriving thresholds here.
+ * reusing the platform's existing tier computation (`getTier`) rather than
+ * re-deriving thresholds here.
  */
 const REGULAR_OR_HIGHER = new Set(['regular', 'fixture', 'institution', 'legend'])
 
@@ -144,7 +144,7 @@ export async function resolveSegmentWithMeta(input: SegmentInput): Promise<Segme
       case 'regulars':
         // Tier at the business (derived from per-business check-in count) is
         // `regular` or higher.
-        include = REGULAR_OR_HIGHER.has(getTierForCount(count))
+        include = REGULAR_OR_HIGHER.has(getTier(count))
         break
       case 'all_past_visitors':
         // Any past check-in qualifies.

@@ -5,10 +5,12 @@ import { api } from '@area-code/shared/lib/api'
 import { getSocket } from '@area-code/shared/lib/socket'
 import { useSocketRoom } from '@area-code/shared/hooks/useSocketRoom'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
+import { getTierLabel } from '@area-code/shared/constants/tier-levels'
+import type { Tier } from '@area-code/shared/types'
 
 interface CheckInEntry {
   displayName: string
-  tier: string
+  tier: Tier
   visitCount: number
   timestamp: string
 }
@@ -120,7 +122,7 @@ export function CheckInDetailPanel() {
             <div className="flex flex-col gap-1">
               <span className="text-[var(--text-primary)] font-medium text-sm">{entry.displayName}</span>
               <div className="flex flex-row items-center gap-2">
-                <span className="text-[var(--text-muted)] text-xs capitalize">{entry.tier}</span>
+                <span className="text-[var(--text-muted)] text-xs">{getTierLabel(entry.tier)}</span>
                 <span
                   className="text-xs font-medium px-2 py-0.5 rounded-full"
                   style={{

@@ -1,5 +1,6 @@
 // DynamoDB-backed Check-In Repository (replaces Prisma)
 import { GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+import { getTier } from '@area-code/shared/constants/tier-levels'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import * as dynamo from './dynamodb-repository.js'
 import { updateUser } from '../auth/dynamodb-repository.js'
@@ -58,21 +59,9 @@ export async function insertCheckIn(data: { userId: string; nodeId: string; type
 }
 
 // ─── Tier Recalculation ─────────────────────────────────────────────────────
-
-const TIER_THRESHOLDS = [
-  { min: 500, tier: 'legend' },
-  { min: 150, tier: 'institution' },
-  { min: 50, tier: 'fixture' },
-  { min: 10, tier: 'regular' },
-  { min: 0, tier: 'local' },
-] as const
-
-export function getTierForCount(count: number): string {
-  for (const t of TIER_THRESHOLDS) {
-    if (count >= t.min) return t.tier
-  }
-  return 'local'
-}
+// Tier computation lives in exactly one place: the shared `getTier`
+// (`@area-code/shared/constants/tier-levels`). The never-demote guard below
+// only ever moves a tier up, never down.
 
 export async function incrementTotalCheckIns(userId: string) {
   const result = await documentClient.send(
@@ -87,7 +76,7 @@ export async function incrementTotalCheckIns(userId: string) {
   const totalCheckIns = (result.Attributes?.['totalCheckIns'] as number) ?? 0
   const currentTier = (result.Attributes?.['tier'] as string) ?? 'local'
 
-  const newTier = getTierForCount(totalCheckIns)
+  const newTier = getTier(totalCheckIns)
   if (newTier !== currentTier) {
     await updateUser(userId, { tier: newTier })
   }

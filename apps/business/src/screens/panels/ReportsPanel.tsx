@@ -20,6 +20,8 @@ import {
 
 import { api } from '@area-code/shared/lib/api'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
+import { getTierLabel } from '@area-code/shared/constants/tier-levels'
+import type { Tier } from '@area-code/shared/types'
 
 /* ------------------------------------------------------------------ */
 /*  Types matching backend Report / TeaserReport                      */
@@ -208,7 +210,7 @@ function PeakHoursChart({ data }: { data: PeakHoursResult }) {
 function CrowdCompositionChart({ data }: { data: CrowdCompositionResult }) {
   const chartData = useMemo(() => {
     return Object.entries(data.tierPercentages).map(([tier, pct]) => ({
-      name: tier.charAt(0).toUpperCase() + tier.slice(1),
+      name: getTierLabel(tier as Tier),
       value: Math.round(pct * 10) / 10,
     }))
   }, [data.tierPercentages])

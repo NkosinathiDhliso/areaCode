@@ -1,9 +1,13 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft } from 'lucide-react'
 
 import { api } from '@area-code/shared/lib/api'
+import { haptic } from '@area-code/shared/lib/haptics'
+import { createRapidTapDetector, TROPHY_TAP_GAP_MS, type RapidTapDetector } from '@area-code/shared/lib/rapidTap'
+import { isOnline } from '@area-code/shared/lib/platform'
+import { isSocketConnected } from '@area-code/shared/lib/socket'
 import { useErrorStore } from '@area-code/shared/stores/errorStore'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useTheme } from '@area-code/shared/hooks/useTheme'
@@ -14,8 +18,40 @@ import { Spinner } from '@area-code/shared/components/Spinner'
 import type { PrivacyLevel } from '@area-code/shared/types'
 import type { AppRoute } from '../types'
 
+/** Number of fast taps on the version row that toggles the diagnostics card. */
+const DIAGNOSTICS_TAP_COUNT = 7
+
 interface SettingsScreenProps {
   onNavigate: (route: AppRoute) => void
+}
+
+/**
+ * Diagnostics rapid-tap trigger (Hidden_Delight HD-3, Requirement 7). Reuses
+ * the one shared `createRapidTapDetector` (no second detector) with a 7-tap
+ * threshold and the shared `TROPHY_TAP_GAP_MS` gap. A fired burst toggles the
+ * inline diagnostics card: opening it when closed, closing it when open
+ * (Requirement 7.1). Single, double, or slow taps do nothing but the row's own
+ * pressed feedback.
+ *
+ * The detector is pure and has no timers, so it is created once in a ref with
+ * nothing to clean up. There is no hint copy anywhere: discovery is
+ * word-of-mouth (Requirement 7.3, same secrecy contract as Requirement 6).
+ */
+function useDiagnosticsTap() {
+  const [open, setOpen] = useState(false)
+  const detectorRef = useRef<RapidTapDetector | null>(null)
+  if (detectorRef.current === null) {
+    detectorRef.current = createRapidTapDetector({ taps: DIAGNOSTICS_TAP_COUNT, gapMs: TROPHY_TAP_GAP_MS })
+  }
+
+  const onPointerDown = useCallback(() => {
+    if (detectorRef.current?.tap()) {
+      haptic(10)
+      setOpen((prev) => !prev)
+    }
+  }, [])
+
+  return { open, onPointerDown }
 }
 
 export function SettingsScreen({ onNavigate }: SettingsScreenProps) {
@@ -23,6 +59,7 @@ export function SettingsScreen({ onNavigate }: SettingsScreenProps) {
   const logout = useConsumerAuthStore((s) => s.logout)
   const { preference, setPreference } = useTheme()
   const { updating, updateApp } = useAppUpdate()
+  const { open: showDiagnostics, onPointerDown: onVersionRowPointerDown } = useDiagnosticsTap()
   const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false)
   const [deletingAccount, setDeletingAccount] = useState(false)
 
@@ -143,6 +180,14 @@ export function SettingsScreen({ onNavigate }: SettingsScreenProps) {
           {t('profile.updateHint', 'Reloads the app with the latest version.')}
         </p>
       </div>
+      <button
+        onPointerDown={onVersionRowPointerDown}
+        className="w-full flex flex-row items-center justify-between bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3 mb-3 min-h-11 transition-all active:scale-[0.98]"
+      >
+        <span className="text-[var(--text-primary)] text-sm font-medium">{t('profile.version', 'Version')}</span>
+        <span className="text-[var(--text-muted)] text-sm tabular-nums">{__APP_VERSION__}</span>
+      </button>
+      {showDiagnostics && <DiagnosticsCard />}
 
       {/* Account */}
       <SectionHeading label={t('settings.section.account', 'Account')} className="mt-3" />
@@ -206,6 +251,43 @@ export function SettingsScreen({ onNavigate }: SettingsScreenProps) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * Inline diagnostics readout (Hidden_Delight HD-3, Requirement 7.1). Shows only
+ * app version/build, environment name, online state, and websocket connected
+ * state: booleans and names, never secrets, env var values, or URLs. Online and
+ * socket state are live values, refreshed on a short interval while the card is
+ * mounted (it only mounts while open), and the interval is cleared on unmount.
+ */
+function DiagnosticsCard() {
+  const [state, setState] = useState(() => ({ online: isOnline(), socket: isSocketConnected() }))
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setState({ online: isOnline(), socket: isSocketConnected() })
+    }, 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  return (
+    <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 mb-3" aria-hidden>
+      <DiagnosticsRow label="Version" value={__APP_VERSION__} />
+      <DiagnosticsRow label="Build" value={__BUILD_TIME__} />
+      <DiagnosticsRow label="Env" value={import.meta.env.MODE} />
+      <DiagnosticsRow label="Online" value={state.online ? 'yes' : 'no'} />
+      <DiagnosticsRow label="Socket" value={state.socket ? 'connected' : 'disconnected'} />
+    </div>
+  )
+}
+
+function DiagnosticsRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-row items-center justify-between py-1">
+      <span className="text-[var(--text-muted)] text-xs">{label}</span>
+      <span className="text-[var(--text-secondary)] text-xs tabular-nums">{value}</span>
     </div>
   )
 }

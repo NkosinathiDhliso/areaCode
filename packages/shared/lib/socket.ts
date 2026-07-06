@@ -7,4 +7,5 @@ export {
   getWebSocket,
   disconnectWebSocket,
   setWebSocketUrl,
+  isSocketConnected,
 } from './websocket'

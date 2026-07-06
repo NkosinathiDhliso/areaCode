@@ -1,3 +1,4 @@
+import { getTierLabel } from '@area-code/shared/constants/tier-levels'
 import type { Tier } from '@area-code/shared/types'
 import { View, Text, StyleSheet } from 'react-native'
 
@@ -6,14 +7,6 @@ import { colors } from '../theme'
 interface NativeTierBadgeProps {
   tier: Tier
   compact?: boolean
-}
-
-const TIER_LABELS: Record<Tier, string> = {
-  local: 'Local',
-  regular: 'Regular',
-  fixture: 'Fixture',
-  institution: 'Institution',
-  legend: 'Legend',
 }
 
 const TIER_COLORS: Record<Tier, string> = {
@@ -33,7 +26,7 @@ export function NativeTierBadge({ tier, compact }: NativeTierBadgeProps) {
 
   return (
     <View style={[styles.badge, { backgroundColor: `${color}20` }]}>
-      <Text style={[styles.text, { color }]}>{TIER_LABELS[tier]}</Text>
+      <Text style={[styles.text, { color }]}>{getTierLabel(tier)}</Text>
     </View>
   )
 }

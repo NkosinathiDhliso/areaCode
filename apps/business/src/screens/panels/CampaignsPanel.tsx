@@ -1,5 +1,6 @@
 import { api, type ApiError } from '@area-code/shared/lib/api'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
+import { getTierLabel } from '@area-code/shared/constants/tier-levels'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -55,7 +56,10 @@ interface RewardItem {
 const SEGMENTS: { value: Segment; label: string; hint: string }[] = [
   { value: 'lapsed', label: 'Lapsed visitors', hint: 'Visited before but not recently' },
   { value: 'first_timers', label: 'First-timers', hint: 'Checked in exactly once' },
-  { value: 'regulars', label: 'Regulars', hint: 'Your loyal crowd' },
+  // The `regulars` segment resolves to the `regular` rank or higher, so its
+  // label tracks the one rank-label source (getTierLabel) and never shows a
+  // retired rank name.
+  { value: 'regulars', label: `${getTierLabel('regular')}s`, hint: 'Your loyal crowd' },
   { value: 'all_past_visitors', label: 'All past visitors', hint: 'Everyone who has checked in' },
 ]
 

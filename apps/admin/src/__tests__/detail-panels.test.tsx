@@ -61,7 +61,7 @@ describe('ConsumerDetailPanel surfaces the three user reads (R4.1)', () => {
           userId: 'u-1',
           username: 'Thandi',
           email: 'thandi@example.com',
-          tier: 'gold',
+          tier: 'regular',
           totalCheckIns: 12,
           cityId: 'jhb',
           createdAt: '2024-01-01T00:00:00.000Z',

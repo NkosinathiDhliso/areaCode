@@ -1,9 +1,10 @@
 import { useEffect } from 'react'
 
+import { getTierLabel } from '../constants/tier-levels'
 import { getSocket } from '../lib/socket'
 import { useNotificationStore } from '../stores/notificationStore'
 import { useToastStore } from '../stores/toastStore'
-import type { Toast } from '../types'
+import type { Tier, Toast } from '../types'
 
 /**
  * Subscribes to user-targeted notification events:
@@ -51,11 +52,12 @@ export function useNotificationSocket(token?: string) {
 
     const onTierChanged = (payload: { oldTier: string; newTier: string; benefits?: string[] }) => {
       const createdAt = new Date().toISOString()
+      const label = getTierLabel(payload.newTier as Tier)
       prepend({
         notifId: `tier-${payload.newTier}-${Date.now()}`,
         type: 'tier_change',
-        title: 'Tier upgrade!',
-        body: `You've reached ${payload.newTier} tier.`,
+        title: 'Rank up',
+        body: `You've reached ${label}.`,
         data: { oldTier: payload.oldTier, newTier: payload.newTier, benefits: payload.benefits ?? [] },
         isRead: false,
         createdAt,
@@ -63,7 +65,7 @@ export function useNotificationSocket(token?: string) {
       const toast: Toast = {
         id: `tier-${Date.now()}`,
         type: 'streak',
-        message: `You've reached ${payload.newTier} tier!`,
+        message: `You've reached ${label}.`,
         priority: 5,
         timestamp: Date.now(),
       }

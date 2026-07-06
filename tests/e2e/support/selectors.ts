@@ -29,7 +29,7 @@ export const consumer = {
   tierBadge: (page: Page) =>
     page
       .getByTestId('tier-badge')
-      .or(page.getByText(/explorer|regular|local|insider/i))
+      .or(page.getByText(/local|insider|patron|icon|legend/i))
       .first(),
   profileLink: (page: Page) =>
     page

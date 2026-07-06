@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto'
+import { getTierLabel } from '@area-code/shared/constants/tier-levels'
 import { AppError } from '../../shared/errors/AppError.js'
 import { AWS_REGION, DEV_MODE } from '../../shared/config/env.js'
 import { kvGet, kvSet, kvIncr, kvTtl } from '../../shared/kv/dynamodb-kv.js'
@@ -243,8 +244,8 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
       await sendNotification({
         userId,
         type: 'tier_change',
-        title: 'Tier Upgrade!',
-        body: `Congratulations! You've reached ${newTier} tier.`,
+        title: 'Tier Upgrade',
+        body: `You've reached ${getTierLabel(newTier)} tier.`,
         data: { oldTier, newTier, benefits: TIER_BENEFITS[newTier] ?? [] },
         skipPreferenceCheck: true,
       })

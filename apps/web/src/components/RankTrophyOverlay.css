@@ -1,0 +1,322 @@
+/**
+ * Trophy_Tap choreography (colocated with RankTrophyOverlay.tsx).
+ *
+ * Every keyframe animates `transform` / `opacity` only (compositor-only, no
+ * layout thrash), per Requirement 5.2. All colour comes from the `--tier-*`
+ * tokens applied inline by the component; nothing here hardcodes a colour.
+ *
+ * Convention: the app's shared keyframes live in `packages/shared/tokens.css`
+ * (shimmer, popIn, ripple, ...). These are consumer-web-only decorative frames
+ * for one feature, so per design D6 they colocate here instead of bloating the
+ * shared token sheet, while keeping the component itself under the size limit.
+ *
+ * Per-node placement (angle, index, jitter) is passed in as CSS custom
+ * properties (`--angle`, `--i`, `--dx`) set inline in the TSX so one class can
+ * drive N particles.
+ */
+
+/* Root layer. Fixed full-screen; z-index and safe-area padding are applied
+   inline by the component so they can reference env() and stay above BottomNav. */
+.trophy-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Opaque-ish backdrop over the profile screen. Colour is the app background
+   token; opacity gives the ~92% wash design D6 calls for. */
+.trophy-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-base);
+  opacity: 0.92;
+}
+
+/* Centered stage that holds the badge, label, and every effect layer. */
+.trophy-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+}
+
+/* The badge itself: spring pop from small to full size. */
+.trophy-badge {
+  animation: trophyPop 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: center;
+}
+
+/* Rank label under the badge; fades and lifts into place just after the pop. */
+.trophy-label {
+  animation: trophyLabelIn 520ms cubic-bezier(0.22, 1, 0.36, 1) 180ms both;
+}
+
+/* Layers that overlay the badge are centered and non-interactive. */
+.trophy-fx {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  pointer-events: none;
+}
+
+/* ── Glow pulse (Patron+) ─────────────────────────────────────────────── */
+.trophy-glow {
+  width: 220px;
+  height: 220px;
+  margin: -110px 0 0 -110px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, var(--trophy-color) 0%, transparent 68%);
+  opacity: 0.5;
+  animation: trophyGlow 1600ms ease-in-out infinite;
+}
+
+/* ── Ring ripples (Local, Icon) ───────────────────────────────────────── */
+.trophy-ripple {
+  width: 140px;
+  height: 140px;
+  margin: -70px 0 0 -70px;
+  border-radius: 9999px;
+  border: 2px solid var(--trophy-color);
+  opacity: 0.6;
+  animation: trophyRipple 1400ms ease-out forwards;
+  animation-delay: calc(var(--i) * 260ms);
+}
+
+/* ── Radial spark burst (Insider, Patron) ─────────────────────────────── */
+.trophy-spark {
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 9999px;
+  background: var(--trophy-color);
+  animation: trophySpark 900ms ease-out forwards;
+}
+
+/* ── Orbiting sparks (Patron) ─────────────────────────────────────────── */
+/* The orbit ring rotates; the dot is offset from center so it circles. */
+.trophy-orbit {
+  width: 0;
+  height: 0;
+  animation: trophyOrbit 2600ms linear infinite;
+  animation-delay: calc(var(--i) * -866ms);
+}
+.trophy-orbit > span {
+  display: block;
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+  background: var(--trophy-color);
+  transform: translateX(58px);
+}
+
+/* ── Light rays (Icon, Legend) ────────────────────────────────────────── */
+.trophy-ray {
+  width: 4px;
+  height: 120px;
+  margin: -120px 0 0 -2px;
+  transform-origin: bottom center;
+  background: linear-gradient(to top, var(--trophy-color), transparent);
+  opacity: 0;
+  animation: trophyRay 1600ms ease-out forwards;
+  animation-delay: calc(var(--i) * 60ms);
+}
+
+/* ── Rising particle fountain (Icon) ──────────────────────────────────── */
+.trophy-fountain {
+  width: 7px;
+  height: 7px;
+  margin: -3px 0 0 -3px;
+  border-radius: 9999px;
+  background: var(--trophy-color);
+  opacity: 0;
+  animation: trophyFountain 1500ms ease-out forwards;
+  animation-delay: calc(var(--i) * 90ms);
+}
+
+/* ── Starfield burst (Legend) ─────────────────────────────────────────── */
+.trophy-star {
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 9999px;
+  background: var(--trophy-color);
+  animation: trophyStar 1800ms ease-out forwards;
+  animation-delay: calc(var(--i) * 24ms);
+}
+
+/* ── Shimmer sweep (Legend) ───────────────────────────────────────────── */
+/* Diagonal light band that translates across the badge. Transform-only (not
+   background-position) to honour the compositor-only rule (Requirement 5.2),
+   while reusing the visual language of the shared `.animate-shimmer`. */
+.trophy-shimmer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 9999px;
+  pointer-events: none;
+}
+.trophy-shimmer::before {
+  content: '';
+  position: absolute;
+  top: -25%;
+  left: -60%;
+  width: 40%;
+  height: 150%;
+  background: linear-gradient(115deg, transparent, var(--trophy-color), transparent);
+  opacity: 0.75;
+  transform: translateX(-120%) rotate(8deg);
+  animation: trophyShimmer 2200ms ease-in-out infinite;
+}
+
+/* ── Reduced-motion variant (Requirement 5.5) ─────────────────────────── */
+/* Distinct accessibility path (not a fallback): the badge and label share one
+   flat fade in / hold / fade out and nothing else renders (no particles, rays,
+   or shimmer). Opacity only, no transform, so it is genuinely static. The
+   duration comes from `--trophy-fade-ms` (set inline from
+   TROPHY_REDUCED_MOTION_DURATION_MS) so the CSS stays in sync with the
+   auto-dismiss timer. */
+.trophy-badge-static,
+.trophy-label-static {
+  animation: trophyFade var(--trophy-fade-ms) ease-in-out both;
+}
+
+/* Fade in over the first ~300ms, hold, fade out over the last ~300ms. The 15%
+   and 85% stops map to 300ms in / 300ms out at the 2000ms design duration. */
+@keyframes trophyFade {
+  0% {
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ── Keyframes (transform / opacity only) ─────────────────────────────── */
+@keyframes trophyPop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes trophyLabelIn {
+  0% {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes trophyGlow {
+  0%,
+  100% {
+    transform: scale(0.9);
+    opacity: 0.35;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.6;
+  }
+}
+
+@keyframes trophyRipple {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@keyframes trophySpark {
+  0% {
+    transform: rotate(var(--angle)) translateY(0) scale(0.2);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--angle)) translateY(-96px) scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes trophyOrbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes trophyRay {
+  0% {
+    transform: rotate(var(--angle)) scaleY(0);
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: rotate(var(--angle)) scaleY(1);
+    opacity: 0;
+  }
+}
+
+@keyframes trophyFountain {
+  0% {
+    transform: translate(0, 0) scale(0.4);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), -128px) scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes trophyStar {
+  0% {
+    transform: rotate(var(--angle)) translateY(0) scale(0.2);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--angle)) translateY(-150px) scale(1.1);
+    opacity: 0;
+  }
+}
+
+@keyframes trophyShimmer {
+  0% {
+    transform: translateX(-120%) rotate(8deg);
+  }
+  60%,
+  100% {
+    transform: translateX(360%) rotate(8deg);
+  }
+}

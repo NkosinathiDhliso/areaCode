@@ -400,6 +400,17 @@ export function disconnectWebSocket(): void {
   wsManager = null
 }
 
+/**
+ * Read-only connection state of the current socket singleton. Pure getter with
+ * no side effects: it never creates a manager, opens a socket, or reconnects,
+ * so callers that only want to observe state (e.g. a diagnostics readout) can
+ * ask without disturbing the live connection. Returns false when no socket has
+ * been created or the URL is disabled.
+ */
+export function isSocketConnected(): boolean {
+  return wsManager?.connected ?? false
+}
+
 // Compatibility layer for existing code
 export function getSocket(
   token?: string,

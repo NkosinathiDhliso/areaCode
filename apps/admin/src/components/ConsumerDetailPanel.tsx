@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import { api } from '@area-code/shared/lib/api'
 import type { Tier, User } from '@area-code/shared/types'
+import { getTierLabel } from '@area-code/shared/constants/tier-levels'
 
 interface ConsentRow {
   consentVersion?: string
@@ -108,7 +109,7 @@ function Profile({ detail }: { detail: UserDetail }) {
 }
 
 function TierLabel({ tier }: { tier: Tier }) {
-  return <span className="capitalize">{tier}</span>
+  return <span>{getTierLabel(tier)}</span>
 }
 
 function CheckInHistory({ items }: { items: CheckInHistoryItem[] }) {

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@area-code/shared/lib/api'
-import type { AudienceAnalytics } from '@area-code/shared/types'
+import type { AudienceAnalytics, Tier } from '@area-code/shared/types'
+import { getTierLabel } from '@area-code/shared/constants/tier-levels'
 import { MusicInsightsSection } from '../../components/MusicInsightsSection'
 
 export function AudiencePanel() {
@@ -60,7 +61,7 @@ export function AudiencePanel() {
         {data.tierDistribution ? (
           Object.entries(data.tierDistribution).map(([tier, count]) => (
             <div key={tier} className="flex flex-row items-center justify-between py-1">
-              <span className="text-[var(--text-primary)] text-sm capitalize">{tier}</span>
+              <span className="text-[var(--text-primary)] text-sm">{getTierLabel(tier as Tier)}</span>
               <span className="text-[var(--text-muted)] text-sm">{count}</span>
             </div>
           ))
