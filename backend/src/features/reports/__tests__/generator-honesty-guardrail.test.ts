@@ -222,7 +222,7 @@ beforeEach(() => {
 
 function generatedReport(): Report {
   expect(h.storeReportMock).toHaveBeenCalledTimes(1)
-  return h.storeReportMock.mock.calls[0]![0] as Report
+  return (h.storeReportMock.mock.calls[0] as unknown as [Report])[0]
 }
 
 // ─── Behavioral assertions ────────────────────────────────────────────────────

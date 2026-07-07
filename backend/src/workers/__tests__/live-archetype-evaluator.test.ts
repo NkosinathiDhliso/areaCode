@@ -502,9 +502,9 @@ describe('e2e lifecycle: cold-start → fill → empty (R1.1, R2.1, R2.4, R3.1, 
   /** Grab the single emitted `node:archetype_change` payload from the stub. */
   function lastEmittedPayload(): Record<string, unknown> {
     expect(mocks.emitMock).toHaveBeenCalledTimes(1)
-    const call = mocks.emitMock.mock.calls[0]!
+    const call = mocks.emitMock.mock.calls[0] as unknown as [string, Record<string, unknown>]
     expect(call[0]).toBe(CITY_SLUG)
-    return call[1] as Record<string, unknown>
+    return call[1]
   }
 
   it('drives the evaluator through declared_promise → crowd_live → (grace) crowd_live → declared_promise', async () => {
