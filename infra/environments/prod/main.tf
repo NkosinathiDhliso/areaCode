@@ -412,6 +412,33 @@ resource "aws_dynamodb_table" "users" {
     type = "S"
   }
 
+  # People search (add-a-friend). Sparse, char-bucketed prefix indexes: the app
+  # writes usernameLower/displayNameLower plus a single-char bucket key derived
+  # from the first character. Search runs `<field>Char = q[0] AND
+  # begins_with(<field>Lower, q)`, replacing the full-table Scan. The char
+  # bucket spreads writes/reads across ~36 partitions instead of one hot key.
+  # Sparse: identity lock rows (EMAIL#/SUB#) carry none of these attributes and
+  # never appear here.
+  attribute {
+    name = "usernameChar"
+    type = "S"
+  }
+
+  attribute {
+    name = "usernameLower"
+    type = "S"
+  }
+
+  attribute {
+    name = "displayNameChar"
+    type = "S"
+  }
+
+  attribute {
+    name = "displayNameLower"
+    type = "S"
+  }
+
   global_secondary_index {
     name            = "EmailIndex"
     hash_key        = "email"
@@ -421,6 +448,20 @@ resource "aws_dynamodb_table" "users" {
   global_secondary_index {
     name            = "CognitoIndex"
     hash_key        = "cognitoSub"
+    projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "UsernameSearchIndex"
+    hash_key        = "usernameChar"
+    range_key       = "usernameLower"
+    projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "DisplayNameSearchIndex"
+    hash_key        = "displayNameChar"
+    range_key       = "displayNameLower"
     projection_type = "ALL"
   }
 

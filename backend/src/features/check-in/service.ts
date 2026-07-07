@@ -14,7 +14,7 @@ import {
 } from '../../shared/socket/events.js'
 import { getMutualFollowIds, getFollowingIds } from '../social/repository.js'
 import { getUserById } from '../auth/repository.js'
-import { canEmitIdentity, sanitizeForBusiness } from '../../shared/privacy/privacy-guard.js'
+import { canEmitIdentity, canEmitToFriends, sanitizeForBusiness } from '../../shared/privacy/privacy-guard.js'
 import { runAbuseChecks } from './abuse.js'
 import * as repo from './repository.js'
 import { createOrRefreshPresence, getLivePresenceCount, recordPresenceSample } from '../presence/repository.js'
@@ -361,7 +361,7 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
       // Emit personalised friend toasts to each mutual follow's user room
       // Only emit if the user's privacy allows identity sharing
       try {
-        const canEmit = await canEmitIdentity(userId)
+        const canEmit = await canEmitToFriends(userId)
         if (canEmit) {
           const followingIds = await getFollowingIds(userId)
           const friendIds = await getMutualFollowIds(userId, followingIds)

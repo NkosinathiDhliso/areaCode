@@ -14,6 +14,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook } from '@testing-library/react'
 
 import { useMapStore } from '@area-code/shared/stores/mapStore'
+import { useToastStore } from '@area-code/shared/stores/toastStore'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { setSocketOverride } from '@area-code/shared/lib/websocket'
 
@@ -65,6 +66,7 @@ function makeMockSocket(): MockSocket {
 beforeEach(() => {
   vi.clearAllMocks()
   useMapStore.setState({ friendsAtVenue: {} })
+  useToastStore.setState({ queue: [], isBottomSheetOpen: false, checkInToastSeenAt: {} })
   useConsumerAuthStore.setState({
     isAuthenticated: false,
     accessToken: null,
@@ -122,6 +124,30 @@ describe('useFriendsPresence', () => {
     })
 
     expect(useMapStore.getState().friendsAtVenue['venue-1']).toEqual(['u-alice'])
+  })
+
+  it('surfaces a visible belonging toast on toast:friend_checkin (not just ranking)', () => {
+    const socket = makeMockSocket()
+    setSocketOverride(socket)
+    useConsumerAuthStore.setState({ isAuthenticated: true, accessToken: 'tok' })
+    mockApiGet.mockResolvedValueOnce({ items: [] })
+
+    renderHook(() => useFriendsPresence('tok'))
+
+    socket.__fire('toast:friend_checkin', {
+      type: 'checkin',
+      message: 'Alice just checked in at Kitchener\u2019s',
+      userId: 'u-alice',
+      nodeId: 'venue-1',
+      avatarUrl: 'https://example.com/avatar.jpg',
+    })
+
+    const queue = useToastStore.getState().queue
+    const toast = queue.find((entry) => entry.nodeId === 'venue-1')
+    expect(toast).toBeDefined()
+    expect(toast?.type).toBe('friend_checkin')
+    expect(toast?.message).toBe('Alice just checked in at Kitchener\u2019s')
+    expect(toast?.avatarUrl).toBe('https://example.com/avatar.jpg')
   })
 
   it('removes friend presence on friend:checkout event (R3.4)', () => {

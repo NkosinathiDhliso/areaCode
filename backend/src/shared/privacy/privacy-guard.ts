@@ -166,6 +166,33 @@ export async function canEmitIdentity(userId: string): Promise<boolean> {
 }
 
 /**
+ * Check whether identity data may be emitted to the user's MUTUAL FRIENDS only
+ * (never to strangers). Distinct from `canEmitIdentity`, which gates city-wide
+ * (stranger-visible) emission and is intentionally `public`-only.
+ *
+ * Friend-directed events (`toast:friend_checkin`, `friend:checkout`, the
+ * friend-checkin push) fan out solely to the user's mutual follows, so both
+ * `public` AND the default `friends_only` must be allowed — sharing presence
+ * with friends is exactly what `friends_only` means. Only `private` suppresses
+ * it. Fail closed on any error.
+ *
+ * Without this, default (`friends_only`) users — the majority — would silently
+ * emit nothing to their friends, so the belonging signal never lands.
+ */
+export async function canEmitToFriends(userId: string): Promise<boolean> {
+  try {
+    if (_getUserById) {
+      const user = await _getUserById(userId)
+      const level = (user?.privacyLevel as PrivacyLevel) ?? DEFAULT_PRIVACY_LEVEL
+      return level !== 'private'
+    }
+  } catch {
+    // Fail closed
+  }
+  return false
+}
+
+/**
  * Sanitize a business check-in event payload.
  * Business owners see display name and tier ONLY — never phone, email,
  * userId, cognitoSub, lat, lng, or any tracking-enabling data.

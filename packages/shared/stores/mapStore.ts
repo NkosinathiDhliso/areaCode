@@ -100,6 +100,13 @@ interface MapStore {
   addFriendPresence: (nodeId: string, userId: string) => void
   /** Remove a single friend from a venue's presence list. */
   removeFriendPresence: (nodeId: string, userId: string) => void
+  /**
+   * Remove a user from EVERY venue's presence list. Used when the viewer blocks
+   * someone: the follow edges are severed server-side, but the local taste-match
+   * store must drop them immediately rather than waiting for the next session
+   * seed, or a just-blocked user keeps boosting venues until reload.
+   */
+  removeFriendPresenceEverywhere: (userId: string) => void
   /** Reset friends presence to empty. Called on logout (R3.3). */
   clearFriendsPresence: () => void
   /** Bulk-set the hasLiveGets map from `deriveHasLiveGets` output. */
@@ -194,6 +201,16 @@ export const useMapStore = create<MapStore>()(
         // Clean up empty arrays to keep the store lean
         if (arr.length === 0) {
           delete state.friendsAtVenue[nodeId]
+        }
+      }),
+    removeFriendPresenceEverywhere: (userId) =>
+      set((state) => {
+        for (const nodeId of Object.keys(state.friendsAtVenue)) {
+          const arr = state.friendsAtVenue[nodeId]
+          if (!arr) continue
+          const idx = arr.indexOf(userId)
+          if (idx !== -1) arr.splice(idx, 1)
+          if (arr.length === 0) delete state.friendsAtVenue[nodeId]
         }
       }),
     clearFriendsPresence: () =>

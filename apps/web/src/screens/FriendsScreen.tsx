@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { createContext, useContext, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@area-code/shared/lib/api'
@@ -7,8 +7,45 @@ import { Avatar } from '@area-code/shared/components/Avatar'
 import { TierBadge } from '@area-code/shared/components/TierBadge'
 import { Skeleton } from '@area-code/shared/components/Skeleton'
 import type { Tier } from '@area-code/shared/types'
+import { UserActionsMenu } from '../components/UserActionsMenu'
+import { UserProfileSheet } from '../components/UserProfileSheet'
 
 type Tab = 'friends' | 'following' | 'followers' | 'search'
+
+// Lets any row open a user's profile sheet without threading a callback through
+// every tab component.
+const OpenProfileContext = createContext<(userId: string) => void>(() => {})
+const useOpenProfile = () => useContext(OpenProfileContext)
+
+/** Tappable avatar + name region that opens the target user's profile sheet. */
+function IdentityButton({
+  userId,
+  displayName,
+  username,
+  avatarUrl,
+  tier,
+}: {
+  userId: string
+  displayName: string
+  username: string
+  avatarUrl: string | null
+  tier: Tier
+}) {
+  const openProfile = useOpenProfile()
+  return (
+    <button
+      type="button"
+      onClick={() => openProfile(userId)}
+      className="flex flex-row items-center gap-3 flex-1 min-w-0 text-left transition-all active:scale-[0.98]"
+    >
+      <Avatar url={avatarUrl} displayName={displayName} size="sm" tier={tier} />
+      <div className="flex-1 min-w-0">
+        <p className="text-[var(--text-primary)] text-sm font-medium truncate">{displayName}</p>
+        <p className="text-[var(--text-muted)] text-xs truncate">@{username}</p>
+      </div>
+    </button>
+  )
+}
 
 interface FriendEntry {
   userId: string
@@ -36,35 +73,40 @@ export function FriendsScreen() {
   const { t } = useTranslation()
   const [tab, setTab] = useState<Tab>('friends')
   const [search, setSearch] = useState('')
+  const [profileUserId, setProfileUserId] = useState<string | null>(null)
 
   return (
-    <div
-      className="flex flex-col h-full overflow-y-auto px-5 pb-4"
-      style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }}
-      data-scroll-container
-    >
-      <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-4">{t('friends.title')}</h1>
+    <OpenProfileContext.Provider value={setProfileUserId}>
+      <div
+        className="flex flex-col h-full overflow-y-auto px-5 pb-4"
+        style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }}
+        data-scroll-container
+      >
+        <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] mb-4">{t('friends.title')}</h1>
 
-      {/* Tab bar */}
-      <div className="flex flex-row gap-1 mb-4 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-1">
-        {(['friends', 'following', 'followers', 'search'] as Tab[]).map((tabKey) => (
-          <button
-            key={tabKey}
-            onClick={() => setTab(tabKey)}
-            className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all duration-150 ${
-              tab === tabKey ? 'gradient-accent text-white' : 'text-[var(--text-secondary)]'
-            }`}
-          >
-            {tabKey === 'search' ? 'Search' : tabKey.charAt(0).toUpperCase() + tabKey.slice(1)}
-          </button>
-        ))}
+        {/* Tab bar */}
+        <div className="flex flex-row gap-1 mb-4 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-1">
+          {(['friends', 'following', 'followers', 'search'] as Tab[]).map((tabKey) => (
+            <button
+              key={tabKey}
+              onClick={() => setTab(tabKey)}
+              className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all duration-150 ${
+                tab === tabKey ? 'gradient-accent text-white' : 'text-[var(--text-secondary)]'
+              }`}
+            >
+              {tabKey === 'search' ? 'Search' : tabKey.charAt(0).toUpperCase() + tabKey.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'friends' && <FriendsTab onFindPeople={() => setTab('search')} />}
+        {tab === 'following' && <FollowingTab onFindPeople={() => setTab('search')} />}
+        {tab === 'followers' && <FollowersTab onFindPeople={() => setTab('search')} />}
+        {tab === 'search' && <SearchTab search={search} setSearch={setSearch} />}
+
+        {profileUserId && <UserProfileSheet userId={profileUserId} onClose={() => setProfileUserId(null)} />}
       </div>
-
-      {tab === 'friends' && <FriendsTab onFindPeople={() => setTab('search')} />}
-      {tab === 'following' && <FollowingTab onFindPeople={() => setTab('search')} />}
-      {tab === 'followers' && <FollowersTab onFindPeople={() => setTab('search')} />}
-      {tab === 'search' && <SearchTab search={search} setSearch={setSearch} />}
-    </div>
+    </OpenProfileContext.Provider>
   )
 }
 
@@ -142,11 +184,13 @@ function FollowingTab({ onFindPeople }: { onFindPeople: () => void }) {
           key={u.userId}
           className="flex flex-row items-center gap-3 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3"
         >
-          <Avatar url={u.avatarUrl} displayName={u.displayName} size="sm" tier={u.tier} />
-          <div className="flex-1 min-w-0">
-            <p className="text-[var(--text-primary)] text-sm font-medium truncate">{u.displayName}</p>
-            <p className="text-[var(--text-muted)] text-xs truncate">@{u.username}</p>
-          </div>
+          <IdentityButton
+            userId={u.userId}
+            displayName={u.displayName}
+            username={u.username}
+            avatarUrl={u.avatarUrl}
+            tier={u.tier}
+          />
           {u.isMutual && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--success)]/10 text-[var(--success)]">
               {t('friends.mutual')}
@@ -159,6 +203,7 @@ function FollowingTab({ onFindPeople }: { onFindPeople: () => void }) {
           >
             {t('friends.unfollow')}
           </button>
+          <UserActionsMenu targetUserId={u.userId} targetName={u.displayName || u.username} />
         </div>
       ))}
     </div>
@@ -208,11 +253,13 @@ function FollowersTab({ onFindPeople }: { onFindPeople: () => void }) {
           key={u.userId}
           className="flex flex-row items-center gap-3 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3"
         >
-          <Avatar url={u.avatarUrl} displayName={u.displayName} size="sm" tier={u.tier} />
-          <div className="flex-1 min-w-0">
-            <p className="text-[var(--text-primary)] text-sm font-medium truncate">{u.displayName}</p>
-            <p className="text-[var(--text-muted)] text-xs truncate">@{u.username}</p>
-          </div>
+          <IdentityButton
+            userId={u.userId}
+            displayName={u.displayName}
+            username={u.username}
+            avatarUrl={u.avatarUrl}
+            tier={u.tier}
+          />
           {u.isFollowingBack ? (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--success)]/10 text-[var(--success)]">
               {t('friends.mutual')}
@@ -226,6 +273,7 @@ function FollowersTab({ onFindPeople }: { onFindPeople: () => void }) {
               {t('friends.followBack')}
             </button>
           )}
+          <UserActionsMenu targetUserId={u.userId} targetName={u.displayName || u.username} />
         </div>
       ))}
     </div>
@@ -287,11 +335,13 @@ function SearchTab({ search, setSearch }: { search: string; setSearch: (s: strin
               key={u.userId}
               className="flex flex-row items-center gap-3 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3"
             >
-              <Avatar url={u.avatarUrl} displayName={u.displayName} size="sm" tier={u.tier} />
-              <div className="flex-1 min-w-0">
-                <p className="text-[var(--text-primary)] text-sm font-medium truncate">{u.displayName}</p>
-                <p className="text-[var(--text-muted)] text-xs truncate">@{u.username}</p>
-              </div>
+              <IdentityButton
+                userId={u.userId}
+                displayName={u.displayName}
+                username={u.username}
+                avatarUrl={u.avatarUrl}
+                tier={u.tier}
+              />
               <TierBadge tier={u.tier} />
               {u.isMutual ? (
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--success)]/10 text-[var(--success)]">
@@ -314,6 +364,7 @@ function SearchTab({ search, setSearch }: { search: string; setSearch: (s: strin
                   {t('friends.follow')}
                 </button>
               )}
+              <UserActionsMenu targetUserId={u.userId} targetName={u.displayName || u.username} />
             </div>
           ))}
         </div>
@@ -331,11 +382,13 @@ function SearchTab({ search, setSearch }: { search: string; setSearch: (s: strin
 function UserRow({ user, badge, badgeColor }: { user: FriendEntry; badge?: string; badgeColor?: string }) {
   return (
     <div className="flex flex-row items-center gap-3 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl px-4 py-3">
-      <Avatar url={user.avatarUrl} displayName={user.displayName} size="sm" tier={user.tier} />
-      <div className="flex-1 min-w-0">
-        <p className="text-[var(--text-primary)] text-sm font-medium truncate">{user.displayName}</p>
-        <p className="text-[var(--text-muted)] text-xs truncate">@{user.username}</p>
-      </div>
+      <IdentityButton
+        userId={user.userId}
+        displayName={user.displayName}
+        username={user.username}
+        avatarUrl={user.avatarUrl}
+        tier={user.tier}
+      />
       <TierBadge tier={user.tier} />
       {badge && (
         <span
@@ -345,6 +398,7 @@ function UserRow({ user, badge, badgeColor }: { user: FriendEntry; badge?: strin
           {badge}
         </span>
       )}
+      <UserActionsMenu targetUserId={user.userId} targetName={user.displayName || user.username} />
     </div>
   )
 }

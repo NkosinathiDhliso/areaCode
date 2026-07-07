@@ -8,6 +8,7 @@ import {
   checkPrivacy,
   filterByPrivacy,
   canEmitIdentity,
+  canEmitToFriends,
   sanitizeForBusiness,
 } from '../../shared/privacy/privacy-guard.js'
 import type { ReportCategory } from '../../features/social/report-repository.js'
@@ -581,6 +582,52 @@ describe('Property 27: WebSocket privacy enforcement for non-public users', () =
         // canEmitIdentity checks privacyLevel ?? DEFAULT_PRIVACY_LEVEL which is 'friends_only'
         // 'friends_only' !== 'public' so returns false
         expect(canEmit).toBe(false)
+      }),
+      { numRuns: 25 },
+    )
+  })
+
+  // canEmitToFriends gates FRIEND-directed emission (toast:friend_checkin,
+  // friend:checkout, friend push). Unlike canEmitIdentity (public-only, for
+  // stranger-visible city events), it must allow the default friends_only so
+  // friends actually receive the belonging signal.
+  it('canEmitToFriends returns true for public users', async () => {
+    await fc.assert(
+      fc.asyncProperty(userIdArb, async (userId) => {
+        setupPrivacyGuard({
+          users: new Map([[userId, { privacyLevel: 'public' }]]),
+          blocks: new Set(),
+          mutualFollows: new Set(),
+        })
+        expect(await canEmitToFriends(userId)).toBe(true)
+      }),
+      { numRuns: 25 },
+    )
+  })
+
+  it('canEmitToFriends returns true for friends_only users (the default)', async () => {
+    await fc.assert(
+      fc.asyncProperty(userIdArb, async (userId) => {
+        setupPrivacyGuard({
+          users: new Map([[userId, { privacyLevel: 'friends_only' }]]),
+          blocks: new Set(),
+          mutualFollows: new Set(),
+        })
+        expect(await canEmitToFriends(userId)).toBe(true)
+      }),
+      { numRuns: 25 },
+    )
+  })
+
+  it('canEmitToFriends returns false only for private users', async () => {
+    await fc.assert(
+      fc.asyncProperty(userIdArb, async (userId) => {
+        setupPrivacyGuard({
+          users: new Map([[userId, { privacyLevel: 'private' }]]),
+          blocks: new Set(),
+          mutualFollows: new Set(),
+        })
+        expect(await canEmitToFriends(userId)).toBe(false)
       }),
       { numRuns: 25 },
     )

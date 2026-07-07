@@ -38,6 +38,40 @@ import type { User, BusinessAccount, StaffAccount } from './types.js'
 const emailLockKey = (email: string) => `EMAIL#${email.toLowerCase().trim()}`
 const subLockKey = (cognitoSub: string) => `SUB#${cognitoSub}`
 
+// ────────────────────────────────────────────────────────────────────────────
+// People-search index attributes.
+//
+// Backs the UsernameSearchIndex / DisplayNameSearchIndex GSIs (see
+// infra .../main.tf). For each searchable field we store the lowercased value
+// (the GSI range key, queried with begins_with for prefix search) and a
+// single-character bucket = its first character (the GSI hash key, so writes
+// and reads spread across ~36 partitions instead of one hot key). Empty fields
+// yield no attributes, keeping the row out of that sparse index.
+// ────────────────────────────────────────────────────────────────────────────
+export function deriveSearchAttributes(fields: {
+  username?: string | null
+  displayName?: string | null
+}): Record<string, string> {
+  const out: Record<string, string> = {}
+  const u = fields.username?.trim().toLowerCase()
+  if (u) {
+    out['usernameLower'] = u
+    out['usernameChar'] = u[0]!
+  }
+  const d = fields.displayName?.trim().toLowerCase()
+  if (d) {
+    out['displayNameLower'] = d
+    out['displayNameChar'] = d[0]!
+  }
+  return out
+}
+
+/** Search-index attribute names, grouped by field, for update-time REMOVE. */
+const SEARCH_ATTRS_BY_FIELD: Record<'username' | 'displayName', string[]> = {
+  username: ['usernameLower', 'usernameChar'],
+  displayName: ['displayNameLower', 'displayNameChar'],
+}
+
 function isTransactionConflict(err: unknown): boolean {
   const name = (err as { name?: string }).name
   return name === 'TransactionCanceledException' || name === 'ConditionalCheckFailedException'
@@ -112,6 +146,8 @@ export async function createUser(data: Omit<User, 'userId' | 'createdAt'>): Prom
     onboardingComplete: false,
     createdAt: now,
     updatedAt: now,
+    // People-search index attributes (sparse GSIs).
+    ...deriveSearchAttributes({ username: data.username, displayName: data.displayName }),
   }
 
   // Build a single atomic transaction: the user row plus an email lock and a
@@ -274,8 +310,6 @@ export async function updateUser(
   const keys = Object.keys(data).filter((k) => data[k as keyof typeof data] !== undefined)
   if (keys.length === 0) return getUserById(userId)
 
-  const updateExpression = keys.map((key) => `#${key} = :${key}`).join(', ')
-
   const expressionAttributeNames: Record<string, string> = {
     '#updatedAt': 'updatedAt',
   }
@@ -290,11 +324,43 @@ export async function updateUser(
     expressionAttributeValues[`:${key}`] = data[key as keyof typeof data]
   })
 
+  const setPairs = keys.map((key) => `#${key} = :${key}`)
+
+  // Keep the people-search index in sync. When a searchable field changes, set
+  // its derived attributes; when it is cleared, REMOVE them so the row drops
+  // out of that sparse index rather than lingering under a stale prefix.
+  const removeAttrs: string[] = []
+  const syncSearchField = (field: 'username' | 'displayName') => {
+    if (data[field] === undefined) return
+    const derived = deriveSearchAttributes({ [field]: data[field] } as { username?: string; displayName?: string })
+    const derivedKeys = Object.keys(derived)
+    if (derivedKeys.length > 0) {
+      for (const attr of derivedKeys) {
+        expressionAttributeNames[`#${attr}`] = attr
+        expressionAttributeValues[`:${attr}`] = derived[attr]
+        setPairs.push(`#${attr} = :${attr}`)
+      }
+    } else {
+      // Field present but empty → remove its index attributes.
+      for (const attr of SEARCH_ATTRS_BY_FIELD[field]) {
+        expressionAttributeNames[`#${attr}`] = attr
+        removeAttrs.push(`#${attr}`)
+      }
+    }
+  }
+  syncSearchField('username')
+  syncSearchField('displayName')
+
+  let updateExpression = `SET ${setPairs.join(', ')}, #updatedAt = :updatedAt`
+  if (removeAttrs.length > 0) {
+    updateExpression += ` REMOVE ${removeAttrs.join(', ')}`
+  }
+
   const result = await documentClient.send(
     new UpdateCommand({
       TableName: TableNames.users,
       Key: { userId },
-      UpdateExpression: `SET ${updateExpression}, #updatedAt = :updatedAt`,
+      UpdateExpression: updateExpression,
       ExpressionAttributeNames: expressionAttributeNames,
       ExpressionAttributeValues: expressionAttributeValues,
       ReturnValues: 'ALL_NEW',

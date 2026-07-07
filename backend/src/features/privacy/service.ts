@@ -1,6 +1,7 @@
 import { AppError } from '../../shared/errors/AppError.js'
 import { getUserById, updateUser } from '../auth/dynamodb-repository.js'
 import { blockUser, unblockUser, getBlockedUsers } from '../social/block-repository.js'
+import { unfollowUser } from '../social/repository.js'
 import { createReport } from '../social/report-repository.js'
 import type { PrivacyLevel } from '../../shared/privacy/types.js'
 import type { ReportCategory, UserReport } from '../social/report-repository.js'
@@ -44,6 +45,16 @@ export async function blockUserAction(blockerId: string, blockedId: string): Pro
     }
     throw err
   }
+
+  // Sever the follow graph in BOTH directions. A block record alone does not
+  // remove the follow edges, so without this the blocked user would remain a
+  // mutual "friend" — still listed as a friend, still counted in each other's
+  // taste-match presence, and still receiving friend check-in/checkout events
+  // (those friend-scoped fan-outs read the follow graph directly, not the
+  // privacy guard). Removing the edges makes the block authoritative across
+  // every friend surface at once. Best-effort: a delete failure must not leave
+  // the block un-applied, and unfollow is idempotent (a no-op if no edge).
+  await Promise.allSettled([unfollowUser(blockerId, blockedId), unfollowUser(blockedId, blockerId)])
 }
 
 export async function unblockUserAction(blockerId: string, blockedId: string): Promise<void> {

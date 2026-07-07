@@ -3,8 +3,10 @@ import { useEffect, useRef } from 'react'
 import { getSocket } from '@area-code/shared/lib/socket'
 import { api } from '@area-code/shared/lib/api'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
+import { useToastStore } from '@area-code/shared/stores/toastStore'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { usePresenceStore } from '@area-code/shared/stores/presenceStore'
+import { TOAST_PRIORITY } from '@area-code/shared/lib/toastAdmission'
 
 import { filterActiveFriends } from '../lib/carouselRanking'
 
@@ -29,6 +31,7 @@ export function useFriendsPresence(token?: string) {
   const removeFriendPresence = useMapStore((s) => s.removeFriendPresence)
   const setFriendsPresence = useMapStore((s) => s.setFriendsPresence)
   const clearFriendsPresence = useMapStore((s) => s.clearFriendsPresence)
+  const addToast = useToastStore((s) => s.addToast)
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
 
   // Track whether the initial seed has been issued so the reconnect handler
@@ -72,7 +75,11 @@ export function useFriendsPresence(token?: string) {
 
     const socket = getSocket(token)
 
-    // toast:friend_checkin -> add friend to venue presence
+    // toast:friend_checkin -> update taste-match presence AND surface the
+    // belonging toast. The event carries a ready-to-show message + avatar; the
+    // toast store dedups per venue so a burst of friends at one spot is one
+    // toast, not a stream (shouldEnqueueCheckInToast). Belonging is the
+    // strongest discovery magnet, so it must be seen, not just ranked.
     const checkinHandler = (payload: {
       type: 'checkin'
       message: string
@@ -81,6 +88,15 @@ export function useFriendsPresence(token?: string) {
       avatarUrl?: string
     }) => {
       addFriendPresence(payload.nodeId, payload.userId)
+      addToast({
+        id: `friend-checkin-${payload.nodeId}-${payload.userId}-${Date.now()}`,
+        type: 'friend_checkin',
+        message: payload.message,
+        nodeId: payload.nodeId,
+        ...(payload.avatarUrl ? { avatarUrl: payload.avatarUrl } : {}),
+        priority: TOAST_PRIORITY.friend_checkin ?? 3,
+        timestamp: Date.now(),
+      })
     }
 
     // friend:checkout -> remove friend from venue presence
@@ -106,5 +122,5 @@ export function useFriendsPresence(token?: string) {
       socket.off('friend:checkout', checkoutHandler)
       socket.off('connect', connectHandler)
     }
-  }, [isAuthenticated, token, addFriendPresence, removeFriendPresence, setFriendsPresence])
+  }, [isAuthenticated, token, addFriendPresence, removeFriendPresence, setFriendsPresence, addToast])
 }

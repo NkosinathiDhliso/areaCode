@@ -185,6 +185,26 @@ resource "aws_dynamodb_table" "users" {
     type = "S"
   }
 
+  # People search (add-a-friend). See prod/main.tf for the full rationale:
+  # sparse, char-bucketed prefix indexes on username / display name that
+  # replace the users-table Scan.
+  attribute {
+    name = "usernameChar"
+    type = "S"
+  }
+  attribute {
+    name = "usernameLower"
+    type = "S"
+  }
+  attribute {
+    name = "displayNameChar"
+    type = "S"
+  }
+  attribute {
+    name = "displayNameLower"
+    type = "S"
+  }
+
   global_secondary_index {
     name            = "EmailIndex"
     hash_key        = "email"
@@ -193,6 +213,18 @@ resource "aws_dynamodb_table" "users" {
   global_secondary_index {
     name            = "CognitoIndex"
     hash_key        = "cognitoSub"
+    projection_type = "ALL"
+  }
+  global_secondary_index {
+    name            = "UsernameSearchIndex"
+    hash_key        = "usernameChar"
+    range_key       = "usernameLower"
+    projection_type = "ALL"
+  }
+  global_secondary_index {
+    name            = "DisplayNameSearchIndex"
+    hash_key        = "displayNameChar"
+    range_key       = "displayNameLower"
     projection_type = "ALL"
   }
 

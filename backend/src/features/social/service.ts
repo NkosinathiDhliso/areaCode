@@ -1,5 +1,6 @@
 import { AppError } from '../../shared/errors/AppError.js'
-import { filterByPrivacy } from '../../shared/privacy/privacy-guard.js'
+import { filterByPrivacy, checkPrivacy } from '../../shared/privacy/privacy-guard.js'
+import { getUserById } from '../auth/dynamodb-repository.js'
 import * as repo from './repository.js'
 import { deriveTopVenue } from './leaderboard-utils.js'
 import { DEV_MODE } from '../../shared/config/env.js'
@@ -66,10 +67,40 @@ export async function followUser(followerId: string, followingId: string) {
     throw AppError.badRequest('Cannot follow yourself')
   }
   if (DEV_MODE) return
+  // Determine mutuality BEFORE writing our edge: if the target already follows
+  // us, this follow completes the mutual pair (they become friends now).
+  let becameMutual = false
+  try {
+    becameMutual = await repo.isFollowing(followingId, followerId)
+  } catch {
+    // Non-critical: fall back to the plain "started following" copy.
+  }
   try {
     await repo.followUser(followerId, followingId)
   } catch {
     throw AppError.conflict('Already following this user')
+  }
+
+  // Best-effort notify the followed user so the relationship can actually form.
+  // Without this, a one-way follow is invisible to the target and mutual
+  // friendship (the whole point of the feature) depends on blind reciprocity.
+  // A notification failure must never fail the follow itself.
+  try {
+    const { getUserById } = await import('../auth/dynamodb-repository.js')
+    const { sendNotification } = await import('../notifications/service.js')
+    const follower = await getUserById(followerId)
+    const name = follower?.displayName ?? follower?.username ?? 'Someone'
+    await sendNotification({
+      userId: followingId,
+      type: 'new_follower',
+      title: becameMutual ? `You and ${name} are now friends` : `${name} started following you`,
+      body: becameMutual
+        ? `You now see each other on the map.`
+        : `Follow back to become friends and see each other on the map.`,
+      data: { followerId },
+    })
+  } catch {
+    // Non-critical
   }
 }
 
@@ -425,11 +456,95 @@ export async function getCityLeaderboard(citySlug: string, viewerId?: string, ar
   return { entries, userRank, segment }
 }
 
+// ─── Public Profile ───────────────────────────────────────────────────────
+
+/**
+ * Privacy-respecting public profile of another consumer, plus the viewer's
+ * relationship to them. Identity (name/username/avatar) and stats are only
+ * populated when PrivacyGuard grants `full` visibility (own row, a public
+ * profile, or a mutual friend). A blocked or private target is `excluded` and
+ * surfaces as 404 so we never reveal that the account exists.
+ */
+export async function getPublicProfile(viewerId: string, targetId: string) {
+  if (DEV_MODE) {
+    return {
+      userId: targetId,
+      displayName: 'Sipho',
+      username: 'sipho_jozi',
+      avatarUrl: null as string | null,
+      tier: 'trailblazer',
+      totalCheckIns: 142,
+      isFollowing: true,
+      isFollowedBy: true,
+      isMutual: true,
+      visibility: 'full' as const,
+    }
+  }
+
+  const check = await checkPrivacy(targetId, viewerId)
+  if (check.visibility === 'excluded') {
+    throw AppError.notFound('User not found')
+  }
+
+  const user = await getUserById(targetId)
+  if (!user) {
+    throw AppError.notFound('User not found')
+  }
+
+  const [following, followedBy] = await Promise.all([
+    repo.isFollowing(viewerId, targetId),
+    repo.isFollowing(targetId, viewerId),
+  ])
+  const full = check.visibility === 'full'
+
+  return {
+    userId: targetId,
+    displayName: full ? user.displayName : null,
+    username: full ? user.username : null,
+    avatarUrl: full ? user.avatarUrl : null,
+    tier: user.tier ?? 'local',
+    totalCheckIns: full ? ((user as { totalCheckIns?: number }).totalCheckIns ?? 0) : null,
+    isFollowing: following,
+    isFollowedBy: followedBy,
+    isMutual: following && followedBy,
+    visibility: check.visibility,
+  }
+}
+
 // ─── Friends List ───────────────────────────────────────────────────────────
 
 export async function getFriendsList(userId: string) {
   if (DEV_MODE) {
-    return { friends: [], count: 0 }
+    // Mirror the dev feed / leaderboard cast so the Friends tab is populated
+    // and testable locally, instead of reading empty while other surfaces
+    // show friends.
+    const friends = [
+      {
+        userId: 'dev-user-2',
+        username: 'sipho_jozi',
+        displayName: 'Sipho',
+        avatarUrl: null,
+        tier: 'trailblazer',
+        totalCheckIns: 142,
+      },
+      {
+        userId: 'dev-user-3',
+        username: 'thandi_sa',
+        displayName: 'Thandi',
+        avatarUrl: null,
+        tier: 'explorer',
+        totalCheckIns: 98,
+      },
+      {
+        userId: 'dev-user-4',
+        username: 'bongani_jhb',
+        displayName: 'Bongani',
+        avatarUrl: null,
+        tier: 'explorer',
+        totalCheckIns: 54,
+      },
+    ]
+    return { friends, count: friends.length }
   }
   const friends = await repo.getMutualFriends(userId)
   return { friends, count: friends.length }

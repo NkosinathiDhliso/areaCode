@@ -21,7 +21,7 @@ import { writeDwellRow } from '../presence/dwell-sink.js'
 import { getNodeWithCity } from '../check-in/repository.js'
 import { emitPresenceUpdate, emitFriendCheckout } from '../../shared/socket/events.js'
 import { getMutualFollowIds, getFollowingIds } from '../social/repository.js'
-import { canEmitIdentity } from '../../shared/privacy/privacy-guard.js'
+import { canEmitToFriends } from '../../shared/privacy/privacy-guard.js'
 import type { CheckOutInput, CheckOutResponse } from './types.js'
 
 import { DEV_MODE } from '../../shared/config/env.js'
@@ -103,7 +103,7 @@ export async function processCheckOut(userId: string, input: CheckOutInput): Pro
   // call `removeFriendPresence(nodeId, userId)` and keep taste-match honest
   // (Requirements 3.4, 3.5).
   try {
-    const canEmit = await canEmitIdentity(userId)
+    const canEmit = await canEmitToFriends(userId)
     if (canEmit) {
       const followingIds = await getFollowingIds(userId)
       const friendIds = await getMutualFollowIds(userId, followingIds)

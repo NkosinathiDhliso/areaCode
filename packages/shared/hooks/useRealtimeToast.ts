@@ -15,6 +15,7 @@ const PRIORITY_MAP: Record<ToastType, number> = {
   surge: 1,
   city_pulse: 2,
   reward_pressure: 3,
+  friend_checkin: 3,
   checkin: 4,
   reward_new: 4,
   streak: 5,

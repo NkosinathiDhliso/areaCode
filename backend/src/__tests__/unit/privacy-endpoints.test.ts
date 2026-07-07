@@ -74,6 +74,11 @@ vi.mock('../../features/social/block-repository', () => ({
   getBlockedUsers: vi.fn(),
 }))
 
+// blockUserAction also severs the follow graph in both directions.
+vi.mock('../../features/social/repository', () => ({
+  unfollowUser: vi.fn().mockResolvedValue({ count: 1 }),
+}))
+
 vi.mock('../../features/social/report-repository', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../features/social/report-repository')>()
   return {
@@ -85,6 +90,7 @@ vi.mock('../../features/social/report-repository', async (importOriginal) => {
 // Import after mocks are set up
 import { getUserById, updateUser } from '../../features/auth/dynamodb-repository'
 import { blockUser, unblockUser, getBlockedUsers } from '../../features/social/block-repository'
+import { unfollowUser } from '../../features/social/repository'
 import { createReport } from '../../features/social/report-repository'
 import * as privacyService from '../../features/privacy/service'
 
@@ -93,6 +99,7 @@ const mockUpdateUser = updateUser as ReturnType<typeof vi.fn>
 const mockBlockUser = blockUser as ReturnType<typeof vi.fn>
 const mockUnblockUser = unblockUser as ReturnType<typeof vi.fn>
 const mockGetBlockedUsers = getBlockedUsers as ReturnType<typeof vi.fn>
+const mockUnfollowUser = unfollowUser as ReturnType<typeof vi.fn>
 const mockCreateReport = createReport as ReturnType<typeof vi.fn>
 
 // ─── 1. Self-Block Returns 400 ─────────────────────────────────────────────
@@ -135,6 +142,18 @@ describe('Block logic: self-block returns 400', () => {
     await privacyService.blockUserAction('user-1', 'user-2')
 
     expect(mockBlockUser).toHaveBeenCalledWith('user-1', 'user-2')
+  })
+
+  it('should sever the mutual-follow edges in BOTH directions when blocking', async () => {
+    // A block record alone does not remove follows, so a blocked user would
+    // stay a mutual "friend" (friends list, taste-match presence, friend
+    // check-in/checkout events). Blocking must unfollow both ways.
+    mockBlockUser.mockResolvedValue(undefined)
+
+    await privacyService.blockUserAction('user-1', 'user-2')
+
+    expect(mockUnfollowUser).toHaveBeenCalledWith('user-1', 'user-2')
+    expect(mockUnfollowUser).toHaveBeenCalledWith('user-2', 'user-1')
   })
 })
 

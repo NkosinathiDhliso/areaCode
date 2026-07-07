@@ -30,7 +30,15 @@ export type CheckInType = 'reward' | 'presence'
 export type RewardType = 'nth_checkin' | 'daily_first' | 'streak' | 'milestone'
 
 // Toast types with priority
-export type ToastType = 'surge' | 'city_pulse' | 'reward_pressure' | 'checkin' | 'reward_new' | 'streak' | 'leaderboard'
+export type ToastType =
+  | 'surge'
+  | 'city_pulse'
+  | 'reward_pressure'
+  | 'friend_checkin'
+  | 'checkin'
+  | 'reward_new'
+  | 'streak'
+  | 'leaderboard'
 
 // Claim statuses
 export type ClaimStatus = 'unclaimed' | 'pending' | 'claimed'

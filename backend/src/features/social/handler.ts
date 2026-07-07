@@ -106,6 +106,20 @@ export async function socialRoutes(app: FastifyInstance) {
     },
   )
 
+  // GET /v1/users/:id/profile
+  // Privacy-respecting public profile for another consumer. Excluded targets
+  // (private, or a block in either direction) return 404 so existence is not
+  // revealed; friends_only non-mutual viewers get the row with identity nulled.
+  app.get(
+    '/v1/users/:id/profile',
+    { preHandler: [requireAuth('consumer'), validate({ params: followParamsSchema })] },
+    async (request) => {
+      const auth = getAuth(request)
+      const params = request.params as z.infer<typeof followParamsSchema>
+      return service.getPublicProfile(auth.userId, params.id)
+    },
+  )
+
   // GET /v1/users/me/friends
   app.get('/v1/users/me/friends', { preHandler: [requireAuth('consumer')] }, async (request) => {
     const auth = getAuth(request)

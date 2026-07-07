@@ -32,6 +32,11 @@ export const TOAST_PRIORITY: Record<string, number> = {
   surge: 1,
   city_pulse: 2,
   reward_pressure: 3,
+  // Belonging (a friend checked in) is the strongest personal magnet, so it
+  // sits above ambient check-in / reward toasts and is a distinct type: unlike
+  // `checkin` it is never suppressed by the per-venue Check_In_Toast dedup, so
+  // an ambient city buzz toast can't swallow "your friend is here".
+  friend_checkin: 3,
   checkin: 4,
   reward_new: 4,
   streak: 5,

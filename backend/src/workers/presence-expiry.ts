@@ -38,7 +38,7 @@ import {
 } from '../features/presence/repository.js'
 import { emitFriendCheckout, emitPresenceUpdate } from '../shared/socket/events.js'
 import { getMutualFollowIds, getFollowingIds } from '../features/social/repository.js'
-import { canEmitIdentity } from '../shared/privacy/privacy-guard.js'
+import { canEmitToFriends } from '../shared/privacy/privacy-guard.js'
 
 /** Cities are stored in `app-data` as `CITY#<id>` rows where `sk = pk`. */
 async function getCities() {
@@ -103,7 +103,7 @@ export async function handler() {
         // Best-effort emit `friend:checkout` to the expired user's mutual friends
         // so their taste-match store stays honest (Requirements 3.4, 3.5).
         try {
-          const canEmit = await canEmitIdentity(record.userId)
+          const canEmit = await canEmitToFriends(record.userId)
           if (canEmit) {
             const followingIds = await getFollowingIds(record.userId)
             const friendIds = await getMutualFollowIds(record.userId, followingIds)
