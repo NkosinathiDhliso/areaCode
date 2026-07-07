@@ -55,7 +55,16 @@ describe('Feature: spotlight-mode, Property 1: fires only after the full duratio
 
           // A move within tolerance (hypot = frac * tolerance <= tolerance) must not cancel.
           const r = frac * tolerance
-          h.onPointerMove(evt(x + Math.cos(angle) * r, y + Math.sin(angle) * r))
+          const moveX = x + Math.cos(angle) * r
+          const moveY = y + Math.sin(angle) * r
+          // Adding a sub-tolerance offset to a non-zero base can round the
+          // reconstructed distance just over the tolerance in double precision
+          // (e.g. 16 + 0.9999999999999987 === 17). The handler compares the
+          // distance it actually sees, so gate the assertion on that same value
+          // rather than the intended `r`; otherwise the test asserts a case that
+          // is legitimately past tolerance.
+          fc.pre(Math.hypot(moveX - x, moveY - y) <= tolerance)
+          h.onPointerMove(evt(moveX, moveY))
           expect(onLongPress).not.toHaveBeenCalled()
 
           // Cross the threshold: fires exactly once, with the pointer-down event.
