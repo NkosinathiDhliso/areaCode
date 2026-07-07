@@ -7,6 +7,7 @@ import { validateWindow, classifyLifecycle, isVisibleInFeed } from './lifecycle.
 import { pulseStateFromScore, rankGetsByVibe } from './ranking.js'
 import * as repo from './repository.js'
 import { DEV_MODE } from '../../shared/config/env.js'
+import { isConditionalCheckFailedError } from '../../shared/db/dynamodb.js'
 
 const DEV_REWARDS = [
   {
@@ -456,7 +457,15 @@ export async function redeemReward(code: string, staffId?: string) {
     }
   }
 
-  await repo.markRedeemed(redemption.id as string, staffId, staffName)
+  try {
+    await repo.markRedeemed(redemption.id as string, staffId, staffName)
+  } catch (err) {
+    // A concurrent confirm already redeemed this code between our read above
+    // and this write. The conditional write in `markRedemptionAsRedeemed`
+    // fails closed, so surface the same error a sequential double-redeem gets.
+    if (isConditionalCheckFailedError(err)) throw AppError.badRequest('already_redeemed')
+    throw err
+  }
   // Invalidate leaderboard cache so the new redemption shows up immediately.
   try {
     const { clearLeaderboardCache } = await import('../business/staff-leaderboard.js')

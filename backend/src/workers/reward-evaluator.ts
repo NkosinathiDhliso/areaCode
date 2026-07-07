@@ -84,8 +84,9 @@ async function evaluateRewards(userId: string, nodeId: string) {
     const code = generateRedemptionCode()
     const codeExpiresAt = new Date(Date.now() + REDEMPTION_CODE_TTL_MS).toISOString()
 
+    let redemptionId: string
     try {
-      await repo.createRedemption({
+      const created = await repo.createRedemption({
         rewardId: reward.id,
         userId,
         redemptionCode: code,
@@ -95,6 +96,7 @@ async function evaluateRewards(userId: string, nodeId: string) {
         ...(reward.node?.name ? { nodeName: reward.node.name } : {}),
         rewardTitle: reward.title,
       })
+      redemptionId = created.id
     } catch (err) {
       if (isConditionalCheckFailedError(err)) {
         // ON CONFLICT , already claimed. The unique-claim condition tripped,
@@ -108,7 +110,33 @@ async function evaluateRewards(userId: string, nodeId: string) {
       throw err
     }
 
-    await repo.incrementClaimedCount(reward.id)
+    // Atomic slot-cap enforcement. The read-then-check above is a fast early-out;
+    // this conditional increment is the authoritative guard against over-issuing
+    // when concurrent check-ins race for the last slot. If it fails, the slot was
+    // taken after we minted — roll the redemption back so the cap holds.
+    try {
+      await repo.incrementClaimedCount(reward.id, slots)
+    } catch (err) {
+      if (isConditionalCheckFailedError(err)) {
+        await repo.deleteRedemption(redemptionId, reward.id, userId)
+        console.log(`[reward-evaluator] Slot full, rolled back: user=${userId} reward=${reward.id}`)
+        continue
+      }
+      // Non-conditional failure: the redemption is minted but the count did not
+      // advance. Roll back the mint (best-effort) and rethrow so SQS retries,
+      // rather than leaving an over-cap code live.
+      await repo
+        .deleteRedemption(redemptionId, reward.id, userId)
+        .catch((rollbackErr) =>
+          console.error(
+            `[reward-evaluator] redemption rollback failed: user=${userId} reward=${reward.id}`,
+            rollbackErr,
+          ),
+        )
+      console.error(`[reward-evaluator] incrementClaimedCount failed: user=${userId} reward=${reward.id}`, err)
+      throw err
+    }
+
     await emitClaimEvents(userId, nodeId, reward, code, codeExpiresAt)
     console.log(`[reward-evaluator] Claimed: user=${userId} reward=${reward.id} code=${code}`)
   }

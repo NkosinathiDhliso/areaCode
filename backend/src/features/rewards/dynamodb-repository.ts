@@ -230,11 +230,22 @@ export async function markRedemptionAsRedeemed(
     exprValues[':staffName'] = staffName
   }
 
+  // Guard against double-redeem races: only flip the row if it has NOT already
+  // been redeemed. A redemption row is created with `redeemedAt: null`, so the
+  // attribute exists but is null on an unredeemed code; a redeemed row holds an
+  // ISO string. Without this, two concurrent confirms (double-tap, retry, or
+  // two staff devices scanning the same code) both pass the service-layer
+  // `redeemedAt` null check and both write, handing out the reward twice for
+  // one code. The conditional write makes exactly one confirm win; the loser
+  // throws `ConditionalCheckFailedException`, which the service maps to
+  // `already_redeemed`. Mirrors the guest-claim token guard.
+  exprValues[':unredeemed'] = null
   await documentClient.send(
     new UpdateCommand({
       TableName: TableNames.appData,
       Key: { pk: `REDEMPTION#${redemptionId}`, sk: `REDEMPTION#${redemptionId}` },
       UpdateExpression: updateExpr,
+      ConditionExpression: 'attribute_not_exists(redeemedAt) OR redeemedAt = :unredeemed',
       ExpressionAttributeValues: exprValues,
     }),
   )
