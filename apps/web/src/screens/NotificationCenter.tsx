@@ -42,7 +42,18 @@ export function NotificationCenter({ onNavigate }: NotificationCenterProps) {
       data-scroll-container
     >
       <div className="flex flex-row items-center justify-between mb-4">
-        <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('notif.center.title')}</h1>
+        <div className="flex flex-row items-center gap-3">
+          <button
+            onClick={() => onNavigate('profile')}
+            aria-label={t('common.back', 'Back')}
+            className="text-[var(--text-muted)] transition-all active:scale-95"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('notif.center.title')}</h1>
+        </div>
         <button
           onClick={() => onNavigate('notification-settings')}
           className="text-[var(--accent)] text-sm font-medium"

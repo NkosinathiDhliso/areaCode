@@ -323,7 +323,7 @@ function AppContent() {
             {activeRoute === 'settings' && <SettingsScreen onNavigate={setRoute} />}
             {activeRoute === 'privacy' && <PrivacySettingsScreen onNavigate={setRoute} />}
             {activeRoute === 'notifications' && <NotificationCenter onNavigate={setRoute} />}
-            {activeRoute === 'notification-settings' && <NotificationSettings onNavigate={setRoute} />}
+            {activeRoute === 'notification-settings' && <NotificationSettings />}
             {activeRoute === 'history' && <CheckInHistoryScreen onNavigate={setRoute} />}
           </>
         )}

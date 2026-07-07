@@ -11,16 +11,10 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { AppRoute } from '../types'
-
-interface NotificationSettingsProps {
-  onNavigate: (route: AppRoute) => void
-}
-
 type PrefKey = NotificationPreferenceKey
 type Prefs = NotificationPreferences
 
-export function NotificationSettings({ onNavigate }: NotificationSettingsProps) {
+export function NotificationSettings() {
   const { t } = useTranslation()
   const [prefs, setPrefs] = useState<Prefs>(DEFAULTS)
 
@@ -86,7 +80,11 @@ export function NotificationSettings({ onNavigate }: NotificationSettingsProps) 
       data-scroll-container
     >
       <div className="flex flex-row items-center gap-3 mb-4">
-        <button onClick={() => onNavigate('notifications')} aria-label="Back" className="text-[var(--text-muted)]">
+        <button
+          onClick={() => window.history.back()}
+          aria-label={t('common.back', 'Back')}
+          className="text-[var(--text-muted)] transition-all active:scale-95"
+        >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="15 18 9 12 15 6" />
           </svg>

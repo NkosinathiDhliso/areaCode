@@ -132,7 +132,6 @@ export function SettingsScreen({ onNavigate }: SettingsScreenProps) {
           ))}
         </div>
       </div>
-      <NavRow label={t('notif.center.settings')} onClick={() => onNavigate('notification-settings')} />
 
       {/* Privacy & data */}
       <SectionHeading label={t('settings.section.privacyData', 'Privacy & data')} className="mt-3" />
