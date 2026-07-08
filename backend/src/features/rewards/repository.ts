@@ -91,6 +91,10 @@ export async function updateReward(
     description: string
     isActive: boolean
     expiresAt: string | null
+    // Loyalty check-in threshold (Churn-defences R1.7). Persisted so a venue
+    // can change the bar on an existing reward; grandfathered locks are
+    // untouched by this write.
+    triggerValue: number
     // Event/Offer get attributes (R1.3, R1.6). Threaded through so an update
     // can (re)assert the category and window; undefined fields are dropped
     // before persistence so loyalty rows are untouched.

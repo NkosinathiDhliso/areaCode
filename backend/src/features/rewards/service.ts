@@ -6,6 +6,7 @@ import { notifyNewRewardConsumers } from '../notifications/service.js'
 import { validateWindow, classifyLifecycle, isVisibleInFeed } from './lifecycle.js'
 import { pulseStateFromScore, rankGetsByVibe } from './ranking.js'
 import * as repo from './repository.js'
+import { countLocksForReward } from './threshold-lock.js'
 import { DEV_MODE } from '../../shared/config/env.js'
 import { isConditionalCheckFailedError } from '../../shared/db/dynamodb.js'
 
@@ -252,6 +253,10 @@ export async function updateReward(
     isActive?: boolean | undefined
     expiresAt?: string | null | undefined
     isFirstGet?: boolean | undefined
+    // Loyalty check-in threshold (Churn-defences R1.7). Existing Threshold_Lock
+    // rows are left untouched by this write (R1.2); the grandfathering logic in
+    // threshold-lock.ts gives locked users the better of the two values.
+    triggerValue?: number | undefined
     // Event/Offer get attributes (R1.3, R1.6). An update may (re)assert the
     // category and/or move the window; the resulting row must still hold a
     // valid Active_Window when it is an event/offer.
@@ -320,6 +325,7 @@ export async function updateReward(
     updateData.expiresAt = data.expiresAt
   }
   if (data.isFirstGet !== undefined) (updateData as { isFirstGet?: boolean }).isFirstGet = data.isFirstGet
+  if (data.triggerValue !== undefined) (updateData as { triggerValue?: number }).triggerValue = data.triggerValue
 
   // Thread the event/offer attributes through to persistence so an update can
   // (re)assert the category and window. Undefined fields are dropped by the
@@ -330,6 +336,26 @@ export async function updateReward(
   if (data.claimRequiresCheckIn !== undefined) updateData.claimRequiresCheckIn = data.claimRequiresCheckIn
 
   return repo.updateReward(rewardId, updateData)
+}
+
+/**
+ * Count consumers with in-flight grandfathered progress toward a reward, so
+ * the business portal can warn an operator before they change the threshold
+ * (Churn-defences R1.7: "N customers will keep their existing progress").
+ * Ownership is enforced the same way as updateReward — the reward's node must
+ * belong to the calling business, otherwise 403.
+ */
+export async function getRewardLockCount(rewardId: string, businessId: string): Promise<{ count: number }> {
+  if (DEV_MODE) {
+    return { count: 3 }
+  }
+  const reward = await repo.getRewardById(rewardId)
+  if (!reward) throw AppError.notFound('Reward not found')
+  if (reward.node?.businessId !== businessId) {
+    throw AppError.forbidden('You do not own this reward')
+  }
+  const count = await countLocksForReward(rewardId)
+  return { count }
 }
 
 export async function getRewardsNearMe(lat: number, lng: number, viewerId?: string) {

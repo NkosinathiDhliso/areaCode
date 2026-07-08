@@ -49,6 +49,26 @@ export async function rewardRoutes(app: FastifyInstance) {
     },
   )
 
+  // GET /v1/business/rewards/:id/lock-count — owners and managers (view_rewards).
+  // Returns how many consumers hold a grandfathered Threshold_Lock for this
+  // reward, so the portal can warn the operator before a threshold change
+  // (Churn-defences R1.7).
+  app.get(
+    '/v1/business/rewards/:id/lock-count',
+    {
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('view_rewards'),
+        validate({ params: rewardIdParamsSchema }),
+      ],
+    },
+    async (request) => {
+      const businessId = getBusinessRole(request).businessId
+      const params = request.params as z.infer<typeof rewardIdParamsSchema>
+      return service.getRewardLockCount(params.id, businessId)
+    },
+  )
+
   // GET /v1/rewards/near-me
   app.get(
     '/v1/rewards/near-me',

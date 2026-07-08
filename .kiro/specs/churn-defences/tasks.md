@@ -48,7 +48,7 @@ Each phase ships independently. None introduce always-on infra. None violate the
 
 - [x] 6.1 Reward eligibility now uses `getEffectiveThreshold`.
 - [x] 6.2 Reward editor in business portal shows the explanation line.
-- [ ] 6.3 Reward editor confirm dialog: "X customers will keep their existing progress."
+- [x] 6.3 Reward editor confirm dialog: "X customers will keep their existing progress." Backend `GET /v1/business/rewards/:id/lock-count` (`countLocksForReward`, ownership-gated), threshold now editable on the reward edit form, and a confirm dialog fires when the threshold changes and locks exist.
 
 ### Task 7: Cleanup
 
@@ -171,7 +171,7 @@ Each phase ships independently. None introduce always-on infra. None violate the
 
 - [ ] 24.1 Draft in-app announcement of the tier-permanence commitment.
 - [ ] 24.2 Brief sales / business-development on the First-Get path.
-- [ ] 24.3 Update `docs/SALES_PITCH.md` to include the casual-customer story.
+- [x] 24.3 Update `SALES_PITCH.md` (repo root; there is no `docs/SALES_PITCH.md`) to include the casual-customer story. Added the "Turning Walk-Ins Into Members: The First-Get" section.
 
 ---
 

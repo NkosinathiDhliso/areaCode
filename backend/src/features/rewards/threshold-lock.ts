@@ -179,6 +179,36 @@ export async function processCheckInRewardLocks(userId: string, nodeId: string):
   }
 }
 
+/**
+ * Count the Threshold_Lock rows for one reward — i.e. how many consumers
+ * currently have in-flight, grandfathered progress toward it. Powers the
+ * business-portal confirm dialog when a venue changes a reward's threshold
+ * ("N customers will keep their existing progress"), Churn-defences R1.7.
+ *
+ * `pk = LOCK#<userId>#<rewardId>`, so the reward id is not a key prefix; we
+ * scan the LOCK# space and filter on the stored `rewardId` attribute. Bounded
+ * by the number of LOCK# rows, same as `cleanupOrphanedLocks`. If LOCK# rows
+ * grow significantly, switch both to a GSI.
+ */
+export async function countLocksForReward(rewardId: string): Promise<number> {
+  let exclusiveStartKey: Record<string, unknown> | undefined
+  let count = 0
+  do {
+    const result = await documentClient.send(
+      new ScanCommand({
+        TableName: TableNames.appData,
+        FilterExpression: 'begins_with(pk, :prefix) AND rewardId = :rid',
+        ExpressionAttributeValues: { ':prefix': 'LOCK#', ':rid': rewardId },
+        ProjectionExpression: 'pk',
+        ...(exclusiveStartKey ? { ExclusiveStartKey: exclusiveStartKey } : {}),
+      }),
+    )
+    count += (result.Items ?? []).length
+    exclusiveStartKey = result.LastEvaluatedKey
+  } while (exclusiveStartKey)
+  return count
+}
+
 export async function deleteLock(userId: string, rewardId: string): Promise<void> {
   await documentClient.send(
     new DeleteCommand({

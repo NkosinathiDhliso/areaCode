@@ -206,23 +206,36 @@ export function RewardsPanel() {
   )
 }
 
+// Loyalty get types that carry an editable visit-count threshold.
+const THRESHOLD_TYPES = ['nth_checkin', 'streak', 'milestone']
+
 function RewardEditForm({ reward, onSaved, onCancel }: { reward: Reward; onSaved: () => void; onCancel: () => void }) {
+  const supportsThreshold = !isEventOrOffer(reward.getCategory) && THRESHOLD_TYPES.includes(reward.type)
+  const originalThreshold = reward.triggerValue
+
   const [title, setTitle] = useState(reward.title)
   const [slots, setSlots] = useState(reward.totalSlots != null ? String(reward.totalSlots) : '')
+  const [threshold, setThreshold] = useState(reward.triggerValue != null ? String(reward.triggerValue) : '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Grandfather confirm dialog (R1.7): holds the affected-customer count while
+  // the operator confirms a threshold change. null = dialog closed.
+  const [pendingLockCount, setPendingLockCount] = useState<number | null>(null)
 
-  async function handleSave() {
-    if (!title.trim()) {
-      setError('Title is required.')
-      return
-    }
+  const thresholdChanged = supportsThreshold && threshold.trim() !== '' && parseInt(threshold, 10) !== originalThreshold
+
+  function buildBody(): Record<string, unknown> {
+    const body: Record<string, unknown> = { title: title.trim() }
+    if (slots) body['totalSlots'] = parseInt(slots, 10)
+    if (supportsThreshold && threshold.trim()) body['triggerValue'] = parseInt(threshold, 10)
+    return body
+  }
+
+  async function persist() {
     setLoading(true)
     setError(null)
     try {
-      const body: Record<string, unknown> = { title: title.trim() }
-      if (slots) body['totalSlots'] = parseInt(slots, 10)
-      await api.put(`/v1/business/rewards/${reward.id}`, body)
+      await api.put(`/v1/business/rewards/${reward.id}`, buildBody())
       onSaved()
     } catch (err: unknown) {
       const e = err as { message?: string }
@@ -230,6 +243,36 @@ function RewardEditForm({ reward, onSaved, onCancel }: { reward: Reward; onSaved
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleSave() {
+    if (!title.trim()) {
+      setError('Title is required.')
+      return
+    }
+    // When the threshold moves on an existing reward, tell the operator how
+    // many customers keep their grandfathered progress before committing
+    // (Churn-defences R1.7). Grandfathering happens server-side regardless;
+    // this is an informed-consent gate, so a failed count blocks (fail-closed)
+    // rather than silently saving behind the operator's back.
+    if (thresholdChanged) {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await api.get<{ count: number }>(`/v1/business/rewards/${reward.id}/lock-count`)
+        setLoading(false)
+        if (res.count > 0) {
+          setPendingLockCount(res.count)
+          return
+        }
+      } catch (err: unknown) {
+        setLoading(false)
+        const e = err as { message?: string }
+        setError(e.message ?? "Couldn't check affected customers. Try again.")
+        return
+      }
+    }
+    await persist()
   }
 
   return (
@@ -241,6 +284,25 @@ function RewardEditForm({ reward, onSaved, onCancel }: { reward: Reward; onSaved
         placeholder="Reward title"
         className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
       />
+      {supportsThreshold && (
+        <>
+          <label className="flex flex-col gap-1">
+            <span className="text-[var(--text-secondary)] text-[11px]">Visits required</span>
+            <input
+              type="number"
+              min="1"
+              value={threshold}
+              onChange={(e) => setThreshold(e.target.value)}
+              placeholder="Visits required (e.g. 5)"
+              aria-label="Visits required"
+              className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+            />
+          </label>
+          <p className="text-[var(--text-muted)] text-[11px] -mt-1">
+            Existing customers stay on their original visit count. Only new customers see the new threshold.
+          </p>
+        </>
+      )}
       <input
         type="number"
         value={slots}
@@ -251,19 +313,54 @@ function RewardEditForm({ reward, onSaved, onCancel }: { reward: Reward; onSaved
       <div className="flex flex-row gap-2">
         <button
           onClick={onCancel}
-          className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+          className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm active:scale-95"
         >
           Cancel
         </button>
         <button
           onClick={() => void handleSave()}
           disabled={loading || !title.trim()}
-          className="flex-1 bg-[var(--accent)] text-white font-semibold rounded-xl py-2.5 text-sm disabled:opacity-50"
+          className="flex-1 bg-[var(--accent)] text-white font-semibold rounded-xl py-2.5 text-sm disabled:opacity-50 active:scale-95"
         >
           {loading ? '...' : 'Save'}
         </button>
       </div>
       {error && <p className="text-[var(--danger)] text-xs">{error}</p>}
+
+      {pendingLockCount !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm threshold change"
+        >
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-5 max-w-sm w-full flex flex-col gap-3">
+            <h3 className="text-[var(--text-primary)] font-semibold text-base">Change reward threshold?</h3>
+            <p className="text-[var(--text-secondary)] text-sm">
+              {pendingLockCount} {pendingLockCount === 1 ? 'customer' : 'customers'} will keep their existing progress.
+              Only new customers will see the new threshold.
+            </p>
+            <div className="flex flex-row gap-2 mt-1">
+              <button
+                onClick={() => setPendingLockCount(null)}
+                className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-3 text-sm active:scale-95"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setPendingLockCount(null)
+                  void persist()
+                }}
+                disabled={loading}
+                className="flex-1 bg-[var(--accent)] text-white font-semibold rounded-xl py-3 text-sm disabled:opacity-50 active:scale-95"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

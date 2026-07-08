@@ -60,6 +60,11 @@ describe('rewards router — no new reach surface (R5.1, R5.2)', () => {
     const expected = new Set([
       'POST /v1/business/rewards',
       'PUT /v1/business/rewards/:id',
+      // Operator-scoped read (view_rewards, business/staff auth) backing the
+      // threshold-change confirm dialog (Churn-defences R1.7). Not a consumer
+      // reach surface: it returns a grandfathered-lock count for one owned
+      // reward, gated by ownership, never lists or ranks gets.
+      'GET /v1/business/rewards/:id/lock-count',
       'GET /v1/rewards/near-me',
       'GET /v1/users/me/unclaimed-rewards',
       'POST /v1/rewards/:id/redeem',

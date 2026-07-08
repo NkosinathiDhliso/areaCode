@@ -118,6 +118,14 @@ export const updateRewardBodySchema = z
     expiresAt: z.string().datetime().nullable().optional(),
     isFirstGet: z.boolean().optional(),
     /**
+     * Loyalty check-in threshold. Editable so a venue can raise or lower the
+     * bar on an existing reward. Existing consumers keep their grandfathered
+     * Threshold_Lock (Churn-defences R1.2/R1.4); only new consumers see the
+     * new value. The business portal warns the operator with a count of
+     * affected customers before saving (R1.7).
+     */
+    triggerValue: z.number().int().positive().optional(),
+    /**
      * Allows an update to (re)assert the get category. When the target is — or
      * becomes — an event/offer, the window refinement below applies (R1.3, R1.6).
      */

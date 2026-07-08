@@ -1,5 +1,26 @@
 # Implementation Plan: Go-Live Operations & Infrastructure Readiness (Tier 0)
 
+> **STALE / SUPERSEDED (2026-07-08).** This checklist was written on the
+> `serverless-prod-cleanup` branch and no longer reflects reality. Do not read
+> the unchecked boxes below as live launch blockers. The current authoritative
+> sources are `docs/GO_LIVE_CHECK_RESULT.md` (5 July, prod check green, exit 0)
+> and `docs/GO_LIVE_AUDIT.md` (17 May).
+>
+> Per those docs, most items here are already done: CI/CD is cleaned of
+> ECS/Prisma/Docker, CloudWatch alarms (Lambda errors/throttles/p99, DynamoDB
+> throttles/system-errors, SQS DLQ, Route53 health), the `api.areacode.co.za`
+> custom domain, X-Ray, HSTS + security headers, the SNS alerts email
+> subscription, and the RUNBOOK/DEPLOY/ROLLBACK docs all exist. The two dead
+> Secrets Manager data sources were removed and prod `terraform validate`
+> passes.
+>
+> Genuinely still open (tracked in `docs/GO_LIVE_AUDIT.md`): (1) WAF is not
+> attached, and cannot be attached to the API Gateway **v2 HTTP API** directly
+> (AWS WAF supports REST APIs, ALB, and CloudFront only) so it needs a
+> CloudFront front or a REST API to land, and (2) the push-sender SQS queue has
+> no consumer (wire a `lambda_push_sender` or explicitly defer). Everything
+> else below is historical.
+
 ## Overview
 
 This plan addresses infrastructure, CI/CD, monitoring, and operational gaps that were not covered by the original 22-requirement platform completeness audit. These are "Tier 0" items — they don't add user-facing features but are required for a safe, maintainable production launch. Without them, deployments will fail, errors will go unnoticed, and the team cannot debug production issues.
