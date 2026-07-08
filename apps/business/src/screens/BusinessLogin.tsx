@@ -1,5 +1,6 @@
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { api } from '@area-code/shared/lib/api'
+import { classifyLoginError } from '@area-code/shared/lib/loginError'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -47,8 +48,19 @@ export function BusinessLogin({ onSwitchToSignup }: BusinessLoginProps) {
         businessId: string
       }>('/v1/auth/business/email-login', { email, password })
       setAuth(res.accessToken, res.refreshToken, res.businessId)
-    } catch {
-      setError(t('biz.login.emailFailed', 'Invalid email or password.'))
+    } catch (err: unknown) {
+      const { kind, message } = classifyLoginError(err)
+      if (kind === 'rate-limited') {
+        setError(t('auth.login.rateLimited', 'Too many attempts. Please wait and try again.'))
+      } else if (kind === 'server') {
+        setError(t('auth.login.serverError', 'Something went wrong on our side. Please try again.'))
+      } else if (kind === 'unconfirmed') {
+        setError(message ?? t('auth.login.verifyEmail', 'Please verify your email before signing in.'))
+      } else if (kind === 'reset-required') {
+        setError(message ?? t('auth.login.resetRequired', 'Please reset your password to continue.'))
+      } else {
+        setError(t('biz.login.emailFailed', 'Invalid email or password.'))
+      }
     } finally {
       setLoading(false)
     }

@@ -1,5 +1,6 @@
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { api } from '@area-code/shared/lib/api'
+import { classifyLoginError } from '@area-code/shared/lib/loginError'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -54,26 +55,42 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
       setAuth(res.accessToken, res.refreshToken, res.user.id)
       onNavigate('map')
     } catch (err) {
-      const status = (err as { statusCode?: number } | null)?.statusCode
-      if (status === 429) {
-        setError(t('auth.login.tooManyAttempts', 'Too many attempts. Please try again in a few minutes.'))
-        return
+      const { kind, message } = classifyLoginError(err)
+      switch (kind) {
+        case 'rate-limited':
+          setError(t('auth.login.tooManyAttempts', 'Too many attempts. Please try again in a few minutes.'))
+          return
+        case 'server':
+          // The global toast already shows the reassuring server-error copy;
+          // keep the inline message aligned instead of blaming the credentials.
+          setError(t('auth.login.serverError', 'Something went wrong on our side. Please try again.'))
+          return
+        case 'unconfirmed':
+          setError(message ?? t('auth.login.verifyEmail', 'Please verify your email before signing in.'))
+          return
+        case 'reset-required':
+          setError(message ?? t('auth.login.resetRequired', 'Please reset your password to continue.'))
+          return
+        case 'credentials': {
+          // Cognito answers the same 401 for a wrong password and an unknown
+          // account. Treat sign-in as sign-up by creating the account with the
+          // same credentials (a 409 back means the password was simply wrong).
+          // A short password can never be a real account, so guide instead of
+          // attempting an invalid signup.
+          if (password.length < 8) {
+            setError(t('auth.login.passwordShort', 'Password must be at least 8 characters'))
+            return
+          }
+          await createAccountWithSameCredentials()
+          return
+        }
+        default:
+          // 400 / 404 / network: show clean, generic copy rather than leaking
+          // raw backend status text, and never silently attempt a signup the
+          // way the old catch-all fall-through did.
+          setError(t('auth.login.emailFailed', 'Invalid email or password.'))
+          return
       }
-      if (status !== undefined && status >= 500) {
-        // The global toast already shows the reassuring server-error copy;
-        // keep the inline message aligned instead of blaming the credentials.
-        setError(t('auth.login.serverError', 'Something went wrong on our side. Please try again.'))
-        return
-      }
-      // Auth failure on a valid request: the account may simply not exist yet.
-      // Treat sign-in as sign-up by creating the account with the same
-      // credentials. A short password can never be a real account here, so
-      // guide instead of attempting an invalid signup.
-      if (password.length < 8) {
-        setError(t('auth.login.passwordShort', 'Password must be at least 8 characters'))
-        return
-      }
-      await createAccountWithSameCredentials()
     } finally {
       setLoading(false)
     }

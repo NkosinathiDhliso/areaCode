@@ -1,4 +1,5 @@
 export { api, type ApiError } from './api'
+export { classifyLoginError, type LoginErrorKind, type LoginErrorClassification } from './loginError'
 export { getSocket, disconnectSocket, setSocketOverride } from './websocket'
 export { getWebSocket, disconnectWebSocket } from './websocket'
 export { storage } from './storage'

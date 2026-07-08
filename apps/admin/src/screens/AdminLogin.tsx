@@ -1,5 +1,6 @@
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { api } from '@area-code/shared/lib/api'
+import { classifyLoginError } from '@area-code/shared/lib/loginError'
 import type { AdminRole } from '@area-code/shared/types'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -67,8 +68,15 @@ export function AdminLogin() {
         return
       }
       persist(res)
-    } catch {
-      setError(t('admin.login.invalid', 'Invalid credentials.'))
+    } catch (err: unknown) {
+      const { kind } = classifyLoginError(err)
+      if (kind === 'rate-limited') {
+        setError(t('auth.login.rateLimited', 'Too many attempts. Please wait and try again.'))
+      } else if (kind === 'server') {
+        setError(t('auth.login.serverError', 'Something went wrong on our side. Please try again.'))
+      } else {
+        setError(t('admin.login.invalid', 'Invalid credentials.'))
+      }
     } finally {
       setLoading(false)
     }

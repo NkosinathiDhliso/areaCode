@@ -1,5 +1,6 @@
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { api } from '@area-code/shared/lib/api'
+import { classifyLoginError } from '@area-code/shared/lib/loginError'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -37,9 +38,21 @@ export function StaffLogin() {
       }>('/v1/auth/staff/email-login', { email, password })
       setAuth(res.accessToken, res.refreshToken, res.staff.id, res.staff.businessId, res.staff.name)
     } catch (err: unknown) {
-      const apiErr = err as { statusCode?: number } | undefined
-      if (apiErr?.statusCode === 429) {
+      const { kind, message } = classifyLoginError(err)
+      if (kind === 'rate-limited') {
         setError(t('auth.login.rateLimited', 'Too many attempts. Please wait and try again.'))
+        return
+      }
+      if (kind === 'server') {
+        setError(t('auth.login.serverError', 'Something went wrong on our side. Please try again.'))
+        return
+      }
+      if (kind === 'unconfirmed') {
+        setError(message ?? t('auth.login.verifyEmail', 'Please verify your email before signing in.'))
+        return
+      }
+      if (kind === 'reset-required') {
+        setError(message ?? t('auth.login.resetRequired', 'Please reset your password to continue.'))
         return
       }
       setError(t('staff.login.emailFailed', 'Invalid email or password.'))
