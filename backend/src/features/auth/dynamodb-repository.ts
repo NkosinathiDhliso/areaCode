@@ -612,6 +612,53 @@ export async function getStaffByBusinessId(businessId: string): Promise<StaffAcc
   return (result.Items || []).map((i) => mapStaff(i))
 }
 
+// Find a staff member of this business by email. The BIZ_STAFF list rows do not
+// carry the email, so we read each profile row (small N, bounded by the tier
+// staff limit) and match there. Prefers an active match; falls back to an
+// inactive (removed) one so callers can reactivate rather than duplicate.
+export async function findStaffByEmail(businessId: string, email: string): Promise<StaffAccount | null> {
+  const target = email.toLowerCase().trim()
+  const list = await getStaffByBusinessId(businessId)
+  const profiles = await Promise.all(list.map((s) => getStaffById(s.staffId)))
+  const matches = profiles.filter(
+    (p): p is StaffAccount => !!p && (p.email as string | undefined)?.toLowerCase().trim() === target,
+  )
+  return matches.find((p) => p.isActive !== false) ?? matches[0] ?? null
+}
+
+// Re-activate a previously removed staff member in place (same staffId and
+// cognitoSub), flipping both rows back to active and refreshing the name. Used
+// when a removed member is re-invited and accepts with the same identity, so we
+// reuse the existing account instead of creating a duplicate.
+export async function reactivateStaff(staffId: string, businessId: string, name: string): Promise<StaffAccount | null> {
+  const now = new Date().toISOString()
+  await documentClient.send(
+    new TransactWriteCommand({
+      TransactItems: [
+        {
+          Update: {
+            TableName: TableNames.appData,
+            Key: { pk: `STAFF#${staffId}`, sk: `PROFILE#${staffId}` },
+            UpdateExpression: 'SET isActive = :true, #name = :name, updatedAt = :now',
+            ConditionExpression: 'attribute_exists(pk)',
+            ExpressionAttributeNames: { '#name': 'name' },
+            ExpressionAttributeValues: { ':true': true, ':name': name, ':now': now },
+          },
+        },
+        {
+          Update: {
+            TableName: TableNames.appData,
+            Key: { pk: `BIZ_STAFF#${businessId}`, sk: `STAFF#${staffId}` },
+            UpdateExpression: 'SET isActive = :true',
+            ExpressionAttributeValues: { ':true': true },
+          },
+        },
+      ],
+    }),
+  )
+  return getStaffById(staffId)
+}
+
 export async function deleteUser(userId: string): Promise<void> {
   // Release the email/sub uniqueness locks in the same transaction as the row
   // delete, otherwise a deleted user's email could never be claimed again.

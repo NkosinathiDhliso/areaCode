@@ -3,6 +3,7 @@ import { QueryCommand, PutCommand, GetCommand, ScanCommand } from '@aws-sdk/lib-
 
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
+import { AppError } from '../../shared/errors/AppError.js'
 
 import {
   getUserById,
@@ -125,6 +126,8 @@ export async function findStaffByCognitoSub(cognitoSub: string) {
   return getStaffByCognitoSub(cognitoSub)
 }
 
+export { findStaffByEmail, reactivateStaff } from './dynamodb-repository.js'
+
 export async function findUserByUsername(username: string): Promise<unknown | null> {
   if (!username) return null
   const result = await documentClient.send(
@@ -190,18 +193,45 @@ export async function findStaffInviteByToken(token: string) {
 
 export async function acceptStaffInvite(inviteToken: string) {
   const { UpdateCommand } = await import('@aws-sdk/lib-dynamodb')
+  try {
+    // Conditional flip: only the first accept wins. Guards against two
+    // concurrent accepts (email + Google, or a double submit) both creating a
+    // staff account from one invite.
+    await documentClient.send(
+      new UpdateCommand({
+        TableName: TableNames.appData,
+        Key: { pk: `STAFF_INVITE#${inviteToken}`, sk: `STAFF_INVITE#${inviteToken}` },
+        UpdateExpression: 'SET accepted = :accepted, acceptedAt = :acceptedAt',
+        ConditionExpression: 'accepted = :false',
+        ExpressionAttributeValues: {
+          ':accepted': true,
+          ':acceptedAt': new Date().toISOString(),
+          ':false': false,
+        },
+      }),
+    )
+  } catch (err) {
+    if ((err as { name?: string }).name === 'ConditionalCheckFailedException') {
+      throw AppError.gone('Invite already accepted')
+    }
+    throw err
+  }
+  return { accepted: true }
+}
+
+// Return a burned invite to the usable state. Used to roll back the accept flip
+// when account creation fails downstream, so a mid-flight failure does not
+// strand the invitee with a consumed token and no staff account.
+export async function unacceptStaffInvite(inviteToken: string) {
+  const { UpdateCommand } = await import('@aws-sdk/lib-dynamodb')
   await documentClient.send(
     new UpdateCommand({
       TableName: TableNames.appData,
       Key: { pk: `STAFF_INVITE#${inviteToken}`, sk: `STAFF_INVITE#${inviteToken}` },
-      UpdateExpression: 'SET accepted = :accepted, acceptedAt = :acceptedAt',
-      ExpressionAttributeValues: {
-        ':accepted': true,
-        ':acceptedAt': new Date().toISOString(),
-      },
+      UpdateExpression: 'SET accepted = :false REMOVE acceptedAt',
+      ExpressionAttributeValues: { ':false': false },
     }),
   )
-  return { accepted: true }
 }
 
 export async function createStaffAccount(data: {

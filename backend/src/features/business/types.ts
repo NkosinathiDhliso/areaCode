@@ -295,6 +295,10 @@ export const staffIdParamsSchema = z.object({
   id: z.string().uuid(),
 })
 
+export const staffInviteTokenParamsSchema = z.object({
+  token: z.string().min(1).max(128),
+})
+
 export type CheckoutBody = z.infer<typeof checkoutBodySchema>
 export type BoostBody = z.infer<typeof boostBodySchema>
 export type StaffInviteBody = z.infer<typeof staffInviteBodySchema>

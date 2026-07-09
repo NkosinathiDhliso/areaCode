@@ -476,7 +476,11 @@ export async function redeemReward(code: string, staffId?: string) {
     if (rewardDetail?.node?.businessId) {
       const { getStaffById } = await import('../auth/dynamodb-repository.js')
       const staff = await getStaffById(staffId)
-      if (!staff || staff.businessId !== rewardDetail.node.businessId) {
+      // Fail closed: reject unknown staff, staff from another business, and
+      // removed staff (isActive === false). A still-valid access token must not
+      // let a removed member keep validating redemptions, since the Cognito
+      // disable on removal only stops refresh/new logins.
+      if (!staff || staff.isActive === false || staff.businessId !== rewardDetail.node.businessId) {
         throw AppError.forbidden('You cannot redeem rewards for this business')
       }
       staffName = staff?.name

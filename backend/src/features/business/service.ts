@@ -642,12 +642,33 @@ async function handlePaymentFailed(payload: Record<string, unknown>) {
 
 // ─── Staff Management ───────────────────────────────────────────────────────
 
-const STAFF_LIMITS: Record<string, number | null> = {
+// Single source of truth for staff head-count per tier. Consumed here (invite
+// creation) and by the auth accept paths (auth/service.ts) via
+// `assertStaffCapacity`, so the check at invite time and accept time can never
+// drift. `null` means unlimited.
+export const STAFF_LIMITS: Record<string, number | null> = {
   free: 2,
   starter: 2,
   growth: 5,
   pro: null,
   payg: 2,
+}
+
+// Throws AppError.forbidden when the business is already at its staff limit for
+// its EFFECTIVE tier (honouring trial expiry). One home for the limit check so
+// invite creation and invite acceptance always agree.
+export async function assertStaffCapacity(businessId: string): Promise<void> {
+  const biz = await repo.findBusinessById(businessId)
+  if (!biz) throw AppError.notFound('Business not found')
+
+  const effectiveTier = getEffectiveTier(biz as { tier?: string; trialEndsAt?: string | null })
+  const limit = STAFF_LIMITS[effectiveTier]
+  if (limit === null || limit === undefined) return
+
+  const count = await repo.countStaffForBusiness(businessId)
+  if (count >= limit) {
+    throw AppError.forbidden(`Staff limit reached for ${effectiveTier} tier (max ${limit})`)
+  }
 }
 
 export async function inviteStaff(
@@ -659,17 +680,7 @@ export async function inviteStaff(
   if (DEV_MODE) {
     return { id: `dev-invite-${Date.now()}`, businessId, phone, email, role, inviteToken: 'dev-token', accepted: false }
   }
-  const biz = await repo.findBusinessById(businessId)
-  if (!biz) throw AppError.notFound('Business not found')
-
-  const effectiveTier = getEffectiveTier(biz as any)
-  const limit = STAFF_LIMITS[effectiveTier]
-  if (limit !== null && limit !== undefined) {
-    const count = await repo.countStaffForBusiness(businessId)
-    if (count >= limit) {
-      throw AppError.forbidden(`Staff limit reached for ${effectiveTier} tier (max ${limit})`)
-    }
-  }
+  await assertStaffCapacity(businessId)
 
   return repo.createStaffInvite(businessId, phone, email, role)
 }
@@ -677,6 +688,13 @@ export async function inviteStaff(
 export async function listStaffInvites(businessId: string) {
   if (DEV_MODE) return []
   return repo.listStaffInvites(businessId)
+}
+
+export async function revokeStaffInvite(businessId: string, token: string) {
+  if (DEV_MODE) return { revoked: true }
+  const result = await repo.deleteStaffInvite(businessId, token)
+  if (result.count === 0) throw AppError.notFound('Invite not found or already accepted')
+  return { revoked: true }
 }
 
 export async function listStaff(businessId: string) {

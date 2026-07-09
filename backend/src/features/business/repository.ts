@@ -6,6 +6,7 @@ import {
   PutCommand,
   QueryCommand,
   ScanCommand,
+  TransactWriteCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames, isConditionalCheckFailedError } from '../../shared/db/dynamodb.js'
@@ -152,16 +153,65 @@ export async function listStaffAccounts(businessId: string) {
   return staff.filter((s: any) => s.isActive !== false)
 }
 
+// Delete a pending invite. Conditioned on the invite belonging to this business
+// and not yet accepted, so one business cannot revoke another's invite and an
+// already-accepted invite (a live staff account) cannot be silently dropped.
+// Returns { count: 0 } when nothing matched so the caller can surface notFound.
+export async function deleteStaffInvite(businessId: string, token: string) {
+  try {
+    await documentClient.send(
+      new DeleteCommand({
+        TableName: TableNames.appData,
+        Key: { pk: `STAFF_INVITE#${token}`, sk: `STAFF_INVITE#${token}` },
+        ConditionExpression: 'businessId = :bid AND accepted = :false',
+        ExpressionAttributeValues: { ':bid': businessId, ':false': false },
+      }),
+    )
+  } catch (err) {
+    if (isConditionalCheckFailedError(err)) return { count: 0 }
+    throw err
+  }
+  return { count: 1 }
+}
+
 export async function removeStaffAccount(id: string, businessId: string) {
-  // Update staff in app_data
-  await documentClient.send(
-    new UpdateCommand({
-      TableName: TableNames.appData,
-      Key: { pk: `STAFF#${id}`, sk: `BIZ#${businessId}` },
-      UpdateExpression: 'SET isActive = :inactive',
-      ExpressionAttributeValues: { ':inactive': false },
-    }),
-  )
+  // Soft-delete both rows that represent a staff member: the profile row
+  // (STAFF#{id} / PROFILE#{id}, read by getStaffById) and the business-list
+  // row (BIZ_STAFF#{businessId} / STAFF#{id}, read by getStaffByBusinessId).
+  // The previous key (STAFF#{id} / BIZ#{businessId}) matched neither, so
+  // removal silently deactivated nothing. Conditioned on the profile row
+  // existing so the caller's notFound guard is real.
+  try {
+    await documentClient.send(
+      new TransactWriteCommand({
+        TransactItems: [
+          {
+            Update: {
+              TableName: TableNames.appData,
+              Key: { pk: `STAFF#${id}`, sk: `PROFILE#${id}` },
+              UpdateExpression: 'SET isActive = :inactive',
+              ConditionExpression: 'attribute_exists(pk)',
+              ExpressionAttributeValues: { ':inactive': false },
+            },
+          },
+          {
+            Update: {
+              TableName: TableNames.appData,
+              Key: { pk: `BIZ_STAFF#${businessId}`, sk: `STAFF#${id}` },
+              UpdateExpression: 'SET isActive = :inactive',
+              ExpressionAttributeValues: { ':inactive': false },
+            },
+          },
+        ],
+      }),
+    )
+  } catch (err) {
+    const name = (err as { name?: string }).name
+    if (name === 'ConditionalCheckFailedException' || name === 'TransactionCanceledException') {
+      return { count: 0 }
+    }
+    throw err
+  }
   return { count: 1 }
 }
 

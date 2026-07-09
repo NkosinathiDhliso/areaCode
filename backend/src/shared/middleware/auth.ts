@@ -139,11 +139,16 @@ async function verifyToken(token: string, role: AuthRole): Promise<AuthPayload> 
     const bid = payload['custom:businessId'] as string | undefined
     if (sid) userId = sid
     if (bid) businessId = bid
-    if (!sid || !bid) {
-      const st = await getStaffByCognitoSub(cognitoSub)
-      if (!sid && st?.staffId) userId = st.staffId
-      if (!bid && st?.businessId) businessId = st.businessId
+    // Always resolve the staff row: it fills any missing claims AND lets us
+    // reject a removed staff member (isActive === false) whose access token is
+    // still valid. Disabling the Cognito user on removal only blocks refresh
+    // and new logins, so this row check is what makes removal take effect now.
+    const st = await getStaffByCognitoSub(cognitoSub)
+    if (st?.isActive === false) {
+      throw AppError.unauthorized('This staff account has been deactivated.')
     }
+    if (!sid && st?.staffId) userId = st.staffId
+    if (!bid && st?.businessId) businessId = st.businessId
   }
 
   const citySlug = payload['custom:citySlug'] as string | undefined

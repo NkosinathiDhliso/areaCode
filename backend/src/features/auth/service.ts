@@ -794,48 +794,73 @@ export async function acceptStaffInviteEmail(opts: {
   }
 
   const businessId = invite.businessId as string
-  const { countStaffForBusiness, findBusinessById } = await import('../business/repository.js')
-  const biz = await findBusinessById(businessId)
-  if (biz) {
-    const STAFF_LIMITS: Record<string, number | null> = {
-      free: 2,
-      starter: 2,
-      growth: 5,
-      pro: null,
-      payg: 2,
-    }
-    const limit = STAFF_LIMITS[biz.tier ?? 'free']
-    if (limit !== null && limit !== undefined) {
-      const count = await countStaffForBusiness(businessId)
-      if (count >= limit) {
-        throw AppError.forbidden(`Staff limit reached for ${biz.tier} tier (max ${limit})`)
-      }
-    }
+  const { assertStaffCapacity } = await import('../business/service.js')
+  await assertStaffCapacity(businessId)
+
+  // Look up any existing staff row for this email. An ACTIVE match is a real
+  // duplicate; a removed (inactive) one is reactivated in place below.
+  const existing = await repo.findStaffByEmail(businessId, email)
+  if (existing && existing.isActive !== false) {
+    throw AppError.conflict('A staff member with this email already exists for this business.')
   }
 
-  const cognitoUser = await cognito.createEmailPasswordUser('staff', email, opts.password)
-  await repo.acceptStaffInvite(opts.token)
-
   const inviteRole = (invite.role as string) ?? 'staff'
-  const staff = await repo.createStaffAccount({
-    businessId,
-    name: opts.name.trim(),
-    email,
-    cognitoSub: cognitoUser.sub,
-    role: inviteRole as 'manager' | 'staff',
-  })
 
-  await cognito.updateUserAttributes('staff', email, {
-    staffId: staff.staffId,
-    businessId,
-  })
+  // Burn the token first (mutex against concurrent accepts), then create or
+  // reactivate. If it fails before the account exists, roll the token back so
+  // the invitee is not stranded with a consumed invite and no account.
+  await repo.acceptStaffInvite(opts.token)
+  let staffCreated = false
+  try {
+    let staff: { staffId: string; name: string; businessId: string } | null = null
+    let sub: string | undefined
 
-  const tokens = await cognito.passwordAuth('staff', email, opts.password)
+    try {
+      const created = await cognito.createEmailPasswordUser('staff', email, opts.password)
+      sub = created.sub
+    } catch (err) {
+      if (!(err instanceof cognito.UsernameTakenError)) throw err
+      // A Cognito email/password user already owns this address. If it backs a
+      // removed staff member of this business, recover and reactivate it in
+      // place; otherwise it is a genuine duplicate.
+      if (existing && existing.isActive === false && existing.cognitoSub) {
+        const recovered = await cognito.recoverOrphanEmailUser('staff', email, opts.password)
+        sub = recovered.sub
+        await cognito.enableCognitoUser('staff', existing.cognitoSub as string)
+        staff = await repo.reactivateStaff(existing.staffId, businessId, opts.name.trim())
+      } else {
+        throw AppError.conflict('An account already exists for this email. Sign in instead.')
+      }
+    }
 
-  return {
-    accessToken: tokens.accessToken,
-    refreshToken: tokens.refreshToken,
-    staff: { id: staff.staffId, name: staff.name, businessId: staff.businessId },
+    if (!staff) {
+      // No prior account, or a removed one created under a different sign-in
+      // method (e.g. Google): create a fresh staff account.
+      staff = await repo.createStaffAccount({
+        businessId,
+        name: opts.name.trim(),
+        email,
+        cognitoSub: sub as string,
+        role: inviteRole as 'manager' | 'staff',
+      })
+    }
+    staffCreated = true
+
+    await cognito.updateUserAttributes('staff', email, {
+      staffId: staff.staffId,
+      businessId,
+    })
+
+    const tokens = await cognito.passwordAuth('staff', email, opts.password)
+
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      staff: { id: staff.staffId, name: staff.name, businessId: staff.businessId },
+    }
+  } catch (err) {
+    if (!staffCreated) await repo.unacceptStaffInvite(opts.token).catch(() => {})
+    throw err
   }
 }
 
@@ -874,49 +899,62 @@ export async function staffOAuthAcceptInvite(opts: {
     throw AppError.forbidden('Sign in with the Google account that matches the invited email.')
   }
 
+  const businessId = invite.businessId as string
+
+  // An account already linked to this Google identity: reactivate it if it is a
+  // removed member of THIS business (re-invite of the same person), otherwise
+  // it is a genuine conflict.
   const linked = await repo.findStaffByCognitoSub(opts.cognitoSub)
-  if (linked) {
+  if (linked && linked.isActive !== false) {
     throw AppError.conflict('This Google account is already linked to a staff profile.')
   }
+  const reactivateTarget = linked && linked.isActive === false && linked.businessId === businessId ? linked : null
 
-  const businessId = invite.businessId as string
-  const { countStaffForBusiness, findBusinessById } = await import('../business/repository.js')
-  const biz = await findBusinessById(businessId)
-  if (biz) {
-    const STAFF_LIMITS: Record<string, number | null> = {
-      free: 2,
-      starter: 2,
-      growth: 5,
-      pro: null,
-      payg: 2,
-    }
-    const limit = STAFF_LIMITS[biz.tier ?? 'free']
-    if (limit !== null && limit !== undefined) {
-      const count = await countStaffForBusiness(businessId)
-      if (count >= limit) {
-        throw AppError.forbidden(`Staff limit reached for ${biz.tier} tier (max ${limit})`)
-      }
-    }
+  const { assertStaffCapacity } = await import('../business/service.js')
+  await assertStaffCapacity(businessId)
+
+  // Reject a duplicate: this email already backs an active staff member here
+  // (e.g. they already accepted a different invite via email/password).
+  const existing = await repo.findStaffByEmail(businessId, email)
+  if (existing && existing.isActive !== false) {
+    throw AppError.conflict('A staff member with this email already exists for this business.')
   }
 
-  await repo.acceptStaffInvite(opts.inviteToken)
-
   const inviteRole = (invite.role as string) ?? 'staff'
-  const staff = await repo.createStaffAccount({
-    businessId,
-    name: opts.name.trim(),
-    cognitoSub: opts.cognitoSub,
-    email,
-    role: inviteRole as 'manager' | 'staff',
-  })
 
-  await cognito.updateUserAttributesByCognitoSub('staff', opts.cognitoSub, {
-    staffId: staff.staffId,
-    businessId,
-  })
+  // Burn the token first (mutex), then create or reactivate. Roll back on a
+  // failure that happens before the staff account exists.
+  await repo.acceptStaffInvite(opts.inviteToken)
+  let staffCreated = false
+  try {
+    let staff: { staffId: string; name: string; businessId: string } | null = null
 
-  return {
-    staff: { id: staff.staffId, name: staff.name, businessId: staff.businessId },
+    if (reactivateTarget) {
+      await cognito.enableCognitoUser('staff', opts.cognitoSub)
+      staff = await repo.reactivateStaff(reactivateTarget.staffId, businessId, opts.name.trim())
+    }
+    if (!staff) {
+      staff = await repo.createStaffAccount({
+        businessId,
+        name: opts.name.trim(),
+        cognitoSub: opts.cognitoSub,
+        email,
+        role: inviteRole as 'manager' | 'staff',
+      })
+    }
+    staffCreated = true
+
+    await cognito.updateUserAttributesByCognitoSub('staff', opts.cognitoSub, {
+      staffId: staff.staffId,
+      businessId,
+    })
+
+    return {
+      staff: { id: staff.staffId, name: staff.name, businessId: staff.businessId },
+    }
+  } catch (err) {
+    if (!staffCreated) await repo.unacceptStaffInvite(opts.inviteToken).catch(() => {})
+    throw err
   }
 }
 

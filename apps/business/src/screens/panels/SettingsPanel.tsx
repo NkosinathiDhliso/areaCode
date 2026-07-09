@@ -17,8 +17,12 @@ interface StaffInvite {
 }
 
 function getInviteUrl(token: string): string {
-  const base = window.location.origin.replace('business.', 'staff.')
-  return `${base}/staff-invite/${token}`
+  // Prefer the configured staff origin. Fall back to swapping the `business.`
+  // subdomain for `staff.` only when it is not set (local dev), since the
+  // string swap silently produces a wrong link on any host without that prefix.
+  const configured = (import.meta.env['VITE_STAFF_URL'] as string | undefined)?.trim()
+  const base = configured || window.location.origin.replace('business.', 'staff.')
+  return `${base.replace(/\/$/, '')}/staff-invite/${token}`
 }
 
 export function SettingsPanel() {
@@ -125,6 +129,15 @@ export function SettingsPanel() {
 
   async function handleRemoveStaff(staffId: string) {
     setConfirmRemoveStaffId(staffId)
+  }
+
+  async function handleRevokeInvite(token: string) {
+    try {
+      await api.delete(`/v1/business/staff/invites/${token}`)
+      setInvites((prev) => prev.filter((i) => i.inviteToken !== token))
+    } catch {
+      useErrorStore.getState().showError("Couldn't revoke invite. Try again.")
+    }
   }
 
   function confirmRemoveStaff() {
@@ -265,9 +278,17 @@ export function SettingsPanel() {
                       Expires {new Date(inv.expiresAt).toLocaleDateString()}
                     </span>
                   </div>
-                  <button onClick={() => handleCopyLink(inv.inviteToken)} className="text-[var(--accent)] text-xs">
-                    Copy Link
-                  </button>
+                  <div className="flex flex-row items-center gap-3">
+                    <button onClick={() => handleCopyLink(inv.inviteToken)} className="text-[var(--accent)] text-xs">
+                      Copy Link
+                    </button>
+                    <button
+                      onClick={() => void handleRevokeInvite(inv.inviteToken)}
+                      className="text-[var(--danger)] text-xs"
+                    >
+                      Revoke
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

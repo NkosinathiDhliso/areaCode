@@ -11,6 +11,7 @@ import {
   trialStartBodySchema,
   boostBodySchema,
   staffInviteBodySchema,
+  staffInviteTokenParamsSchema,
   staffIdParamsSchema,
 } from './types.js'
 import { z } from 'zod'
@@ -332,6 +333,24 @@ export async function businessRoutes(app: FastifyInstance) {
       const auth = getAuth(request)
       const invites = await service.listStaffInvites(auth.userId)
       return { items: invites }
+    },
+  )
+
+  // DELETE /v1/business/staff/invites/:token
+  app.delete(
+    '/v1/business/staff/invites/:token',
+    {
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('manage_staff'),
+        validate({ params: staffInviteTokenParamsSchema }),
+      ],
+    },
+    async (request, reply) => {
+      const auth = getAuth(request)
+      const params = request.params as z.infer<typeof staffInviteTokenParamsSchema>
+      await service.revokeStaffInvite(auth.userId, params.token)
+      return reply.status(204).send()
     },
   )
 

@@ -101,8 +101,15 @@ export function StaffOAuthCallback() {
 
         setAuth(tokens.access_token, tokens.refresh_token, sync.staff.id, sync.staff.businessId, sync.staff.name)
         window.history.replaceState({}, '', '/')
-      } catch {
-        if (!cancelled) setError(t('auth.oauth.failed', 'Google sign-in failed. Try again.'))
+      } catch (err) {
+        if (cancelled) return
+        // Surface the server's specific reason (wrong Google email, invite
+        // expired/already used, staff limit reached) instead of a generic
+        // failure. Only fall back to the generic copy for opaque errors
+        // (token exchange, network) that carry no useful message.
+        const message = err instanceof Error ? err.message : ''
+        const generic = t('auth.oauth.failed', 'Google sign-in failed. Try again.')
+        setError(message && !message.startsWith('sync_failed_') ? message : generic)
       }
     }
 

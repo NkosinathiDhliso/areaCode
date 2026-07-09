@@ -25,6 +25,7 @@ import {
   VerifySoftwareTokenCommand,
   AdminDeleteUserCommand,
   AdminDisableUserCommand,
+  AdminEnableUserCommand,
   AdminUserGlobalSignOutCommand,
   ListUsersCommand,
   type AuthFlowType,
@@ -610,6 +611,16 @@ export async function adminSetUserPassword(role: AuthRole, username: string, pas
 }
 
 // ─── Disable User ───────────────────────────────────────────────────────────
+
+export async function enableCognitoUser(role: AuthRole, cognitoSub: string) {
+  const pool = getPool(role)
+  await cognitoClient.send(
+    new AdminEnableUserCommand({
+      UserPoolId: pool.userPoolId,
+      Username: cognitoSub,
+    }),
+  )
+}
 
 export async function disableCognitoUser(role: AuthRole, cognitoSub: string) {
   const pool = getPool(role)
