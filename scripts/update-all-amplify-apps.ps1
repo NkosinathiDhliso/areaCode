@@ -92,6 +92,12 @@ foreach ($app in $AmplifyApps) {
     if (($app.Name -eq "Web (Main)" -or $app.Name -eq "Business") -and $MapboxToken) {
         $managed['VITE_MAPBOX_TOKEN'] = $MapboxToken
     }
+    # The Business dashboard generates staff invite links pointing at the staff
+    # portal. Give it the staff origin explicitly so the link never depends on a
+    # `business.`->`staff.` hostname swap.
+    if ($app.Name -eq "Business") {
+        $managed['VITE_STAFF_URL'] = "https://staff.areacode.co.za"
+    }
     if ($app.RumMonitorId -and $app.RumIdentityPool) {
         $managed['VITE_RUM_APP_MONITOR_ID'] = $app.RumMonitorId
         $managed['VITE_RUM_IDENTITY_POOL_ID'] = $app.RumIdentityPool
