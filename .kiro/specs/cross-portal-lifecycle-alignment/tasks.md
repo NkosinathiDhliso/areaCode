@@ -92,33 +92,33 @@ phone identifiers.
     - Copy per R4.1/R4.3; driven by `venueActive`; jsdom test
     - _Requirements: 4.1, 4.3_
 
-- [ ] 6. Consumer check-in outbox (R5)
-  - [ ] 6.1 `apps/web/src/lib/checkinOutbox.ts` pure logic core
+- [x] 6. Consumer check-in outbox (R5)
+  - [x] 6.1 `apps/web/src/lib/checkinOutbox.ts` pure logic core
     - Enqueue decision (network/5xx only), retry schedule 30s/2m/8m, park
       after 3, Replay_Window discard before any network call, injected
       storage adapter
     - _Requirements: 5.1, 5.2, 5.4_
-  - [ ] 6.2 Write property test for the outbox state machine
+  - [x] 6.2 Write property test for the outbox state machine
     - Property 2: single-state invariant, retry cap, no stale network calls,
       success/4xx always remove
     - _Requirements: 5.1, 5.2, 5.4, 5.5_
-  - [ ] 6.3 `useCheckinOutbox` pump hook wired into the check-in flow
+  - [x] 6.3 `useCheckinOutbox` pump hook wired into the check-in flow
     - Interval + `online` event, cleanup on unmount, disabled buttons during
       in-flight retries where surfaced
     - _Requirements: 5.1, 5.2_
-  - [ ] 6.4 ProfileScreen parked-failures section
+  - [x] 6.4 ProfileScreen parked-failures section
     - Retry (re-enqueue, Replay_Window permitting) and discard actions; jsdom
       test
     - _Requirements: 5.6_
 
-- [ ] 7. Record deferred-surface decisions (R6)
-  - [ ] 7.1 Annotate `docs/PLATFORM_AUDIT_FINDINGS.md`
+- [x] 7. Record deferred-surface decisions (R6)
+  - [x] 7.1 Annotate `docs/PLATFORM_AUDIT_FINDINGS.md`
     - C4 closed by this spec; mobile deferral and its outbox follow-up
       recorded with the no-phone-auth binding
     - _Requirements: 6.1, 6.2_
 
-- [ ] 8. End-to-end sweep
-  - [ ] 8.1 Playwright: staff home renders the lapsed banner for a demoted
+- [x] 8. End-to-end sweep
+  - [x] 8.1 Playwright: staff home renders the lapsed banner for a demoted
         fixture business
-  - [ ] 8.2 Playwright: consumer profile shows a parked check-in and retry
+  - [x] 8.2 Playwright: consumer profile shows a parked check-in and retry
         path (mocked network failure)

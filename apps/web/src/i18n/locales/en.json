@@ -31,6 +31,8 @@
   "checkin.scanQr": "Scan the venue's QR code to check in",
   "checkin.locating": "Locating...",
   "checkin.connectToCheckIn": "Connect to check in",
+  "checkin.offline": "You are offline. Reconnect to check in.",
+  "checkin.queued": "Check-in saved. We'll complete it as soon as you're back online.",
   "checkin.celebrate.title": "You're in",
   "checkin.celebrate.total": "{{count}} check-ins",
   "checkin.celebrate.streak": "{{count}}-night streak",

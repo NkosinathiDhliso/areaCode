@@ -179,12 +179,19 @@ Replace the opt-in `broadcast_location` privacy toggle with a structural friends
 - [x] 11. Checkpoint — Ensure all tests pass
   - All tests pass (1 pre-existing flaky timeout unrelated to this feature).
 
-- [ ] 12. Property-based test for check-in contribution
-  - [ ]\* 12.1 Write property test for check-in always contributes — Property 1
+- [x] 12. Property-based test for check-in contribution
+  - [x]\* 12.1 Write property test for check-in always contributes — Property 1
     - **Property 1: Check-in always contributes**
     - Generate random check-in inputs, mock Redis/socket, verify pulse score recalculated, counters incremented, socket events emitted
     - No user relationship or consent value suppresses any update
     - **Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5, 9.1**
+    - Implemented in
+      `backend/src/features/check-in/__tests__/checkin-always-contributes.property.test.ts`.
+      This DynamoDB implementation folds unique-user tracking into the daily
+      counter approximation (no Redis SADD), so the test asserts the
+      `kvIncr(checkin:today)` + `pulse:{cityId}:{nodeId}` write + `emitPulseUpdate`
+      that the real code performs across randomised consent/relationship/setting
+      inputs.
 
 - [x] 13. Final checkpoint — Ensure all tests pass
   - 135/136 tests pass. The 1 failure is a pre-existing flaky `mockDelay` timeout test.

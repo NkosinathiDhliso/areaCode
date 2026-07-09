@@ -13,23 +13,28 @@ live codebase on June 1, 2026. Most items flagged as "missing" had already been 
 and wired up by the time of re-verification. Treat the per-item verdicts in this notice
 as authoritative; the original finding text is retained below for historical context only.
 
-| Finding                       | Original claim                | Verified status                                                                                                                                                                                                                                                     |
-| ----------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| C1 Mobile app                 | "Incomplete / non-functional" | **DONE.** Full Expo Router app (auth, tabs, map, check-in, QR). Push registration is now implemented in `apps/mobile/src/lib/push.ts` (permission + Expo token + `POST /v1/users/me/push-token`) and wired into `_layout.tsx`, including tap-to-route deep-linking. |
-| C2 WebSocket token refresh    | "Reconnection storms"         | **DONE (by design).** `reconnectWithUrl()` reconnects with the fresh token; no dedicated refresh endpoint needed.                                                                                                                                                   |
-| C3 Push backend               | "No integration"              | **DONE.** `POST /v1/users/me/push-token` persists tokens; `sendExpoPush()` delivers via Expo. No separate worker (sent inline).                                                                                                                                     |
-| C4 Check-in error recovery    | "No offline queue"            | **OPEN.** No durable offline/retry queue on web or mobile. Largest remaining item.                                                                                                                                                                                  |
-| C5 Staff My Rank              | "Not implemented"             | **DONE.** `MyRank.tsx` renders on `StaffHome`, backed by `/v1/business/staff/leaderboard`.                                                                                                                                                                          |
-| C6 First-Get issuer           | "No UI"                       | **DONE.** `FirstGetIssuer.tsx` on `StaffHome` + backend preview/confirm/mint endpoints.                                                                                                                                                                             |
-| C7 Admin retention dashboard  | "No screen"                   | **DONE.** `RetentionDashboard.tsx` wired into admin nav; `/v1/admin/retention` + `retention.ts` exist.                                                                                                                                                              |
-| C8 Release-health gate        | "No auto-rollback"            | **DONE.** `release-health-gate.yml` queries Sentry crash-free rate and auto-rolls-back via Lambda alias swap.                                                                                                                                                       |
-| C9 GPS proximity nudge        | "Not implemented"             | **DONE.** `useProximityNudge.ts` (with tests) drives `ProximityNudgeBanner` on web + mobile.                                                                                                                                                                        |
-| C10 Threshold grandfathering  | "Unclear"                     | **DONE.** `threshold-lock.ts` implements it with property tests.                                                                                                                                                                                                    |
-| C11 "Tier never expires" copy | "Missing"                     | **DONE (June 1, 2026).** Already on web; now added to mobile rewards + profile screens.                                                                                                                                                                             |
-| C12 T&C tier permanence       | "Not surfaced"                | **DONE (June 1, 2026).** `TIER_PERMANENCE_CLAUSE` now rendered in web `TermsScreen` and shared `legal-content.ts` Terms section 4. (`AREA_CODE_CONSENT_VERSION` bump still deferred — see note.)                                                                    |
-| H2 Check-in rate limiting     | "No rate limit"               | **DONE.** `rateLimitMiddleware({ key: 'check-in', max: 10, windowSeconds: 60 })` on `POST /v1/check-in`.                                                                                                                                                            |
+| Finding                       | Original claim                | Verified status                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C1 Mobile app                 | "Incomplete / non-functional" | **DONE.** Full Expo Router app (auth, tabs, map, check-in, QR). Push registration is now implemented in `apps/mobile/src/lib/push.ts` (permission + Expo token + `POST /v1/users/me/push-token`) and wired into `_layout.tsx`, including tap-to-route deep-linking.                                                                                                                                      |
+| C2 WebSocket token refresh    | "Reconnection storms"         | **DONE (by design).** `reconnectWithUrl()` reconnects with the fresh token; no dedicated refresh endpoint needed.                                                                                                                                                                                                                                                                                        |
+| C3 Push backend               | "No integration"              | **DONE.** `POST /v1/users/me/push-token` persists tokens; `sendExpoPush()` delivers via Expo. No separate worker (sent inline).                                                                                                                                                                                                                                                                          |
+| C4 Check-in error recovery    | "No offline queue"            | **DONE (web) by `cross-portal-lifecycle-alignment` R5.** Durable localStorage outbox (`apps/web/src/lib/checkinOutbox.ts` + `useCheckinOutbox` pump + ProfileScreen parked-failures), backend replay accepts `capturedAt` within a 15-min Replay_Window with `(userId, nodeId, capturedAt)` idempotency and delivery-time presence (honest). Mobile equivalent deferred with the mobile app (see below). |
+| C5 Staff My Rank              | "Not implemented"             | **DONE.** `MyRank.tsx` renders on `StaffHome`, backed by `/v1/business/staff/leaderboard`.                                                                                                                                                                                                                                                                                                               |
+| C6 First-Get issuer           | "No UI"                       | **DONE.** `FirstGetIssuer.tsx` on `StaffHome` + backend preview/confirm/mint endpoints.                                                                                                                                                                                                                                                                                                                  |
+| C7 Admin retention dashboard  | "No screen"                   | **DONE.** `RetentionDashboard.tsx` wired into admin nav; `/v1/admin/retention` + `retention.ts` exist.                                                                                                                                                                                                                                                                                                   |
+| C8 Release-health gate        | "No auto-rollback"            | **DONE.** `release-health-gate.yml` queries Sentry crash-free rate and auto-rolls-back via Lambda alias swap.                                                                                                                                                                                                                                                                                            |
+| C9 GPS proximity nudge        | "Not implemented"             | **DONE.** `useProximityNudge.ts` (with tests) drives `ProximityNudgeBanner` on web + mobile.                                                                                                                                                                                                                                                                                                             |
+| C10 Threshold grandfathering  | "Unclear"                     | **DONE.** `threshold-lock.ts` implements it with property tests.                                                                                                                                                                                                                                                                                                                                         |
+| C11 "Tier never expires" copy | "Missing"                     | **DONE (June 1, 2026).** Already on web; now added to mobile rewards + profile screens.                                                                                                                                                                                                                                                                                                                  |
+| C12 T&C tier permanence       | "Not surfaced"                | **DONE (June 1, 2026).** `TIER_PERMANENCE_CLAUSE` now rendered in web `TermsScreen` and shared `legal-content.ts` Terms section 4. (`AREA_CODE_CONSENT_VERSION` bump still deferred — see note.)                                                                                                                                                                                                         |
+| H2 Check-in rate limiting     | "No rate limit"               | **DONE.** `rateLimitMiddleware({ key: 'check-in', max: 10, windowSeconds: 60 })` on `POST /v1/check-in`.                                                                                                                                                                                                                                                                                                 |
 
-**Net remaining work:** C4 (offline/retry queue) and the client wiring for C1 (mobile push).
+**Net remaining work:** the client wiring for C1 (mobile push). C4 is closed for
+web by `cross-portal-lifecycle-alignment`. The mobile app stays deferred and
+excluded from CI (the `build-frontends` matrix in `.github/workflows/ci.yml`
+covers web, admin, business, and staff only); its check-in outbox is a recorded
+follow-up bound to the same email + Google OAuth surface (no phone/SMS) when the
+mobile app resumes, per `.kiro/steering/no-sms-no-phone-auth.md`.
 The `AREA_CODE_CONSENT_VERSION` env bump for C12 is intentionally deferred because a major
 version bump forces all users to re-consent on next open; do it as a deliberate ops step.
 
@@ -131,6 +136,28 @@ This audit identifies **23 critical gaps** and **17 medium-priority issues** acr
 ---
 
 ### C4. No Error Recovery for Failed Check-Ins
+
+> **CLOSED for web (`cross-portal-lifecycle-alignment`, R5).** Shipped exactly as
+> the required actions below describe, with honest-presence guarantees layered on:
+>
+> - Pure outbox core `apps/web/src/lib/checkinOutbox.ts` (enqueue decision on
+>   network/5xx only, retry schedule 30s/2m/8m, park after 3, Replay_Window
+>   discard before any network call), fast-check property-tested (Property 2).
+> - `useCheckinOutbox` pump (interval + `online` event, mounted at the app root
+>   while authenticated); `checkinOutboxStore` persists to localStorage.
+> - ProfileScreen "Check-ins that need attention" section with retry/discard.
+> - Backend accepts an optional `capturedAt` within a 15-minute Replay_Window
+>   (`checkin_replay_expired` otherwise), validates proximity on the submitted
+>   original coordinates, and starts presence at DELIVERY time, never backdated
+>   (`honest-presence.md`). Double delivery is idempotent on
+>   `(userId, nodeId, capturedAt)`.
+>
+> **Mobile receives no changes under this spec.** The mobile app stays deferred,
+> excluded from CI (the `build-frontends` matrix in `.github/workflows/ci.yml`
+> covers web, admin, business, and staff only), and bound to email + Google OAuth
+> on resume (`.kiro/steering/no-sms-no-phone-auth.md`). Its outbox equivalent
+> (AsyncStorage instead of localStorage) is the recorded follow-up. No phone/SMS
+> identifiers in outbox rows.
 
 **Location:** `apps/web/src/screens/MapScreen.tsx`, `apps/mobile/` (when implemented)  
 **Impact:** Users lose check-ins when network fails or GPS is inaccurate
