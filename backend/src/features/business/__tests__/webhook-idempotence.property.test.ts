@@ -34,8 +34,8 @@
  *     non-conditional write (auto-clears after firing once)
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ─── In-memory DynamoDBDocumentClient test double ───────────────────────────
 //

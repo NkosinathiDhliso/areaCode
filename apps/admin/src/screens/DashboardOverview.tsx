@@ -1,7 +1,6 @@
+import { api } from '@area-code/shared/lib/api'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-
-import { api } from '@area-code/shared/lib/api'
 
 interface DashboardMetrics {
   totalConsumers: number
@@ -18,7 +17,7 @@ export function DashboardOverview() {
   const { t } = useTranslation()
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
   const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState(false)
+  const [_loadError, setLoadError] = useState(false)
 
   async function fetchMetrics() {
     try {

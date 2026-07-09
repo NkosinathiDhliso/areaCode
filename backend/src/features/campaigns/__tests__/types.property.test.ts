@@ -14,8 +14,9 @@
  * **Validates: Requirements 5.3, 5.4, C1**
  */
 
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
+
 import { createCampaignBodySchema, CAMPAIGN_CHANNELS } from '../types.js'
 
 // ─── Generators ─────────────────────────────────────────────────────────────

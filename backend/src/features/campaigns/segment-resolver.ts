@@ -17,7 +17,9 @@
 // ============================================================================
 
 import { getTier } from '@area-code/shared/constants/tier-levels'
+
 import { getCheckInsByNode } from '../check-in/dynamodb-repository.js'
+
 import type { Segment } from './types.js'
 
 /** Input to the segment resolver. */

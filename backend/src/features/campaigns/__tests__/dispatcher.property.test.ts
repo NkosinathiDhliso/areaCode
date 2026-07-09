@@ -22,8 +22,8 @@
  * **Validates: Requirements 10.1**
  */
 
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 import { chunk, tokenizeRecipients, MAX_BATCH_SIZE } from '../dispatcher.js'
 

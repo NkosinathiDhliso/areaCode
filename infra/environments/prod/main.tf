@@ -62,13 +62,6 @@ variable "spotify_redirect_uri" {
   default     = "https://areacode.co.za/api/v1/streaming/spotify/callback"
 }
 
-variable "sentry_dsn" {
-  description = "Sentry DSN for backend error monitoring. Leave empty to disable Sentry."
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
 variable "anonymization_salt" {
   description = "Salt used to anonymize user IDs in venue intelligence reports"
   type        = string
@@ -833,7 +826,6 @@ module "lambda_api" {
     AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
     AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
     AREA_CODE_S3_MEDIA_BUCKET               = module.s3_media.bucket_name
-    AREA_CODE_SQS_PUSH_QUEUE_URL            = module.sqs_push_sender.queue_url
     AREA_CODE_CONSENT_VERSION               = "v1.0"
     AREA_CODE_ANONYMIZATION_SALT            = var.anonymization_salt
     # Win-back campaigns: the API async-invokes this dispatcher on send-now.
@@ -860,9 +852,7 @@ module "lambda_api" {
     APPLE_MUSIC_TEAM_ID     = var.apple_music_team_id
     APPLE_MUSIC_KEY_ID      = var.apple_music_key_id
     APPLE_MUSIC_PRIVATE_KEY = var.apple_music_private_key
-    # Error monitoring (no-op if sentry_dsn is empty)
-    SENTRY_DSN = var.sentry_dsn
-    GIT_SHA    = var.git_sha
+    GIT_SHA                 = var.git_sha
   }
 }
 
@@ -1082,7 +1072,6 @@ module "lambda_report_generator" {
     BUSINESSES_TABLE             = aws_dynamodb_table.businesses.name
     APP_DATA_TABLE               = aws_dynamodb_table.app_data.name
     AREA_CODE_REPORT_QUEUE_URL   = module.sqs_report_generation.queue_url
-    AREA_CODE_SQS_PUSH_QUEUE_URL = module.sqs_push_sender.queue_url
     AREA_CODE_ANONYMIZATION_SALT = var.anonymization_salt
   }
 }
@@ -1108,9 +1097,9 @@ module "lambda_campaign_dispatcher" {
 }
 
 # Win-back campaign sender Lambda — SQS-triggered worker; delivers one batch via
-# push (existing push-sender queue) and/or email (SES), writing one anonymized
-# send record per recipient. Shares the QR HMAC secret so the unsubscribe tokens
-# it signs verify against the API's unsubscribe route.
+# email (SES), writing one anonymized send record per recipient. Shares the QR
+# HMAC secret so the unsubscribe tokens it signs verify against the API's
+# unsubscribe route.
 module "lambda_campaign_sender" {
   source        = "../../modules/lambda"
   env           = local.env
@@ -1118,13 +1107,12 @@ module "lambda_campaign_sender" {
   timeout       = 120
   memory_size   = 512
   environment_variables = {
-    AREA_CODE_ENV                = local.env
-    USERS_TABLE                  = aws_dynamodb_table.users.name
-    BUSINESSES_TABLE             = aws_dynamodb_table.businesses.name
-    APP_DATA_TABLE               = aws_dynamodb_table.app_data.name
-    AREA_CODE_SQS_PUSH_QUEUE_URL = module.sqs_push_sender.queue_url
-    AREA_CODE_API_BASE_URL       = "https://api.areacode.co.za"
-    AREA_CODE_QR_HMAC_SECRET     = data.aws_secretsmanager_secret_version.qr_hmac.secret_string
+    AREA_CODE_ENV            = local.env
+    USERS_TABLE              = aws_dynamodb_table.users.name
+    BUSINESSES_TABLE         = aws_dynamodb_table.businesses.name
+    APP_DATA_TABLE           = aws_dynamodb_table.app_data.name
+    AREA_CODE_API_BASE_URL   = "https://api.areacode.co.za"
+    AREA_CODE_QR_HMAC_SECRET = data.aws_secretsmanager_secret_version.qr_hmac.secret_string
   }
 }
 
@@ -1307,13 +1295,6 @@ module "sqs_reward_eval" {
   enable_lambda_mapping = true
 }
 
-module "sqs_push_sender" {
-  source             = "../../modules/sqs"
-  env                = local.env
-  queue_name         = "push-sender"
-  visibility_timeout = 30
-}
-
 module "sqs_report_generation" {
   source                = "../../modules/sqs"
   env                   = local.env
@@ -1345,7 +1326,7 @@ resource "aws_iam_role_policy" "api_sqs_send" {
     Statement = [{
       Effect   = "Allow"
       Action   = ["sqs:SendMessage"]
-      Resource = [module.sqs_reward_eval.queue_arn, module.sqs_push_sender.queue_arn]
+      Resource = [module.sqs_reward_eval.queue_arn]
     }]
   })
 }
@@ -1480,11 +1461,6 @@ resource "aws_iam_role_policy" "campaign_sender_sqs" {
         Effect   = "Allow"
         Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
         Resource = [module.sqs_campaign_send.queue_arn]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["sqs:SendMessage"]
-        Resource = [module.sqs_push_sender.queue_arn]
       }
     ]
   })
@@ -1531,11 +1507,6 @@ resource "aws_iam_role_policy" "reward_eval_sqs" {
         Effect   = "Allow"
         Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
         Resource = module.sqs_reward_eval.queue_arn
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["sqs:SendMessage"]
-        Resource = module.sqs_push_sender.queue_arn
       }
     ]
   })
@@ -1627,11 +1598,6 @@ resource "aws_iam_role_policy" "report_generator_sqs" {
         Effect   = "Allow"
         Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
         Resource = [module.sqs_report_generation.queue_arn]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["sqs:SendMessage"]
-        Resource = [module.sqs_push_sender.queue_arn]
       }
     ]
   })
@@ -2036,24 +2002,6 @@ resource "aws_cloudwatch_metric_alarm" "sqs_reward_eval_dlq" {
   }
 }
 
-resource "aws_cloudwatch_metric_alarm" "sqs_push_sender_dlq" {
-  alarm_name          = "area-code-${local.env}-sqs-push-sender-dlq"
-  alarm_description   = "Messages landed in the push-sender DLQ"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 1
-  metric_name         = "ApproximateNumberOfMessagesVisible"
-  namespace           = "AWS/SQS"
-  period              = 300
-  statistic           = "Maximum"
-  threshold           = 0
-  treat_missing_data  = "notBreaching"
-  alarm_actions       = [aws_sns_topic.alerts.arn]
-
-  dimensions = {
-    QueueName = "area-code-${local.env}-push-sender-dlq"
-  }
-}
-
 # Booster business alarms (booster-pricing-floor-and-audit R9.5, R9.6, R9.7)
 # Both metrics are emitted only on the actual event — no zero-count heartbeat,
 # so `notBreaching` is the safe default for missing-data treatment.
@@ -2154,7 +2102,7 @@ module "amplify_domain_staff" {
   ]
 }
 
-# --- CloudWatch RUM (frontend error/perf monitoring, replaces Sentry) ---
+# --- CloudWatch RUM (frontend error/perf monitoring) ---
 # Pay-per-event ($1 / 100k events). Cookies disabled at SDK level so no
 # consent banner is required under POPIA. See module docs for details.
 module "rum" {
@@ -2223,10 +2171,6 @@ output "media_bucket" {
 
 output "sqs_reward_eval_url" {
   value = module.sqs_reward_eval.queue_url
-}
-
-output "sqs_push_sender_url" {
-  value = module.sqs_push_sender.queue_url
 }
 
 output "sqs_report_generation_url" {

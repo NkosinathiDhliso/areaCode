@@ -39,7 +39,10 @@ jobs:
         run: pnpm exec tsc --noEmit
 
       - name: Lint
-        run: pnpm exec eslint . --max-warnings 900
+        # Warning_Ratchet: cap is the post-cleanup warning count. Only ever
+        # lower this number as the count drops; never raise it. ci.yml's lint
+        # job MUST enforce the same cap so master cannot drift above PRs.
+        run: pnpm exec eslint . --max-warnings 173
 
       - name: Tests with coverage
         run: pnpm exec vitest run --coverage

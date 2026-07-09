@@ -45,6 +45,29 @@ not yet queryable because those workers have not been invoked in prod (no log
 group exists yet); they self-resolve on first invocation. The four manual gates
 stay human by design.
 
+## Coverage changes since this run (billing-revenue-integrity)
+
+Recorded after this 2026-07-05 run, so the verbatim output below predates them
+and will differ from a future run:
+
+- The `push-sender` SQS queue and its DLQ were deleted. Report-ready
+  notifications now deliver via SES email plus WebSocket, so
+  `area-code-prod-push-sender-dlq` no longer exists. The go-live check no longer
+  probes that DLQ. The `[PASS] DLQ area-code-prod-push-sender-dlq` line in the
+  output below is from before the deletion and will not appear on future runs.
+- The go-live check now covers the billing pipeline. It asserts the Yoco secrets
+  `YOCO_WEBHOOK_SECRET` and `YOCO_PROD_SECRET_KEY` are present and non-empty on
+  `area-code-prod-api`, and `YOCO_WEBHOOK_SECRET` on `area-code-prod-yoco-webhook`
+  (presence only, secret values are never printed). It also probes the live
+  webhook route with an unsigned POST to `/v1/webhooks/yoco` and expects HTTP
+  401, proving the signature gate is alive and fails closed.
+- The billing lifecycle behind manual gate §1.3 is now shipped: a paid checkout
+  writes `paidUntil` and `paidInterval`, tiers expire with a 7-day grace window
+  and a renewal reminder email, boost purchases activate a bounded boost window,
+  and checkout redirects land on truthful screens in the business portal. A
+  future run will show the billing secret-presence and webhook-signature lines
+  and omit the push-sender DLQ line.
+
 ## Full output
 
 ```
@@ -242,7 +265,128 @@ that neither the script nor the e2e sweep can see.
    confirms, and sees Redeemed.
 2. §1.2 First live customer signup from the venue: Google OAuth or email; the
    new user lands on the map.
-3. §1.3 Yoco test payment upgrades venue to paid: the test-card webhook flips
-   the venue from trial to paid within 60s.
+3. §1.3 Yoco test payment upgrades venue to paid: after a Yoco test-mode card
+   checkout (card `4242 4242 4242 4242`), the business dashboard billing status
+   header flips to the plan badge plus the paid-until date (format
+   `<Plan> · paid until <date>`) within 60 seconds.
 4. §1.4 Map loads on a 2019 Android on mobile data: shows the map and at least
    one node within 10s.
+
+## Task 2.5 verification: monitoring swap (release-quality-and-ops-hygiene)
+
+Verification of the Sentry-to-CloudWatch monitoring swap (spec
+`release-quality-and-ops-hygiene`, R2.1 and R2.2). This records what was
+verified in the repo checkout and the exact live steps the founder must run to
+complete the dev-deploy portion. The live steps are not yet executed; they need
+AWS credentials and GitHub `workflow_dispatch` access this checkout does not
+have. Nothing below claims a deploy result that was not observed.
+
+### Verified locally (repo checkout, 18:09)
+
+- Backend Lambda build is clean after Sentry removal.
+  `pnpm --filter backend build:lambda` exits 0 and builds the monolith Lambda,
+  the WebSocket Lambda, and 14 worker Lambdas.
+- The freshly built bundle carries no Sentry code. A grep of `backend/dist/`
+  for `__SENTRY__`, `@sentry`, and `sentryWrapped` returns zero matches. (An
+  earlier grep hit was a stale pre-removal artifact that the rebuild replaced.)
+- No Sentry wiring remains in backend source. `backend/src/shared/monitoring/`
+  no longer exists, `@sentry/node` is absent from `backend/package.json`, and
+  the only "Sentry" token left in `backend/src` is the explanatory comment in
+  `app.ts` ("This is the one monitoring path (no Sentry).").
+- The Fastify error handler still logs structured errors. `app.ts`
+  `setErrorHandler` ends the 5xx path with `app.log.error(error)` before
+  returning the typed `{ error, message, statusCode }` body, so uncaught errors
+  land in the API Lambda CloudWatch log group as structured `error`-level lines.
+  AWS 4xx client errors log via `app.log.warn` and are not counted as 5xx.
+- The Health_Gate decision core is valid and behaves correctly.
+  `node --check scripts/health-gate-decision.mjs` passes; the Property 2 test
+  (`scripts/health-gate-decision.test.ts`) passes (2 tests); and the CLI path
+  the workflow calls returns `NO_ROLLBACK` (exit 0) for healthy signals,
+  `ROLLBACK` (exit 0) with `backend_alarm` and `frontend_regression` reasons for
+  a regression, and `MISSING_DATA` (exit 1, loud failure) for an empty signal
+  set.
+- All four workflow YAML files parse cleanly, including
+  `release-health-gate.yml`, `quality-gate.yml`, `ci.yml`, and `terraform.yml`.
+
+### Environment nuance (affects where the alarm check runs)
+
+`infra/environments/dev/main.tf` defines no CloudWatch metric alarms and no
+CloudWatch RUM module. The API error alarm (`area-code-prod-api-errors`), the
+p99 alarm (`area-code-prod-api-duration-p99`), and the four RUM monitors
+(`area-code-prod-{web,business,staff,admin}`) exist in prod only. So:
+
+- Structured-error logging is verified in dev against the dev API log group.
+- "The error alarm still evaluates" is a prod-scoped check against
+  `area-code-prod-api-errors` (the alarm the Health_Gate reads). There is no
+  dev alarm to evaluate.
+
+### Manual steps requiring live access (pending founder execution)
+
+Run from the repo root with AWS credentials for account 562691664641,
+region us-east-1.
+
+1. Dev deploy (canonical scripted path):
+
+   ```powershell
+   ./scripts/deploy-serverless.ps1 -Environment dev
+   ```
+
+   Expected: `area-code-dev-api` (and the dev WebSocket and worker Lambdas)
+   update without error. This is the break-glass path per `tech.md`.
+
+2. Confirm structured errors land in CloudWatch (dev). Drive one 5xx or inspect
+   recent errors, then read the dev API log group:
+
+   ```powershell
+   aws logs filter-log-events `
+     --log-group-name /aws/lambda/area-code-dev-api `
+     --filter-pattern '"level":50' `
+     --start-time ([DateTimeOffset]::UtcNow.AddMinutes(-30).ToUnixTimeMilliseconds()) `
+     --region us-east-1 --no-cli-pager
+   ```
+
+   Expected: pino `error`-level (`"level":50`) JSON lines for any uncaught
+   error, proving the `app.log.error` path reaches CloudWatch with no Sentry in
+   the chain. A quiet log with no errors is also a valid healthy result.
+
+3. Confirm the prod error alarm still evaluates (not in ALARM by construction,
+   just that it reads a state and is not INSUFFICIENT_DATA forever):
+
+   ```powershell
+   aws cloudwatch describe-alarms `
+     --alarm-names area-code-prod-api-errors area-code-prod-api-duration-p99 `
+     --query 'MetricAlarms[].{name:AlarmName,state:StateValue}' `
+     --output table --region us-east-1 --no-cli-pager
+   ```
+
+   Expected: each alarm reports `OK` or `ALARM` (a live evaluated state), not a
+   stuck `INSUFFICIENT_DATA`, confirming the Backend_Signal the Health_Gate
+   reads is alive.
+
+4. Run the gate workflow once on a branch (no rollback, dry run). From a branch
+   with these changes pushed:
+
+   ```powershell
+   gh workflow run release-health-gate.yml `
+     --ref <your-branch> `
+     -f sha=$(git rev-parse HEAD) `
+     -f dryRun=true `
+     -f waitMinutes=1
+   ```
+
+   Then watch the run:
+
+   ```powershell
+   gh run watch --exit-status
+   ```
+
+   Expected: the "Collect CloudWatch signals" step reads the four RUM monitors
+   and the two backend alarms, "Evaluate decision" prints a decision, and with
+   `dryRun=true` the "Auto-rollback (alias swap)" step is skipped. A
+   `MISSING_DATA` outcome fails the job loudly (exit 1) rather than passing
+   silently, which is the intended R2.4 behaviour when no RUM sessions exist in
+   the window yet; re-run with a longer `waitMinutes` once dev/prod traffic is
+   flowing, or confirm against a window with real sessions.
+
+On completion, record the observed decision, alarm states, and a confirming log
+line here, then mark task 2.5 complete.

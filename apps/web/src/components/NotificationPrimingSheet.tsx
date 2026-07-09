@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-
+import { BottomSheet } from '@area-code/shared/components/BottomSheet'
 import { api } from '@area-code/shared/lib/api'
 import { storage } from '@area-code/shared/lib/storage'
-import { BottomSheet } from '@area-code/shared/components/BottomSheet'
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface NearbyEvent {
   username: string

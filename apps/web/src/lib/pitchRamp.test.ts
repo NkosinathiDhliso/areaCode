@@ -57,7 +57,7 @@ describe('Feature: map-camera-gesture-feel, Property 1: sticky pitch offset', ()
         // freezes during a gesture. The system's state machine does not update
         // during a manual gesture, so the effective pitch stays constant.
         const manualGestureInProgress = true
-        const firstTarget = computeRampTarget(zooms[0]!, offset)
+        const _firstTarget = computeRampTarget(zooms[0]!, offset)
 
         // While manual gesture is active, no matter what zoom changes occur,
         // the system should not update the pitch (target stays frozen).

@@ -15,8 +15,8 @@
  *
  * Validates: Requirements 7.1, 7.9, 10.6, 10.7
  */
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 import { ARCHETYPE_CATALOG } from '../../constants/archetype-catalog'
 import { MUSIC_GENRES } from '../../constants/genre-weights'

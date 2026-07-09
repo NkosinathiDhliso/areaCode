@@ -1,8 +1,12 @@
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
-import type { PrivacyLevel } from '../../shared/privacy/types.js'
-import { DEFAULT_PRIVACY_LEVEL } from '../../shared/privacy/types.js'
+import type { ReportCategory } from '../../features/social/report-repository.js'
+import {
+  HIGH_PRIORITY_CATEGORIES,
+  determineReportPriority,
+  buildAbuseFlagForReport,
+} from '../../features/social/report-repository.js'
 import {
   initPrivacyGuard,
   checkPrivacy,
@@ -11,12 +15,8 @@ import {
   canEmitToFriends,
   sanitizeForBusiness,
 } from '../../shared/privacy/privacy-guard.js'
-import type { ReportCategory } from '../../features/social/report-repository.js'
-import {
-  HIGH_PRIORITY_CATEGORIES,
-  determineReportPriority,
-  buildAbuseFlagForReport,
-} from '../../features/social/report-repository.js'
+import type { PrivacyLevel } from '../../shared/privacy/types.js'
+import { DEFAULT_PRIVACY_LEVEL } from '../../shared/privacy/types.js'
 
 // ─── Arbitraries ────────────────────────────────────────────────────────────
 
@@ -661,7 +661,7 @@ describe('Property 26: Harassment reports create high-priority abuse flags', () 
   )
 
   /** Arbitrary for a report submission */
-  const reportDataArb = fc.record({
+  const _reportDataArb = fc.record({
     reportId: fc.uuid(),
     reporterId: fc.uuid(),
     reportedUserId: fc.uuid(),

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 import {
   RETENTION_YEARS_MS,
@@ -37,7 +37,7 @@ import {
 const msArb = fc.integer({ min: 0, max: 10_000_000_000_000 })
 
 /** ISO 8601 ms-precision UTC string round-tripped from an integer ms epoch. */
-const isoMsArb = msArb.map((ms) => new Date(ms).toISOString())
+const _isoMsArb = msArb.map((ms) => new Date(ms).toISOString())
 
 /**
  * Produces values that are NOT a valid ISO 8601 ms-precision UTC string:

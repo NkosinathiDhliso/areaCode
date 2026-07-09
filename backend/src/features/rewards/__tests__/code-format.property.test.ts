@@ -12,8 +12,8 @@
  * **Validates: Requirements 5.4**
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ─── Worker mock harness (mirrors workers/__tests__/reward-evaluator.test.ts) ─
 

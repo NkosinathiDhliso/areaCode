@@ -1,11 +1,11 @@
+import { getTierLabel } from '@area-code/shared/constants/tier-levels'
+import { api } from '@area-code/shared/lib/api'
+import type { User, Tier } from '@area-code/shared/types'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { api } from '@area-code/shared/lib/api'
-import type { User, Tier } from '@area-code/shared/types'
-import { getTierLabel } from '@area-code/shared/constants/tier-levels'
-import { useAdminAuthStore } from '../stores/adminAuthStore'
 import { ConsumerDetailPanel } from '../components/ConsumerDetailPanel'
+import { useAdminAuthStore } from '../stores/adminAuthStore'
 
 interface ConsumerDetail extends User {
   isDisabled: boolean

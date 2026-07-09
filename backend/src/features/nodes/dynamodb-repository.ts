@@ -1,7 +1,9 @@
 // DynamoDB Repository for Nodes Feature
 import { GetCommand, QueryCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
-import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
+
+import { documentClient, TableNames, isConditionalCheckFailedError } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
+
 import type { Node } from './types.js'
 
 // ============================================================================
@@ -114,6 +116,48 @@ export async function deleteNode(nodeId: string): Promise<void> {
   await documentClient.send(new DeleteCommand({ TableName: TableNames.nodes, Key: { nodeId } }))
 }
 
+/**
+ * Set the node's Boost_Window (`boostUntil`) with max-merge semantics: the
+ * window only ever grows, never shrinks. DynamoDB has no native `max()`, so we
+ * use a conditional UpdateItem that writes the new instant only when it is
+ * later than any existing one (or none is set). A rejected condition means the
+ * stored window already ends later, so we treat it as a benign no-op.
+ *
+ * `boostUntilIso` MUST be a millisecond ISO 8601 UTC string (as produced by
+ * `Date.prototype.toISOString`), which the rest of the codebase uses for
+ * timestamps. Such strings compare lexicographically in the same order as
+ * chronologically, so the `<` comparison in the condition is a true time
+ * comparison.
+ *
+ * Idempotent under webhook re-delivery: re-applying the same or an earlier
+ * window is a no-op, so a duplicated boost payment never extends the window a
+ * second time.
+ */
+export async function setNodeBoostWindow(nodeId: string, boostUntilIso: string): Promise<void> {
+  try {
+    await documentClient.send(
+      new UpdateCommand({
+        TableName: TableNames.nodes,
+        Key: { nodeId },
+        UpdateExpression: 'SET #boostUntil = :new, #updatedAt = :updatedAt',
+        ConditionExpression: 'attribute_not_exists(#boostUntil) OR #boostUntil < :new',
+        ExpressionAttributeNames: {
+          '#boostUntil': 'boostUntil',
+          '#updatedAt': 'updatedAt',
+        },
+        ExpressionAttributeValues: {
+          ':new': boostUntilIso,
+          ':updatedAt': new Date().toISOString(),
+        },
+      }),
+    )
+  } catch (err) {
+    // Existing window already ends later than the new one: max-merge no-op.
+    if (isConditionalCheckFailedError(err)) return
+    throw err
+  }
+}
+
 export async function listNodes(options?: {
   cityId?: string
   category?: string
@@ -188,6 +232,7 @@ function mapNode(item: Record<string, unknown>): Node {
     headerImageKey: (item['headerImageKey'] as string | null | undefined) ?? null,
     defaultArchetypeId: (item['defaultArchetypeId'] as string | null | undefined) ?? null,
     currentArchetypeId: (item['currentArchetypeId'] as string | null | undefined) ?? null,
+    boostUntil: (item['boostUntil'] as string | null | undefined) ?? null,
     createdAt: (item['createdAt'] as string) ?? '',
     updatedAt: (item['updatedAt'] as string) ?? '',
   }

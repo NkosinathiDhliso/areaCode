@@ -3,11 +3,12 @@
  * Emits simulated real-time events on timers for consumer and business apps.
  */
 import type { NodeState, ToastType } from '../types'
-import { MOCK_NODES } from './data/nodes'
-import { MOCK_USERS } from './data/users'
-import { MOCK_PULSE_SCORES } from './data/pulseScores'
-import { randomBetween } from './helpers'
+
 import { getUserMusicData } from './data/crowdVibe'
+import { MOCK_NODES } from './data/nodes'
+import { MOCK_PULSE_SCORES } from './data/pulseScores'
+import { MOCK_USERS } from './data/users'
+import { randomBetween } from './helpers'
 
 type Listener = (...args: unknown[]) => void
 

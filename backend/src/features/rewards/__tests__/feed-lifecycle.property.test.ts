@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 import { isVisibleInFeed, classifyLifecycle } from '../lifecycle.js'
 
@@ -40,7 +40,7 @@ const loyaltyRowArb: fc.Arbitrary<FeedRow> = fc.constant({ getCategory: 'loyalty
  * An event/offer row with a valid ordered window. The window is positioned
  * relative to a clock so that across many runs we cover upcoming/live/ended.
  */
-const windowedRowArb = (nowMs: number): fc.Arbitrary<FeedRow> =>
+const windowedRowArb = (_nowMs: number): fc.Arbitrary<FeedRow> =>
   fc
     .tuple(fc.constantFrom('event' as const, 'offer' as const), epochMsArb, fc.integer({ min: 1, max: MAX_WINDOW_MS }))
     .map(([getCategory, startMs, durationMs]) => ({

@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
 import jsQR from 'jsqr'
+import { useState, useRef, useEffect } from 'react'
 
-import { api, type ApiError } from '../../shared/lib/api'
 import { Box, Text } from '../../shared/components/primitives'
+import { api, type ApiError } from '../../shared/lib/api'
 
 type FlowState = 'idle' | 'preview' | 'confirming' | 'result'
 

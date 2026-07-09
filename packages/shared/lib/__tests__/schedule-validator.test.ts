@@ -13,8 +13,8 @@
  *
  * Per-failure-path unit coverage lives in `schedule-validator.units.test.ts`.
  */
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 import { MUSIC_GENRES } from '../../constants/genre-weights'
 import type { LineupEntry, MusicGenre, MusicSchedule, ScheduleDayOfWeek, ScheduleSlot } from '../../types'

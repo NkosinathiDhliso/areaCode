@@ -9,6 +9,7 @@
  */
 
 import { PutCommand, DeleteCommand, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb'
+
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 
 export async function blockUser(blockerId: string, blockedId: string): Promise<void> {

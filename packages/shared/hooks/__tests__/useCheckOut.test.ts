@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 import { ERROR_COPY } from '../../constants/error-copy'
 import type { ApiError } from '../../lib/api'

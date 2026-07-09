@@ -1,14 +1,16 @@
 import { randomBytes } from 'node:crypto'
+
+import { classifyLifecycle, isClaimEligible } from '../features/rewards/lifecycle.js'
+import { decideMint } from '../features/rewards/repeat-policy.js'
+import { getEffectiveThreshold } from '../features/rewards/threshold-lock.js'
+import { isConditionalCheckFailedError } from '../shared/db/dynamodb.js'
 import {
   emitRewardClaimed,
   emitRewardSlotsUpdate,
   emitToast,
   emitBusinessRewardClaimed,
 } from '../shared/socket/events.js'
-import { classifyLifecycle, isClaimEligible } from '../features/rewards/lifecycle.js'
-import { decideMint } from '../features/rewards/repeat-policy.js'
-import { getEffectiveThreshold } from '../features/rewards/threshold-lock.js'
-import { isConditionalCheckFailedError } from '../shared/db/dynamodb.js'
+
 import * as repo from './reward-evaluator-repository.js'
 
 interface CheckInMessage {
@@ -37,6 +39,10 @@ const REDEMPTION_CODE_TTL_MS = 24 * 60 * 60 * 1000
  * at the node for the user and auto-claims qualified ones.
  */
 export async function handler(event: { Records: Array<{ body: string }> }) {
+  // Single structured heartbeat per invocation so the go-live-check worker scan
+  // can tell "ran quietly" (processed check-ins, no reward qualified) apart from
+  // "never ran" — matching the other workers' start-of-handler log style.
+  console.log(`[reward-evaluator] Starting reward evaluation for ${event.Records.length} check-in message(s)`)
   for (const record of event.Records) {
     const msg: CheckInMessage = JSON.parse(record.body)
     await evaluateRewards(msg.userId, msg.nodeId, msg.fingerprintHash)

@@ -1,10 +1,12 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
-import { AppError } from '../errors/AppError.js'
-import { getAuth } from './auth.js'
+
 import { getBusinessById, getStaffById } from '../../features/auth/dynamodb-repository.js'
 import type { BusinessMemberRole } from '../../features/business/types.js'
 import { hasPermission } from '../../features/business/types.js'
 import { DEV_MODE } from '../config/env.js'
+import { AppError } from '../errors/AppError.js'
+
+import { getAuth } from './auth.js'
 
 export interface BusinessRolePayload {
   businessId: string

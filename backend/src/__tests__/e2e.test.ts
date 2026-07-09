@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import type { FastifyInstance } from 'fastify'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 
 /**
  * End-to-End API Tests for Area Code Platform

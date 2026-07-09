@@ -13,10 +13,10 @@
  * enumerate all tier pairs and pulse states, using fast-check to sweep the
  * continuous score dimension.
  */
-import { describe, it, expect } from 'vitest'
-import * as fc from 'fast-check'
 import { TIER_SIZE_MULTIPLIER } from '@area-code/shared/constants'
 import type { BusinessTier, NodeState } from '@area-code/shared/types'
+import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 // ─── Replicate the pure helpers from useMapMarkers.ts ───────────────────────
 // These are module-private in the hook file, so we replicate them here to test

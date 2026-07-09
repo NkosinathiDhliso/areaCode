@@ -1,5 +1,5 @@
-import { api } from '@area-code/shared/lib/api'
 import { Spinner } from '@area-code/shared/components/Spinner'
+import { api } from '@area-code/shared/lib/api'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 

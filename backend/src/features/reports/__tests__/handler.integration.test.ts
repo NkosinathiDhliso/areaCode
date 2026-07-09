@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import type { FastifyInstance } from 'fastify'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 
 /**
  * Integration tests for report API routes.

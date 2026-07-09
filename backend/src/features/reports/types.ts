@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import type { DigestData, DigestDeltas, DigestMetricName, DigestMetrics } from './digest.js'
+
 // ============================================================================
 // Internal Processing Types (never stored in reports)
 // ============================================================================
@@ -385,6 +387,87 @@ export const teaserReportSchema = z.object({
   summary: reportSummarySchema,
   upgradeMessage: z.string().min(1),
 })
+
+// ============================================================================
+// Digest Row (Weekly Attribution Digest)
+// ============================================================================
+
+/**
+ * Persisted Digest for one business and one Digest_Week, in the app-data table.
+ *
+ * Key structure:
+ *   pk: DIGEST#<businessId>
+ *   sk: WEEK#<weekStartIso date>
+ *
+ * The metric and delta shapes are owned by the pure logic in `digest.ts`
+ * (`DigestMetrics`, `DigestDeltas`, `DigestMetricName`); this schema validates
+ * that same shape at the persistence boundary. The pk/sk are storage keys
+ * derived by the repository and are not part of the validated domain payload,
+ * matching the `reportTokensSchema` convention. There is no TTL attribute:
+ * retention is enforced by the cleanup worker (12 months), consistent with the
+ * other audited rows.
+ */
+export const digestMetricNameSchema = z.enum([
+  'visits',
+  'uniqueVisitors',
+  'firstTimeVisitors',
+  'returningVisitors',
+  'redemptions',
+  'firstGetIssued',
+  'firstGetConversions',
+])
+
+const digestMetricsSchema = z.object({
+  visits: z.number().int().min(0),
+  uniqueVisitors: z.number().int().min(0),
+  firstTimeVisitors: z.number().int().min(0),
+  returningVisitors: z.number().int().min(0),
+  redemptions: z.number().int().min(0),
+  firstGetIssued: z.number().int().min(0),
+  firstGetConversions: z.number().int().min(0),
+  busiestDay: z.string().nullable(),
+  busiestHour: z.number().int().min(0).max(23).nullable(),
+})
+
+// Optional per-metric signed deltas. Modelled as an object of optional integers
+// (not a record) so the inferred type is exactly `Partial<Record<...>>` and
+// matches `DigestDeltas` from digest.ts without drift.
+const digestDeltasSchema = z.object({
+  visits: z.number().int().optional(),
+  uniqueVisitors: z.number().int().optional(),
+  firstTimeVisitors: z.number().int().optional(),
+  returningVisitors: z.number().int().optional(),
+  redemptions: z.number().int().optional(),
+  firstGetIssued: z.number().int().optional(),
+  firstGetConversions: z.number().int().optional(),
+})
+
+export const digestRowSchema = z.object({
+  businessId: z.string().min(1).max(64),
+  weekStart: z.string().min(1),
+  metrics: digestMetricsSchema,
+  deltas: digestDeltasSchema.optional(),
+  suppressed: z.array(digestMetricNameSchema),
+  tierAtBuild: z.string().min(1),
+  emailSent: z.boolean(),
+  createdAt: z.string().min(1),
+})
+
+export type DigestRow = z.infer<typeof digestRowSchema>
+
+// Compile-time drift guards: if the zod schema and the pure-logic shapes in
+// digest.ts diverge, these type aliases stop resolving and the build fails.
+// They keep the persisted row and the metric math in lockstep (one source of
+// truth for the metric shape lives in digest.ts).
+type AssertEqual<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never
+type _MetricsInSync = AssertEqual<z.infer<typeof digestMetricsSchema>, DigestMetrics>
+type _DeltasInSync = AssertEqual<z.infer<typeof digestDeltasSchema>, DigestDeltas>
+type _SuppressedInSync = AssertEqual<DigestRow['suppressed'][number], DigestMetricName>
+type _RowMetricsInSync = AssertEqual<DigestRow['metrics'], DigestData['metrics']>
+
+// Reference the guards so they are not reported as unused; a drift turns the
+// referenced alias into `never`, which is an assignable-from error below.
+export const DIGEST_SCHEMA_IN_SYNC: _MetricsInSync & _DeltasInSync & _SuppressedInSync & _RowMetricsInSync = true
 
 // ============================================================================
 // API Query Param Schemas

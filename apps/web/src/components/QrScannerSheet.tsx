@@ -1,7 +1,7 @@
+import { BottomSheet } from '@area-code/shared/components/BottomSheet'
+import jsQR from 'jsqr'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import jsQR from 'jsqr'
-import { BottomSheet } from '@area-code/shared/components/BottomSheet'
 
 interface QrScannerSheetProps {
   isOpen: boolean

@@ -1,9 +1,9 @@
+import { Spinner } from '@area-code/shared/components/Spinner'
+import { exchangeCodeForTokens } from '@area-code/shared/lib/cognitoHostedUiOAuth'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { exchangeCodeForTokens } from '@area-code/shared/lib/cognitoHostedUiOAuth'
 import { useStaffAuthStore } from '../stores/staffAuthStore'
-import { Spinner } from '@area-code/shared/components/Spinner'
 
 function hostedUiDomain(): string | undefined {
   const v = import.meta.env['VITE_COGNITO_HOSTED_UI_DOMAIN_STAFF'] as string | undefined

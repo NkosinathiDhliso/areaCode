@@ -6,10 +6,10 @@
 // Design follows the Area Code tokens (packages/shared/tokens.css): dark slate
 // gradient, glacier accent, zero purple. Re-run this if the brand changes.
 
-import { createRequire } from 'node:module'
-import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
 import { readdirSync, mkdirSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')

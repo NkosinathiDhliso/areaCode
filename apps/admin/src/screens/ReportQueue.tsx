@@ -1,9 +1,8 @@
+import { api } from '@area-code/shared/lib/api'
+import { formatRelativeTime } from '@area-code/shared/lib/formatters'
+import type { Report } from '@area-code/shared/types'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-
-import { api } from '@area-code/shared/lib/api'
-import type { Report } from '@area-code/shared/types'
-import { formatRelativeTime } from '@area-code/shared/lib/formatters'
 
 interface ReportWithNode extends Report {
   nodeName: string

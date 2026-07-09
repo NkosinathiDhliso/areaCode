@@ -14,17 +14,17 @@
 //
 // Per founder decision (Requirement 13.2), manual check-out grants NO tangible
 // reward in this release: this service exposes no reward coupling whatsoever.
-import { AppError } from '../../shared/errors/AppError.js'
-import { getUserById } from '../auth/repository.js'
-import { endPresenceByCheckOut, getLivePresenceCount, recordPresenceSample } from '../presence/repository.js'
-import { writeDwellRow } from '../presence/dwell-sink.js'
-import { getNodeWithCity } from '../check-in/repository.js'
-import { emitPresenceUpdate, emitFriendCheckout } from '../../shared/socket/events.js'
-import { getMutualFollowIds, getFollowingIds } from '../social/repository.js'
-import { canEmitToFriends } from '../../shared/privacy/privacy-guard.js'
-import type { CheckOutInput, CheckOutResponse } from './types.js'
-
 import { DEV_MODE } from '../../shared/config/env.js'
+import { AppError } from '../../shared/errors/AppError.js'
+import { canEmitToFriends } from '../../shared/privacy/privacy-guard.js'
+import { emitPresenceUpdate, emitFriendCheckout } from '../../shared/socket/events.js'
+import { getUserById } from '../auth/repository.js'
+import { getNodeWithCity } from '../check-in/repository.js'
+import { writeDwellRow } from '../presence/dwell-sink.js'
+import { endPresenceByCheckOut, getLivePresenceCount, recordPresenceSample } from '../presence/repository.js'
+import { getMutualFollowIds, getFollowingIds } from '../social/repository.js'
+
+import type { CheckOutInput, CheckOutResponse } from './types.js'
 
 /**
  * Process a consumer check-out (`POST /v1/check-out`).

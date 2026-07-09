@@ -20,14 +20,28 @@ These are the things that, if broken on the first day, kill the pilot.
 > plus a green e2e run is never launch approval on its own, so §1 stays
 > mandatory even when both automated layers are green.
 
-| #   | Test                                                                          | Pass condition                                                                       | Fix path                                                                                                                                         |
-| --- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | **First QR scan succeeds end-to-end on a real venue staff phone.**            | Staff sees redemption preview within 2 seconds; confirms; sees "Redeemed!"           | Test once per venue, on the actual phone. Switch to manual code entry if camera permission is denied.                                            |
-| 2   | **First customer signup from the venue completes via Google OAuth or email.** | New user lands on the map within 8 seconds of signup.                                | Email branch is the fallback. Both should be tested live before opening the door.                                                                |
-| 3   | **Yoco webhook upgrades the venue from trial to paid.**                       | After test card payment, the dashboard shows "Pro · paid until …" within 60 seconds. | Use Yoco's test mode card `4242 4242 4242 4242`. Verify the webhook URL in Yoco dashboard matches `https://api.areacode.co.za/v1/webhooks/yoco`. |
-| 4   | **Map loads on the lowest-spec phone we plan to support.**                    | A 2019 Android with 4G shows the map and at least one node within 10 seconds.        | If WebGL isn't available, the fallback should still render markers in 2D mode.                                                                   |
+| #   | Test                                                                          | Pass condition                                                                                                                                                                                                    | Fix path                                                                                                                                         |
+| --- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | **First QR scan succeeds end-to-end on a real venue staff phone.**            | Staff sees redemption preview within 2 seconds; confirms; sees "Redeemed!"                                                                                                                                        | Test once per venue, on the actual phone. Switch to manual code entry if camera permission is denied.                                            |
+| 2   | **First customer signup from the venue completes via Google OAuth or email.** | New user lands on the map within 8 seconds of signup.                                                                                                                                                             | Email branch is the fallback. Both should be tested live before opening the door.                                                                |
+| 3   | **Yoco webhook upgrades the venue from trial to paid.**                       | After the test-card payment, the dashboard billing status header shows the plan badge plus the paid-until date (format `<Plan> · paid until <date>`, e.g. `Growth · paid until 9 August 2026`) within 60 seconds. | Use Yoco's test mode card `4242 4242 4242 4242`. Verify the webhook URL in Yoco dashboard matches `https://api.areacode.co.za/v1/webhooks/yoco`. |
+| 4   | **Map loads on the lowest-spec phone we plan to support.**                    | A 2019 Android with 4G shows the map and at least one node within 10 seconds.                                                                                                                                     | If WebGL isn't available, the fallback should still render markers in 2D mode.                                                                   |
 
 **If all four pass, you can open signups. If even one fails, fix before the first customer walks in.**
+
+> **Billing lifecycle (shipped).** The money path behind blocker 3 is live. The
+> Yoco webhook secret is provisioned in prod and the webhook handler fails loud
+> when the secret is missing or a signature is invalid; it never silently
+> accepts a payment event. A paid checkout writes `paidUntil` and `paidInterval`,
+> so there is a month 2: tiers expire at `paidUntil`, enter a 7-day grace window
+> with a renewal reminder email, and downgrade only after grace lapses. Boost
+> purchases activate a bounded boost window on the node. Checkout redirects land
+> on truthful screens in the business portal (`/plans` and `/boost` read the
+> return status instead of showing a static page). The go-live check now covers
+> billing: it asserts the Yoco secrets are present and non-empty on the prod
+> Lambdas (presence only, values never printed) and probes the live webhook
+> route with an unsigned POST, expecting HTTP 401 so the signature gate is proven
+> alive and fail-closed.
 
 ---
 
@@ -45,10 +59,12 @@ Run before the launch day, repeat the morning of.
 - [ ] At least one venue has `isFirstGet=true` set on a reward (this is the casual-customer path)
 - [ ] Cognito consumer pool has password policy ≥ 8 chars, no MFA required at signup
 - [ ] Cognito consumer pool has Google identity provider configured
-- [ ] Sentry release is recorded for the live SHA (check the release-health-gate workflow ran clean)
+- [ ] `release-health-gate.yml` ran clean for the live SHA (reads CloudWatch RUM + backend alarms)
 - [ ] Last `release-health-gate.yml` run shows `rollback=false`
-- [ ] No outstanding alerts in Sentry, no DLQ messages in `area-code-prod-reward-eval-dlq` or `area-code-prod-push-sender-dlq`
+- [ ] No frontend errors in the CloudWatch RUM console (four app monitors), no DLQ messages in `area-code-prod-reward-eval-dlq`
 - [ ] Last 24h of CloudWatch logs show no `level=ERROR` lines on the API Lambda
+- [ ] Yoco secrets present and non-empty on prod Lambdas: `YOCO_WEBHOOK_SECRET` and `YOCO_PROD_SECRET_KEY` on `area-code-prod-api`, `YOCO_WEBHOOK_SECRET` on `area-code-prod-yoco-webhook` (the check reports presence only, never the value)
+- [ ] Unsigned POST to `https://api.areacode.co.za/v1/webhooks/yoco` returns `401` (signature gate alive, fails closed)
 
 ## §3 — Frontend ready check
 
@@ -83,7 +99,7 @@ For each venue:
 ## §5 — Launch-day operations (the morning the venue opens with the app)
 
 - [ ] Founder is reachable on WhatsApp from 7am to 7pm
-- [ ] Sentry alerts are routed to founder's phone
+- [ ] CloudWatch alarm notifications (API errors, RUM) are routed to founder's phone
 - [ ] CloudWatch dashboard pinned in a browser tab
 - [ ] Admin retention dashboard refreshed every 2 hours, manually
 - [ ] At noon, founder messages each pilot owner: "How's it going?" — open-ended, asks for problems
@@ -124,7 +140,7 @@ If 30-day retention is below 15%, the reward design is wrong, not the platform. 
 | Staff says "the QR scanner is black"                   | Camera permission not granted         | Browser settings → site permissions → camera → allow. Re-test.                                                                                                |
 | Owner says "no one is signing up"                      | Staff not pitching                    | Sit at the venue for 30 minutes. Watch what staff actually says. Briefing fix.                                                                                |
 | Owner says "the dashboard is broken"                   | Stale token / cookies                 | Hard refresh (Ctrl+Shift+R) or sign out and back in.                                                                                                          |
-| Sentry alert: "5xx error rate spike"                   | Almost certainly a recent deploy      | Run `release-health-gate.yml` with current SHA. If `rollback=true`, the gate already rolled back; check the alert. If `rollback=false`, investigate manually. |
+| CloudWatch alarm: "5xx error rate spike"               | Almost certainly a recent deploy      | Run `release-health-gate.yml` with current SHA. If `rollback=true`, the gate already rolled back; check the alarm. If `rollback=false`, investigate manually. |
 | Yoco webhook didn't fire                               | Webhook signature mismatch            | Verify `YOCO_WEBHOOK_SECRET` env var matches Yoco dashboard. Re-trigger from dashboard.                                                                       |
 
 ## §9 — Out-of-scope for the pilot

@@ -1,8 +1,9 @@
 // DynamoDB-backed Notifications Repository (replaces Prisma)
+import type { NotificationPreferences } from '@area-code/shared/types'
 import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
-import type { NotificationPreferences } from '@area-code/shared/types'
 
 // ============================================================================
 // NOTIFICATION HISTORY

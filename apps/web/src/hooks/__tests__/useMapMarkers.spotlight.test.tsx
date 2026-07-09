@@ -46,6 +46,7 @@ const { liveMarkers, FakeMarker } = vi.hoisted(() => {
 
 vi.mock('mapbox-gl', () => ({ default: { Marker: FakeMarker } }))
 
+import { loadMapboxGl } from '../../lib/mapboxLoader'
 import { useMapMarkers } from '../useMapMarkers'
 
 function node(id: string, category: NodeCategory = 'nightlife', lat = -26.2, lng = 28.04): Node {
@@ -97,7 +98,12 @@ function liveNodeIds(): string[] {
   return [...liveMarkers].map((m) => m.getElement().dataset['nodeId'] ?? '').sort()
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  // Mapbox GL is now dynamically imported (Bundle_Budget R9.1). useMapMarkers
+  // reads the loaded module synchronously via getMapboxGl(); prime the shared
+  // loader here (it resolves to the mocked module above) so markers build
+  // during renderHook, exactly as they do in production after the map loads.
+  await loadMapboxGl()
   liveMarkers.clear()
   onTap.mockClear()
   seed()

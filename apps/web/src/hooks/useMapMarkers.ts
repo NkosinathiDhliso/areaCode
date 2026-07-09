@@ -2,7 +2,10 @@ import { TIER_SIZE_MULTIPLIER } from '@area-code/shared/constants'
 import { useLocationStore, useMapStore, useSelectionStore } from '@area-code/shared/stores'
 import { useUserStore } from '@area-code/shared/stores/userStore'
 import type { Node, NodeCategory, NodeState } from '@area-code/shared/types'
-import mapboxgl from 'mapbox-gl'
+// Type-only import: erased at build time. The Mapbox runtime is loaded lazily
+// (split out of the initial chunk, R9.1) by `useMapInit` via `loadMapboxGl`;
+// this hook reads the resolved module synchronously through `getMapboxGl`.
+import type mapboxgl from 'mapbox-gl'
 import { createElement, useCallback, useEffect, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 
@@ -11,6 +14,7 @@ import { canRecenter } from '../lib/cameraControl'
 import { DEFAULT_ARCHETYPE_ID, GLYPH_ZOOM_THRESHOLD, PULSE_TEMPO } from '../lib/carouselConstants'
 import { vibeRank } from '../lib/carouselRanking'
 import { createLongPressHandlers } from '../lib/longPress'
+import { getMapboxGl } from '../lib/mapboxLoader'
 import { getNodeState, getCategoryColour } from '../lib/mapHelpers'
 import {
   beamContainerSize,
@@ -748,6 +752,12 @@ export function useMapMarkers(
     const addMarkers = () => {
       if (cancelled) return
 
+      // The Mapbox runtime is lazily loaded by useMapInit; this effect is gated
+      // on `mapReady` (set only after the map's 'load'), so the module has
+      // always resolved by here. The guard is purely defensive (R9.1).
+      const gl = getMapboxGl()
+      if (!gl) return
+
       let curZoom = GLYPH_ZOOM_THRESHOLD
       try {
         curZoom = map.getZoom()
@@ -851,7 +861,7 @@ export function useMapMarkers(
           onGlyphLongPressRef.current ? () => onGlyphLongPressRef.current?.(node) : undefined,
         )
 
-        const marker = new mapboxgl.Marker({
+        const marker = new gl.Marker({
           element: el,
           anchor: 'bottom',
           // Keep the beam upright and screen-locked so ONLY the bottom anchor

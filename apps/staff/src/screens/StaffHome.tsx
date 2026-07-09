@@ -1,56 +1,39 @@
+import { api } from '@area-code/shared/lib/api'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ShieldOff } from 'lucide-react'
 
-import { api } from '@area-code/shared/lib/api'
-import { useStaffAuthStore } from '../stores/staffAuthStore'
-import { StaffValidator } from '../components/StaffValidator'
-import { RecentRedemptions } from '../components/RecentRedemptions'
-import { MyRank } from '../components/MyRank'
 import { FirstGetIssuer } from '../components/FirstGetIssuer'
+import { LapsedBusinessBanner } from '../components/LapsedBusinessBanner'
+import { MyRank } from '../components/MyRank'
+import { RecentRedemptions } from '../components/RecentRedemptions'
+import { StaffValidator } from '../components/StaffValidator'
 import { VibeDeclaration } from '../components/VibeDeclaration'
+import { useStaffAuthStore } from '../stores/staffAuthStore'
 
 export function StaffHome() {
   const { t } = useTranslation()
   const { staffName, businessId, logout } = useStaffAuthStore()
   const [businessName, setBusinessName] = useState<string | null>(null)
-  const [businessDeactivated, setBusinessDeactivated] = useState(false)
+  const [lapsed, setLapsed] = useState(false)
 
   useEffect(() => {
     if (!businessId) return
     void api
-      .get<{ businessName?: string; isActive?: boolean }>('/v1/staff/business')
+      .get<{ businessName?: string; isActive?: boolean; businessState?: 'active' | 'lapsed' }>('/v1/staff/business')
       .then((res) => {
         if (res.businessName) setBusinessName(res.businessName)
-        if (res.isActive === false) setBusinessDeactivated(true)
+        // A lapsed business no longer blocks the shift: staff can still validate
+        // already-earned codes (R3.2). The banner names the state; the validator
+        // stays available. `isActive === false` is a legacy signal kept for
+        // older responses that predate `businessState`.
+        if (res.businessState === 'lapsed' || res.isActive === false) setLapsed(true)
       })
       .catch((err: unknown) => {
-        // Only treat 403 as deactivation (explicit denial).
-        // 404 means the endpoint isn't deployed yet - don't block the user.
-        if ((err as { statusCode?: number })?.statusCode === 403) setBusinessDeactivated(true)
+        // Only treat 403 as a lapse (explicit denial). 404 means the endpoint
+        // isn't deployed yet - don't degrade the surface.
+        if ((err as { statusCode?: number })?.statusCode === 403) setLapsed(true)
       })
   }, [businessId])
-
-  if (businessDeactivated) {
-    return (
-      <div
-        className="flex flex-col items-center justify-center min-h-dvh px-6 bg-[var(--bg-base)] gap-4"
-        style={{
-          paddingTop: 'max(2rem, env(safe-area-inset-top))',
-          paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
-        }}
-      >
-        <ShieldOff size={32} strokeWidth={1.5} className="text-[var(--danger)]" />
-        <h1 className="text-[var(--text-primary)] font-bold text-xl font-[Syne] text-center">Business deactivated</h1>
-        <p className="text-[var(--text-secondary)] text-sm text-center">
-          This business account has been deactivated. Contact the business owner for more information.
-        </p>
-        <button onClick={logout} className="text-[var(--accent)] text-sm font-medium">
-          Sign out
-        </button>
-      </div>
-    )
-  }
 
   return (
     <div className="flex flex-col h-dvh bg-[var(--bg-base)]">
@@ -82,6 +65,7 @@ export function StaffHome() {
         style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}
         data-scroll-container
       >
+        {lapsed && <LapsedBusinessBanner />}
         <StaffValidator />
         <FirstGetIssuer />
         <VibeDeclaration />

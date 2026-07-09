@@ -21,8 +21,8 @@
  *
  * Validates: Requirements 4.7
  */
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 import { createRapidTapDetector } from '../rapidTap'
 

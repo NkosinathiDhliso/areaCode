@@ -21,11 +21,11 @@
 // Serverless-only: no always-on resource, just this EventBridge-driven handler.
 import { ScanCommand } from '@aws-sdk/lib-dynamodb'
 
-import { documentClient, TableNames } from '../shared/db/dynamodb.js'
-import { kvGet, kvSet } from '../shared/kv/dynamodb-kv.js'
 import { getCheckInsByUser } from '../features/check-in/dynamodb-repository.js'
 import { toSASTDate, sastDateForOffset, isStreakAtRisk } from '../features/check-in/streak.js'
 import { getPreferences, sendNotification } from '../features/notifications/service.js'
+import { documentClient, TableNames } from '../shared/db/dynamodb.js'
+import { kvGet, kvSet } from '../shared/kv/dynamodb-kv.js'
 
 /** At-most-once-per-day dedup TTL (26h covers a late run + the next day's run). */
 const DEDUP_TTL_SECONDS = 26 * 60 * 60

@@ -15,7 +15,7 @@
  *     250ms debounce
  */
 // @vitest-environment jsdom
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { describe, expect, it, vi, beforeEach, afterEach, beforeAll } from 'vitest'
 
 // ─── Hoisted mocks ──────────────────────────────────────────────────────────
@@ -127,6 +127,7 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 // Lazily import after `vi.mock` and the env stub above are in place so the
 // useMapInit module captures the mocked `mapbox-gl` and the test token.
 import { useMapInit } from '../useMapInit'
+
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
 
 // ─── Test harness ───────────────────────────────────────────────────────────
@@ -149,7 +150,18 @@ function Harness({ onHook }: { onHook: (handle: HarnessHandle) => void }) {
   return React.createElement('div', { ref: hook.containerRef, style: { width: 100, height: 100 } })
 }
 
-function setup(): { handle: HarnessHandle; map: InstanceType<typeof mocks.MockMap> } {
+// Mapbox GL is now loaded via a dynamic `import('mapbox-gl')` inside the init
+// effect (Bundle_Budget R9.1), so the map is constructed on a microtask after
+// render rather than synchronously. Flush the pending promise chain (the
+// import, the loader's `.then`, and the effect's `.then`) so the MockMap is
+// built before the test grabs it. Microtasks are not affected by fake timers.
+async function flushMicrotasks(times = 10): Promise<void> {
+  for (let i = 0; i < times; i++) {
+    await Promise.resolve()
+  }
+}
+
+async function setup(): Promise<{ handle: HarnessHandle; map: InstanceType<typeof mocks.MockMap> }> {
   let handleRef: HarnessHandle | null = null
   render(
     React.createElement(Harness, {
@@ -158,9 +170,12 @@ function setup(): { handle: HarnessHandle; map: InstanceType<typeof mocks.MockMa
       },
     }),
   )
-  // The hook's init effect runs synchronously after render, constructing
-  // exactly one MockMap. Grab the most recent instance - earlier tests in
-  // the file may have left their (now-removed) instances in the array.
+  // Let the dynamic-import chain resolve so the init effect constructs exactly
+  // one MockMap. Grab the most recent instance - earlier tests in the file may
+  // have left their (now-removed) instances in the array.
+  await act(async () => {
+    await flushMicrotasks()
+  })
   const map = mocks.MockMap.instances[mocks.MockMap.instances.length - 1]
   if (!map) throw new Error('expected useMapInit to construct a MockMap')
   // Fire 'load' so the hook flips `singletonLoaded` and assigns
@@ -204,8 +219,8 @@ afterEach(() => {
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe('useMapInit (R1 sidebar correctness)', () => {
-  it('animates the bearing back to 0° when compass is tapped at >1° (R1.1)', () => {
-    const { handle, map } = setup()
+  it('animates the bearing back to 0° when compass is tapped at >1° (R1.1)', async () => {
+    const { handle, map } = await setup()
     map.setBearingValue(45)
 
     act(() => {
@@ -219,8 +234,8 @@ describe('useMapInit (R1 sidebar correctness)', () => {
     expect(args.duration).toBeLessThanOrEqual(1000)
   })
 
-  it('treats a compass tap within ±1° of north as a successful no-op (R1.2)', () => {
-    const { handle, map } = setup()
+  it('treats a compass tap within ±1° of north as a successful no-op (R1.2)', async () => {
+    const { handle, map } = await setup()
     map.setBearingValue(0.4)
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
@@ -234,8 +249,8 @@ describe('useMapInit (R1 sidebar correctness)', () => {
     errorSpy.mockRestore()
   })
 
-  it('treats a compass tap at -0.7° (just west of north) as a no-op too (R1.2)', () => {
-    const { handle, map } = setup()
+  it('treats a compass tap at -0.7° (just west of north) as a no-op too (R1.2)', async () => {
+    const { handle, map } = await setup()
     map.setBearingValue(-0.7)
 
     act(() => {
@@ -245,8 +260,8 @@ describe('useMapInit (R1 sidebar correctness)', () => {
     expect(map.easeTo).not.toHaveBeenCalled()
   })
 
-  it('flies the map to a fresh Last_Known_Position when recenter is tapped (R1.3)', () => {
-    const { handle, map } = setup()
+  it('flies the map to a fresh Last_Known_Position when recenter is tapped (R1.3)', async () => {
+    const { handle, map } = await setup()
     // Drive useLocationStore directly rather than going through
     // navigator.geolocation, per the task's implementation note.
     useLocationStore.setState({
@@ -269,8 +284,8 @@ describe('useMapInit (R1 sidebar correctness)', () => {
     expect(args.duration).toBeLessThanOrEqual(1500)
   })
 
-  it('does not fly to a stale Last_Known_Position older than 60s (R1.3, R1.4)', () => {
-    const { handle, map } = setup()
+  it('does not fly to a stale Last_Known_Position older than 60s (R1.3, R1.4)', async () => {
+    const { handle, map } = await setup()
     useLocationStore.setState({
       lastKnownPosition: { lat: -26.2041, lng: 28.0473 },
       capturedAt: Date.now() - 61_000,
@@ -284,8 +299,8 @@ describe('useMapInit (R1 sidebar correctness)', () => {
     expect(map.flyTo).not.toHaveBeenCalled()
   })
 
-  it('does not fly when no Last_Known_Position has been captured (R1.4)', () => {
-    const { handle, map } = setup()
+  it('does not fly when no Last_Known_Position has been captured (R1.4)', async () => {
+    const { handle, map } = await setup()
     // capturedAt is null by default per beforeEach.
 
     act(() => {
@@ -295,8 +310,8 @@ describe('useMapInit (R1 sidebar correctness)', () => {
     expect(map.flyTo).not.toHaveBeenCalled()
   })
 
-  it('silently early-outs both buttons when the map reports loaded() === false (R1.6)', () => {
-    const { handle, map } = setup()
+  it('silently early-outs both buttons when the map reports loaded() === false (R1.6)', async () => {
+    const { handle, map } = await setup()
     const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     map.setLoadedFlag(false)
@@ -333,14 +348,14 @@ describe('useMapInit (R1 sidebar correctness)', () => {
     errorSpy.mockRestore()
   })
 
-  it('treats a double-tap of compass within 250ms as a single intent (R1.8)', () => {
+  it('treats a double-tap of compass within 250ms as a single intent (R1.8)', async () => {
     // R1.8 lives at the MapControls layer (250ms shared `lastTapAt` ref).
     // At the hook level, R1.2 happens to give us the same observable
     // behaviour for compass: the first call eases to 0°, the mock map
     // reflects that in subsequent getBearing() reads, and the second call
     // self-cancels because the bearing is now within ±1°. Either way, only
     // one easeTo lands.
-    const { handle, map } = setup()
+    const { handle, map } = await setup()
     map.setBearingValue(45)
 
     act(() => {

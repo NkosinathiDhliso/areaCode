@@ -1,17 +1,21 @@
 import { randomUUID } from 'node:crypto'
+
+import type { VenueMomentum } from '@area-code/shared/types'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import { AppError } from '../../shared/errors/AppError.js'
+
 import { APP_ENV, AWS_REGION, DEV_MODE, requireEnv } from '../../shared/config/env.js'
+import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet } from '../../shared/kv/dynamodb-kv.js'
-import { getActiveRewardsByNodeId } from '../rewards/dynamodb-repository.js'
-import * as repo from './repository.js'
-import * as nodesDynamo from './dynamodb-repository.js'
-import { findBusinessById } from '../business/repository.js'
 import { emitNodeCreated } from '../../shared/socket/events.js'
+import { findBusinessById } from '../business/repository.js'
 import { getLivePresenceCount, getMomentum } from '../presence/repository.js'
+import { getActiveRewardsByNodeId } from '../rewards/dynamodb-repository.js'
+
+import { isBoostActive } from './boost.js'
 import { DEV_NODES } from './dev-nodes.js'
-import type { VenueMomentum } from '@area-code/shared/types'
+import * as nodesDynamo from './dynamodb-repository.js'
+import * as repo from './repository.js'
 
 // Tiers that count as 'paid' — nodes from these businesses appear on the public map.
 const PAID_TIERS = new Set(['starter', 'growth', 'pro', 'payg'])
@@ -112,7 +116,10 @@ export async function getNodeDetail(nodeId: string) {
     pulseScore = score ? parseFloat(score) : 0
   }
 
-  return { ...node, pulseScore }
+  // Expose the paid Boost_Window read model (billing R5.2, R5.5). `boostUntil`
+  // flows through the spread; `boostActive` is computed at read time and
+  // reverts to false once the window passes — no expiry worker, no residue.
+  return { ...node, pulseScore, boostActive: isBoostActive(node.boostUntil) }
 }
 
 export async function getNodePublic(nodeSlug: string) {
@@ -303,6 +310,12 @@ export async function businessCreateNode(
   })
 
   // Only broadcast (and surface on the public map) if the business is on a paid tier.
+  // Map membership deliberately keys off the STORED tier, not Tier_Resolver
+  // (billing R4.3). Feature gating uses getEffectiveTier (a lapsed paid tier
+  // resolves to starter); map membership uses stored state + isActive so the
+  // single removal mechanism is storage demotion (deactivateForNonPayment, R3.3)
+  // once the grace window lapses. Resolving the tier here would fork a second
+  // removal path that could drift from the demotion sweep.
   const business = await findBusinessById(businessId)
   const isPaid = business ? PAID_TIERS.has(business.tier ?? 'free') : false
 

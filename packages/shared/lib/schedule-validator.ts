@@ -83,7 +83,6 @@ function hhmmToMinutes(hhmm: string): number {
 function isValidIanaTimezone(tz: string): boolean {
   if (typeof tz !== 'string' || tz.length === 0) return false
   try {
-    // eslint-disable-next-line no-new
     new Intl.DateTimeFormat('en-US', { timeZone: tz })
     return true
   } catch (e) {

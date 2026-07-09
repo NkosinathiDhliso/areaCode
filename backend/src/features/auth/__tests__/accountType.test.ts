@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 const ALLOWED_RESPONSES = ['consumer', 'business', 'staff', 'not_found'] as const
 type AccountType = (typeof ALLOWED_RESPONSES)[number]

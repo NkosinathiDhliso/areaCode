@@ -1,10 +1,10 @@
 import { AppError } from '../../shared/errors/AppError.js'
+import type { PrivacyLevel } from '../../shared/privacy/types.js'
 import { getUserById, updateUser } from '../auth/dynamodb-repository.js'
 import { blockUser, unblockUser, getBlockedUsers } from '../social/block-repository.js'
-import { unfollowUser } from '../social/repository.js'
 import { createReport } from '../social/report-repository.js'
-import type { PrivacyLevel } from '../../shared/privacy/types.js'
 import type { ReportCategory, UserReport } from '../social/report-repository.js'
+import { unfollowUser } from '../social/repository.js'
 
 // ─── Privacy Settings ─────────────────────────────────────────────────────
 

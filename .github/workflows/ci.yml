@@ -25,7 +25,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec prettier --check .
-      - run: pnpm exec eslint .
+      # Warning_Ratchet: same cap as quality-gate.yml (post-cleanup count) so
+      # master cannot drift above what PRs are held to. Only ever lower this
+      # number as the count drops; never raise it.
+      - run: pnpm exec eslint . --max-warnings 173
 
   typecheck:
     name: Type Check
@@ -227,16 +230,3 @@ jobs:
           NODES_STATUS=$(curl -s -o /tmp/nodes.json -w "%{http_code}" https://api.areacode.co.za/v1/nodes/johannesburg)
           echo "Nodes endpoint status: ${NODES_STATUS}"
           test "${NODES_STATUS}" = "200"
-
-      # Notify Sentry of new release (only runs if token is configured)
-      - name: Create Sentry release
-        if: env.SENTRY_AUTH_TOKEN != ''
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: area-code-api
-        run: |
-          npx @sentry/cli releases new "area-code-api@${{ github.sha }}"
-          npx @sentry/cli releases set-commits "area-code-api@${{ github.sha }}" --auto
-          npx @sentry/cli releases finalize "area-code-api@${{ github.sha }}"
-          npx @sentry/cli releases deploys "area-code-api@${{ github.sha }}" new -e prod

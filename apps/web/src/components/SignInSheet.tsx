@@ -1,5 +1,5 @@
-import { useTranslation } from 'react-i18next'
 import { BottomSheet } from '@area-code/shared/components/BottomSheet'
+import { useTranslation } from 'react-i18next'
 
 type Route = 'map' | 'ranks' | 'feed' | 'profile' | 'login' | 'landing'
 

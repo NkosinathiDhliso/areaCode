@@ -4,10 +4,12 @@ For the live-incident playbook, see `RUNBOOK.md`. This doc covers the rollback m
 
 ## Automatic Rollback (Release-Health Gate)
 
-Every prod deploy via `deploy-lambda.yml` triggers `release-health-gate.yml`. After 30 minutes of soak time it queries Sentry and rolls back automatically when:
+Every prod deploy via `deploy-lambda.yml` triggers `release-health-gate.yml`. After 30 minutes of soak time it reads CloudWatch (the four RUM app monitors for frontend errors, plus the prod API Lambda alarms for the backend) and rolls back automatically when:
 
-- Crash-free user rate dropped > 1 percentage point compared to the 7-day baseline, or
-- Error count over the last 30 minutes exceeded 5x the per-30m baseline.
+- The frontend RUM error rate for the post-deploy window regressed beyond threshold versus the trailing 7-day baseline, on any of the four monitors (`area-code-prod-web`, `-business`, `-staff`, `-admin`), or
+- A prod API Lambda alarm (`area-code-prod-api-errors`, `-api-duration-p99`) was in ALARM during the window.
+
+If the gate cannot read the RUM signal (missing metric or CloudWatch API error), it fails the job loudly rather than reporting a silent pass.
 
 Rollback re-aliases `live` to whatever `live-prev` points to. A `rollback-{ts}` git tag is created. A Slack alert lands in the ops channel.
 

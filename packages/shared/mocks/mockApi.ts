@@ -4,8 +4,9 @@
  * are intercepted transparently.
  */
 import { api } from '../lib/api'
-import { resolve } from './mockRouter'
+
 import { mockDelay } from './helpers'
+import { resolve } from './mockRouter'
 
 export function patchApiClient(): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

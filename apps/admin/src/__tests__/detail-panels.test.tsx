@@ -17,8 +17,8 @@
  * **Validates: Requirements 4.1, 4.5**
  */
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 // ─── Mocks ──────────────────────────────────────────────────────────────────
 
@@ -46,8 +46,9 @@ vi.mock('react-i18next', () => ({
 }))
 
 import { api } from '@area-code/shared/lib/api'
-import { ConsumerDetailPanel } from '../components/ConsumerDetailPanel'
+
 import { BusinessDetailPanel } from '../components/BusinessDetailPanel'
+import { ConsumerDetailPanel } from '../components/ConsumerDetailPanel'
 
 afterEach(() => {
   vi.clearAllMocks()

@@ -573,7 +573,6 @@ module "lambda_api" {
     AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
     AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
     AREA_CODE_S3_MEDIA_BUCKET               = module.s3_media.bucket_name
-    AREA_CODE_SQS_PUSH_QUEUE_URL            = module.sqs_push_sender.queue_url
     AREA_CODE_CONSENT_VERSION               = "v1.0"
     # Win-back campaigns: the API async-invokes this dispatcher on send-now.
     AREA_CODE_CAMPAIGN_DISPATCHER_FUNCTION = module.lambda_campaign_dispatcher.function_name
@@ -762,7 +761,6 @@ module "lambda_report_generator" {
     BUSINESSES_TABLE             = aws_dynamodb_table.businesses.name
     APP_DATA_TABLE               = aws_dynamodb_table.app_data.name
     AREA_CODE_REPORT_QUEUE_URL   = module.sqs_report_generation.queue_url
-    AREA_CODE_SQS_PUSH_QUEUE_URL = module.sqs_push_sender.queue_url
     AREA_CODE_ANONYMIZATION_SALT = "report-anonymization-salt-dev"
   }
 }
@@ -789,8 +787,8 @@ module "lambda_campaign_dispatcher" {
 }
 
 # Win-back campaign sender Lambda — SQS-triggered worker; delivers one batch via
-# push (existing push-sender queue) and/or email (SES), and writes one
-# anonymized send record per recipient. (Mirrors the reports generator pattern.)
+# email (SES), and writes one anonymized send record per recipient. (Mirrors the
+# reports generator pattern.)
 module "lambda_campaign_sender" {
   source        = "../../modules/lambda"
   env           = local.env
@@ -798,11 +796,10 @@ module "lambda_campaign_sender" {
   timeout       = 120
   memory_size   = 512
   environment_variables = {
-    AREA_CODE_ENV                = local.env
-    USERS_TABLE                  = aws_dynamodb_table.users.name
-    BUSINESSES_TABLE             = aws_dynamodb_table.businesses.name
-    APP_DATA_TABLE               = aws_dynamodb_table.app_data.name
-    AREA_CODE_SQS_PUSH_QUEUE_URL = module.sqs_push_sender.queue_url
+    AREA_CODE_ENV    = local.env
+    USERS_TABLE      = aws_dynamodb_table.users.name
+    BUSINESSES_TABLE = aws_dynamodb_table.businesses.name
+    APP_DATA_TABLE   = aws_dynamodb_table.app_data.name
   }
 }
 
@@ -1030,7 +1027,7 @@ resource "aws_iam_role_policy" "report_generator_dynamodb" {
   })
 }
 
-# Lambda IAM: report-generator -> SQS receive/delete (report-generation queue) + send (push-sender queue)
+# Lambda IAM: report-generator -> SQS receive/delete (report-generation queue)
 resource "aws_iam_role_policy" "report_generator_sqs" {
   name = "sqs-access"
   role = module.lambda_report_generator.role_name
@@ -1042,11 +1039,6 @@ resource "aws_iam_role_policy" "report_generator_sqs" {
         Effect   = "Allow"
         Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
         Resource = [module.sqs_report_generation.queue_arn]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["sqs:SendMessage"]
-        Resource = [module.sqs_push_sender.queue_arn]
       }
     ]
   })
@@ -1158,7 +1150,7 @@ resource "aws_iam_role_policy" "campaign_sender_dynamodb" {
   })
 }
 
-# Lambda IAM: campaign-sender -> SQS receive/delete (campaign-send queue) + send (push-sender queue)
+# Lambda IAM: campaign-sender -> SQS receive/delete (campaign-send queue)
 resource "aws_iam_role_policy" "campaign_sender_sqs" {
   name = "sqs-access"
   role = module.lambda_campaign_sender.role_name
@@ -1170,11 +1162,6 @@ resource "aws_iam_role_policy" "campaign_sender_sqs" {
         Effect   = "Allow"
         Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
         Resource = [module.sqs_campaign_send.queue_arn]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["sqs:SendMessage"]
-        Resource = [module.sqs_push_sender.queue_arn]
       }
     ]
   })
@@ -1257,7 +1244,7 @@ resource "aws_iam_role_policy" "api_sqs_send" {
     Statement = [{
       Effect   = "Allow"
       Action   = ["sqs:SendMessage"]
-      Resource = [module.sqs_reward_eval.queue_arn, module.sqs_push_sender.queue_arn]
+      Resource = [module.sqs_reward_eval.queue_arn]
     }]
   })
 }
@@ -1307,11 +1294,6 @@ resource "aws_iam_role_policy" "reward_eval_sqs" {
         Effect   = "Allow"
         Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
         Resource = module.sqs_reward_eval.queue_arn
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["sqs:SendMessage"]
-        Resource = module.sqs_push_sender.queue_arn
       }
     ]
   })
@@ -1328,13 +1310,6 @@ module "sqs_reward_eval" {
   visibility_timeout    = 60
   lambda_function_arn   = module.lambda_reward_evaluator.function_arn
   enable_lambda_mapping = true
-}
-
-module "sqs_push_sender" {
-  source             = "../../modules/sqs"
-  env                = local.env
-  queue_name         = "push-sender"
-  visibility_timeout = 30
 }
 
 module "sqs_report_generation" {
@@ -1558,10 +1533,6 @@ output "vpc_id" {
 
 output "sqs_reward_eval_url" {
   value = module.sqs_reward_eval.queue_url
-}
-
-output "sqs_push_sender_url" {
-  value = module.sqs_push_sender.queue_url
 }
 
 output "sqs_report_generation_url" {

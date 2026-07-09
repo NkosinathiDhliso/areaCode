@@ -1,10 +1,12 @@
-import { kvGet, kvIncr } from '../../shared/kv/dynamodb-kv.js'
-import * as repo from './repository.js'
-import { emitNotificationNew, emitToUser } from '../../shared/socket/events.js'
 import {
   NOTIFICATION_PREFERENCE_DEFAULTS as DEFAULTS,
   type NotificationPreferenceKey,
 } from '@area-code/shared/constants/notification-preferences'
+
+import { kvGet, kvIncr } from '../../shared/kv/dynamodb-kv.js'
+import { emitNotificationNew, emitToUser } from '../../shared/socket/events.js'
+
+import * as repo from './repository.js'
 
 /**
  * Maps notification types to the corresponding user preference key.

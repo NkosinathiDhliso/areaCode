@@ -1,4 +1,5 @@
 import { Flame, Moon } from 'lucide-react'
+
 import { Box, Text } from './primitives'
 
 interface StreakDisplayProps {

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { api } from '../lib/api'
-import type { Reward } from '../types'
 import { useRewardStore } from '../stores/rewardStore'
+import type { Reward } from '../types'
 
 export function useRewards(nodeId: string | null) {
   const setNodeRewards = useRewardStore((s) => s.setNodeRewards)

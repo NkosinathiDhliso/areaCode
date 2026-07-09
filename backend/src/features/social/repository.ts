@@ -1,5 +1,6 @@
 // DynamoDB-backed Social Repository (replaces Prisma + Redis)
 import { GetCommand, PutCommand, DeleteCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
+
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { getUserById } from '../auth/dynamodb-repository.js'
 import { getCheckInsByNode } from '../check-in/dynamodb-repository.js'

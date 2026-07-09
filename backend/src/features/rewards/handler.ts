@@ -1,7 +1,10 @@
 import type { FastifyInstance } from 'fastify'
+import { z } from 'zod'
+
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { requireBusinessPermission, getBusinessRole } from '../../shared/middleware/business-role.js'
 import { validate } from '../../shared/middleware/validation.js'
+
 import * as service from './service.js'
 import {
   createRewardBodySchema,
@@ -10,7 +13,6 @@ import {
   redeemBodySchema,
   nearMeQuerySchema,
 } from './types.js'
-import { z } from 'zod'
 
 export async function rewardRoutes(app: FastifyInstance) {
   // POST /v1/business/rewards — owners and managers (manage_rewards)

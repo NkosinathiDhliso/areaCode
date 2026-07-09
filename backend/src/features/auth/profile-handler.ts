@@ -1,11 +1,13 @@
-import type { FastifyInstance } from 'fastify'
-import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
-import { validate } from '../../shared/middleware/validation.js'
-import * as service from './service.js'
-import { updateProfileBodySchema, consentBodySchema, checkInHistoryQuerySchema } from './types.js'
-import { z } from 'zod'
 import { TIER_LEVELS, getTier } from '@area-code/shared/constants/tier-levels'
 import type { TierLevel } from '@area-code/shared/constants/tier-levels'
+import type { FastifyInstance } from 'fastify'
+import { z } from 'zod'
+
+import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
+import { validate } from '../../shared/middleware/validation.js'
+
+import * as service from './service.js'
+import { updateProfileBodySchema, consentBodySchema, checkInHistoryQuerySchema } from './types.js'
 
 export async function profileRoutes(app: FastifyInstance) {
   // GET /v1/users/me

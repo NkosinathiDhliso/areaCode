@@ -1,7 +1,11 @@
-import { useCallback, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
-import { Settings } from 'lucide-react'
+import { Avatar } from '@area-code/shared/components/Avatar'
+import { RedemptionCodeCard } from '@area-code/shared/components/RedemptionCodeCard'
+import { StreakDisplay } from '@area-code/shared/components/StreakDisplay'
+import { TierBadge } from '@area-code/shared/components/TierBadge'
+import { TierProgressBar } from '@area-code/shared/components/TierProgressBar'
+import { TIER_PERMANENCE_SHORT } from '@area-code/shared/constants/legal'
+import { getTierLabel } from '@area-code/shared/constants/tier-levels'
+import { useUnclaimedRewards } from '@area-code/shared/hooks'
 import { api } from '@area-code/shared/lib/api'
 import { haptic } from '@area-code/shared/lib/haptics'
 import {
@@ -12,18 +16,16 @@ import {
 } from '@area-code/shared/lib/rapidTap'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useUserStore } from '@area-code/shared/stores/userStore'
-import { useUnclaimedRewards } from '@area-code/shared/hooks'
-import { TierBadge } from '@area-code/shared/components/TierBadge'
-import { getTierLabel } from '@area-code/shared/constants/tier-levels'
-import { TierProgressBar } from '@area-code/shared/components/TierProgressBar'
-import { StreakDisplay } from '@area-code/shared/components/StreakDisplay'
-import { Avatar } from '@area-code/shared/components/Avatar'
-import { RedemptionCodeCard } from '@area-code/shared/components/RedemptionCodeCard'
-import { TIER_PERMANENCE_SHORT } from '@area-code/shared/constants/legal'
 import type { User } from '@area-code/shared/types'
-import type { AppRoute } from '../types'
-import { StreamingSection } from '../components/StreamingSection'
+import { useQuery } from '@tanstack/react-query'
+import { Settings } from 'lucide-react'
+import { useCallback, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
+import { ParkedCheckinsSection } from '../components/ParkedCheckinsSection'
 import { RankTrophyOverlay } from '../components/RankTrophyOverlay'
+import { StreamingSection } from '../components/StreamingSection'
+import type { AppRoute } from '../types'
 
 interface ProfileScreenProps {
   onNavigate: (route: AppRoute) => void
@@ -196,12 +198,15 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
                 redemptionCode={c.redemptionCode}
                 nodeName={c.nodeName}
                 codeExpiresAt={c.codeExpiresAt}
+                venueActive={c.venueActive}
                 hint={t('rewards.codeHint')}
               />
             ))}
           </div>
         </div>
       )}
+
+      <ParkedCheckinsSection />
 
       {tierProgress && (
         <div className="mb-3">

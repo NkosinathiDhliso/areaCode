@@ -1,7 +1,7 @@
 import type { Report, TeaserReport } from './types.js'
 
 /** Tiers that receive full detailed reports */
-const FULL_ACCESS_TIERS = new Set(['growth', 'pro'])
+export const FULL_ACCESS_TIERS = new Set(['growth', 'pro'])
 
 /** Upgrade message shown to lower-tier businesses */
 const UPGRADE_MESSAGE =

@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { NODE_CATEGORIES } from '@area-code/shared/constants/node-categories'
 import type { NodeCategory } from '@area-code/shared/types'
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface CategoryFilterBarProps {
   onFilter: (category: NodeCategory | null) => void

@@ -9,9 +9,9 @@
  * **Validates: Requirements 5.3**
  */
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, cleanup } from '@testing-library/react'
 import * as fc from 'fast-check'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 
 import { StaffValidator } from '../StaffValidator'
 

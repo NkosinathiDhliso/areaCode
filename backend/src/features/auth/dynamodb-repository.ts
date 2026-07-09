@@ -12,9 +12,11 @@ import {
   ScanCommand,
   TransactWriteCommand,
 } from '@aws-sdk/lib-dynamodb'
+
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
 import { AppError } from '../../shared/errors/AppError.js'
+
 import type { User, BusinessAccount, StaffAccount } from './types.js'
 
 // ────────────────────────────────────────────────────────────────────────────

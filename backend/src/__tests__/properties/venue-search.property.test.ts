@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 // ─── Pure search logic extracted from the service/repository layer ───────────
 // The actual implementation in repository.ts does:

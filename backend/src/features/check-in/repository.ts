@@ -1,9 +1,11 @@
 // DynamoDB-backed Check-In Repository (replaces Prisma)
-import { GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { getTier } from '@area-code/shared/constants/tier-levels'
-import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
-import * as dynamo from './dynamodb-repository.js'
+import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+
+import { documentClient, TableNames, isConditionalCheckFailedError } from '../../shared/db/dynamodb.js'
 import { updateUser } from '../auth/dynamodb-repository.js'
+
+import * as dynamo from './dynamodb-repository.js'
 import { toSASTDate } from './streak.js'
 
 export async function getNodeWithCity(nodeId: string) {
@@ -56,6 +58,32 @@ export async function insertCheckIn(data: { userId: string; nodeId: string; type
     type: data.type,
     neighbourhoodId: data.neighbourhoodId,
   })
+}
+
+// Idempotency claim for a replayed (queued) check-in
+// (cross-portal-lifecycle-alignment R5.7). The check-ins table is keyed on a
+// random checkInId, so there is no natural dedup key; this writes a small marker
+// row in app-data keyed on (userId, nodeId, capturedAt) with a conditional put.
+// Returns true when THIS call claimed the key (first delivery, proceed with the
+// check-in), false when it was already claimed (duplicate delivery, return the
+// original success with no second row). Short TTL: outbox retries all fall inside
+// the 15-minute Replay_Window, so the marker never needs to outlive it by much.
+export async function claimReplayCheckIn(userId: string, nodeId: string, capturedAt: string): Promise<boolean> {
+  const key = `CHECKIN_REPLAY#${userId}#${nodeId}#${capturedAt}`
+  const ttl = Math.floor(Date.now() / 1000) + 20 * 60
+  try {
+    await documentClient.send(
+      new PutCommand({
+        TableName: TableNames.appData,
+        Item: { pk: key, sk: key, userId, nodeId, capturedAt, ttl },
+        ConditionExpression: 'attribute_not_exists(pk)',
+      }),
+    )
+    return true
+  } catch (err) {
+    if (isConditionalCheckFailedError(err)) return false
+    throw err
+  }
 }
 
 // ─── Tier Recalculation ─────────────────────────────────────────────────────

@@ -2,8 +2,8 @@ import type { MapInstance, Node } from '@area-code/shared/types'
 import * as fc from 'fast-check'
 import { describe, expect, it, vi } from 'vitest'
 
-import { POSITION_FRESHNESS_WINDOW } from './carouselConstants'
 import { canRecenter, moveCameraToActive, recenterIfFresh } from './cameraControl'
+import { POSITION_FRESHNESS_WINDOW } from './carouselConstants'
 
 /**
  * Map Discovery - camera coordination + recenter gating property tests

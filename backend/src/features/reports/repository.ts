@@ -1,6 +1,8 @@
 import { GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
-import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
-import { reportTokensSchema, type Report, type ReportMetrics } from './types.js'
+
+import { documentClient, TableNames, isConditionalCheckFailedError } from '../../shared/db/dynamodb.js'
+
+import { digestRowSchema, reportTokensSchema, type DigestRow, type Report, type ReportMetrics } from './types.js'
 
 // ============================================================================
 // Constants
@@ -320,4 +322,116 @@ function computePreviousPeriodStart(periodType: string, periodStart: string): st
   }
 
   return null
+}
+
+// ============================================================================
+// Digest Rows (Weekly Attribution Digest)
+// ============================================================================
+//
+// One Digest_Row per business per Digest_Week, in the app-data table.
+//   pk: DIGEST#<businessId>
+//   sk: WEEK#<weekStartIso date>
+// Sort keys are the ISO date of the opening Monday, so a lexical descending
+// query (ScanIndexForward=false) yields newest-first. No TTL attribute: the
+// cleanup worker enforces the 12-month retention, matching the other audited
+// rows.
+
+/** Page size for the digest history view. */
+const DIGEST_HISTORY_PAGE_SIZE = 10
+
+const digestPk = (businessId: string): string => `DIGEST#${businessId}`
+const digestSk = (weekStart: string): string => `WEEK#${weekStart}`
+
+/**
+ * Persist one Digest_Row, idempotent per business-week (R3.1).
+ *
+ * The conditional write on `attribute_not_exists(pk)` for the week's sort key
+ * makes a Report_Pipeline retry a no-op: the first pass writes the row and gets
+ * `written`; any replay for the same week hits the condition and gets
+ * `duplicate`. `duplicate` is the designed idempotency signal (the generator
+ * uses it to suppress a second Digest_Email), NOT a swallowed failure — every
+ * other error surfaces.
+ */
+export async function putDigestRow(row: DigestRow): Promise<'written' | 'duplicate'> {
+  try {
+    await documentClient.send(
+      new PutCommand({
+        TableName: TableNames.appData,
+        Item: {
+          pk: digestPk(row.businessId),
+          sk: digestSk(row.weekStart),
+          businessId: row.businessId,
+          weekStart: row.weekStart,
+          metrics: row.metrics,
+          deltas: row.deltas,
+          suppressed: row.suppressed,
+          tierAtBuild: row.tierAtBuild,
+          emailSent: row.emailSent,
+          createdAt: row.createdAt,
+        },
+        ConditionExpression: 'attribute_not_exists(pk)',
+      }),
+    )
+    return 'written'
+  } catch (err) {
+    if (isConditionalCheckFailedError(err)) {
+      // A Digest_Row for this business-week already exists → replay no-op (R3.1).
+      return 'duplicate'
+    }
+    throw err
+  }
+}
+
+/**
+ * The most recent Digest_Row for a business, or null when none exists. Queries
+ * the partition newest-first and takes the first row (Latest access pattern).
+ */
+export async function getLatestDigest(businessId: string): Promise<DigestRow | null> {
+  const result = await documentClient.send(
+    new QueryCommand({
+      TableName: TableNames.appData,
+      KeyConditionExpression: 'pk = :pk',
+      ExpressionAttributeValues: { ':pk': digestPk(businessId) },
+      ScanIndexForward: false,
+      Limit: 1,
+    }),
+  )
+
+  const item = result.Items?.[0]
+  if (!item) return null
+
+  const parsed = digestRowSchema.safeParse(item)
+  return parsed.success ? parsed.data : null
+}
+
+/**
+ * A page of Digest_Rows for a business, newest first, with cursor pagination
+ * (History access pattern). The cursor is the base64-encoded LastEvaluatedKey,
+ * matching the report-listing pagination convention.
+ */
+export async function queryDigestHistory(
+  businessId: string,
+  cursor?: string,
+): Promise<{ items: DigestRow[]; nextCursor?: string }> {
+  const result = await documentClient.send(
+    new QueryCommand({
+      TableName: TableNames.appData,
+      KeyConditionExpression: 'pk = :pk',
+      ExpressionAttributeValues: { ':pk': digestPk(businessId) },
+      ScanIndexForward: false,
+      Limit: DIGEST_HISTORY_PAGE_SIZE,
+      ...(cursor ? { ExclusiveStartKey: JSON.parse(Buffer.from(cursor, 'base64').toString()) } : {}),
+    }),
+  )
+
+  const items = (result.Items || [])
+    .map((item) => digestRowSchema.safeParse(item))
+    .filter((parsed) => parsed.success)
+    .map((parsed) => parsed.data)
+
+  const nextCursor = result.LastEvaluatedKey
+    ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64')
+    : undefined
+
+  return { items, nextCursor }
 }

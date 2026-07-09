@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest'
 import * as fc from 'fast-check'
-import { useToastStore } from '../toastStore'
+import { describe, it, expect, beforeEach } from 'vitest'
+
 import type { Toast, ToastType } from '../../types'
+import { useToastStore } from '../toastStore'
 
 const TOAST_TYPES: ToastType[] = [
   'surge',

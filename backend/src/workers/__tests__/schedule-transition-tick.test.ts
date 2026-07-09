@@ -79,8 +79,8 @@ vi.mock('../../shared/db/dynamodb.js', () => ({
 }))
 
 // Import AFTER mocks so the module-level singletons pick up the stubs.
-import { runTransitionTick } from '../schedule-transition-tick'
 import type { NextTransitionRow } from '../../features/music/schedule-repository.js'
+import { runTransitionTick } from '../schedule-transition-tick'
 
 function makeRow(i: number): NextTransitionRow {
   return {

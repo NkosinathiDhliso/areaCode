@@ -1,7 +1,6 @@
+import { BottomSheet } from '@area-code/shared/components/BottomSheet'
 import { Navigation } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-
-import { BottomSheet } from '@area-code/shared/components/BottomSheet'
 
 interface DirectionsSheetProps {
   isOpen: boolean

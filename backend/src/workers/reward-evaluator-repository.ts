@@ -1,17 +1,18 @@
 // DynamoDB-backed reward evaluator repository (replaces Prisma)
 import { GetCommand, PutCommand, UpdateCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb'
-import { documentClient, TableNames, isConditionalCheckFailedError } from '../shared/db/dynamodb.js'
-import { generateId } from '../shared/db/entities.js'
-import { getActiveRewardsByNodeId, getRedemptionsByUserId } from '../features/rewards/dynamodb-repository.js'
-import { getNodeById } from '../features/nodes/dynamodb-repository.js'
+
+import { writeAbuseFlag } from '../features/check-in/abuse.js'
 import {
   getCheckInsByNode,
   getCheckInsByUser,
   countQualifyingVisits,
 } from '../features/check-in/dynamodb-repository.js'
-import { writeAbuseFlag } from '../features/check-in/abuse.js'
-import { kvIncr } from '../shared/kv/dynamodb-kv.js'
+import { getNodeById } from '../features/nodes/dynamodb-repository.js'
+import { getActiveRewardsByNodeId, getRedemptionsByUserId } from '../features/rewards/dynamodb-repository.js'
 import { REPEAT_WINDOW_MS, type GuardState, type RepeatPolicy } from '../features/rewards/repeat-policy.js'
+import { documentClient, TableNames, isConditionalCheckFailedError } from '../shared/db/dynamodb.js'
+import { generateId } from '../shared/db/entities.js'
+import { kvIncr } from '../shared/kv/dynamodb-kv.js'
 
 // Qualifying_Visit counter: check-ins with `type = 'reward'` at the node. This
 // is the single shared definition (loyalty-repeat-redemption R3.2) used by both

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
 import Fastify from 'fastify'
+import { describe, it, expect } from 'vitest'
 
 import { adminRoutes } from '../handler.js'
 
@@ -57,6 +57,15 @@ describe('admin router — surfaced detail reads (R4.1)', () => {
     expect(getUrls).toContain('/v1/admin/consent/:userId')
 
     // BusinessDetailPanel issues this read.
+    expect(getUrls).toContain('/v1/admin/businesses/:businessId')
+  })
+
+  it('registers the Grace_List endpoint as a static route (cross-portal R2.2)', async () => {
+    const routes = await collectAdminRoutes()
+    const getUrls = new Set(routes.filter((r) => r.method === 'GET').map((r) => r.url))
+    // Static /grace must be present and distinct from the parametric detail read,
+    // so it is not shadowed by :businessId (uuid) validation.
+    expect(getUrls).toContain('/v1/admin/businesses/grace')
     expect(getUrls).toContain('/v1/admin/businesses/:businessId')
   })
 })

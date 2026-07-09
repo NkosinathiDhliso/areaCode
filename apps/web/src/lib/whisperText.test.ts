@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest'
 import type { Node } from '@area-code/shared/types'
+import { describe, it, expect } from 'vitest'
 
 import { computeWhisperText } from './whisperText'
 

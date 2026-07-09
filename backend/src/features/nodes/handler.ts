@@ -1,8 +1,11 @@
 import type { FastifyInstance } from 'fastify'
+import { z } from 'zod'
+
 import { requireAuth, getAuth, optionalAuth } from '../../shared/middleware/auth.js'
 import { requireBusinessPermission, getBusinessRole } from '../../shared/middleware/business-role.js'
-import { validate } from '../../shared/middleware/validation.js'
 import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
+import { validate } from '../../shared/middleware/validation.js'
+
 import * as service from './service.js'
 import {
   citySlugParamsSchema,
@@ -17,7 +20,6 @@ import {
   whoIsHereQuerySchema,
   presignedUploadBodySchema,
 } from './types.js'
-import { z } from 'zod'
 
 export async function nodeRoutes(app: FastifyInstance) {
   // GET /v1/nodes/trending — must be registered before /:citySlug to avoid param collision

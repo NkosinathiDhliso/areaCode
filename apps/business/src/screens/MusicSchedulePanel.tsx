@@ -1,10 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-
-import { api, type ApiError } from '@area-code/shared/lib/api'
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { ARCHETYPE_CATALOG } from '@area-code/shared/constants/archetype-catalog'
 import { MUSIC_GENRES, GENRE_LABELS } from '@area-code/shared/constants/genre-weights'
+import { api, type ApiError } from '@area-code/shared/lib/api'
 import { validateMusicSchedule, type ScheduleValidationCode } from '@area-code/shared/lib/schedule-validator'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
@@ -18,6 +15,8 @@ import type {
   ScheduleSlot,
   ScheduleSlotMode,
 } from '@area-code/shared/types'
+import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 // Order matches R4.2 (Monday-first horizontal week view).
 const DAYS_OF_WEEK: ScheduleDayOfWeek[] = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']

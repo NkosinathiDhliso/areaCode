@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import { MapPin, Check, Lock, AlertCircle } from 'lucide-react'
 import { api, type ApiError } from '@area-code/shared/lib/api'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { usePresenceStore } from '@area-code/shared/stores/presenceStore'
 import type { CheckInResponse } from '@area-code/shared/types'
+import { MapPin, Check, Lock, AlertCircle } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import type { AppRoute } from '../types'
 
 interface QrCheckInProps {

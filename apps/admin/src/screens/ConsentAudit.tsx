@@ -1,9 +1,8 @@
+import { api } from '@area-code/shared/lib/api'
+import { formatLocalDate } from '@area-code/shared/lib/formatters'
+import type { ConsentRecord } from '@area-code/shared/types'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-
-import { api } from '@area-code/shared/lib/api'
-import type { ConsentRecord } from '@area-code/shared/types'
-import { formatLocalDate } from '@area-code/shared/lib/formatters'
 
 interface ErasureRequest {
   userId: string

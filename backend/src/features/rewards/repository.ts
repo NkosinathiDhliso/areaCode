@@ -1,5 +1,5 @@
 // DynamoDB-backed Rewards Repository (replaces Prisma)
-import { GetCommand, ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
+import { ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { kvGet } from '../../shared/kv/dynamodb-kv.js'
@@ -312,15 +312,20 @@ export async function getUnclaimedRewards(userId: string) {
     if (!reward || reward.isActive === false) continue
 
     // Prefer the denormalised fields written at claim time; fall back to the
-    // reward/node lookup for older rows that predate the denormalisation.
+    // reward/node lookup for older rows that predate the denormalisation. The
+    // node is also read for `venueActive` (R4.2) so the wallet card can tell the
+    // holder the venue has left Area Code without a per-card fetch on the client.
     let rewardTitle = (rec['rewardTitle'] as string) ?? ''
     let nodeName = (rec['nodeName'] as string) ?? ''
     const rewardType = reward.type
     if (!rewardTitle) rewardTitle = reward.title
-    if (!nodeName) {
-      const node = await getNodeById(reward.nodeId)
-      nodeName = node?.name ?? ''
-    }
+    const node = await getNodeById(reward.nodeId)
+    if (!nodeName) nodeName = node?.name ?? ''
+    // Active until proven otherwise: a missing node reads as inactive (the venue
+    // is gone), and an explicit `isActive === false` (lapse/disable) reads as
+    // inactive. Earned codes still redeem in this state (Earned_Code_Policy), so
+    // this only drives honest copy, never hides the code.
+    const venueActive = !!node && (node as { isActive?: boolean }).isActive !== false
     enriched.push({
       id: (rec['redemptionId'] ?? rec['pk']) as string,
       rewardTitle,
@@ -328,6 +333,7 @@ export async function getUnclaimedRewards(userId: string) {
       redemptionCode: rec['redemptionCode'] as string,
       codeExpiresAt: rec['codeExpiresAt'] as string,
       nodeName,
+      venueActive,
       createdAt: rec['createdAt'] as string,
     })
   }
@@ -373,7 +379,7 @@ export async function getRecentRedemptions(businessId: string, limit = 20) {
       ExpressionAttributeValues: { ':bid': businessId },
     }),
   )
-  const nodeIds = new Set((nodesResult.Items || []).map((n) => n['nodeId'] as string))
+  const _nodeIds = new Set((nodesResult.Items || []).map((n) => n['nodeId'] as string))
   // Scan redemptions and filter
   const result = await documentClient.send(
     new ScanCommand({

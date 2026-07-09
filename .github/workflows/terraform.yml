@@ -88,7 +88,13 @@ jobs:
         run: terraform apply -auto-approve
         working-directory: infra/environments/dev
 
-  apply-prod:
+  # Prod plan runs WITHOUT an environment gate so the plan is computed and
+  # surfaced in the run before the approval wait. GitHub environment protection
+  # gates a whole job at its start, so a gated job would hide the plan behind
+  # the approval. Splitting plan out lets a reviewer read the plan first, then
+  # approve apply-prod. The saved plan (tfplan) is handed to apply-prod as an
+  # artifact so the applied changes are exactly what was reviewed.
+  plan-prod:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: apply-dev
     runs-on: ubuntu-latest
@@ -113,6 +119,56 @@ jobs:
         run: terraform init
         working-directory: infra/environments/prod
 
+      - name: Terraform Plan
+        run: terraform plan -no-color -out=tfplan
+        working-directory: infra/environments/prod
+
+      - name: Upload prod plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-prod
+          path: infra/environments/prod/tfplan
+          retention-days: 5
+
+  # Prod apply waits for a required reviewer via the `prod-infra` GitHub
+  # environment. MANUAL FOUNDER ACTION (one-time): create the `prod-infra`
+  # environment in repo Settings > Environments and add a required reviewer.
+  # That repo-settings step cannot be expressed in this workflow file; without
+  # it the `environment:` key below has no protection effect. Once configured,
+  # this whole job pauses at its start until the reviewer approves, then applies
+  # the exact plan reviewed in plan-prod. Dev (apply-dev) stays auto-apply.
+  apply-prod:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: [apply-dev, plan-prod]
+    runs-on: ubuntu-latest
+    environment: prod-infra
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: infra/environments/prod
+
+      - name: Download prod plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-prod
+          path: infra/environments/prod
+
       - name: Terraform Apply
-        run: terraform apply -auto-approve
+        run: terraform apply -no-color tfplan
         working-directory: infra/environments/prod

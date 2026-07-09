@@ -2,6 +2,7 @@ import { api } from '@area-code/shared/lib/api'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 import type { Node } from '@area-code/shared/types'
 import { useEffect, useRef, useState } from 'react'
+
 import { MapboxAddressInput } from '../../components/MapboxAddressInput'
 
 export function NodeEditorPanel() {

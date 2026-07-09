@@ -6,8 +6,8 @@
  * data-testid wiring, and the pauseIdleDrift contract.
  */
 // @vitest-environment jsdom
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
 import { MapControls } from '../MapControls'
 

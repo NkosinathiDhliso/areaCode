@@ -7,13 +7,13 @@
  * slot.
  */
 // @vitest-environment jsdom
-import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
+import { describe, expect, it, beforeEach, vi } from 'vitest'
 
-import { useCityPulseToast } from '../useCityPulseToast'
 import { useMapStore } from '../../stores/mapStore'
 import { useToastStore } from '../../stores/toastStore'
 import type { Node } from '../../types'
+import { useCityPulseToast } from '../useCityPulseToast'
 
 const TOAST_ID = 'city-pulse'
 const GRACE_MS = 2000

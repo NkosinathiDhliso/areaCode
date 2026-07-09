@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 /**
  * Property 12: Leaderboard is always sorted descending by check-in count.

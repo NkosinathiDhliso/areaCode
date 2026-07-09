@@ -32,8 +32,8 @@
  * **Validates: Requirements 11.4, 6, C1**
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   sendNotification: vi.fn(),
@@ -63,8 +63,8 @@ vi.mock('../../business/repository.js', () => ({
   findBusinessById: mocks.findBusinessById,
 }))
 
-import { handler } from '../sender.js'
 import { recipientToken } from '../anonymize.js'
+import { handler } from '../sender.js'
 import type { Campaign, CampaignChannel, CampaignSendMessage, ChannelOutcome } from '../types.js'
 
 // ─── Known PII patterns (what a leaked identifier would look like) ────────────

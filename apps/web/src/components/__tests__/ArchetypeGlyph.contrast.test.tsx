@@ -34,10 +34,10 @@
  *     L = 0.2126·R_lin + 0.7152·G_lin + 0.0722·B_lin
  *   contrast(a, b) = (Lmax + 0.05) / (Lmin + 0.05).
  */
-import { describe, expect, it } from 'vitest'
 
 import { ARCHETYPE_CATALOG, dynamicContrastForCategory } from '@area-code/shared/constants'
 import type { NodeCategory, NodeState } from '@area-code/shared/types'
+import { describe, expect, it } from 'vitest'
 
 // ─── Cross-product domain ───────────────────────────────────────────────────
 

@@ -10,13 +10,12 @@
  * - No polling (R14.1)
  */
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook } from '@testing-library/react'
-
+import { setSocketOverride } from '@area-code/shared/lib/websocket'
+import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import { useToastStore } from '@area-code/shared/stores/toastStore'
-import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
-import { setSocketOverride } from '@area-code/shared/lib/websocket'
+import { renderHook } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 import { useFriendsPresence } from '../useFriendsPresence'
 

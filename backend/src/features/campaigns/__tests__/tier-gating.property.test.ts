@@ -24,8 +24,8 @@
  * **Validates: Requirements 9.1, 9.2**
  */
 
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 import { canSendCampaigns, assertCanSendCampaigns, CampaignUpgradeRequiredError } from '../tier-gating.js'
 

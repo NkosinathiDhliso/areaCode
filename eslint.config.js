@@ -173,6 +173,24 @@ export default tseslint.config(
       'import/order': 'warn',
     },
   },
+  // Expo Router route files MUST default-export their screen component; the
+  // router discovers routes by the file's default export. `import/no-default-export`
+  // is simply wrong for this directory.
+  {
+    files: ['apps/mobile/app/**/*.ts', 'apps/mobile/app/**/*.tsx'],
+    rules: {
+      'import/no-default-export': 'off',
+    },
+  },
+  // i18n entry points export the configured i18next singleton as the default,
+  // matching the i18next/react-i18next convention. A named export here would
+  // fight the ecosystem for no gain.
+  {
+    files: ['**/i18n/index.ts'],
+    rules: {
+      'import/no-default-export': 'off',
+    },
+  },
   // Node-run helper scripts (build/codegen/ops) use Node globals.
   {
     files: ['scripts/**/*.js', 'scripts/**/*.mjs', 'scripts/**/*.cjs'],

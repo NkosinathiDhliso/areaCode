@@ -1,8 +1,7 @@
-import { describe, it, expect } from 'vitest'
-import * as fc from 'fast-check'
-
 import { getTier, TIER_LEVELS } from '@area-code/shared/constants/tier-levels'
 import type { Tier } from '@area-code/shared/types'
+import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 /**
  * Tier-permanence guard — Churn-defences spec, Requirement 3.4.

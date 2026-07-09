@@ -1,10 +1,12 @@
 import type { FastifyInstance } from 'fastify'
+import { z } from 'zod'
+
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
-import { validate } from '../../shared/middleware/validation.js'
 import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
+import { validate } from '../../shared/middleware/validation.js'
+
 import * as service from './service.js'
 import { updatePrivacyBodySchema, blockParamsSchema, createReportBodySchema } from './types.js'
-import { z } from 'zod'
 
 export async function privacyRoutes(app: FastifyInstance) {
   // ─── Privacy Settings ─────────────────────────────────────────────────

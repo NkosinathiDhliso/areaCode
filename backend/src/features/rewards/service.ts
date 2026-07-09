@@ -1,3 +1,5 @@
+import { DEV_MODE } from '../../shared/config/env.js'
+import { isConditionalCheckFailedError } from '../../shared/db/dynamodb.js'
 import { AppError } from '../../shared/errors/AppError.js'
 import { findBusinessById } from '../business/repository.js'
 import { getEffectiveTier } from '../business/service.js'
@@ -7,8 +9,6 @@ import { validateWindow, classifyLifecycle, isVisibleInFeed } from './lifecycle.
 import { pulseStateFromScore, rankGetsByVibe } from './ranking.js'
 import * as repo from './repository.js'
 import { countLocksForReward } from './threshold-lock.js'
-import { DEV_MODE } from '../../shared/config/env.js'
-import { isConditionalCheckFailedError } from '../../shared/db/dynamodb.js'
 
 const DEV_REWARDS = [
   {

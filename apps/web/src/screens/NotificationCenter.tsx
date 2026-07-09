@@ -1,10 +1,10 @@
+import { EmptyState } from '@area-code/shared/components/EmptyState'
+import { Skeleton } from '@area-code/shared/components/Skeleton'
+import { useNotifications } from '@area-code/shared/hooks'
+import type { NotificationItem } from '@area-code/shared/stores'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { useNotifications } from '@area-code/shared/hooks'
-import { Skeleton } from '@area-code/shared/components/Skeleton'
-import { EmptyState } from '@area-code/shared/components/EmptyState'
-import type { NotificationItem } from '@area-code/shared/stores'
 import type { AppRoute } from '../types'
 
 interface NotificationCenterProps {

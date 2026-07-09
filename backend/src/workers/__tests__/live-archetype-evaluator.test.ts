@@ -39,8 +39,8 @@
  *   case (the evaluator short-circuits on it first).
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { setFeatureFlagOverride, clearFeatureFlagOverrides } from '@area-code/shared/lib/featureGating'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // ─── Module mocks (hoisted so the factory spies are defined first) ───────────
 
@@ -124,6 +124,7 @@ vi.mock('../../shared/websocket/broadcast.js', () => ({
 // Import AFTER mocks so the module-level singletons pick up the stubs.
 import { evaluateLiveArchetype, __resetLastEmitForTests } from '../live-archetype-evaluator'
 import type { EvaluationTickEvent } from '../live-archetype-evaluator'
+
 import type { LiveArchetypeBranch } from '@area-code/shared/types'
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────

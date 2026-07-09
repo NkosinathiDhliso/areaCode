@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+
 import { applyFriendVisibility } from '../service.js'
 
 function makeEntry(

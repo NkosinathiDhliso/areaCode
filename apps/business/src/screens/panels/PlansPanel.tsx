@@ -1,8 +1,13 @@
-import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-
 import { api } from '@area-code/shared/lib/api'
 import { formatZAR } from '@area-code/shared/lib/formatters'
+import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
+import { SubscriptionHistoryPanel } from '../../components/SubscriptionHistoryPanel'
+
+import { BillingStatusBanner } from './BillingStatusBanner'
+import { CheckoutReturnBanner } from './CheckoutReturnBanner'
+import { useCheckoutReturn } from './useCheckoutReturn'
 
 interface PlanInfo {
   name: string
@@ -29,6 +34,12 @@ interface BusinessProfile {
   // The backend enforces one trial per business, so we use this to hide
   // the "Start trial" CTA for businesses that have already used theirs.
   trialEndsAt?: string | null
+  // Billing lifecycle fields (billing-revenue-integrity R2.6). Present on
+  // GET /v1/business/me: end of the current paid window, what was bought, and
+  // the 7-day grace window after a paid window lapses.
+  paidUntil?: string | null
+  paidInterval?: string | null
+  paymentGraceUntil?: string | null
 }
 
 export function PlansPanel() {
@@ -37,10 +48,26 @@ export function PlansPanel() {
   const [loading, setLoading] = useState<string | null>(null)
   const [currentTier, setCurrentTier] = useState<'starter' | 'growth' | 'pro' | 'payg'>('starter')
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
+  const [paidUntil, setPaidUntil] = useState<string | null>(null)
+  const [paidInterval, setPaidInterval] = useState<string | null>(null)
+  const [paymentGraceUntil, setPaymentGraceUntil] = useState<string | null>(null)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [cancelling, setCancelling] = useState(false)
+
+  // Applies a freshly loaded profile to local billing state. Shared by the
+  // initial load and the checkout-return poll so the banner updates in place.
+  const applyProfile = useCallback((profileRes: BusinessProfile) => {
+    const raw = profileRes.tier ?? 'starter'
+    // 'free' is a legacy value - treat it as starter for display
+    const mapped = raw === 'free' ? 'starter' : raw
+    setCurrentTier(mapped as 'starter' | 'growth' | 'pro' | 'payg')
+    setTrialEndsAt(profileRes.trialEndsAt ?? null)
+    setPaidUntil(profileRes.paidUntil ?? null)
+    setPaidInterval(profileRes.paidInterval ?? null)
+    setPaymentGraceUntil(profileRes.paymentGraceUntil ?? null)
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -50,22 +77,21 @@ export function PlansPanel() {
           api.get<BusinessProfile>('/v1/business/me'),
         ])
         setPlans(plansRes)
-        const raw = profileRes.tier ?? 'starter'
-        // 'free' is a legacy value - treat it as starter for display
-        const mapped = raw === 'free' ? 'starter' : raw
-        setCurrentTier(mapped as 'starter' | 'growth' | 'pro' | 'payg')
-        setTrialEndsAt(profileRes.trialEndsAt ?? null)
+        applyProfile(profileRes)
       } catch {
         setLoadError(true)
       }
     }
     void load()
-  }, [])
+  }, [applyProfile])
+
+  // Checkout return flow (R6): reads ?status on mount, polls to confirm a
+  // success, and strips the param so a refresh does not replay it.
+  const { returnState, isPolling, dismiss } = useCheckoutReturn<BusinessProfile>({ onProfile: applyProfile })
 
   // A business gets exactly one trial, ever. trialEndsAt being non-null means
   // they've already claimed it (active or expired), so new trial CTAs are hidden.
   const hasUsedTrial = trialEndsAt !== null
-  const trialIsActive = trialEndsAt !== null && new Date(trialEndsAt).getTime() > Date.now()
 
   async function handleStartTrial(plan: 'growth' | 'pro') {
     setLoading(plan)
@@ -103,6 +129,15 @@ export function PlansPanel() {
     }
   }
 
+  // R7.6: a renewal is a normal checkout for the plan and interval the business
+  // already holds. Reuses the createCheckoutSession path; on success the backend
+  // extends Paid_Until from max(now, current Paid_Until).
+  function handleRenew() {
+    if (currentTier === 'starter') return
+    const interval = paidInterval ?? (currentTier === 'payg' ? 'daily' : 'monthly')
+    void handleSelectPlan(currentTier, interval)
+  }
+
   async function handleCancelSubscription() {
     setCancelling(true)
     setCheckoutError(null)
@@ -135,12 +170,13 @@ export function PlansPanel() {
         ? t('biz.plans.free')
         : `${formatZAR((plan.monthlyPriceCents ?? 0) / 100)}/mo`
 
+    // Growth/Pro only. PAYG has its own day/week purchase buttons below.
     function handleClick() {
-      if (!actionPlan) return
-      if (canStartTrial && (actionPlan === 'growth' || actionPlan === 'pro')) {
-        void handleStartTrial(actionPlan)
+      if (!actionPlan || isPAYG) return
+      if (canStartTrial) {
+        void handleStartTrial(actionPlan as 'growth' | 'pro')
       } else {
-        void handleSelectPlan(actionPlan, isPAYG ? 'daily' : 'monthly')
+        void handleSelectPlan(actionPlan, 'monthly')
       }
     }
 
@@ -173,7 +209,12 @@ export function PlansPanel() {
           <span className="text-[var(--text-muted)] text-xs">or {formatZAR(plan.weeklyPriceCents / 100)}/week</span>
         )}
         {canStartTrial && (
-          <span className="text-[var(--text-muted)] text-xs">No card needed. Billing starts after your trial.</span>
+          <span className="text-[var(--text-muted)] text-xs">
+            {t(
+              'biz.plans.trialNoCard',
+              'No card needed to start. Choose a plan before your trial ends to keep your features.',
+            )}
+          </span>
         )}
 
         <div className="flex flex-col gap-1 mt-1">
@@ -182,10 +223,10 @@ export function PlansPanel() {
           <FeatureRow label={t('biz.plans.staff')} value={formatLimit(plan.maxStaff)} />
         </div>
 
-        {actionPlan && !isCurrent && (
+        {actionPlan && !isCurrent && !isPAYG && (
           <button
             onClick={handleClick}
-            disabled={loading !== null}
+            disabled={loading !== null || isPolling}
             className={`font-semibold rounded-xl py-3 text-sm transition-all duration-150 active:scale-95 disabled:opacity-50 mt-1 ${
               key === 'growth'
                 ? 'bg-[var(--accent)] text-white'
@@ -194,6 +235,34 @@ export function PlansPanel() {
           >
             {loading === actionPlan ? '...' : canStartTrial ? t('biz.plans.startTrial') : t('biz.plans.subscribe')}
           </button>
+        )}
+        {isPAYG && !isCurrent && (
+          <div className="flex flex-col gap-2 mt-1">
+            <button
+              onClick={() => void handleSelectPlan('payg', 'daily')}
+              disabled={loading !== null || isPolling}
+              className="font-semibold rounded-xl py-3 text-sm transition-all duration-150 active:scale-95 disabled:opacity-50 border border-[var(--border-strong)] text-[var(--text-primary)] bg-transparent"
+            >
+              {loading === 'payg'
+                ? '...'
+                : t('biz.plans.buyDayPass', 'Buy day pass ({{price}})', {
+                    price: `${formatZAR((plan.dailyPriceCents ?? 0) / 100)}/day`,
+                  })}
+            </button>
+            {plan.weeklyPriceCents !== undefined && (
+              <button
+                onClick={() => void handleSelectPlan('payg', 'weekly')}
+                disabled={loading !== null || isPolling}
+                className="font-semibold rounded-xl py-3 text-sm transition-all duration-150 active:scale-95 disabled:opacity-50 border border-[var(--border-strong)] text-[var(--text-primary)] bg-transparent"
+              >
+                {loading === 'payg'
+                  ? '...'
+                  : t('biz.plans.buyWeekPass', 'Buy week pass ({{price}})', {
+                      price: `${formatZAR((plan.weeklyPriceCents ?? 0) / 100)}/week`,
+                    })}
+              </button>
+            )}
+          </div>
         )}
         {isCurrent && (
           <span className="text-[var(--accent)] text-xs text-center font-medium">{t('biz.plans.currentPlan')}</span>
@@ -215,17 +284,17 @@ export function PlansPanel() {
       <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('biz.plans.title')}</h2>
       <p className="text-[var(--text-secondary)] text-sm">{t('biz.plans.subtitle')}</p>
 
-      {trialIsActive && trialEndsAt && (
-        <div className="bg-[var(--success-subtle,#e7f7ee)] border border-[var(--success)] rounded-xl px-4 py-3 text-[var(--text-primary)] text-sm">
-          Free trial active | ends {new Date(trialEndsAt).toLocaleDateString()}. Add a payment method before then to
-          keep your {currentTier} features.
-        </div>
-      )}
-      {!trialIsActive && hasUsedTrial && (
-        <div className="bg-[var(--bg-raised)] border border-[var(--border)] rounded-xl px-4 py-3 text-[var(--text-secondary)] text-xs">
-          Your trial is over | pick a plan.
-        </div>
-      )}
+      <CheckoutReturnBanner state={returnState} onDismiss={dismiss} />
+
+      <BillingStatusBanner
+        tier={currentTier}
+        paidUntil={paidUntil}
+        paidInterval={paidInterval}
+        paymentGraceUntil={paymentGraceUntil}
+        trialEndsAt={trialEndsAt}
+        onRenew={handleRenew}
+        renewing={loading !== null || isPolling}
+      />
       {checkoutError && (
         <div className="bg-[var(--danger-subtle,#fee)] border border-[var(--danger)] rounded-xl px-4 py-3 text-[var(--danger)] text-sm">
           {checkoutError}
@@ -262,6 +331,9 @@ export function PlansPanel() {
         </button>
       )}
 
+      {/* Past subscription payments (R7.5). Self-handles its own empty state. */}
+      <SubscriptionHistoryPanel />
+
       {showCancelConfirm && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-5">
           <div className="bg-[var(--bg-modal)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
@@ -271,7 +343,7 @@ export function PlansPanel() {
             <p className="text-[var(--text-secondary)] text-sm mb-4">
               {t(
                 'biz.plans.cancelBody',
-                'Your plan will be downgraded to Starter immediately. You will lose access to paid features like extra nodes, rewards, and staff slots.',
+                'Your plan will be downgraded to Starter immediately, and your venues will be removed from the consumer map. You will lose access to paid features like extra nodes, gets, and staff slots.',
               )}
             </p>
             <div className="flex flex-row gap-3">

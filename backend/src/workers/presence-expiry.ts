@@ -28,7 +28,6 @@
 // The Terraform wiring (rate(5 minutes), arm64 Lambda) lives in infra.
 import { ScanCommand } from '@aws-sdk/lib-dynamodb'
 
-import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 import { writeDwellRow } from '../features/presence/dwell-sink.js'
 import {
   endPresenceByExpiry,
@@ -36,9 +35,10 @@ import {
   reconcileCounter,
   recordPresenceSample,
 } from '../features/presence/repository.js'
-import { emitFriendCheckout, emitPresenceUpdate } from '../shared/socket/events.js'
 import { getMutualFollowIds, getFollowingIds } from '../features/social/repository.js'
+import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 import { canEmitToFriends } from '../shared/privacy/privacy-guard.js'
+import { emitFriendCheckout, emitPresenceUpdate } from '../shared/socket/events.js'
 
 /** Cities are stored in `app-data` as `CITY#<id>` rows where `sk = pk`. */
 async function getCities() {

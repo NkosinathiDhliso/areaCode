@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 
-import { ARCHETYPE_ICONS, getArchetypeIcon, dynamicContrastForCategory } from '../archetype-icons'
 import { ARCHETYPE_CATALOG } from '../archetype-catalog'
+import { ARCHETYPE_ICONS, getArchetypeIcon, dynamicContrastForCategory } from '../archetype-icons'
 import { NODE_CATEGORIES } from '../node-categories'
 
 /**

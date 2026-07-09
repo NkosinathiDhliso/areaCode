@@ -1,10 +1,17 @@
 import { ScanCommand } from '@aws-sdk/lib-dynamodb'
+
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { sendTrialExpiryEmail } from '../../shared/email/ses.js'
 
+import { sendRenewalReminders } from './service.js'
+
 /**
- * Scheduled handler (EventBridge daily) that sends trial expiry reminders.
- * Sends at 3 days and 1 day before expiry.
+ * Scheduled handler (EventBridge daily) that sends trial expiry reminders and
+ * pre-lapse renewal reminders.
+ *
+ * Trial reminders fire at 3 days and 1 day before trial expiry. The renewal
+ * sweep (billing-revenue-integrity R3.4) additionally emails paid monthly/yearly
+ * businesses whose `paidUntil` is within 7 days, one send per paid window.
  */
 export async function handleTrialReminders() {
   const now = Date.now()
@@ -40,5 +47,17 @@ export async function handleTrialReminders() {
     }
   }
 
-  return { sent, scanned: businesses.length }
+  // billing-revenue-integrity R3.4: the same daily worker sends the pre-lapse
+  // renewal reminder (paid monthly/yearly, `paidUntil` within 7 days). Isolated
+  // in a try/catch so a renewal-query failure never blocks the trial-expiry
+  // nudges above and is logged loudly rather than swallowed silently.
+  let renewalReminded = 0
+  try {
+    const renewal = await sendRenewalReminders(now)
+    renewalReminded = renewal.reminded
+  } catch (err) {
+    console.warn(`[trial-reminder] renewal reminder sweep failed: ${String(err)}`)
+  }
+
+  return { sent, scanned: businesses.length, renewalReminded }
 }

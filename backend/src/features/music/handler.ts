@@ -1,10 +1,14 @@
+import { ScheduleValidationError, validateMusicSchedule } from '@area-code/shared/lib/schedule-validator'
+import type { MusicSchedule } from '@area-code/shared/types'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 
+import { AppError } from '../../shared/errors/AppError.js'
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { requireBusinessPermission, getBusinessRole } from '../../shared/middleware/business-role.js'
 import { validate } from '../../shared/middleware/validation.js'
-import { AppError } from '../../shared/errors/AppError.js'
+
+import { deleteScheduleSlot, getSchedule, upsertSchedule } from './schedule-repository.js'
 import * as service from './service.js'
 import {
   updateGenresBodySchema,
@@ -12,11 +16,6 @@ import {
   spotifyCallbackQuerySchema,
   crowdVibeParamsSchema,
 } from './types.js'
-
-import { ScheduleValidationError, validateMusicSchedule } from '@area-code/shared/lib/schedule-validator'
-import type { MusicSchedule } from '@area-code/shared/types'
-
-import { deleteScheduleSlot, getSchedule, upsertSchedule } from './schedule-repository.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Music_Schedule route helpers

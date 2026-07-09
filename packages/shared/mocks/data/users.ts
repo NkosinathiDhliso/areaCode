@@ -1,7 +1,7 @@
-import type { User, MusicGenre, DimensionScoreVector, StreamingProvider } from '../../types'
-import { GENRE_WEIGHT_MATRIX } from '../../constants/genre-weights'
 import { ARCHETYPE_CATALOG } from '../../constants/archetype-catalog'
+import { GENRE_WEIGHT_MATRIX } from '../../constants/genre-weights'
 import { computeDimensionScores, resolveArchetype } from '../../lib/archetypeResolver'
+import type { User, MusicGenre, StreamingProvider } from '../../types'
 import { hoursAgo } from '../helpers'
 
 /**

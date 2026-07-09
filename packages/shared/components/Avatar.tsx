@@ -1,4 +1,5 @@
 import type { Tier } from '../types'
+
 import { Box } from './primitives'
 
 interface AvatarProps {

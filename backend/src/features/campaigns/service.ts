@@ -29,15 +29,17 @@
 // ============================================================================
 
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda'
-import { AppError } from '../../shared/errors/AppError.js'
+
 import { AWS_REGION } from '../../shared/config/env.js'
 import { generateId } from '../../shared/db/entities.js'
+import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet } from '../../shared/kv/dynamodb-kv.js'
 import { findBusinessById } from '../business/repository.js'
 import { getEffectiveTier } from '../business/service.js'
 import { getCheckInsByNode } from '../check-in/dynamodb-repository.js'
 import { getNodesByBusinessId } from '../nodes/dynamodb-repository.js'
 import { getRewardById } from '../rewards/repository.js'
+
 import { generateCampaignSalt, recipientToken } from './anonymize.js'
 import { filterByConsentAndOptOut, filterByFrequencyCap } from './eligibility.js'
 import { assertWithinQuota, QuotaExceededError, quotaMonthKey } from './quota.js'

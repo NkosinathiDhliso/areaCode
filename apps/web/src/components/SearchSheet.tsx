@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
 import { BottomSheet } from '@area-code/shared/components/BottomSheet'
 import { api } from '@area-code/shared/lib/api'
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
+import { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface SearchResult {
   id: string

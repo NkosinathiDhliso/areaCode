@@ -1,7 +1,8 @@
-import { kvIncr } from '../../shared/kv/dynamodb-kv.js'
 import { PutCommand } from '@aws-sdk/lib-dynamodb'
+
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
+import { kvIncr } from '../../shared/kv/dynamodb-kv.js'
 import { getUserById } from '../auth/dynamodb-repository.js'
 
 interface AbuseCheckResult {
@@ -18,7 +19,7 @@ export async function runAbuseChecks(
   userId: string,
   nodeId: string,
   fingerprintHash: string | undefined,
-  ip: string,
+  _ip: string,
 ): Promise<AbuseCheckResult> {
   const flags: AbuseCheckResult['flags'] = []
 

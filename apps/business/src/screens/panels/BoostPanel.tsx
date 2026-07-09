@@ -1,11 +1,15 @@
+import { api } from '@area-code/shared/lib/api'
+import { formatZAR } from '@area-code/shared/lib/formatters'
+import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
+import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { api } from '@area-code/shared/lib/api'
-import { formatZAR } from '@area-code/shared/lib/formatters'
-import { useBusinessStore } from '@area-code/shared/stores/businessStore'
-
 import { BoostPurchasesPanel } from '../../components/BoostPurchasesPanel'
+
+import { ActiveBoostList } from './ActiveBoostList'
+import { CheckoutReturnBanner } from './CheckoutReturnBanner'
+import { useBoostCheckoutReturn } from './useCheckoutReturn'
 
 interface BoostPricing {
   '2hr': number
@@ -19,6 +23,12 @@ export function BoostPanel() {
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const nodes = useBusinessStore((s) => s.nodes)
+  const businessId = useBusinessAuthStore((s) => s.businessId)
+
+  // Checkout return flow (R6, boost path): reads ?status on mount, polls the
+  // boost purchases list to confirm a success, and strips the param so a
+  // refresh does not replay it.
+  const { returnState, isPolling, dismiss } = useBoostCheckoutReturn(businessId)
 
   useEffect(() => {
     async function load() {
@@ -64,13 +74,18 @@ export function BoostPanel() {
     <div className="p-5 flex flex-col gap-4">
       <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{t('biz.boost.title')}</h2>
 
+      <CheckoutReturnBanner state={returnState} onDismiss={dismiss} />
+
+      {/* R5.6 - Active Boost_Window state per owned node, driven by boostUntil. */}
+      <ActiveBoostList nodes={nodes} />
+
       {pricing && (
         <div className="flex flex-col gap-3">
           {(['2hr', '6hr', '24hr'] as const).map((dur) => (
             <button
               key={dur}
               onClick={() => handleBoost(dur)}
-              disabled={loading !== null}
+              disabled={loading !== null || isPolling}
               className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-5 flex flex-row items-center justify-between active:scale-[0.98] transition-transform"
             >
               <div>

@@ -1,7 +1,8 @@
-import { AppError } from '../../shared/errors/AppError.js'
-import * as repo from './repository.js'
 import * as cognito from '../../shared/cognito/client.js'
 import { AWS_REGION, DEV_MODE, requireEnv } from '../../shared/config/env.js'
+import { AppError } from '../../shared/errors/AppError.js'
+
+import * as repo from './repository.js'
 // ─── Staff Invite ───────────────────────────────────────────────────────────
 
 export async function acceptStaffInvite(token: string, name: string, phone: string) {

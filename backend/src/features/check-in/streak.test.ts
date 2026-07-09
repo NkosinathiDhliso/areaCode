@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
 import fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 import { isStreakAtRisk, toSASTDate, sastDateForOffset } from './streak.js'
 

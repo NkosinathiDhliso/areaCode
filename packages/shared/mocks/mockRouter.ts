@@ -2,20 +2,16 @@
  * Mock route resolver , maps (method, path) to handler functions.
  * Maintains mutable MockState for session-level state changes.
  */
+import { ARCHETYPE_CATALOG } from '../constants/archetype-catalog'
+import { GENRE_WEIGHT_MATRIX } from '../constants/genre-weights'
+import { computeDimensionScores, resolveArchetype, matchesArchetype } from '../lib/archetypeResolver'
 import type { Reward, Report, ConsentRecord, User, NodeState, MusicGenre } from '../types'
-import { generateId, hoursAgo, randomBetween } from './helpers'
-import { MOCK_NODES } from './data/nodes'
-import { MOCK_PULSE_SCORES } from './data/pulseScores'
-import { MOCK_USERS, CURRENT_USER_ID } from './data/users'
-import { MOCK_BUSINESSES, CURRENT_BUSINESS_ID } from './data/businesses'
-import { MOCK_REWARDS } from './data/rewards'
-import { MOCK_REDEMPTIONS } from './data/redemptions'
-import { MOCK_STAFF } from './data/staff'
-import { MOCK_LEADERBOARD, CURRENT_USER_RANK } from './data/leaderboard'
-import { MOCK_FEED } from './data/feed'
-import { MOCK_REPORTS } from './data/reports'
-import { MOCK_CONSENT, CURRENT_CONSENT_VERSION } from './data/consent'
+
 import { MOCK_ABUSE_FLAGS } from './data/abuseFlags'
+import { MOCK_BUSINESSES, CURRENT_BUSINESS_ID } from './data/businesses'
+import { MOCK_CONSENT, CURRENT_CONSENT_VERSION } from './data/consent'
+import { buildCrowdVibeSnapshot, buildBusinessMusicAudience } from './data/crowdVibe'
+import { MOCK_FEED } from './data/feed'
 import {
   addFollow,
   removeFollow,
@@ -25,10 +21,15 @@ import {
   getFollowingIds,
   getFollowerIds,
 } from './data/follows'
-import { buildCrowdVibeSnapshot, buildBusinessMusicAudience } from './data/crowdVibe'
-import { ARCHETYPE_CATALOG } from '../constants/archetype-catalog'
-import { GENRE_WEIGHT_MATRIX } from '../constants/genre-weights'
-import { computeDimensionScores, resolveArchetype, matchesArchetype } from '../lib/archetypeResolver'
+import { MOCK_LEADERBOARD, CURRENT_USER_RANK } from './data/leaderboard'
+import { MOCK_NODES } from './data/nodes'
+import { MOCK_PULSE_SCORES } from './data/pulseScores'
+import { MOCK_REDEMPTIONS } from './data/redemptions'
+import { MOCK_REPORTS } from './data/reports'
+import { MOCK_REWARDS } from './data/rewards'
+import { MOCK_STAFF } from './data/staff'
+import { MOCK_USERS, CURRENT_USER_ID } from './data/users'
+import { generateId, hoursAgo, randomBetween } from './helpers'
 
 // ---------------------------------------------------------------------------
 // Mutable state

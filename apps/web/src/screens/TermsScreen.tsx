@@ -1,6 +1,5 @@
-import { ChevronLeft } from 'lucide-react'
-
 import { TIER_PERMANENCE_CLAUSE } from '@area-code/shared/constants/legal'
+import { ChevronLeft } from 'lucide-react'
 
 import type { AppRoute } from '../types'
 

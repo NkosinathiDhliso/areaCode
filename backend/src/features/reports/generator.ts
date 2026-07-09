@@ -1,17 +1,21 @@
 import { randomUUID } from 'node:crypto'
+
 import { QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb'
-import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs'
+
+import { requireEnv } from '../../shared/config/env.js'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
-import { AWS_REGION, requireEnv } from '../../shared/config/env.js'
-import { anonymizeCheckIns, hashVisitorToken, type RawCheckIn } from './anonymize.js'
-import { analyzePeakHours } from './analyzers/peak-hours.js'
+import { sendReportReadyEmail } from '../../shared/email/ses.js'
+import { getBusinessById } from '../auth/dynamodb-repository.js'
+
+import { analyzeBenchmarks } from './analyzers/benchmarks.js'
 import { analyzeCrowdComposition } from './analyzers/crowd-composition.js'
+import { analyzeJourney } from './analyzers/journey.js'
 import { analyzeMusicProfile } from './analyzers/music-profile.js'
+import { analyzePeakHours } from './analyzers/peak-hours.js'
+import { generateRecommendations } from './analyzers/recommendations.js'
 import { analyzeRepeatVisitors } from './analyzers/repeat-visitors.js'
 import { analyzeTrends } from './analyzers/trends.js'
-import { analyzeBenchmarks } from './analyzers/benchmarks.js'
-import { analyzeJourney } from './analyzers/journey.js'
-import { generateRecommendations } from './analyzers/recommendations.js'
+import { anonymizeCheckIns, hashVisitorToken, type RawCheckIn } from './anonymize.js'
 import { scanForPii } from './pii-scanner.js'
 import { storeReport, storeReportTokens, storeBusinessMetrics, getPreviousReport } from './repository.js'
 import type { GenerateReportMessage, Report, ReportMetrics, MusicPrefs } from './types.js'
@@ -330,30 +334,20 @@ async function sendWebSocketNotification(businessId: string, reportId: string): 
 }
 
 /**
- * Queue email notification via SQS push-sender.
+ * Send a report-ready email via the shared SES module (R9.1). Replaces the
+ * enqueue to the consumer-less `push-sender` SQS queue: SES is the existing
+ * delivered channel for transactional business email. Resolves the business's
+ * email + name from the businesses table, then hands off to the shared sender.
  */
-async function queueEmailNotification(businessId: string, reportId: string, periodType: string): Promise<void> {
-  // Terraform sets AREA_CODE_SQS_PUSH_QUEUE_URL. Unset means push notifications
-  // are not configured for this environment, so there is nothing to queue.
-  const queueUrl = process.env['AREA_CODE_SQS_PUSH_QUEUE_URL']
-  if (!queueUrl) return
-
-  try {
-    const sqsClient = new SQSClient({ region: AWS_REGION })
-    await sqsClient.send(
-      new SendMessageCommand({
-        QueueUrl: queueUrl,
-        MessageBody: JSON.stringify({
-          type: 'report_ready',
-          businessId,
-          reportId,
-          periodType,
-        }),
-      }),
-    )
-  } catch (error) {
-    console.warn('[generator] Email notification queue failed:', error)
+async function sendEmailNotification(businessId: string, reportId: string, periodType: string): Promise<void> {
+  const business = await getBusinessById(businessId)
+  if (!business?.email) {
+    // No destination address on the row — nothing to deliver to. Log so a
+    // misconfigured business surfaces, rather than silently doing nothing.
+    console.warn(`[generator] No email on business ${businessId}; skipping report-ready email`)
+    return
   }
+  await sendReportReadyEmail(business.email, business.businessName ?? 'there', reportId, periodType)
 }
 
 // ============================================================================
@@ -625,8 +619,10 @@ async function generateReportInternal(
     console.warn(`[generator] WebSocket notification failed:`, err)
   }
   try {
-    await queueEmailNotification(businessId, reportId, periodType)
+    await sendEmailNotification(businessId, reportId, periodType)
   } catch (err) {
+    // R9.3: delivery failure is logged and never aborts report persistence
+    // (the report is already stored above at step 8).
     console.warn(`[generator] Email notification failed:`, err)
   }
 

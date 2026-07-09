@@ -1,12 +1,11 @@
-import { useEffect, useState, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
-
+import { useSocketRoom } from '@area-code/shared/hooks/useSocketRoom'
 import { api } from '@area-code/shared/lib/api'
 import { getSocket } from '@area-code/shared/lib/socket'
-import { useSocketRoom } from '@area-code/shared/hooks/useSocketRoom'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import type { BusinessCheckinPayload, LiveStats } from '@area-code/shared/types'
+import { useQuery } from '@tanstack/react-query'
+import { useEffect, useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface LiveAvatar {
   username: string | undefined

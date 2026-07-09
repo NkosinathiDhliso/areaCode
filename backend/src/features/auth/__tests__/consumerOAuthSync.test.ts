@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 /**
  * Identity resolution for consumer Google sign-in (`consumerOAuthSync`).

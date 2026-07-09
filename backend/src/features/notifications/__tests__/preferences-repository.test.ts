@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 /**
  * Pins the non-destructive persistence of notification preferences.

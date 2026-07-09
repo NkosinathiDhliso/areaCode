@@ -1,9 +1,9 @@
-import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { MUSIC_GENRES } from '@area-code/shared/constants/genre-weights'
 import { api } from '@area-code/shared/lib/api'
 import { useUserStore } from '@area-code/shared/stores/userStore'
-import { MUSIC_GENRES } from '@area-code/shared/constants/genre-weights'
 import type { MusicGenre } from '@area-code/shared/types'
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 const GENRE_LABELS: Record<MusicGenre, string> = {
   amapiano: 'Amapiano',

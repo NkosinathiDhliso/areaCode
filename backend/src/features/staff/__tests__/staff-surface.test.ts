@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
 import Fastify from 'fastify'
+import { describe, it, expect } from 'vitest'
 
 import { staffRoutes } from '../handler.js'
 

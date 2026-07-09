@@ -15,9 +15,8 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-import { describe, expect, it } from 'vitest'
-
 import type { NodeState } from '@area-code/shared/types'
+import { describe, expect, it } from 'vitest'
 
 import { PULSE_TEMPO } from './carouselConstants'
 

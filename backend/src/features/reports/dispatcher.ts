@@ -1,7 +1,8 @@
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs'
 import { ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
-import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
+
 import { AWS_REGION } from '../../shared/config/env.js'
+import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 
 // ============================================================================
 // Constants

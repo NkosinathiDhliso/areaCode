@@ -95,6 +95,13 @@ export interface Node {
   defaultArchetypeId?: string | null
   /** Last Live_Archetype id emitted for this venue, when one is active. */
   currentArchetypeId?: string | null
+  /**
+   * End of the paid Boost_Window as an ISO 8601 ms UTC instant. Set on boost
+   * payment success to `max(existing, paidAt + duration)`. A node is
+   * Boost_Active while `boostUntil > now`, computed at read time (no worker).
+   * Absent/null means no boost has ever been purchased.
+   */
+  boostUntil?: string | null
   createdAt: string
   updatedAt: string
 }

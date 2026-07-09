@@ -1,6 +1,11 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
+import { z } from 'zod'
+
+import * as cognito from '../../shared/cognito/client.js'
+import { DEV_MODE } from '../../shared/config/env.js'
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { validate } from '../../shared/middleware/validation.js'
+
 import * as service from './service.js'
 import {
   userIdParamsSchema,
@@ -13,9 +18,6 @@ import {
   abuseFlagIdParamsSchema,
 } from './types.js'
 import type { AdminRole } from './types.js'
-import { z } from 'zod'
-import * as cognito from '../../shared/cognito/client.js'
-import { DEV_MODE } from '../../shared/config/env.js'
 
 async function getAdminRole(request: FastifyRequest): Promise<AdminRole> {
   if (DEV_MODE) {
@@ -136,6 +138,14 @@ export async function adminRoutes(app: FastifyInstance) {
     },
   )
 
+  // GET /v1/admin/businesses/grace — Grace_List (R2.2). Registered before the
+  // parametric `:businessId` route; Fastify's router prefers the static segment,
+  // and `businessIdParamsSchema` (uuid) would reject "grace" anyway.
+  app.get('/v1/admin/businesses/grace', { preHandler: [adminAuth] }, async (request) => {
+    const role = await getAdminRole(request)
+    return service.getBusinessesInGrace(role)
+  })
+
   // GET /v1/admin/businesses/:businessId
   app.get(
     '/v1/admin/businesses/:businessId',
@@ -173,7 +183,7 @@ export async function adminRoutes(app: FastifyInstance) {
       const role = await getAdminRole(request)
       const params = request.params as z.infer<typeof businessIdParamsSchema>
       const body = request.body as z.infer<typeof setTierBodySchema>
-      return service.setBusinessTier(auth.userId, role, params.businessId, body.tier, body.reason, body.trialEndsAt)
+      return service.setBusinessTier(auth.userId, role, params.businessId, body.tier, body.reason, body.paidUntil)
     },
   )
 

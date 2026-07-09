@@ -1,10 +1,11 @@
+import { sendCampaignEmail } from '../../shared/email/ses.js'
 import { findBusinessById } from '../business/repository.js'
 import { sendNotification } from '../notifications/service.js'
-import { sendCampaignEmail } from '../../shared/email/ses.js'
+
 import { incrementFrequencyCap } from './eligibility.js'
 import { getCampaignById, getRecipientEmails, putSendRecord } from './repository.js'
-import { buildUnsubscribeUrl } from './unsubscribe.js'
 import type { Campaign, CampaignSendMessage, ChannelOutcome } from './types.js'
+import { buildUnsubscribeUrl } from './unsubscribe.js'
 
 // ============================================================================
 // Win-Back Campaigns — Campaign Sender Lambda

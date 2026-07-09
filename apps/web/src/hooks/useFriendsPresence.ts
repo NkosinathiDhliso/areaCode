@@ -1,12 +1,11 @@
-import { useEffect, useRef } from 'react'
-
-import { getSocket } from '@area-code/shared/lib/socket'
 import { api } from '@area-code/shared/lib/api'
-import { useMapStore } from '@area-code/shared/stores/mapStore'
-import { useToastStore } from '@area-code/shared/stores/toastStore'
-import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
-import { usePresenceStore } from '@area-code/shared/stores/presenceStore'
+import { getSocket } from '@area-code/shared/lib/socket'
 import { TOAST_PRIORITY } from '@area-code/shared/lib/toastAdmission'
+import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
+import { useMapStore } from '@area-code/shared/stores/mapStore'
+import { usePresenceStore } from '@area-code/shared/stores/presenceStore'
+import { useToastStore } from '@area-code/shared/stores/toastStore'
+import { useEffect, useRef } from 'react'
 
 import { filterActiveFriends } from '../lib/carouselRanking'
 

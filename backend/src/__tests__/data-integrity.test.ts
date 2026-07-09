@@ -1,18 +1,18 @@
-import { describe, it, expect } from 'vitest'
+import { TIER_LEVELS, getTier } from '@area-code/shared/constants/tier-levels'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
 
 // ─── Import all Zod schemas (source of truth for validation) ────────────────
-import { checkInBodySchema } from '../features/check-in/types'
-import { consumerSignupBodySchema, verifyOtpBodySchema, consentBodySchema } from '../features/auth/types'
-import { createRewardBodySchema, updateRewardBodySchema, redeemBodySchema } from '../features/rewards/types'
-import { createNodeBodySchema, reportNodeBodySchema, claimNodeBodySchema } from '../features/nodes/types'
-import { boostBodySchema } from '../features/business/types'
 import { reportActionBodySchema } from '../features/admin/types'
+import { consumerSignupBodySchema, verifyOtpBodySchema, consentBodySchema } from '../features/auth/types'
+import { boostBodySchema } from '../features/business/types'
+import { checkInBodySchema } from '../features/check-in/types'
+import { createNodeBodySchema, reportNodeBodySchema, claimNodeBodySchema } from '../features/nodes/types'
 import { notificationPrefsSchema } from '../features/notifications/types'
+import { createRewardBodySchema, updateRewardBodySchema, redeemBodySchema } from '../features/rewards/types'
 
 // ─── Import constants and types ─────────────────────────────────────────────
-import { TIER_LEVELS, getTier } from '@area-code/shared/constants/tier-levels'
 
 // ─── 1. Schema Validation: Reject invalid data ─────────────────────────────
 

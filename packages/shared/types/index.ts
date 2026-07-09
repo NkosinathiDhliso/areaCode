@@ -23,6 +23,11 @@ export type PrivacyLevel = 'public' | 'friends_only' | 'private'
 // Business tiers
 export type BusinessTier = 'free' | 'starter' | 'growth' | 'pro' | 'payg'
 
+// Paid subscription billing interval (billing-revenue-integrity). Null on a
+// business means no interval was bought — an admin Comp_Window, a legacy row, or
+// a never-paid business.
+export type PaidInterval = 'daily' | 'weekly' | 'monthly' | 'yearly'
+
 // Check-in types
 export type CheckInType = 'reward' | 'presence'
 
@@ -282,6 +287,21 @@ export interface Node {
   pulseScore?: number
   /** Live presence count seeded from the nodes list (honest read model). */
   liveCheckInCount?: number
+  /**
+   * End of the paid Boost_Window as an ISO 8601 ms UTC instant, passed through
+   * from the node read paths (billing R5.2). Absent/null means no active boost.
+   * This is a PAID reach signal, kept strictly separate from pulse/aliveness
+   * (honest-presence): it never feeds the live count or beam brightness.
+   */
+  boostUntil?: string | null
+  /**
+   * Computed at read time on the server as `boostUntil > now` (billing R5.2,
+   * R5.5). No expiry worker: once the window passes this reads false on the
+   * next refresh with no residue. Consumed by `vibeRank` inside the level-3
+   * tier signal only (boost first, then tier) and never allowed to outrank
+   * taste-match or aliveness, per discovery-dna-vibe-over-convenience.
+   */
+  boostActive?: boolean
 }
 
 export interface PulseScore {
@@ -382,6 +402,12 @@ export interface BusinessAccount {
   cognitoSub: string | null
   tier: BusinessTier
   trialEndsAt: string | null
+  // Paid_Until entitlement window (billing-revenue-integrity). Set by a paid
+  // activation or an admin Comp_Window; null when no window is active. The
+  // Tier_Resolver reads this alongside trial and grace to resolve the effective
+  // tier (cross-portal-lifecycle-alignment R2.1).
+  paidUntil: string | null
+  paidInterval: PaidInterval | null
   paymentGraceUntil: string | null
   yocoCustomerId: string | null
   isActive: boolean

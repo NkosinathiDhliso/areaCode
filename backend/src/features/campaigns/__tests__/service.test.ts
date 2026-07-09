@@ -79,6 +79,7 @@ vi.mock('@aws-sdk/client-lambda', () => ({
   },
 }))
 
+import { recipientToken } from '../anonymize.js'
 import {
   createCampaign,
   sendCampaign,
@@ -98,7 +99,6 @@ import {
   CampaignQuotaExceededError,
   CAMPAIGN_DISPATCHER_FUNCTION_ENV,
 } from '../service.js'
-import { recipientToken } from '../anonymize.js'
 import type { Campaign, CampaignSendRecord, CampaignStatus, CreateCampaignInput } from '../types.js'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -668,7 +668,7 @@ describe('computeAnalytics (detail-view analytics, R11.1/11.2/11.4/11.5)', () =>
   const CAMPAIGN_ID = 'camp-1'
   const SALT = 'salt'
   const SENT_AT = '2025-03-01T00:00:00.000Z'
-  const SENT_AT_MS = new Date(SENT_AT).getTime()
+  const _SENT_AT_MS = new Date(SENT_AT).getTime()
 
   /** A sent campaign whose tokens we can reproduce for attribution. */
   function sentCampaign(over: Partial<Campaign> = {}): Campaign {

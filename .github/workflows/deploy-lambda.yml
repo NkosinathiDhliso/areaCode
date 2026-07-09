@@ -85,18 +85,6 @@ jobs:
           echo "previous=$PREV_VERSION" >> "$GITHUB_OUTPUT"
           echo "function=$FN" >> "$GITHUB_OUTPUT"
 
-      - name: Record Sentry release
-        if: ${{ github.event.inputs.environment == 'prod' && env.SENTRY_AUTH_TOKEN != '' }}
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
-        run: |
-          npx --yes @sentry/cli releases new "${{ github.sha }}"
-          npx --yes @sentry/cli releases set-commits "${{ github.sha }}" --auto || true
-          npx --yes @sentry/cli releases finalize "${{ github.sha }}"
-          npx --yes @sentry/cli releases deploys "${{ github.sha }}" new --env prod
-
   trigger-health-gate:
     needs: deploy
     if: ${{ github.event.inputs.environment == 'prod' }}

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 // ─── Arbitraries ────────────────────────────────────────────────────────────
 
@@ -27,7 +27,7 @@ const adminActionTypeArb = fc.constantFrom(
 const entityTypeArb = fc.constantFrom('user', 'business', 'flag')
 
 /** Node record arbitrary */
-const nodeRecordArb = fc.record({
+const _nodeRecordArb = fc.record({
   nodeId: nodeIdArb,
   name: fc.string({ minLength: 1, maxLength: 50 }),
   isActive: fc.boolean(),
@@ -35,7 +35,7 @@ const nodeRecordArb = fc.record({
 })
 
 /** User record arbitrary */
-const userRecordArb = fc.record({
+const _userRecordArb = fc.record({
   userId: userIdArb,
   displayName: fc.string({ minLength: 1, maxLength: 30 }),
   isDisabled: fc.boolean(),

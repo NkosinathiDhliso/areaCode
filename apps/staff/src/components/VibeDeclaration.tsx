@@ -17,15 +17,14 @@
  * phone number and never depends on SMS or phone-OTP.
  */
 
-import { useEffect, useMemo, useState } from 'react'
-import { Music, ShieldOff } from 'lucide-react'
-
-import { api, type ApiError } from '@area-code/shared/lib/api'
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { MUSIC_GENRES, GENRE_LABELS } from '@area-code/shared/constants/genre-weights'
+import { api, type ApiError } from '@area-code/shared/lib/api'
 import { validateMusicSchedule } from '@area-code/shared/lib/schedule-validator'
 import { resolveActiveSlot, resolveScheduleClock } from '@area-code/shared/lib/scheduleResolver'
 import type { MusicGenre, MusicSchedule, ScheduleSlot } from '@area-code/shared/types'
+import { Music, ShieldOff } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { useStaffAuthStore } from '../stores/staffAuthStore'
 

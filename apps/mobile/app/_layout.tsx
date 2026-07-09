@@ -11,8 +11,6 @@ import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore
 import { getSocket } from '@area-code/shared/lib/socket'
 import { storage } from '@area-code/shared/lib/storage'
 import { useNodePulse } from '@area-code/shared/hooks/useNodePulse'
-import { useRewardSocket } from '@area-code/shared/hooks/useRewardSocket'
-import { useNotificationSocket } from '@area-code/shared/hooks/useNotificationSocket'
 
 import { GlobalErrorToast } from '../src/components/GlobalErrorToast'
 import { bootstrapNative } from '../src/lib/bootstrap'

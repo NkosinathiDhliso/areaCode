@@ -2,12 +2,16 @@ import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import type { MapInstance } from '@area-code/shared/types'
-import mapboxgl from 'mapbox-gl'
+// Type-only import: erased at build time so the Mapbox GL runtime is NOT pulled
+// into the initial chunk. The runtime is loaded lazily via `loadMapboxGl()`
+// inside the init effect below (Bundle_Budget R9.1).
+import type mapboxgl from 'mapbox-gl'
 import { useEffect, useRef, useState, useCallback } from 'react'
 
-import { cameraMotion } from '../lib/cameraEasing'
 import { USER_VIEW_ZOOM } from '../lib/cameraControl'
+import { cameraMotion } from '../lib/cameraEasing'
 import { deviceTier } from '../lib/deviceTier'
+import { loadMapboxGl } from '../lib/mapboxLoader'
 import { PITCH_3D, PITCH_FLAT, MAX_PITCH, pitchForZoom, computeRampTarget } from '../lib/pitchRamp'
 
 const MAPBOX_TOKEN = import.meta.env['VITE_MAPBOX_TOKEN'] as string | undefined
@@ -572,171 +576,211 @@ export function useMapInit() {
     const initialTheme: ThemeMode = resolved
     themeRef.current = initialTheme
 
-    let map: mapboxgl.Map
-    try {
-      mapboxgl.accessToken = MAPBOX_TOKEN
+    // Created once the Mapbox runtime resolves. The cleanup closure reads these,
+    // so they live in the effect scope rather than the async callback.
+    let createdMap: mapboxgl.Map | null = null
+    let cancelled = false
+    let ro: ResizeObserver | null = null
+    let ctrlObserver: MutationObserver | null = null
 
-      map = new mapboxgl.Map({
-        container,
-        style: STYLE_URL[initialTheme],
-        // Open on a full-country overview; the user zooms in via Recenter.
-        center: COUNTRY_CENTER,
-        zoom: COUNTRY_ZOOM,
-        pitch: PITCH_3D,
-        bearing: BEARING_3D,
-        // Low-tier devices skip antialias to stay within GPU budget (Req 7.1).
-        antialias: deviceTier === 'high',
-        failIfMajorPerformanceCaveat: false,
-        // Globe projection uses spherical math for marker screen-coordinate
-        // projection. Without this, the implicit mercator projection at very
-        // low zoom + high pitch produces incorrect screen positions, causing
-        // markers to detach from the globe surface (mapbox-gl issue #12592).
-        projection: 'globe' as unknown as mapboxgl.ProjectionSpecification,
-        // Prevent zooming out past a meaningful regional overview.
-        minZoom: 4,
-        // Allow the zoom-driven pitch ramp to reach near-ground street level.
-        maxPitch: MAX_PITCH,
-      })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error'
-      if (import.meta.env?.DEV) {
-        console.error('[useMapInit] Failed to create map:', message)
-      }
-      setMapError('Could not load the map. Please try again.')
-      return
-    }
-
-    // Track bearing changes so the compass UI reflects reality. Quantised to
-    // whole degrees: 'rotate' fires every frame of a rotate gesture, and a raw
-    // setBearing re-rendered the entire MapScreen tree per frame. The compass
-    // icon cannot show sub-degree rotation anyway.
-    map.on('rotate', () => {
-      try {
-        const rounded = Math.round(map.getBearing())
-        setBearing((prev) => (prev === rounded ? prev : rounded))
-      } catch {
-        /* ignore */
-      }
-    })
-
-    // ── Street-level immersion: zoom-driven pitch ramp ──
-    // After each zoom settles, ease the camera toward the pitch that matches
-    // the new zoom, so diving into a venue feels like dropping to where you'd
-    // be standing. Two invariants:
-    //   1. Applied on 'zoomend' via easeTo, never per 'zoom' frame via
-    //      setPitch. setPitch is jumpTo under the hood: it stops any in-flight
-    //      camera animation, so a per-frame ramp aborted wheel-zoom easing and
-    //      selection fly-tos mid-flight (the same bug class map-carousel.md
-    //      records for setBearing) and made zooming feel stuttery.
-    //   2. The target honours the sticky manual offset, so a deliberate
-    //      two-finger tilt is preserved across later zooms instead of the view
-    //      snapping back to the ramp value.
-    // Suspended in flat mode and while the user is manually pitching.
-    const applyZoomPitch = () => {
-      if (!is3DRef.current || manualPitchRef.current) return
-      try {
-        const target = computeRampTarget(map.getZoom(), manualPitchOffsetRef.current)
-        if (Math.abs(map.getPitch() - target) > 1) {
-          map.easeTo({ pitch: target, ...cameraMotion(450) })
-        }
-      } catch {
-        /* pitch is cosmetic - fail open */
-      }
-    }
-    map.on('zoomend', applyZoomPitch)
-    // Only a real user gesture carries originalEvent; our own easeTo does not.
-    // Flag manual pitch so the ramp yields to a deliberate two-finger tilt.
-    map.on('pitchstart', (e) => {
-      if ((e as { originalEvent?: unknown }).originalEvent) manualPitchRef.current = true
-    })
-    map.on('pitchend', () => {
-      // Capture the offset a manual tilt chose (relative to the ramp at the
-      // current zoom) so later zooms preserve the user's intent.
-      if (manualPitchRef.current) {
-        try {
-          manualPitchOffsetRef.current = map.getPitch() - pitchForZoom(map.getZoom())
-        } catch {
-          /* keep the previous offset */
-        }
-      }
-      manualPitchRef.current = false
-    })
-
-    // Handle map errors gracefully
-    map.on('error', (e) => {
-      const msg = e.error?.message ?? ''
-      if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-        return
-      }
-      if (import.meta.env?.DEV) {
-        console.warn('[useMapInit] Map error:', e.error)
-      }
-    })
-
-    // style.load fires both on initial style load AND every time setStyle()
-    // swaps the basemap (e.g. dark↔light theme switch). Re-apply terrain,
-    // sky, fog, and 3D buildings every time.
-    map.on('style.load', () => {
-      applyCustomLayers(map, themeRef.current ?? 'dark')
-      suppressCtrlLinkFocus(container)
-    })
-
-    // Keep Mapbox's attribution/logo links out of the keyboard tab order.
-    // Observe only the control corners (not the whole container) so the
-    // frequent marker DOM churn from socket updates never triggers this.
-    const ctrlEl: HTMLElement = container!
-    const ctrlObserver = new MutationObserver(() => suppressCtrlLinkFocus(ctrlEl))
-    const watchCtrlCorners = () => {
-      suppressCtrlLinkFocus(ctrlEl)
-      ctrlEl
-        .querySelectorAll(
-          '.mapboxgl-ctrl-bottom-left, .mapboxgl-ctrl-bottom-right, .mapboxgl-ctrl-top-right, .mapboxgl-ctrl-top-left',
-        )
-        .forEach((corner) => ctrlObserver.observe(corner, { childList: true, subtree: true }))
-    }
-    watchCtrlCorners()
-
-    // Only expose the map ref AFTER it's fully loaded.
-    map.on('load', () => {
-      loadedRef.current = true
-      mapRef.current = map
-      setMapInstance(buildMapInstance(map))
-      setMapReadyKey((k) => k + 1)
-      suppressCtrlLinkFocus(container)
-    })
-
-    map.scrollZoom.enable()
-    map.dragPan.enable()
-    map.touchZoomRotate.enableRotation()
-
-    const ro = new ResizeObserver(() => {
-      try {
-        map.resize()
-      } catch {
-        /* ignore */
-      }
-    })
-    ro.observe(container)
-
-    // Timeout: if map doesn't load within 15s, show error.
+    // Start the load timeout BEFORE the dynamic import so a slow module fetch on
+    // a poor connection surfaces the same "taking too long" error as a slow map
+    // load. The only user-visible change on a slow load is the existing loading
+    // spinner showing a moment longer while the Mapbox chunk downloads (R9.1).
     const loadTimeout = setTimeout(() => {
       if (!loadedRef.current) {
         setMapError('Map is taking too long to load. Check your connection and try again.')
       }
     }, 15000)
 
+    // Load Mapbox GL JS lazily so its large runtime is split out of the initial
+    // JS chunk (Bundle_Budget R9.1). The map screen shows its existing loading
+    // state until the module resolves and the map fires 'load'.
+    loadMapboxGl()
+      .then((gl) => {
+        // The effect was torn down (unmount / retry / error), the container
+        // detached, or another path already built the map while the module was
+        // loading - abort so we never leak a second map.
+        if (cancelled || !containerRef.current || mapRef.current) return
+
+        let created: mapboxgl.Map
+        try {
+          gl.accessToken = MAPBOX_TOKEN
+
+          created = new gl.Map({
+            container,
+            style: STYLE_URL[initialTheme],
+            // Open on a full-country overview; the user zooms in via Recenter.
+            center: COUNTRY_CENTER,
+            zoom: COUNTRY_ZOOM,
+            pitch: PITCH_3D,
+            bearing: BEARING_3D,
+            // Low-tier devices skip antialias to stay within GPU budget (Req 7.1).
+            antialias: deviceTier === 'high',
+            failIfMajorPerformanceCaveat: false,
+            // Globe projection uses spherical math for marker screen-coordinate
+            // projection. Without this, the implicit mercator projection at very
+            // low zoom + high pitch produces incorrect screen positions, causing
+            // markers to detach from the globe surface (mapbox-gl issue #12592).
+            projection: 'globe' as unknown as mapboxgl.ProjectionSpecification,
+            // Prevent zooming out past a meaningful regional overview.
+            minZoom: 4,
+            // Allow the zoom-driven pitch ramp to reach near-ground street level.
+            maxPitch: MAX_PITCH,
+          })
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Unknown error'
+          if (import.meta.env?.DEV) {
+            console.error('[useMapInit] Failed to create map:', message)
+          }
+          setMapError('Could not load the map. Please try again.')
+          return
+        }
+
+        // Const binding so the event-handler closures below see a non-null map
+        // (a reassignable `let` would not narrow inside nested callbacks).
+        const map = created
+        createdMap = map
+
+        // Track bearing changes so the compass UI reflects reality. Quantised to
+        // whole degrees: 'rotate' fires every frame of a rotate gesture, and a raw
+        // setBearing re-rendered the entire MapScreen tree per frame. The compass
+        // icon cannot show sub-degree rotation anyway.
+        map.on('rotate', () => {
+          try {
+            const rounded = Math.round(map.getBearing())
+            setBearing((prev) => (prev === rounded ? prev : rounded))
+          } catch {
+            /* ignore */
+          }
+        })
+
+        // ── Street-level immersion: zoom-driven pitch ramp ──
+        // After each zoom settles, ease the camera toward the pitch that matches
+        // the new zoom, so diving into a venue feels like dropping to where you'd
+        // be standing. Two invariants:
+        //   1. Applied on 'zoomend' via easeTo, never per 'zoom' frame via
+        //      setPitch. setPitch is jumpTo under the hood: it stops any in-flight
+        //      camera animation, so a per-frame ramp aborted wheel-zoom easing and
+        //      selection fly-tos mid-flight (the same bug class map-carousel.md
+        //      records for setBearing) and made zooming feel stuttery.
+        //   2. The target honours the sticky manual offset, so a deliberate
+        //      two-finger tilt is preserved across later zooms instead of the view
+        //      snapping back to the ramp value.
+        // Suspended in flat mode and while the user is manually pitching.
+        const applyZoomPitch = () => {
+          if (!is3DRef.current || manualPitchRef.current) return
+          try {
+            const target = computeRampTarget(map.getZoom(), manualPitchOffsetRef.current)
+            if (Math.abs(map.getPitch() - target) > 1) {
+              map.easeTo({ pitch: target, ...cameraMotion(450) })
+            }
+          } catch {
+            /* pitch is cosmetic - fail open */
+          }
+        }
+        map.on('zoomend', applyZoomPitch)
+        // Only a real user gesture carries originalEvent; our own easeTo does not.
+        // Flag manual pitch so the ramp yields to a deliberate two-finger tilt.
+        map.on('pitchstart', (e) => {
+          if ((e as { originalEvent?: unknown }).originalEvent) manualPitchRef.current = true
+        })
+        map.on('pitchend', () => {
+          // Capture the offset a manual tilt chose (relative to the ramp at the
+          // current zoom) so later zooms preserve the user's intent.
+          if (manualPitchRef.current) {
+            try {
+              manualPitchOffsetRef.current = map.getPitch() - pitchForZoom(map.getZoom())
+            } catch {
+              /* keep the previous offset */
+            }
+          }
+          manualPitchRef.current = false
+        })
+
+        // Handle map errors gracefully
+        map.on('error', (e) => {
+          const msg = e.error?.message ?? ''
+          if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+            return
+          }
+          if (import.meta.env?.DEV) {
+            console.warn('[useMapInit] Map error:', e.error)
+          }
+        })
+
+        // style.load fires both on initial style load AND every time setStyle()
+        // swaps the basemap (e.g. dark↔light theme switch). Re-apply terrain,
+        // sky, fog, and 3D buildings every time.
+        map.on('style.load', () => {
+          applyCustomLayers(map, themeRef.current ?? 'dark')
+          suppressCtrlLinkFocus(container)
+        })
+
+        // Keep Mapbox's attribution/logo links out of the keyboard tab order.
+        // Observe only the control corners (not the whole container) so the
+        // frequent marker DOM churn from socket updates never triggers this.
+        const ctrlEl: HTMLElement = container!
+        // Const binding so the nested forEach closure sees a non-null observer
+        // (the outer `let` would not narrow inside the callback).
+        const obs = new MutationObserver(() => suppressCtrlLinkFocus(ctrlEl))
+        ctrlObserver = obs
+        const watchCtrlCorners = () => {
+          suppressCtrlLinkFocus(ctrlEl)
+          ctrlEl
+            .querySelectorAll(
+              '.mapboxgl-ctrl-bottom-left, .mapboxgl-ctrl-bottom-right, .mapboxgl-ctrl-top-right, .mapboxgl-ctrl-top-left',
+            )
+            .forEach((corner) => obs.observe(corner, { childList: true, subtree: true }))
+        }
+        watchCtrlCorners()
+
+        // Only expose the map ref AFTER it's fully loaded.
+        map.on('load', () => {
+          loadedRef.current = true
+          mapRef.current = map
+          setMapInstance(buildMapInstance(map))
+          setMapReadyKey((k) => k + 1)
+          suppressCtrlLinkFocus(container)
+        })
+
+        map.scrollZoom.enable()
+        map.dragPan.enable()
+        map.touchZoomRotate.enableRotation()
+
+        ro = new ResizeObserver(() => {
+          try {
+            map.resize()
+          } catch {
+            /* ignore */
+          }
+        })
+        ro.observe(container)
+      })
+      .catch((err) => {
+        // The module itself failed to load (offline, chunk fetch error). Surface
+        // the same graceful fallback the map screen already renders (R9.1).
+        if (cancelled) return
+        const message = err instanceof Error ? err.message : 'Unknown error'
+        if (import.meta.env?.DEV) {
+          console.error('[useMapInit] Failed to load Mapbox GL:', message)
+        }
+        setMapError('Could not load the map. Please try again.')
+      })
+
     return () => {
+      cancelled = true
       clearTimeout(loadTimeout)
-      ro.disconnect()
-      ctrlObserver.disconnect()
+      ro?.disconnect()
+      ctrlObserver?.disconnect()
       // Fully tear down the map on unmount so a stale, detached instance can
       // never block re-initialisation when the Map tab is reopened.
       try {
-        map.remove()
+        createdMap?.remove()
       } catch {
         /* already removed */
       }
-      if (mapRef.current === map) mapRef.current = null
+      if (createdMap && mapRef.current === createdMap) mapRef.current = null
       loadedRef.current = false
       themeRef.current = null
     }

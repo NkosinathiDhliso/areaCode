@@ -1,7 +1,9 @@
 // DynamoDB Repository for Rewards Feature
 import { GetCommand, QueryCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
+
 import { documentClient, TableNames, isConditionalCheckFailedError } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
+
 import type { Reward, RewardRedemption } from './types.js'
 
 // ============================================================================

@@ -23,6 +23,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+
 import { hashVisitorToken } from '../anonymize.js'
 import type { Report } from '../types.js'
 

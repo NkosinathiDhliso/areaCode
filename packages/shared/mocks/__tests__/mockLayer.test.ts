@@ -1,17 +1,16 @@
-import { describe, it, expect, beforeEach } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect, beforeEach } from 'vitest'
 
-import { resolve, resetState } from '../mockRouter'
-import { mockDelay } from '../helpers'
-import { MOCK_NODES } from '../data/nodes'
-import { MOCK_USERS } from '../data/users'
 import { MOCK_BUSINESSES } from '../data/businesses'
-import { MOCK_REWARDS } from '../data/rewards'
-import { MOCK_REDEMPTIONS } from '../data/redemptions'
-import { MOCK_REPORTS } from '../data/reports'
 import { MOCK_CONSENT, CURRENT_CONSENT_VERSION } from '../data/consent'
 import { MOCK_LEADERBOARD } from '../data/leaderboard'
-import { MOCK_FEED } from '../data/feed'
+import { MOCK_NODES } from '../data/nodes'
+import { MOCK_REDEMPTIONS } from '../data/redemptions'
+import { MOCK_REPORTS } from '../data/reports'
+import { MOCK_REWARDS } from '../data/rewards'
+import { MOCK_USERS } from '../data/users'
+import { mockDelay } from '../helpers'
+import { resolve, resetState } from '../mockRouter'
 
 beforeEach(() => {
   resetState()

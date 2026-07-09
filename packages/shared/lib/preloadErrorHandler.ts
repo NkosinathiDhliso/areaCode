@@ -22,7 +22,7 @@ export function installPreloadErrorHandler(): void {
       if (sessionStorage.getItem(SESSION_KEY) === '1') {
         // Already reloaded once this session - don't loop. The new build
         // is genuinely missing this chunk; let the error surface.
-        // eslint-disable-next-line no-console
+
         console.error('[preloadErrorHandler] reload already attempted, not retrying:', reason)
         return
       }
@@ -30,7 +30,7 @@ export function installPreloadErrorHandler(): void {
     } catch {
       // sessionStorage may be unavailable (private mode, quota). Reload anyway.
     }
-    // eslint-disable-next-line no-console
+
     console.warn('[preloadErrorHandler] stale chunk detected, reloading:', reason)
     window.location.reload()
   }

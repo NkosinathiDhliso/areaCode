@@ -1,6 +1,10 @@
+import { getTierLabel } from '@area-code/shared/constants/tier-levels'
+import { api } from '@area-code/shared/lib/api'
+import { useBusinessStore } from '@area-code/shared/stores/businessStore'
+import type { Tier } from '@area-code/shared/types'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   BarChart,
   Bar,
@@ -17,11 +21,6 @@ import {
   PolarRadiusAxis,
   Radar,
 } from 'recharts'
-
-import { api } from '@area-code/shared/lib/api'
-import { useBusinessStore } from '@area-code/shared/stores/businessStore'
-import { getTierLabel } from '@area-code/shared/constants/tier-levels'
-import type { Tier } from '@area-code/shared/types'
 
 /* ------------------------------------------------------------------ */
 /*  Types matching backend Report / TeaserReport                      */

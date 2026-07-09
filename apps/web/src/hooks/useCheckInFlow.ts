@@ -42,6 +42,7 @@ import { useTranslation } from 'react-i18next'
 
 import { getCtaInfo, type CtaInfo } from '../lib/checkInCta'
 import { parseVenueQr } from '../lib/qrParser'
+import { useCheckinOutboxStore } from '../stores/checkinOutboxStore'
 
 /** Parameters the hook cannot read from a shared store and must receive from the host screen. */
 export interface UseCheckInFlowParams {
@@ -91,8 +92,9 @@ export function useCheckInFlow(params: UseCheckInFlowParams = {}): CheckInFlow {
   const { onCheckInSuccess } = params
   const { t } = useTranslation()
 
-  const { checkIn, isPending, qrFallback, resetQrFallback } = useCheckIn()
+  const { checkIn, isPending, qrFallback, resetQrFallback, errorStatusRef } = useCheckIn()
   const { requestLocation, geoStatus } = useGeolocation()
+  const enqueueOutbox = useCheckinOutboxStore((s) => s.enqueue)
 
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
   const connectivity = useConnectivityStore((s) => s.state)
@@ -143,12 +145,27 @@ export function useCheckInFlow(params: UseCheckInFlowParams = {}): CheckInFlow {
           onCheckInSuccess?.(payload.nodeId)
           return true
         }
+        // A GPS check-in that failed on a transient error (network / 5xx) is
+        // queued in the outbox to retry on its own (R5.1). Only GPS submissions
+        // qualify: a QR token is a short-lived at-venue proof, not replayable.
+        // 4xx (proximity, rate limit, validation) is the user's answer and was
+        // already surfaced by `useCheckIn`; it is never queued.
+        const status = errorStatusRef?.current ?? null
+        if (status !== null && payload.lat !== undefined && payload.lng !== undefined && !payload.qrToken) {
+          const queued = enqueueOutbox(
+            { nodeId: payload.nodeId, type: payload.type, lat: payload.lat, lng: payload.lng },
+            status,
+          )
+          if (queued) {
+            showError(t('checkin.queued', "Check-in saved. We'll complete it as soon as you're back online."))
+          }
+        }
         return false
       } finally {
         submittingRef.current = false
       }
     },
-    [isPending, connectivity, showError, t, checkIn, onCheckInSuccess],
+    [isPending, connectivity, showError, t, checkIn, onCheckInSuccess, errorStatusRef, enqueueOutbox],
   )
 
   /**

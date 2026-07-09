@@ -25,9 +25,9 @@
 
 import { GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 
+import { type NextTransitionRow, queryNextTransitions } from '../features/music/schedule-repository.js'
 import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 
-import { type NextTransitionRow, queryNextTransitions } from '../features/music/schedule-repository.js'
 import {
   evaluateLiveArchetype,
   type EvaluationTickEvent,

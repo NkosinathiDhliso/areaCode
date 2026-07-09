@@ -1,10 +1,11 @@
 // DynamoDB-backed cleanup worker (replaces Prisma)
 import { ScanCommand, QueryCommand, DeleteCommand, UpdateCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb'
-import { documentClient, TableNames } from '../shared/db/dynamodb.js'
+
 import { deleteUser, getUserById } from '../features/auth/dynamodb-repository.js'
 import { deleteCheckInsByUser } from '../features/check-in/dynamodb-repository.js'
-import { deleteConnectionsByUser } from '../shared/websocket/broadcast.js'
 import { deleteUserByUsername } from '../shared/cognito/client.js'
+import { documentClient, TableNames } from '../shared/db/dynamodb.js'
+import { deleteConnectionsByUser } from '../shared/websocket/broadcast.js'
 
 /**
  * Cleanup worker , processes right-to-erasure queue + housekeeping.
@@ -391,7 +392,23 @@ export async function handler() {
     console.warn(`[cleanup] idempotency-marker retention sweep failed: ${String(err)}`)
   }
 
-  // ─── Lapsed-payment enforcement ─────────────────────────────────────────
+  // ─── Lapse_Sweep phase 1: paidUntil lapse → grace + renewal email ────────
+  // billing-revenue-integrity R3.1. Businesses whose paid window has lapsed but
+  // that have not yet entered the renewal grace window get a 7-day
+  // `paymentGraceUntil` and one renewal-reminder email. Runs BEFORE phase 2
+  // (`enforceLapsedPayments`) so a business that lapsed today is graced this run
+  // and only demoted after the grace window itself lapses (R3.2, R3.3). Its own
+  // try/catch so a sweep failure never blocks the demotion phase below.
+  let lapseGraced = 0
+  try {
+    const { startLapseSweep } = await import('../features/business/service.js')
+    const result = await startLapseSweep()
+    lapseGraced = result.graced
+  } catch (err) {
+    console.warn(`[cleanup] lapse-sweep (grace) failed: ${String(err)}`)
+  }
+
+  // ─── Lapsed-payment enforcement (phase 2) ────────────────────────────────
   // Demote businesses whose 7-day payment grace has lapsed: their nodes go
   // isActive=false and tier→'free' so they drop off the paid-only map.
   let lapsedPaymentsProcessed = 0
@@ -408,6 +425,7 @@ export async function handler() {
       `booster purchases deleted: ${boosterPurchasesDeleted}, ` +
       `floor audits deleted: ${floorAuditsDeleted}, ` +
       `idempotency markers deleted: ${idempotencyMarkersDeleted}, ` +
+      `lapse-sweep graced: ${lapseGraced}, ` +
       `lapsed payments processed: ${lapsedPaymentsProcessed}`,
   )
   return {
@@ -418,6 +436,7 @@ export async function handler() {
     boosterPurchasesDeleted,
     floorAuditsDeleted,
     idempotencyMarkersDeleted,
+    lapseGraced,
     lapsedPaymentsProcessed,
   }
 }

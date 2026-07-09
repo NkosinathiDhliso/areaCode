@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 // ─── Tier Benefits (mirrors check-in/service.ts) ────────────────────────────
 
@@ -15,6 +15,7 @@ const ALL_TIERS = ['local', 'regular', 'fixture', 'institution', 'legend'] as co
 
 // ─── Notification Preference Defaults (mirrors notifications/service.ts) ────
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- value defines the shape consumed by `keyof typeof` below
 const NOTIFICATION_DEFAULTS = {
   streakAtRisk: false,
   rewardActivated: false,
@@ -296,7 +297,7 @@ describe('Property 14: Notification preference enforcement', () => {
 
   it('notification types without preference mapping are always sent regardless of preferences', () => {
     fc.assert(
-      fc.property(alwaysSendNotificationTypeArb, notificationPrefsArb, (notificationType, prefs) => {
+      fc.property(alwaysSendNotificationTypeArb, notificationPrefsArb, (notificationType, _prefs) => {
         // Even with all preferences disabled, these types should always send
         const allDisabled = {
           streakAtRisk: false,

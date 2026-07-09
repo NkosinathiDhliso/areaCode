@@ -1,14 +1,17 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+
+import { AppError } from '../../shared/errors/AppError.js'
 import { requireAuth } from '../../shared/middleware/auth.js'
 import { requireBusinessPermission, getBusinessRole } from '../../shared/middleware/business-role.js'
 import { validate } from '../../shared/middleware/validation.js'
-import { reportListQuerySchema, reportIdParamsSchema } from './types.js'
+import { findBusinessById } from '../business/repository.js'
+import { getEffectiveTier } from '../business/service.js'
+
+import { generateReportNow } from './generator.js'
 import { listReports, getReport } from './repository.js'
 import { filterByTier } from './tier-gating.js'
-import { findBusinessById } from '../business/repository.js'
-import { AppError } from '../../shared/errors/AppError.js'
-import { generateReportNow } from './generator.js'
+import { reportListQuerySchema, reportIdParamsSchema } from './types.js'
 
 const generateReportBodySchema = z.object({
   periodType: z.enum(['weekly', 'monthly']),
@@ -54,8 +57,11 @@ export async function reportRoutes(app: FastifyInstance) {
         throw AppError.notFound('Report not found')
       }
 
+      // Gate report content by the effective (entitlement-resolved) tier, not the
+      // raw stored tier, so a lapsed paid business sees starter content and a
+      // business inside any active window sees its paid content. (R4.2)
       const business = await findBusinessById(businessId)
-      const tier = business?.tier ?? 'free'
+      const tier = getEffectiveTier((business ?? {}) as { tier?: string; trialEndsAt?: string | null })
 
       return filterByTier(report, tier)
     },

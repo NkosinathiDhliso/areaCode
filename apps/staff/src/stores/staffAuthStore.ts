@@ -1,7 +1,6 @@
-import { create } from 'zustand'
-
-import { storage } from '@area-code/shared/lib/storage'
 import { api } from '@area-code/shared/lib/api'
+import { storage } from '@area-code/shared/lib/storage'
+import { create } from 'zustand'
 
 interface StaffAuthState {
   accessToken: string | null

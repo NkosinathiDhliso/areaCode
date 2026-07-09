@@ -1,7 +1,7 @@
+import type { NodeState } from '@area-code/shared/types'
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 
-import type { NodeState } from '@area-code/shared/types'
 import {
   filterArchetypeCluster,
   filterLiveGets,

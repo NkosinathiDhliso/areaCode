@@ -1,3 +1,4 @@
+import { ARCHETYPE_CATALOG } from '../../constants/archetype-catalog'
 import type {
   MusicGenre,
   DimensionScoreVector,
@@ -5,9 +6,9 @@ import type {
   BusinessMusicAudience,
   NodeCategory,
 } from '../../types'
-import { ARCHETYPE_CATALOG } from '../../constants/archetype-catalog'
-import { MOCK_USERS } from './users'
+
 import { MOCK_NODES } from './nodes'
+import { MOCK_USERS } from './users'
 
 /**
  * Pre-computed music data per mock user.

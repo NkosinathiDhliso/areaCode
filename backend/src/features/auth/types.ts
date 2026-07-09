@@ -160,9 +160,21 @@ export interface BusinessAccount {
   registrationNumber?: string
   cognitoSub?: string
   tier?: string
-  trialEndsAt?: string
-  paymentGraceUntil?: string
-  yocoCustomerId?: string
+  // Lifecycle windows are cleared to NULL (not removed) on subscription
+  // activation, so the type admits `null` as well as absent (see
+  // `activateSubscriptionOnBusiness`, billing-revenue-integrity design Flow 1).
+  trialEndsAt?: string | null
+  paymentGraceUntil?: string | null
+  /** End of the currently-paid subscription window (ISO 8601 UTC). R2.1. */
+  paidUntil?: string | null
+  /** Interval the last successful payment bought: monthly|yearly|daily|weekly. R2.1. */
+  paidInterval?: string | null
+  /**
+   * The `paidUntil` value for which a pre-lapse renewal reminder has already
+   * been sent (billing-revenue-integrity R3.4). One send per paid window: a
+   * renewal changes `paidUntil`, so a new window re-arms the reminder.
+   */
+  renewalReminderSentFor?: string | null
   isActive?: boolean
   createdAt: string
   updatedAt?: string

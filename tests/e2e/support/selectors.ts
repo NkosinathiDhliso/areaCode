@@ -112,6 +112,11 @@ export const business = {
   createRewardButton: (page: Page) => page.getByRole('button', { name: /(create|new) (reward|get)/i }).first(),
   inviteStaffButton: (page: Page) => page.getByRole('button', { name: /invite (staff|team)/i }).first(),
   generateQrButton: (page: Page) => page.getByRole('button', { name: /generate qr/i }).first(),
+  // Dashboard nav is state-based (buttons, not links). The Plans tab mounts the
+  // PlansPanel, which reads any ?status checkout-return param on mount.
+  plansNav: (page: Page) => page.getByRole('button', { name: /^plans$/i }).first(),
+  // PlansPanel heading ("Plans & Pricing").
+  plansTitle: (page: Page) => page.getByRole('heading', { name: /plans/i }).first(),
 }
 
 export const staff = {

@@ -3,17 +3,17 @@ import Fastify from 'fastify'
 
 import { adminRoutes } from './features/admin/handler.js'
 import { getUserById } from './features/auth/dynamodb-repository.js'
-import { checkInRoutes } from './features/check-in/handler.js'
-import { checkOutRoutes } from './features/check-out/handler.js'
 import { authRoutes } from './features/auth/handler.js'
 import { profileRoutes } from './features/auth/profile-handler.js'
 import { businessRoutes } from './features/business/handler.js'
 import { campaignRoutes, campaignConsumerRoutes } from './features/campaigns/handler.js'
-import { notificationRoutes } from './features/notifications/handler.js'
+import { checkInRoutes } from './features/check-in/handler.js'
+import { checkOutRoutes } from './features/check-out/handler.js'
 import { musicRoutes } from './features/music/handler.js'
 import { nodeRoutes } from './features/nodes/handler.js'
 import { nodeImageRoutes } from './features/nodes/image-routes.js'
 import { instagramRoutes } from './features/nodes/instagram-routes.js'
+import { notificationRoutes } from './features/notifications/handler.js'
 import { privacyRoutes } from './features/privacy/handler.js'
 import { reportRoutes } from './features/reports/handler.js'
 import { rewardRoutes } from './features/rewards/handler.js'
@@ -22,13 +22,9 @@ import { socialRoutes } from './features/social/handler.js'
 import { isFollowing } from './features/social/repository.js'
 import { staffRoutes } from './features/staff/handler.js'
 import { AppError } from './shared/errors/AppError.js'
-import { initSentry, captureError } from './shared/monitoring/sentry.js'
 import { initPrivacyGuard } from './shared/privacy/privacy-guard.js'
 
 export async function buildApp() {
-  // Initialize error monitoring before anything else
-  await initSentry()
-
   // Initialize PrivacyGuard with repository dependencies
   initPrivacyGuard({
     getUserById,
@@ -150,8 +146,9 @@ export async function buildApp() {
       })
     }
 
+    // Structured error logged to CloudWatch; the prod error-log alarm alerts
+    // on these. This is the one monitoring path (no Sentry).
     app.log.error(error)
-    captureError(error)
     return reply.status(500).send({
       error: 'internal_error',
       message: 'Internal server error',

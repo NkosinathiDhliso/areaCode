@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-
 import { api } from '@area-code/shared/lib/api'
 import { useErrorStore } from '@area-code/shared/stores/errorStore'
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface RewardMetrics {
   claimRate: number

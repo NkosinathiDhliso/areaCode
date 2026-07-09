@@ -1,9 +1,9 @@
+import { getTierLabel } from '@area-code/shared/constants/tier-levels'
+import { api } from '@area-code/shared/lib/api'
+import type { AudienceAnalytics, Tier } from '@area-code/shared/types'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { api } from '@area-code/shared/lib/api'
-import type { AudienceAnalytics, Tier } from '@area-code/shared/types'
-import { getTierLabel } from '@area-code/shared/constants/tier-levels'
 import { MusicInsightsSection } from '../../components/MusicInsightsSection'
 
 export function AudiencePanel() {

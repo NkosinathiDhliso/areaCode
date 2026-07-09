@@ -34,8 +34,8 @@
  * **Validates: Requirements 8.6, 9.3, 9.4, 11.2, 11.5**
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getNodesByBusinessId: vi.fn(),
@@ -99,6 +99,8 @@ vi.mock('@aws-sdk/client-lambda', () => ({
   },
 }))
 
+import { recipientToken } from '../anonymize.js'
+import { assertWithinQuota, monthlyQuotaForTier, QuotaExceededError } from '../quota.js'
 import {
   sendCampaign,
   countAttributedReturns,
@@ -106,8 +108,6 @@ import {
   CampaignQuotaExceededError,
   CAMPAIGN_DISPATCHER_FUNCTION_ENV,
 } from '../service.js'
-import { assertWithinQuota, monthlyQuotaForTier, QuotaExceededError } from '../quota.js'
-import { recipientToken } from '../anonymize.js'
 import type { Campaign, CampaignStatus } from '../types.js'
 
 // ─── Shared fixtures ──────────────────────────────────────────────────────────

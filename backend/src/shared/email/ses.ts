@@ -47,6 +47,69 @@ export async function sendTrialExpiryEmail(to: string, businessName: string, day
 }
 
 /**
+ * Renewal-reminder email (billing-revenue-integrity R3.1).
+ *
+ * Sent by the Lapse_Sweep when a paid subscription window has lapsed and the
+ * business has just entered the 7-day renewal grace window. One send per lapse
+ * (the sweep sets `paymentGraceUntil` first, which removes the business from
+ * the next run's selection, so this fires exactly once per lapse). Transactional,
+ * email-only, no SMS or phone path (no-sms-no-phone-auth.md). Follows the
+ * `sendTrialExpiryEmail` shape.
+ */
+export async function sendRenewalReminderEmail(to: string, businessName: string) {
+  await ses.send(
+    new SendEmailCommand({
+      FromEmailAddress: FROM_EMAIL,
+      Destination: { ToAddresses: [to] },
+      Content: {
+        Simple: {
+          Subject: { Data: 'Your Area Code subscription has lapsed' },
+          Body: {
+            Text: {
+              Data: `Hi ${businessName},\n\nYour Area Code subscription has lapsed. You have 7 days to renew before your venues come off the map and your plan drops to starter.\n\nVisit your Plans panel to renew and keep your Growth/Pro features.`,
+            },
+          },
+        },
+      },
+    }),
+  )
+}
+
+/**
+ * Pre-lapse renewal reminder (billing-revenue-integrity R3.4).
+ *
+ * Sent by the trial-reminder worker's renewal sweep when a paid monthly/yearly
+ * subscription window will lapse within 7 days, so the owner can renew (a manual
+ * re-checkout — there is no card vault) before their venues come off the map.
+ *
+ * Deliberately distinct from `sendRenewalReminderEmail`, which is the post-lapse
+ * grace notice: this message is honest that the window is still active ("expires
+ * in N days"), where the other says the subscription "has lapsed". Same message
+ * for both copies would be a lie in one of the two states. Transactional,
+ * email-only, no SMS or phone path (no-sms-no-phone-auth.md). Follows the
+ * `sendTrialExpiryEmail` shape.
+ */
+export async function sendRenewalUpcomingEmail(to: string, businessName: string, daysLeft: number) {
+  const dayWord = daysLeft === 1 ? 'day' : 'days'
+  await ses.send(
+    new SendEmailCommand({
+      FromEmailAddress: FROM_EMAIL,
+      Destination: { ToAddresses: [to] },
+      Content: {
+        Simple: {
+          Subject: { Data: `Your Area Code subscription renews in ${daysLeft} ${dayWord}` },
+          Body: {
+            Text: {
+              Data: `Hi ${businessName},\n\nYour Area Code subscription expires in ${daysLeft} ${dayWord}. Renew from your Plans panel to keep your Growth/Pro features and keep your venues on the map.`,
+            },
+          },
+        },
+      },
+    }),
+  )
+}
+
+/**
  * Sends a promotional win-back campaign email on behalf of a business.
  *
  * Unlike the transactional senders above, this is marketing email, so it MUST
@@ -97,6 +160,54 @@ function escapeHtml(value: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+}
+
+/**
+ * Report-ready notification (billing-revenue-integrity R9.1).
+ *
+ * Sent by the report generator when a weekly or monthly venue intelligence
+ * report has been persisted, replacing the consumer-less `push-sender` SQS
+ * enqueue. Delivery is best-effort: the generator wraps this in its own
+ * try/catch so a send failure is logged and never aborts report persistence
+ * (R9.3). Transactional, email-only, no SMS or phone path
+ * (no-sms-no-phone-auth.md). Follows the `sendTrialExpiryEmail` shape.
+ */
+export async function sendReportReadyEmail(
+  to: string,
+  businessName: string,
+  reportId: string,
+  periodType: string,
+): Promise<void> {
+  const reportsUrl = `${businessPortalBaseUrl()}/reports`
+  const periodLabel = periodType === 'monthly' ? 'monthly' : 'weekly'
+  await ses.send(
+    new SendEmailCommand({
+      FromEmailAddress: FROM_EMAIL,
+      Destination: { ToAddresses: [to] },
+      Content: {
+        Simple: {
+          Subject: { Data: 'Your Area Code report is ready' },
+          Body: {
+            Text: {
+              Data: `Hi ${businessName},\n\nYour ${periodLabel} Area Code intelligence report is ready.\n\nOpen the Reports panel to see your latest crowd insights:\n${reportsUrl}\n\nReport reference: ${reportId}`,
+            },
+            Html: {
+              Data: `<div style="font-family:sans-serif;max-width:440px;margin:0 auto;padding:24px"><h2 style="color:#333">Your report is ready</h2><p style="color:#444;font-size:15px;line-height:1.5">Hi ${escapeHtml(businessName)}, your ${periodLabel} Area Code intelligence report is ready with your latest crowd insights.</p><p style="margin:24px 0"><a href="${escapeHtml(reportsUrl)}" style="background:#6366f1;color:#fff;text-decoration:none;padding:12px 24px;border-radius:10px;font-weight:600;display:inline-block">Open Reports</a></p><p style="color:#999;font-size:12px;margin-top:24px">Report reference: ${escapeHtml(reportId)}</p></div>`,
+            },
+          },
+        },
+      },
+    }),
+  )
+}
+
+/**
+ * Base URL of the business portal (Reports/Plans panels live here). Mirrors the
+ * `webBaseUrl()` accessor in auth/service.ts; the default matches the prod
+ * business subdomain in `shared/security/origins.ts`.
+ */
+function businessPortalBaseUrl(): string {
+  return (process.env['AREA_CODE_BUSINESS_URL'] ?? 'https://business.areacode.co.za').replace(/\/+$/, '')
 }
 
 /**

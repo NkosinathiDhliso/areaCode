@@ -2,12 +2,13 @@
  * Dev mock layer entry point.
  * Call initDevMocks() before rendering to intercept API, socket, and geolocation.
  */
-import { patchApiClient } from './mockApi'
-import { MockSocket, startConsumerEmitter } from './mockSocket'
-import { patchGeolocation } from './mockGeo'
-import { MOCK_PULSE_SCORES } from './data/pulseScores'
-import { MOCK_NODES } from './data/nodes'
 import type { NodeState } from '../types'
+
+import { MOCK_NODES } from './data/nodes'
+import { MOCK_PULSE_SCORES } from './data/pulseScores'
+import { patchApiClient } from './mockApi'
+import { patchGeolocation } from './mockGeo'
+import { MockSocket, startConsumerEmitter } from './mockSocket'
 
 export const IS_DEV_MOCK =
   typeof import.meta !== 'undefined' &&

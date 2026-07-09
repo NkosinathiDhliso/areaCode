@@ -1,12 +1,24 @@
 name: Release Health Gate
 
 # Auto-rollback gate. Triggered by deploy-lambda.yml after a prod deploy.
-# Sleeps 30 minutes, queries Sentry release-health, rolls back if the new
-# version's crash-free user rate degraded.
+# Sleeps 30 minutes, then evaluates CloudWatch signals for the post-deploy
+# window and rolls back the API Lambda alias if the release looks unhealthy.
 #
-# See .kiro/specs/churn-defences/ Requirement 5 for the full rationale.
-# The corresponding incident pattern: §1.5 of docs/CHURN_DEFENSES.md
-# (Starbucks app outages and crashes).
+# Signals (see .kiro/specs/release-quality-and-ops-hygiene, R2):
+#   - RUM_Signal: for each of the four CloudWatch RUM app monitors (web,
+#     business, staff, admin) the frontend JS error rate (JsErrorCount /
+#     SessionCount) for the post-deploy window vs the trailing 7-day baseline.
+#     RUM has no release/SHA concept, so the "release" is the deploy timestamp
+#     window, not a release tag.
+#   - Backend_Signal: the prod API Lambda error and p99 CloudWatch alarms; any
+#     alarm in ALARM during the window is a rollback vote.
+#
+# The decision rule is the pure function in scripts/health-gate-decision.mjs
+# (property-tested; see the spec's Property 2). Missing or unreadable data is a
+# distinct, loud job failure, never a silent pass (R2.4).
+#
+# See .kiro/specs/churn-defences/ Requirement 5 for the original rationale and
+# §1.5 of docs/CHURN_DEFENSES.md (Starbucks app outages and crashes).
 
 on:
   workflow_dispatch:
@@ -26,7 +38,7 @@ on:
         default: '30'
         type: string
       minSessions:
-        description: 'Minimum new-version sessions before evaluating (default 30). Prevents low-traffic false positives.'
+        description: 'Minimum per-monitor sessions before a frontend regression can vote (default 30). Prevents low-traffic false positives.'
         required: false
         default: '30'
         type: string
@@ -34,6 +46,18 @@ on:
 permissions:
   id-token: write
   contents: read
+
+env:
+  # Prod RUM app monitor names, one per SPA. These are the
+  # AWS/RUM `application_name` dimension values (module.rum in
+  # infra/environments/prod/main.tf creates area-code-prod-<key>).
+  RUM_MONITORS: 'web business staff admin'
+  RUM_PREFIX: 'area-code-prod-'
+  # Prod API Lambda alarms (Backend_Signal).
+  BACKEND_ALARMS: 'area-code-prod-api-errors area-code-prod-api-duration-p99'
+  # Absolute increase in error rate (window minus baseline) that counts as a
+  # frontend regression.
+  ERROR_RATE_REGRESSION_THRESHOLD: '0.05'
 
 jobs:
   evaluate:
@@ -54,70 +78,130 @@ jobs:
           echo "Waiting $MINUTES minutes for release health to stabilise..."
           sleep $((MINUTES * 60))
 
-      - name: Query Sentry release health
-        id: health
+      - name: Collect CloudWatch signals
+        id: collect
         env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
-          RELEASE_SHA: ${{ inputs.sha }}
-          MIN_SESSIONS: ${{ inputs.minSessions }}
+          WAIT_MINUTES: ${{ inputs.waitMinutes }}
         run: |
-          set -e
-          # Crash-free user rate for the new release (last 30m)
-          NEW=$(curl -sS \
-            -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
-            "https://sentry.io/api/0/organizations/$SENTRY_ORG/sessions/?project=$SENTRY_PROJECT&field=crash_free_rate(user)&field=sum(session)&statsPeriod=30m&query=release:$RELEASE_SHA")
-          NEW_RATE=$(echo "$NEW" | jq -r '.groups[0].totals["crash_free_rate(user)"] // 1.0')
-          NEW_SESSIONS=$(echo "$NEW" | jq -r '.groups[0].totals["sum(session)"] // 0')
+          set -euo pipefail
 
-          # 7-day baseline excluding the current release
-          PREV=$(curl -sS \
-            -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
-            "https://sentry.io/api/0/organizations/$SENTRY_ORG/sessions/?project=$SENTRY_PROJECT&field=crash_free_rate(user)&statsPeriod=7d&query=!release:$RELEASE_SHA")
-          PREV_RATE=$(echo "$PREV" | jq -r '.groups[0].totals["crash_free_rate(user)"] // 1.0')
+          # Post-deploy window = the last WAIT_MINUTES; baseline = trailing 7d.
+          NOW=$(date -u +%s)
+          WINDOW_START=$(date -u -d "@$((NOW - WAIT_MINUTES * 60))" +%Y-%m-%dT%H:%M:%SZ)
+          BASELINE_START=$(date -u -d "@$((NOW - 7 * 24 * 3600))" +%Y-%m-%dT%H:%M:%SZ)
+          END=$(date -u -d "@${NOW}" +%Y-%m-%dT%H:%M:%SZ)
 
-          # Error count (last 30m vs 7d baseline)
-          NEW_ERRORS=$(curl -sS \
-            -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
-            "https://sentry.io/api/0/organizations/$SENTRY_ORG/events-stats/?project=$SENTRY_PROJECT&statsPeriod=30m&query=release:$RELEASE_SHA" \
-            | jq -r '[.data[][1][0].count // 0] | add // 0')
-          PREV_ERRORS=$(curl -sS \
-            -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
-            "https://sentry.io/api/0/organizations/$SENTRY_ORG/events-stats/?project=$SENTRY_PROJECT&statsPeriod=7d&query=!release:$RELEASE_SHA" \
-            | jq -r '[.data[][1][0].count // 0] | add // 0')
+          MISSING=false
 
-          # Avg error rate per 30m over the 7-day window
-          PREV_30M_AVG=$(awk "BEGIN { printf \"%.4f\", $PREV_ERRORS / (7 * 24 * 2) }")
+          # Sum a single AWS/RUM metric over a time range for one monitor.
+          # Prints the numeric sum, or the literal MISSING on any API failure.
+          rum_sum() {
+            local metric="$1" monitor="$2" start="$3" end="$4" period="$5"
+            local out
+            if ! out=$(aws cloudwatch get-metric-statistics \
+              --namespace AWS/RUM \
+              --metric-name "$metric" \
+              --dimensions "Name=application_name,Value=${RUM_PREFIX}${monitor}" \
+              --start-time "$start" --end-time "$end" \
+              --period "$period" --statistics Sum \
+              --query 'Datapoints[].Sum' --output json 2>/dev/null); then
+              echo "MISSING"
+              return
+            fi
+            # Empty datapoint set for an error count is a legitimate zero; the
+            # empty-metric-set guard in the decision function keys off sessions.
+            echo "$out" | jq -r 'if type=="array" then (add // 0) else 0 end'
+          }
 
-          DELTA=$(awk "BEGIN { printf \"%.4f\", $NEW_RATE - $PREV_RATE }")
+          SIGNALS='[]'
+          for m in $RUM_MONITORS; do
+            WIN_ERR=$(rum_sum JsErrorCount "$m" "$WINDOW_START" "$END" 300)
+            WIN_SESS=$(rum_sum SessionCount "$m" "$WINDOW_START" "$END" 300)
+            BASE_ERR=$(rum_sum JsErrorCount "$m" "$BASELINE_START" "$END" 86400)
+            BASE_SESS=$(rum_sum SessionCount "$m" "$BASELINE_START" "$END" 86400)
 
-          echo "new_rate=$NEW_RATE" | tee -a "$GITHUB_OUTPUT"
-          echo "new_sessions=$NEW_SESSIONS" | tee -a "$GITHUB_OUTPUT"
-          echo "prev_rate=$PREV_RATE" | tee -a "$GITHUB_OUTPUT"
-          echo "delta=$DELTA" | tee -a "$GITHUB_OUTPUT"
-          echo "new_errors=$NEW_ERRORS" | tee -a "$GITHUB_OUTPUT"
-          echo "prev_30m_avg=$PREV_30M_AVG" | tee -a "$GITHUB_OUTPUT"
+            if [ "$WIN_ERR" = MISSING ] || [ "$WIN_SESS" = MISSING ] || \
+               [ "$BASE_ERR" = MISSING ] || [ "$BASE_SESS" = MISSING ]; then
+              MISSING=true
+              WIN_ERR=0; WIN_SESS=0; BASE_ERR=0; BASE_SESS=0
+            fi
 
-          # Minimum-sessions gate: if the new version has too few sessions to
-          # draw a meaningful conclusion, skip the rollback. Reports that we
-          # had insufficient signal so ops can manually re-evaluate.
-          if awk "BEGIN { exit !($NEW_SESSIONS < $MIN_SESSIONS) }"; then
+            SIGNALS=$(jq -c \
+              --arg monitor "$m" \
+              --argjson winErr "$WIN_ERR" --argjson winSess "$WIN_SESS" \
+              --argjson baseErr "$BASE_ERR" --argjson baseSess "$BASE_SESS" \
+              '. + [{
+                monitor: $monitor,
+                windowErrorRate: (if $winSess > 0 then ($winErr / $winSess) else 0 end),
+                baselineErrorRate: (if $baseSess > 0 then ($baseErr / $baseSess) else 0 end),
+                windowSessions: $winSess
+              }]' <<<"$SIGNALS")
+          done
+
+          # Backend_Signal: current state of each prod API Lambda alarm.
+          ALARMS='[]'
+          for a in $BACKEND_ALARMS; do
+            if ! STATE=$(aws cloudwatch describe-alarms \
+              --alarm-names "$a" \
+              --query 'MetricAlarms[0].StateValue' --output text 2>/dev/null); then
+              MISSING=true
+              STATE="INSUFFICIENT_DATA"
+            fi
+            if [ -z "$STATE" ] || [ "$STATE" = "None" ]; then
+              MISSING=true
+              STATE="INSUFFICIENT_DATA"
+            fi
+            ALARMS=$(jq -c --arg name "$a" --arg state "$STATE" \
+              '. + [{name: $name, state: $state}]' <<<"$ALARMS")
+          done
+
+          PAYLOAD=$(jq -c -n \
+            --argjson frontendSignals "$SIGNALS" \
+            --argjson backendAlarms "$ALARMS" \
+            --argjson hasMissingData "$MISSING" \
+            --argjson threshold "${ERROR_RATE_REGRESSION_THRESHOLD}" \
+            --argjson minSessions "${{ inputs.minSessions }}" \
+            '{
+              frontendSignals: $frontendSignals,
+              backendAlarms: $backendAlarms,
+              hasMissingData: $hasMissingData,
+              errorRateRegressionThreshold: $threshold,
+              minSessions: $minSessions
+            }')
+
+          echo "$PAYLOAD" > signals.json
+          echo "payload<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$PAYLOAD" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "Collected signals:"
+          jq . signals.json
+
+      - name: Evaluate decision
+        id: health
+        run: |
+          set -euo pipefail
+          # The decision core exits non-zero on MISSING_DATA, so a missing or
+          # unreadable signal fails this step loudly (no rollback decision,
+          # never a silent pass — R2.4).
+          if RESULT=$(node scripts/health-gate-decision.mjs signals.json); then
+            GATE_FAILED=false
+          else
+            GATE_FAILED=true
+          fi
+          echo "Decision: $RESULT"
+          DECISION=$(echo "$RESULT" | jq -r '.decision')
+          REASONS=$(echo "$RESULT" | jq -r '.reasons | join(", ")')
+          echo "decision=$DECISION" | tee -a "$GITHUB_OUTPUT"
+          echo "reasons=$REASONS" | tee -a "$GITHUB_OUTPUT"
+          if [ "$DECISION" = "ROLLBACK" ]; then
+            echo "rollback=true" | tee -a "$GITHUB_OUTPUT"
+          else
             echo "rollback=false" | tee -a "$GITHUB_OUTPUT"
-            echo "insufficient_signal=true" | tee -a "$GITHUB_OUTPUT"
-            exit 0
           fi
-          echo "insufficient_signal=false" | tee -a "$GITHUB_OUTPUT"
-
-          # Rollback decision
-          ROLLBACK=false
-          # Rule 1: crash-free user rate dropped > 1 percentage point
-          if awk "BEGIN { exit !($DELTA < -0.01) }"; then ROLLBACK=true; fi
-          # Rule 2: error count > 5x the 7-day average per 30m
-          if awk "BEGIN { exit !($NEW_ERRORS > 5 * $PREV_30M_AVG && $PREV_30M_AVG > 0) }"; then
-            ROLLBACK=true
+          if [ "$GATE_FAILED" = "true" ]; then
+            echo "::error::Health gate could not read the CloudWatch signal ($REASONS). Failing loudly; no rollback decision made. Investigate RUM/alarm data before trusting this deploy."
+            exit 1
           fi
-          echo "rollback=$ROLLBACK" | tee -a "$GITHUB_OUTPUT"
 
       - name: Auto-rollback (alias swap)
         id: rollback
@@ -140,12 +224,11 @@ jobs:
         run: |
           PAYLOAD=$(jq -n \
             --arg sha "${{ inputs.sha }}" \
-            --arg new_rate "${{ steps.health.outputs.new_rate }}" \
-            --arg prev_rate "${{ steps.health.outputs.prev_rate }}" \
-            --arg new_errors "${{ steps.health.outputs.new_errors }}" \
+            --arg decision "${{ steps.health.outputs.decision }}" \
+            --arg reasons "${{ steps.health.outputs.reasons }}" \
             --arg dryRun "${{ inputs.dryRun }}" \
             --arg version "${{ steps.rollback.outputs.rolled_back_to }}" \
-            '{text: ("Release health gate fired for " + $sha + ". crash-free new=" + $new_rate + " prev=" + $prev_rate + " errors=" + $new_errors + " dryRun=" + $dryRun + " rolled-back-to=" + $version)}')
+            '{text: ("Release health gate fired for " + $sha + ". decision=" + $decision + " reasons=" + $reasons + " dryRun=" + $dryRun + " rolled-back-to=" + $version)}')
           curl -sS -X POST -H 'Content-Type: application/json' --data "$PAYLOAD" "$SLACK_OPS_WEBHOOK"
 
       - name: Tag rolled-back commit
@@ -160,18 +243,23 @@ jobs:
           git push origin "rollback-$TS"
 
       - name: Summary
+        if: ${{ always() }}
         run: |
           echo "## Release Health Gate" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Metric | Value |" >> "$GITHUB_STEP_SUMMARY"
           echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
           echo "| SHA | \`${{ inputs.sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Sessions (new) | ${{ steps.health.outputs.new_sessions }} (min ${{ inputs.minSessions }}) |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Insufficient signal | ${{ steps.health.outputs.insufficient_signal }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Crash-free (new) | ${{ steps.health.outputs.new_rate }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Crash-free (7d baseline) | ${{ steps.health.outputs.prev_rate }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Delta | ${{ steps.health.outputs.delta }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Errors (last 30m) | ${{ steps.health.outputs.new_errors }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Errors (7d avg per 30m) | ${{ steps.health.outputs.prev_30m_avg }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Rollback decision | ${{ steps.health.outputs.rollback }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Wait window (min) | ${{ inputs.waitMinutes }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Min sessions (per monitor) | ${{ inputs.minSessions }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Decision | ${{ steps.health.outputs.decision }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Reasons | ${{ steps.health.outputs.reasons }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Rollback | ${{ steps.health.outputs.rollback }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Dry run | ${{ inputs.dryRun }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "<details><summary>Collected signals</summary>" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat signals.json >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo '(signals not collected)' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "</details>" >> "$GITHUB_STEP_SUMMARY"

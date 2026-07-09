@@ -12,10 +12,9 @@
  *   - R4.14 cross-midnight pair edited as a unit (merged virtual slot).
  */
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { cleanup, render, screen, fireEvent, waitFor, act } from '@testing-library/react'
-
 import type { MusicSchedule } from '@area-code/shared/types'
+import { cleanup, render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // ─── Mocks ─────────────────────────────────────────────────────────────────
 

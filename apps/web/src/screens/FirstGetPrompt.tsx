@@ -9,10 +9,9 @@
  * for the Google-OAuth signup branch.
  */
 
+import { Spinner } from '@area-code/shared/components/Spinner'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-
-import { Spinner } from '@area-code/shared/components/Spinner'
 
 import { cleanFirstGetToken, isCompleteFirstGetToken, redeemFirstGetToken } from '../lib/firstGetToken'
 import type { AppRoute } from '../types'

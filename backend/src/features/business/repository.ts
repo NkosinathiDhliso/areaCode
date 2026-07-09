@@ -1,4 +1,7 @@
 // DynamoDB-backed Business Repository (replaces Prisma)
+import { randomBytes } from 'node:crypto'
+
+import type { AudienceAnalytics, BusinessMusicAudience, LiveStats, MusicGenre } from '@area-code/shared/types'
 import {
   BatchGetCommand,
   DeleteCommand,
@@ -9,18 +12,11 @@ import {
   TransactWriteCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb'
+
+import { requireEnv } from '../../shared/config/env.js'
 import { documentClient, TableNames, isConditionalCheckFailedError } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
 import { kvGet } from '../../shared/kv/dynamodb-kv.js'
-import { requireEnv } from '../../shared/config/env.js'
-import { listRedemptionsForBusiness } from './staff-leaderboard.js'
-import { analyzeCrowdComposition } from '../reports/analyzers/crowd-composition.js'
-import { analyzePeakHours } from '../reports/analyzers/peak-hours.js'
-import { analyzeMusicProfile } from '../reports/analyzers/music-profile.js'
-import { anonymizeCheckIns, type RawCheckIn } from '../reports/anonymize.js'
-import type { MusicPrefs } from '../reports/types.js'
-import type { AudienceAnalytics, BusinessMusicAudience, LiveStats, MusicGenre } from '@area-code/shared/types'
-import { randomBytes } from 'node:crypto'
 import {
   getBusinessById as getBusinessDynamo,
   getBusinessByCognitoSub,
@@ -28,16 +24,28 @@ import {
   getStaffByBusinessId,
 } from '../auth/dynamodb-repository.js'
 import { getCheckInsByNode } from '../check-in/dynamodb-repository.js'
+import { analyzeCrowdComposition } from '../reports/analyzers/crowd-composition.js'
+import { analyzeMusicProfile } from '../reports/analyzers/music-profile.js'
+import { analyzePeakHours } from '../reports/analyzers/peak-hours.js'
+import { anonymizeCheckIns, type RawCheckIn } from '../reports/anonymize.js'
+import type { MusicPrefs } from '../reports/types.js'
+
+import { listRedemptionsForBusiness } from './staff-leaderboard.js'
 import {
   boostFloorRowSchema,
   boosterCheckoutMarkerRowSchema,
   boosterPurchaseRowSchema,
   floorChangeAuditRowSchema,
+  subscriptionPaymentRowSchema,
+  subCheckoutMarkerRowSchema,
   type BoostDuration,
   type BoostFloorRow,
   type BoosterCheckoutMarkerRow,
   type BoosterPurchaseRow,
   type FloorChangeAuditRow,
+  type PaidInterval,
+  type SubscriptionPaymentRow,
+  type SubCheckoutMarkerRow,
 } from './types.js'
 
 const BOOST_DURATIONS: readonly BoostDuration[] = ['2hr', '6hr', '24hr'] as const
@@ -58,6 +66,28 @@ export async function updateBusinessTier(id: string, tier: string, trialEndsAt?:
   const data: Record<string, unknown> = { tier }
   if (trialEndsAt !== undefined) data['trialEndsAt'] = trialEndsAt
   return updateBusiness(id, data as any)
+}
+
+// Admin comp write (cross-portal-lifecycle-alignment R1). A comp is a paid
+// window whose "payment" is Area Code goodwill: it writes Paid_Until directly so
+// the Tier_Resolver (getEffectiveTier) honours it with no resolver branch and no
+// new attribute (the Comp_Window IS Paid_Until). `paidInterval` stays null (no
+// interval was bought, so the pre-lapse renewal reminder skips it); trial and
+// grace are cleared so no stale window lingers. For starter, `paidUntil` is null
+// so the business reads as starter. Mirrors `activateSubscriptionOnBusiness` so
+// the businesses table keeps a single write home (dry-reuse-no-duplication).
+export async function setBusinessCompWindow(
+  businessId: string,
+  tier: 'starter' | 'growth' | 'pro',
+  paidUntil: string | null,
+) {
+  return updateBusiness(businessId, {
+    tier,
+    paidUntil,
+    paidInterval: null,
+    trialEndsAt: null,
+    paymentGraceUntil: null,
+  })
 }
 
 export async function setPaymentGrace(id: string, until: string | null) {
@@ -92,12 +122,46 @@ export async function listBusinessesWithLapsedGrace(nowIso: string): Promise<str
   return ids
 }
 
-export async function deactivateBusiness(id: string) {
-  return updateBusiness(id, { tier: 'free', isActive: false } as any)
+// Businesses currently INSIDE the renewal grace window (cross-portal-lifecycle
+// -alignment R2.2): `paymentGraceUntil` present and still in the future at
+// `nowIso`. This is the inverse of `listBusinessesWithLapsedGrace` (which finds
+// grace that has already passed for demotion). Projection only (id, name, tier,
+// grace expiry), sorted soonest-expiry-first so the admin Grace_List leads with
+// who lapses next. Paginated Scan, mirroring the sibling grace query.
+export async function listBusinessesInGraceProjection(
+  nowIso: string,
+): Promise<Array<{ businessId: string; businessName: string; tier: string; paymentGraceUntil: string }>> {
+  const rows: Array<{ businessId: string; businessName: string; tier: string; paymentGraceUntil: string }> = []
+  let cursor: Record<string, unknown> | undefined
+  do {
+    const params: Record<string, unknown> = {
+      TableName: TableNames.businesses,
+      FilterExpression: 'attribute_exists(paymentGraceUntil) AND paymentGraceUntil > :now',
+      ExpressionAttributeValues: { ':now': nowIso },
+      ProjectionExpression: 'businessId, businessName, tier, paymentGraceUntil',
+    }
+    if (cursor) params['ExclusiveStartKey'] = cursor
+    const result = await documentClient.send(new ScanCommand(params as any))
+    for (const item of result.Items ?? []) {
+      const businessId = item['businessId']
+      const paymentGraceUntil = item['paymentGraceUntil']
+      if (typeof businessId === 'string' && typeof paymentGraceUntil === 'string') {
+        rows.push({
+          businessId,
+          businessName: (item['businessName'] as string) ?? '',
+          tier: (item['tier'] as string) ?? 'free',
+          paymentGraceUntil,
+        })
+      }
+    }
+    cursor = result.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (cursor)
+  rows.sort((a, b) => a.paymentGraceUntil.localeCompare(b.paymentGraceUntil))
+  return rows
 }
 
-export async function setYocoCustomerId(id: string, yocoId: string) {
-  return updateBusiness(id, { yocoCustomerId: yocoId } as any)
+export async function deactivateBusiness(id: string) {
+  return updateBusiness(id, { tier: 'free', isActive: false } as any)
 }
 
 // Staff management
@@ -626,7 +690,7 @@ export async function getMusicAudience(businessId: string): Promise<BusinessMusi
 
 // ─── Recent Redemptions ─────────────────────────────────────────────────────
 
-export async function getRecentRedemptions(businessId: string) {
+export async function getRecentRedemptions(_businessId: string) {
   // Simplified , scan redemptions from appData
   const result = await documentClient.send(
     new ScanCommand({
@@ -671,7 +735,7 @@ export async function getCheckInDetails(businessId: string, date?: string, curso
 
 // ─── Reward Metrics ─────────────────────────────────────────────────────────
 
-export async function getRewardMetrics(rewardId: string, businessId: string) {
+export async function getRewardMetrics(rewardId: string, _businessId: string) {
   // Get the reward from rewards table
   const rewardResult = await documentClient.send(new GetCommand({ TableName: TableNames.rewards, Key: { rewardId } }))
   const reward = rewardResult.Item
@@ -1149,4 +1213,436 @@ export async function getBoosterPurchaseByKey(boostPk: string, boostSk: string):
     return null
   }
   return parsed.data
+}
+
+// ─── Subscription payment write (marker-first choreography) ──────────────────
+//
+// See `.kiro/specs/billing-revenue-integrity/design.md` Flow 1.
+//
+// Mirrors `putBoosterPurchaseWithMarker` exactly so the codebase keeps one
+// idempotency idiom (R2.2). Two conditional puts:
+//
+//   1. PutItem the `SUB_CHECKOUT#<yocoCheckoutId>` marker with
+//      `attribute_not_exists(pk)` so a redelivered checkout id (even with a
+//      fresh Yoco `eventId`) is detected as a duplicate and never activates a
+//      second window (R2.4).
+//   2. PutItem the `SUB#<businessId>` audit row with `attribute_not_exists(pk)`
+//      so a rare collision on (paidAt-millisecond, yocoCheckoutId) for two
+//      different events still can't silently overwrite an existing row.
+//
+// On any non-conditional failure of step 2, best-effort `DeleteItem` the marker
+// so a Yoco retry can re-attempt cleanly. If the compensating delete itself
+// fails, we log and re-throw the *original* error anyway — the next Yoco retry
+// will land on the existing marker and be treated as a duplicate, which is safe
+// because no purchase row was ever written.
+
+export async function putSubscriptionPaymentWithMarker(args: {
+  purchase: SubscriptionPaymentRow
+  marker: SubCheckoutMarkerRow
+}): Promise<{ result: 'written' | 'duplicate' }> {
+  const { purchase, marker } = args
+
+  // Step 1: write the idempotency marker first. R2.4.
+  try {
+    await documentClient.send(
+      new PutCommand({
+        TableName: TableNames.appData,
+        Item: marker,
+        ConditionExpression: 'attribute_not_exists(pk)',
+      }),
+    )
+  } catch (err) {
+    if (isConditionalCheckFailedError(err)) {
+      // Marker already exists → same yocoCheckoutId already persisted. R2.4.
+      return { result: 'duplicate' }
+    }
+    throw err
+  }
+
+  // Step 2: write the Subscription_Payment_Row audit row.
+  try {
+    await documentClient.send(
+      new PutCommand({
+        TableName: TableNames.appData,
+        Item: purchase,
+        ConditionExpression: 'attribute_not_exists(pk)',
+      }),
+    )
+    return { result: 'written' }
+  } catch (err) {
+    if (isConditionalCheckFailedError(err)) {
+      // (pk, sk) collision — but the marker we just wrote is now the source
+      // of truth for this yocoCheckoutId. Treat as duplicate.
+      return { result: 'duplicate' }
+    }
+
+    // Non-conditional failure of the purchase write. Best-effort compensating
+    // delete of the marker so a Yoco retry can re-attempt cleanly.
+    try {
+      await documentClient.send(
+        new DeleteCommand({
+          TableName: TableNames.appData,
+          Key: { pk: marker.pk, sk: marker.sk },
+        }),
+      )
+    } catch (deleteErr) {
+      // Compensating delete failed — log and re-throw the *original* error
+      // anyway. The next Yoco retry will see the orphaned marker and treat
+      // the event as a duplicate, which is safe because no purchase row was
+      // ever written.
+      console.warn(
+        `[business] putSubscriptionPaymentWithMarker: compensating marker delete failed for marker.pk=${marker.pk}: ${String(deleteErr)}`,
+      )
+    }
+    throw err
+  }
+}
+
+// ─── Subscription payment reads ─────────────────────────────────────────────
+//
+// See `.kiro/specs/billing-revenue-integrity/design.md` access-pattern table:
+//
+// - Business history (R7.5): `Query` `pk='SUB#<businessId>'` with
+//   `ScanIndexForward=false` so the natural sort-order (by `paidAt` embedded in
+//   `sk`) yields newest-first.
+// - Admin date-range across all businesses (R8.1): `Query` GSI1 with
+//   `gsi1pk='SUB_BY_TIME'` and `gsi1sk BETWEEN :from AND :to`, newest-first to
+//   match the admin boost report pagination semantics.
+//
+// All reads Zod-parse with `safeParse`; on parse failure we log and skip the
+// offending row so one malformed row cannot bring down a whole page, consistent
+// with the BoosterPurchase query helpers. Cursors reuse the shared
+// `decodeCursor` (throws `MalformedCursorError` for the handler to map to 400).
+
+export async function querySubscriptionPaymentsForBusiness(
+  businessId: string,
+  cursor: string | null,
+  limit: number,
+): Promise<{ items: SubscriptionPaymentRow[]; nextCursor: string | null }> {
+  const params: Record<string, unknown> = {
+    TableName: TableNames.appData,
+    KeyConditionExpression: 'pk = :pk',
+    ExpressionAttributeValues: { ':pk': `SUB#${businessId}` },
+    ScanIndexForward: false, // newest-first (R7.5)
+    Limit: limit,
+  }
+  if (cursor) {
+    ;(params as { ExclusiveStartKey?: Record<string, unknown> }).ExclusiveStartKey = decodeCursor(cursor)
+  }
+
+  const result = await documentClient.send(new QueryCommand(params as any))
+  const items: SubscriptionPaymentRow[] = []
+  for (const item of result.Items ?? []) {
+    const parsed = subscriptionPaymentRowSchema.safeParse(item)
+    if (!parsed.success) {
+      console.warn(
+        `[business] querySubscriptionPaymentsForBusiness: skipping malformed Subscription_Payment_Row sk=${String(item['sk'])}: ${parsed.error.message}`,
+      )
+      continue
+    }
+    items.push(parsed.data)
+  }
+
+  return {
+    items,
+    nextCursor: encodeCursor(result.LastEvaluatedKey as Record<string, unknown> | undefined),
+  }
+}
+
+export async function querySubscriptionPaymentsByTimeRange(
+  fromIso: string,
+  toIso: string,
+  cursor: string | null,
+  limit: number,
+): Promise<{ items: SubscriptionPaymentRow[]; nextCursor: string | null }> {
+  const params: Record<string, unknown> = {
+    TableName: TableNames.appData,
+    IndexName: 'GSI1',
+    KeyConditionExpression: 'gsi1pk = :pk AND gsi1sk BETWEEN :from AND :to',
+    ExpressionAttributeValues: {
+      ':pk': 'SUB_BY_TIME',
+      ':from': fromIso,
+      ':to': toIso,
+    },
+    ScanIndexForward: false, // newest-first to match admin boost report semantics (R8.1)
+    Limit: limit,
+  }
+  if (cursor) {
+    ;(params as { ExclusiveStartKey?: Record<string, unknown> }).ExclusiveStartKey = decodeCursor(cursor)
+  }
+
+  const result = await documentClient.send(new QueryCommand(params as any))
+  const items: SubscriptionPaymentRow[] = []
+  for (const item of result.Items ?? []) {
+    const parsed = subscriptionPaymentRowSchema.safeParse(item)
+    if (!parsed.success) {
+      console.warn(
+        `[business] querySubscriptionPaymentsByTimeRange: skipping malformed Subscription_Payment_Row sk=${String(item['sk'])}: ${parsed.error.message}`,
+      )
+      continue
+    }
+    items.push(parsed.data)
+  }
+
+  return {
+    items,
+    nextCursor: encodeCursor(result.LastEvaluatedKey as Record<string, unknown> | undefined),
+  }
+}
+
+export async function getSubCheckoutMarker(yocoCheckoutId: string): Promise<SubCheckoutMarkerRow | null> {
+  const key = `SUB_CHECKOUT#${yocoCheckoutId}`
+  const result = await documentClient.send(
+    new GetCommand({
+      TableName: TableNames.appData,
+      Key: { pk: key, sk: key },
+    }),
+  )
+  if (!result.Item) return null
+
+  const parsed = subCheckoutMarkerRowSchema.safeParse(result.Item)
+  if (!parsed.success) {
+    console.warn(
+      `[business] getSubCheckoutMarker: malformed Sub_Checkout_Marker for yocoCheckoutId=${yocoCheckoutId}: ${parsed.error.message}`,
+    )
+    return null
+  }
+  return parsed.data
+}
+
+// Point read of a Subscription_Payment_Row by its stored key, following a
+// `getSubCheckoutMarker` hit. Mirrors `getBoosterPurchaseByKey`: the replay
+// reconciliation branch (design Flow 1) reads the existing row's
+// `paidUntilProduced` so it can re-assert the Business_Row state with the exact
+// window the original payment produced, never a second extension. Exposed here
+// so the service layer never imports `documentClient` directly.
+export async function getSubscriptionPaymentByKey(
+  subPk: string,
+  subSk: string,
+): Promise<SubscriptionPaymentRow | null> {
+  const result = await documentClient.send(
+    new GetCommand({
+      TableName: TableNames.appData,
+      Key: { pk: subPk, sk: subSk },
+    }),
+  )
+  if (!result.Item) return null
+
+  const parsed = subscriptionPaymentRowSchema.safeParse(result.Item)
+  if (!parsed.success) {
+    console.warn(
+      `[business] getSubscriptionPaymentByKey: malformed Subscription_Payment_Row pk=${subPk} sk=${subSk}: ${parsed.error.message}`,
+    )
+    return null
+  }
+  return parsed.data
+}
+
+// ─── Subscription activation on the Business_Row ─────────────────────────────
+//
+// See `.kiro/specs/billing-revenue-integrity/design.md` Flow 1 step 5.
+//
+// A single UpdateItem that both grants the paid window and clears the two
+// windows that would otherwise demote or double-count the business: the trial
+// (`trialEndsAt`) and any renewal grace (`paymentGraceUntil`). Doing it in one
+// write means a freshly-paid business can never be read mid-transition (still
+// "on trial" or still "in grace") by a concurrent read path.
+//
+// Delegates to the one business-update path (`updateBusinessTier` and
+// `setPaymentGrace` do the same) so the businesses table keeps a single write
+// home (dry-reuse-no-duplication). `updateBusiness` filters only `undefined`,
+// so the explicit `null`s here are written as DynamoDB NULL — which is exactly
+// how the lapse and tier-resolver read paths expect a cleared window.
+export async function activateSubscriptionOnBusiness(
+  businessId: string,
+  args: { tier: string; paidUntil: string; paidInterval: PaidInterval },
+) {
+  return updateBusiness(businessId, {
+    tier: args.tier,
+    paidUntil: args.paidUntil,
+    paidInterval: args.paidInterval,
+    trialEndsAt: null,
+    paymentGraceUntil: null,
+  })
+}
+
+// ─── Lapsed paid-window sweep source ─────────────────────────────────────────
+//
+// See `.kiro/specs/billing-revenue-integrity/design.md` Flow 3, phase 1.
+//
+// Businesses whose paid subscription window has lapsed and that have NOT yet
+// entered the renewal grace window. Consumed by the daily Lapse_Sweep
+// (business/service.ts) to set `paymentGraceUntil = now + 7d` and send one
+// renewal email, before the existing `listBusinessesWithLapsedGrace` demotes
+// anyone whose grace has itself passed.
+//
+// Match criteria (R3.1):
+//   - a paid tier (growth / pro / payg),
+//   - `paidUntil` present and in the past,
+//   - no grace window set,
+//   - no active trial.
+// Grace and trial are matched against both "absent" AND "NULL" because
+// `activateSubscriptionOnBusiness` clears them to DynamoDB NULL rather than
+// removing the attribute; a NULL fails the `< :now` comparison (type mismatch),
+// so it must be caught explicitly with `= :null`.
+//
+// Paginated Scan, mirroring `listBusinessesWithLapsedGrace`. Returns the fields
+// the sweep needs to both set grace and address the renewal email, so the sweep
+// avoids a second GetItem per business. Business volume is small and this stays
+// PAY_PER_REQUEST, matching the existing scan pattern.
+export async function listBusinessesWithLapsedPaidUntil(nowIso: string): Promise<
+  Array<{
+    businessId: string
+    email: string
+    businessName: string
+    paidUntil: string
+    paidInterval: string | null
+  }>
+> {
+  const rows: Array<{
+    businessId: string
+    email: string
+    businessName: string
+    paidUntil: string
+    paidInterval: string | null
+  }> = []
+  let cursor: Record<string, unknown> | undefined
+  do {
+    const params: Record<string, unknown> = {
+      TableName: TableNames.businesses,
+      FilterExpression:
+        '#tier IN (:growth, :pro, :payg) AND ' +
+        'attribute_exists(paidUntil) AND paidUntil < :now AND ' +
+        '(attribute_not_exists(paymentGraceUntil) OR paymentGraceUntil = :null) AND ' +
+        '(attribute_not_exists(trialEndsAt) OR trialEndsAt = :null OR trialEndsAt < :now)',
+      ExpressionAttributeNames: { '#tier': 'tier' },
+      ExpressionAttributeValues: {
+        ':now': nowIso,
+        ':growth': 'growth',
+        ':pro': 'pro',
+        ':payg': 'payg',
+        ':null': null,
+      },
+      ProjectionExpression: 'businessId, email, businessName, paidUntil, paidInterval',
+    }
+    if (cursor) params['ExclusiveStartKey'] = cursor
+    const result = await documentClient.send(new ScanCommand(params as any))
+    for (const item of result.Items ?? []) {
+      const businessId = item['businessId']
+      const email = item['email']
+      const businessName = item['businessName']
+      const paidUntil = item['paidUntil']
+      if (
+        typeof businessId === 'string' &&
+        typeof email === 'string' &&
+        typeof businessName === 'string' &&
+        typeof paidUntil === 'string'
+      ) {
+        rows.push({
+          businessId,
+          email,
+          businessName,
+          paidUntil,
+          paidInterval: typeof item['paidInterval'] === 'string' ? item['paidInterval'] : null,
+        })
+      }
+    }
+    cursor = result.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (cursor)
+  return rows
+}
+
+// ─── Pre-lapse renewal reminder source ───────────────────────────────────────
+//
+// See `.kiro/specs/billing-revenue-integrity/design.md`: "trial-reminder worker
+// gains the renewal-reminder query (paid tier, `paidUntil` within 7 days,
+// interval monthly/yearly, one send per window recorded on the row as
+// `renewalReminderSentFor = paidUntil`)".
+//
+// Businesses due a pre-lapse renewal reminder (R3.4). Match criteria:
+//   - a paid tier (growth / pro / payg),
+//   - `paidInterval` is `monthly` or `yearly` (NO pre-lapse reminder for
+//     `daily` / `weekly` — those windows are too short for a 7-day lead),
+//   - `paidUntil` present, still in the future, and within `windowEndIso`
+//     (i.e. `now < paidUntil <= now + 7d`),
+//   - not already reminded for THIS window: `renewalReminderSentFor` is absent
+//     or differs from the current `paidUntil`. A renewal extends `paidUntil`,
+//     so the new window's value differs and re-arms the reminder — exactly one
+//     email per paid window.
+//
+// Paginated Scan, mirroring `listBusinessesWithLapsedPaidUntil`. Returns the
+// fields the sweep needs to address the email and set the dedup marker, so the
+// sweep avoids a second GetItem per business. Business volume is small and this
+// stays PAY_PER_REQUEST, matching the existing scan pattern.
+export async function listBusinessesForRenewalReminder(
+  nowIso: string,
+  windowEndIso: string,
+): Promise<
+  Array<{
+    businessId: string
+    email: string
+    businessName: string
+    paidUntil: string
+    paidInterval: string
+  }>
+> {
+  const rows: Array<{
+    businessId: string
+    email: string
+    businessName: string
+    paidUntil: string
+    paidInterval: string
+  }> = []
+  let cursor: Record<string, unknown> | undefined
+  do {
+    const params: Record<string, unknown> = {
+      TableName: TableNames.businesses,
+      FilterExpression:
+        '#tier IN (:growth, :pro, :payg) AND ' +
+        'paidInterval IN (:monthly, :yearly) AND ' +
+        'attribute_exists(paidUntil) AND paidUntil > :now AND paidUntil <= :windowEnd AND ' +
+        '(attribute_not_exists(renewalReminderSentFor) OR renewalReminderSentFor <> paidUntil)',
+      ExpressionAttributeNames: { '#tier': 'tier' },
+      ExpressionAttributeValues: {
+        ':now': nowIso,
+        ':windowEnd': windowEndIso,
+        ':growth': 'growth',
+        ':pro': 'pro',
+        ':payg': 'payg',
+        ':monthly': 'monthly',
+        ':yearly': 'yearly',
+      },
+      ProjectionExpression: 'businessId, email, businessName, paidUntil, paidInterval',
+    }
+    if (cursor) params['ExclusiveStartKey'] = cursor
+    const result = await documentClient.send(new ScanCommand(params as any))
+    for (const item of result.Items ?? []) {
+      const businessId = item['businessId']
+      const email = item['email']
+      const businessName = item['businessName']
+      const paidUntil = item['paidUntil']
+      const paidInterval = item['paidInterval']
+      if (
+        typeof businessId === 'string' &&
+        typeof email === 'string' &&
+        typeof businessName === 'string' &&
+        typeof paidUntil === 'string' &&
+        typeof paidInterval === 'string'
+      ) {
+        rows.push({ businessId, email, businessName, paidUntil, paidInterval })
+      }
+    }
+    cursor = result.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (cursor)
+  return rows
+}
+
+/**
+ * Record that a pre-lapse renewal reminder has been sent for the given paid
+ * window (billing-revenue-integrity R3.4). Setting `renewalReminderSentFor` to
+ * the current `paidUntil` removes the business from the next run's selection
+ * until a renewal changes `paidUntil` (which re-arms the reminder).
+ */
+export async function setRenewalReminderSent(id: string, paidUntil: string) {
+  return updateBusiness(id, { renewalReminderSentFor: paidUntil } as any)
 }

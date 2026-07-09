@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify'
+import { z } from 'zod'
+
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { validate } from '../../shared/middleware/validation.js'
+
 import * as service from './service.js'
 import { pushTokenBodySchema, notificationPrefsSchema, notificationHistoryQuerySchema } from './types.js'
-import { z } from 'zod'
 
 export async function notificationRoutes(app: FastifyInstance) {
   // POST /v1/users/me/push-token

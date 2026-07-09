@@ -1,6 +1,8 @@
 import { Unlock, Users, Lock } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+
 import type { PrivacyLevel } from '../types'
+
 import { Text } from './primitives'
 
 interface PrivacyIndicatorProps {

@@ -7,8 +7,9 @@
  * Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5, 1.6
  */
 // @vitest-environment jsdom
+import { render, act, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, act, waitFor } from '@testing-library/react'
+
 import { StaffValidator } from '../StaffValidator'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────

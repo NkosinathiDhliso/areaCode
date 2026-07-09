@@ -1,12 +1,11 @@
-import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-
+import { getTierLabel } from '@area-code/shared/constants/tier-levels'
+import { useSocketRoom } from '@area-code/shared/hooks/useSocketRoom'
 import { api } from '@area-code/shared/lib/api'
 import { getSocket } from '@area-code/shared/lib/socket'
-import { useSocketRoom } from '@area-code/shared/hooks/useSocketRoom'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
-import { getTierLabel } from '@area-code/shared/constants/tier-levels'
 import type { Tier } from '@area-code/shared/types'
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface CheckInEntry {
   displayName: string

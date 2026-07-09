@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
+
 import { analyzePeakHours } from '../../analyzers/peak-hours.js'
 import type { AnonymizedCheckIn } from '../../types.js'
 

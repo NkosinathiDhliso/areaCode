@@ -40,6 +40,12 @@ export function useCheckIn() {
   const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [qrFallback, setQrFallback] = useState(false)
+  // Status code of the last failed attempt (null on success or before any
+  // attempt), kept in a ref so a caller can read it synchronously right after
+  // `await checkIn(...)`. The web check-in outbox reads it to decide whether a
+  // failure is retryable (network=0 / 5xx) and should be queued; 4xx never is.
+  // Additive and inert for callers that ignore it.
+  const errorStatusRef = useRef<number | null>(null)
   const lastPayloadRef = useRef<CheckInRequest | null>(null)
   const inFlightRef = useRef(false)
 
@@ -53,12 +59,14 @@ export function useCheckIn() {
     lastPayloadRef.current = payload
     setIsPending(true)
     setError(null)
+    errorStatusRef.current = null
     setQrFallback(false)
     try {
       const res = await api.post<CheckInResponse>('/v1/check-in', payload)
       return res
     } catch (err) {
       const apiError = err as ApiError
+      errorStatusRef.current = apiError.statusCode ?? null
       if (apiError.statusCode === 422 && apiError.error === 'accuracy_insufficient') {
         setQrFallback(true)
         setError('accuracy_insufficient')
@@ -84,5 +92,5 @@ export function useCheckIn() {
     setQrFallback(false)
   }, [])
 
-  return { checkIn, retry, isPending, error, qrFallback, resetQrFallback }
+  return { checkIn, retry, isPending, error, errorStatusRef, qrFallback, resetQrFallback }
 }

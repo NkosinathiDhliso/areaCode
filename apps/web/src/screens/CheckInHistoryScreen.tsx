@@ -1,11 +1,12 @@
-import { useCallback, useRef, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
-import { useInfiniteQuery } from '@tanstack/react-query'
-import { api } from '@area-code/shared/lib/api'
-import { Skeleton } from '@area-code/shared/components/Skeleton'
 import { EmptyState } from '@area-code/shared/components/EmptyState'
+import { Skeleton } from '@area-code/shared/components/Skeleton'
+import { api } from '@area-code/shared/lib/api'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { UtensilsCrossed, Coffee, Moon, ShoppingBag, Dumbbell, Palette, MapPin, ChevronLeft } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { useCallback, useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import type { AppRoute } from '../types'
 
 interface CheckInHistoryEntry {

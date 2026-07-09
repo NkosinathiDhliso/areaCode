@@ -1,5 +1,6 @@
 // DynamoDB-backed node state evaluator (replaces Redis + Prisma)
 import { ScanCommand } from '@aws-sdk/lib-dynamodb'
+
 import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 import { kvGet, kvSet } from '../shared/kv/dynamodb-kv.js'
 import { emitStateSurge, emitToast } from '../shared/socket/events.js'

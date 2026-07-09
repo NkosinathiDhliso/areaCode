@@ -1,8 +1,9 @@
 // DynamoDB-backed Music Repository (replaces Prisma)
+import { QueryCommand } from '@aws-sdk/lib-dynamodb'
+
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { updateUser, getUserById } from '../auth/dynamodb-repository.js'
 import { getCheckInsByNode } from '../check-in/dynamodb-repository.js'
-import { QueryCommand } from '@aws-sdk/lib-dynamodb'
 
 export async function updateUserGenres(
   userId: string,

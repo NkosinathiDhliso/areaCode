@@ -20,24 +20,49 @@ This doc is for the on-call engineer dealing with a live production incident. Ev
    - `area-code-prod-dynamo-<table>-throttles`
    - `area-code-prod-dynamo-<table>-system-errors`
    - `area-code-prod-sqs-reward-eval-dlq`
-   - `area-code-prod-sqs-push-sender-dlq`
    - `area-code-prod-api-health` (Route53 health check)
+
+## Frontend Crashes and Errors
+
+Frontend crash and JS error triage lives in the **CloudWatch RUM console** (`us-east-1` → CloudWatch → RUM). There are four app monitors, one per SPA:
+
+- `area-code-prod-web` (consumer)
+- `area-code-prod-business`
+- `area-code-prod-staff`
+- `area-code-prod-admin`
+
+Each monitor's Errors tab shows `JsErrorCount` and session counts. The auto-rollback gate (`release-health-gate.yml`) reads these same monitors; see `ROLLBACK.md`. RUM writes to CloudWatch Logs only (no analytics cookies, POPIA-friendly). Sentry is no longer used for any frontend or backend monitoring.
 
 ## Key CloudWatch Log Groups
 
-| Log group                                      | What's in it                  |
-| ---------------------------------------------- | ----------------------------- |
-| `/aws/lambda/area-code-prod-api`               | Fastify app (all HTTP)        |
-| `/aws/lambda/area-code-prod-websocket`         | WebSocket connect/disconnect  |
-| `/aws/lambda/area-code-prod-reward-evaluator`  | Reward SQS worker             |
-| `/aws/lambda/area-code-prod-report-dispatcher` | Weekly/monthly report kickoff |
-| `/aws/lambda/area-code-prod-report-generator`  | Per-business report worker    |
-| `/aws/lambda/area-code-prod-pulse-decay`       | Pulse decay cron              |
-| `/aws/lambda/area-code-prod-leaderboard-reset` | Weekly leaderboard reset      |
-| `/aws/lambda/area-code-prod-partition-manager` | Daily partition housekeeping  |
-| `/aws/lambda/area-code-prod-cleanup`           | Daily cleanup cron            |
-| `/aws/lambda/area-code-prod-yoco-webhook`      | Yoco payment webhooks         |
-| `/aws/apigateway/area-code-prod`               | API Gateway access logs       |
+| Log group                                             | What's in it                                |
+| ----------------------------------------------------- | ------------------------------------------- |
+| `/aws/lambda/area-code-prod-api`                      | Fastify app (all HTTP)                      |
+| `/aws/lambda/area-code-prod-websocket`                | WebSocket connect/disconnect                |
+| `/aws/lambda/area-code-prod-reward-evaluator`         | Reward SQS worker                           |
+| `/aws/lambda/area-code-prod-report-dispatcher`        | Weekly/monthly report kickoff               |
+| `/aws/lambda/area-code-prod-report-generator`         | Per-business report worker                  |
+| `/aws/lambda/area-code-prod-pulse-decay`              | Pulse decay cron                            |
+| `/aws/lambda/area-code-prod-leaderboard-reset`        | Weekly leaderboard reset                    |
+| `/aws/lambda/area-code-prod-partition-manager`        | Daily partition housekeeping                |
+| `/aws/lambda/area-code-prod-cleanup`                  | Daily cleanup cron                          |
+| `/aws/lambda/area-code-prod-schedule-transition-tick` | Live-vibe music schedule tick (minute cron) |
+| `/aws/lambda/area-code-prod-yoco-webhook`             | Yoco payment webhooks                       |
+| `/aws/apigateway/area-code-prod`                      | API Gateway access logs                     |
+
+## Key DynamoDB Tables
+
+| Table                                  | What's in it                               |
+| -------------------------------------- | ------------------------------------------ |
+| `area-code-prod-users`                 | Consumer and portal user records           |
+| `area-code-prod-nodes`                 | Venues / nodes                             |
+| `area-code-prod-checkins`              | Check-in events                            |
+| `area-code-prod-rewards`               | Rewards and redemption codes               |
+| `area-code-prod-businesses`            | Business accounts and subscriptions        |
+| `area-code-prod-presence`              | Live presence (honest count)               |
+| `area-code-prod-music-schedules`       | Live-vibe music schedules (MusicSchedules) |
+| `area-code-prod-app-data`              | Generic KV store, cities, rate limits      |
+| `area-code-prod-websocket-connections` | WebSocket connection tracking              |
 
 Tail a log group:
 
@@ -83,7 +108,7 @@ aws lambda update-function-configuration --function-name area-code-prod-api \
   --environment "Variables=$(cat /tmp/env.json | jq -c .)"
 ```
 
-Known flags: `AREA_CODE_FORCE_LIVE`, `AREA_CODE_ENV`, `SENTRY_DSN` (blanking disables Sentry), `AREA_CODE_QR_HMAC_SECRET`.
+Known flags: `AREA_CODE_FORCE_LIVE`, `AREA_CODE_ENV`, `AREA_CODE_QR_HMAC_SECRET`.
 
 ## Common Failure Modes
 

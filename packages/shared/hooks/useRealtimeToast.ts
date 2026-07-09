@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react'
 
-import { getSocket } from '../lib/socket'
 import { haversineDistance } from '../lib/geoUtils'
-import { useToastStore } from '../stores/toastStore'
+import { getSocket } from '../lib/socket'
 import { useLocationStore } from '../stores/locationStore'
+import { useToastStore } from '../stores/toastStore'
 import type { Toast, ToastType } from '../types'
 
 const TOAST_DISPLAY_MS = 4000

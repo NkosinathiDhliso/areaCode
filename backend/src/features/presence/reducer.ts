@@ -100,7 +100,7 @@ export function absentRecord(): PresenceRecord {
 }
 
 /** A live `present` record is one in state `present` whose expiresAt is still in the future. */
-function isLivePresent(record: PresenceRecord, now: number): boolean {
+function _isLivePresent(record: PresenceRecord, now: number): boolean {
   return record.state === 'present' && record.expiresAt > now
 }
 

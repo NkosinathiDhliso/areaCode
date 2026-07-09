@@ -1,7 +1,6 @@
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 
-import { GLYPH_ZOOM_THRESHOLD, MAP_ARRIVAL_ZOOM, MIN_MARKER_ZOOM } from './carouselConstants'
 import { beamBlendForZoom, computePresentationKey, presentationTierForZoom } from './markerPresentation'
 
 /**

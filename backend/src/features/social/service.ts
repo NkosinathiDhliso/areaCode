@@ -1,9 +1,10 @@
+import { DEV_MODE } from '../../shared/config/env.js'
 import { AppError } from '../../shared/errors/AppError.js'
 import { filterByPrivacy, checkPrivacy } from '../../shared/privacy/privacy-guard.js'
 import { getUserById } from '../auth/dynamodb-repository.js'
-import * as repo from './repository.js'
+
 import { deriveTopVenue } from './leaderboard-utils.js'
-import { DEV_MODE } from '../../shared/config/env.js'
+import * as repo from './repository.js'
 
 /**
  * Returns the ISO string for the start of the current week (Monday 00:00 SAST).
@@ -285,7 +286,7 @@ export async function getWhoIsHere(nodeId: string, viewerId?: string) {
     const friendIds = await repo.getMutualFollowIds(viewerId, userIds)
     friends = visibleEntries
       .filter((e) => e.userId === viewerId || friendIds.has(e.userId))
-      .map(({ privacyVisibility, ...rest }) => rest)
+      .map(({ privacyVisibility: _privacyVisibility, ...rest }) => rest)
   }
 
   return { totalCount, tierDistribution, friends }

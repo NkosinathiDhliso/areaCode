@@ -1,42 +1,42 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-
-import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
-import { useNavigationStore } from '@area-code/shared/stores/navigationStore'
-import { useSelectionStore } from '@area-code/shared/stores/selectionStore'
-import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
-import { useUserStore } from '@area-code/shared/stores/userStore'
-import { useTheme } from '@area-code/shared/hooks/useTheme'
-import { useRewardSocket } from '@area-code/shared/hooks/useRewardSocket'
-import { useNotificationSocket } from '@area-code/shared/hooks/useNotificationSocket'
-import { api } from '@area-code/shared/lib/api'
-import { getSocket } from '@area-code/shared/lib/socket'
-import type { User } from '@area-code/shared/types'
 import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
 import { GlobalErrorToast } from '@area-code/shared/components/GlobalErrorToast'
 import { OnboardingFlow } from '@area-code/shared/components/OnboardingFlow'
+import { useNotificationSocket } from '@area-code/shared/hooks/useNotificationSocket'
+import { useRewardSocket } from '@area-code/shared/hooks/useRewardSocket'
+import { useTheme } from '@area-code/shared/hooks/useTheme'
+import { api } from '@area-code/shared/lib/api'
+import { getSocket } from '@area-code/shared/lib/socket'
+import { useConnectivityStore } from '@area-code/shared/stores/connectivityStore'
+import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
+import { useNavigationStore } from '@area-code/shared/stores/navigationStore'
+import { useSelectionStore } from '@area-code/shared/stores/selectionStore'
+import { useUserStore } from '@area-code/shared/stores/userStore'
+import type { User } from '@area-code/shared/types'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
+import { BottomNav } from './components/BottomNav'
+import { VerifyEmailBanner } from './components/VerifyEmailBanner'
+import { useCheckinOutbox } from './hooks/useCheckinOutbox'
 import { useFriendsPresence } from './hooks/useFriendsPresence'
-import { MapScreen } from './screens/MapScreen'
-import { LeaderboardScreen } from './screens/LeaderboardScreen'
-import { FeedScreen } from './screens/FeedScreen'
-import { FriendsScreen } from './screens/FriendsScreen'
-import { ProfileScreen } from './screens/ProfileScreen'
-import { SettingsScreen } from './screens/SettingsScreen'
-import { PrivacySettingsScreen } from './screens/PrivacySettingsScreen'
-import { NotificationCenter } from './screens/NotificationCenter'
-import { NotificationSettings } from './screens/NotificationSettings'
+import { AuthLanding } from './screens/AuthLanding'
 import { CheckInHistoryScreen } from './screens/CheckInHistoryScreen'
 import { ConsumerLogin } from './screens/ConsumerLogin'
 import { ConsumerOAuthCallback } from './screens/ConsumerOAuthCallback'
-import { VerifyEmail } from './screens/VerifyEmail'
-import { AuthLanding } from './screens/AuthLanding'
-import { ForgotPassword } from './screens/ForgotPassword'
+import { FeedScreen } from './screens/FeedScreen'
 import { FirstGetPrompt } from './screens/FirstGetPrompt'
-import { QrCheckIn } from './screens/QrCheckIn'
+import { ForgotPassword } from './screens/ForgotPassword'
+import { FriendsScreen } from './screens/FriendsScreen'
+import { LeaderboardScreen } from './screens/LeaderboardScreen'
+import { MapScreen } from './screens/MapScreen'
+import { NotificationCenter } from './screens/NotificationCenter'
+import { NotificationSettings } from './screens/NotificationSettings'
 import { PrivacyPolicyScreen } from './screens/PrivacyPolicyScreen'
+import { PrivacySettingsScreen } from './screens/PrivacySettingsScreen'
+import { ProfileScreen } from './screens/ProfileScreen'
+import { QrCheckIn } from './screens/QrCheckIn'
+import { SettingsScreen } from './screens/SettingsScreen'
 import { TermsScreen } from './screens/TermsScreen'
-import { BottomNav } from './components/BottomNav'
-import { VerifyEmailBanner } from './components/VerifyEmailBanner'
+import { VerifyEmail } from './screens/VerifyEmail'
 import type { AppRoute } from './types'
 
 // Initialise API auth before any React render so queries fired during mount
@@ -124,6 +124,10 @@ function AppContent() {
   // Friends presence: seed from API on auth, listen for socket events,
   // re-seed on reconnect, clear on logout (R3.1, R3.4, R3.5, R14.1).
   useFriendsPresence(accessToken ?? undefined)
+  // Drain the offline check-in outbox while signed in (cross-portal-lifecycle
+  // -alignment R5): queued failed check-ins retry on their own, aged-out ones
+  // are discarded honestly.
+  useCheckinOutbox(isAuthenticated)
 
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [onboardingChecked, setOnboardingChecked] = useState(false)

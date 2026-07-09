@@ -17,12 +17,11 @@
 // recurring schedule, so the GSI sort key is always one of those boundary
 // timestamps in UTC.
 
+import { ScheduleValidationError, validateMusicSchedule } from '@area-code/shared/lib/schedule-validator'
+import type { MusicSchedule, ScheduleDayOfWeek, ScheduleSlot } from '@area-code/shared/types'
 import { DeleteCommand, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
-
-import { ScheduleValidationError, validateMusicSchedule } from '@area-code/shared/lib/schedule-validator'
-import type { MusicSchedule, ScheduleDayOfWeek, ScheduleSlot } from '@area-code/shared/types'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants

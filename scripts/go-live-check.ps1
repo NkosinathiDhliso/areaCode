@@ -296,7 +296,6 @@ function Invoke-AwsJson {
 # verify), not FAIL; a resolved non-zero depth is a FAIL naming the observed count.
 $dlqNames = @(
     "area-code-prod-reward-eval-dlq",
-    "area-code-prod-push-sender-dlq",
     "area-code-prod-campaign-send-dlq",
     "area-code-prod-report-generation-dlq"
 )
@@ -803,9 +802,10 @@ function Get-FunctionLastModifiedMs {
 # some SQS queue names, so the log-group names use the real Lambda names: the
 # campaign worker Lambda is `campaign-sender` (queue: campaign-send) and the
 # report worker Lambda is
-# `report-generator` (queue: report-generation). There is NO push-sender worker
-# Lambda (the push-sender SQS queue is drained by the campaign-sender Lambda),
-# so no `area-code-prod-push-sender` log group exists and none is scanned.
+# `report-generator` (queue: report-generation). There is no push-sender worker
+# Lambda or push-sender SQS queue: the queue was deleted (report-ready now
+# delivers via SES + WebSocket), so no `area-code-prod-push-sender` log group
+# exists and none is scanned.
 # FAIL when a group returns an ERROR event (print group + first event); PASS
 # when clean; WARN when a group is not queryable.
 $workerLogGroups = @(
@@ -863,6 +863,121 @@ foreach ($workerLogGroup in $workerLogGroups) {
             $detail = "$($workerEvents.Count) ERROR event(s) $scanWindowText; first: $firstMessage"
             Write-Check -Status "FAIL" -Name "Worker errors $workerLogGroup" -Detail $detail
         }
+    }
+}
+
+Write-Host ""
+
+# ── Payment configuration (billing-revenue-integrity R1.4 / checklist §10.1) ──
+# Assert the Yoco payment secrets are present and non-empty on the prod Lambdas
+# that read them. The monolith API Lambda (area-code-prod-api) reads both
+# YOCO_WEBHOOK_SECRET and YOCO_PROD_SECRET_KEY; the webhook Lambda
+# (area-code-prod-yoco-webhook) reads YOCO_WEBHOOK_SECRET. A secret that is
+# absent from the function's environment, or present but empty, is a FAIL (the
+# deploy did not inject it, matching defect R1.1). An unresolvable configuration
+# (CLI absent, no permission, or missing function) is a WARN (cannot verify),
+# consistent with the other AWS state checks. Read-only:
+# get-function-configuration is a describe call, never a mutation. Secret VALUES
+# are never printed; only presence/absence is reported.
+Write-Host "Payment configuration" -ForegroundColor Yellow
+
+# Assert-LambdaSecrets reads one Lambda's configuration once and checks each
+# required env var key is present and non-empty. Emits one [PASS]/[FAIL] per
+# key, or a single [WARN] when the configuration cannot be read at all. Reuses
+# Invoke-AwsJson, Write-Check, $script:awsAvailable, and $Region.
+function Assert-LambdaSecrets {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FunctionName,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$RequiredKeys
+    )
+
+    if (-not $script:awsAvailable) {
+        Write-Check -Status "WARN" -Name "Lambda secrets $FunctionName" -Detail "AWS CLI unavailable; not checked"
+        return
+    }
+
+    $cfg = Invoke-AwsJson -AwsArgs @(
+        "lambda", "get-function-configuration",
+        "--function-name", $FunctionName,
+        "--region", $Region
+    )
+    if ($null -eq $cfg) {
+        Write-Check -Status "WARN" -Name "Lambda secrets $FunctionName" -Detail "could not read function configuration (missing function, permission, or credentials)"
+        return
+    }
+
+    # Environment / Environment.Variables are absent when the function has no
+    # env vars at all; treat that as every required key missing (FAIL), not a
+    # read failure.
+    $variables = $null
+    if ($null -ne $cfg.Environment -and $null -ne $cfg.Environment.Variables) {
+        $variables = $cfg.Environment.Variables
+    }
+
+    foreach ($key in $RequiredKeys) {
+        $value = $null
+        if ($null -ne $variables -and $variables.PSObject.Properties.Name -contains $key) {
+            $value = $variables.$key
+        }
+        # Report presence only. Never echo the secret value.
+        if ([string]::IsNullOrEmpty($value)) {
+            Write-Check -Status "FAIL" -Name "$FunctionName $key" -Detail "not set or empty (expected a non-empty secret)"
+        }
+        else {
+            Write-Check -Status "PASS" -Name "$FunctionName $key" -Detail "set (non-empty)"
+        }
+    }
+}
+
+Assert-LambdaSecrets -FunctionName "area-code-prod-api" -RequiredKeys @("YOCO_WEBHOOK_SECRET", "YOCO_PROD_SECRET_KEY")
+Assert-LambdaSecrets -FunctionName "area-code-prod-yoco-webhook" -RequiredKeys @("YOCO_WEBHOOK_SECRET")
+
+# R10.2: Unsigned-POST probe against the live webhook route. POST a harmless
+# dummy JSON body to POST /v1/webhooks/yoco with NO valid signature header and
+# assert the response is 401 — proving the signature gate is alive and fails
+# closed (processYocoWebhook verifies the HMAC before touching any state, so the
+# body is rejected before it can change anything). This is the one write-shaped
+# probe in an otherwise read-only script; the request is expected to be rejected.
+#   401     => PASS (gate alive, fail-closed).
+#   2xx     => FAIL (the gate accepted an unsigned request — dead/open).
+#   5xx     => FAIL (unexpected error, not a clean rejection).
+#   other   => report the observed code; non-401 is a FAIL (R10.2 requires 401).
+#   network => FAIL with the exception message.
+# Invoke-WebRequest throws on non-2xx under $ErrorActionPreference = Stop, so the
+# 401 arrives via the exception; recover the status code from the exception
+# Response, matching the portal HEAD pattern above.
+$webhookUrl = "https://api.areacode.co.za/v1/webhooks/yoco"
+$probeBody = '{"type":"payment.succeeded","id":"go-live-check-probe"}'
+try {
+    $response = Invoke-WebRequest -Method Post -Uri $webhookUrl -Body $probeBody `
+        -ContentType "application/json" -UseBasicParsing
+    # A 2xx here means the unsigned request was accepted — the gate is dead/open.
+    $statusCode = [int]$response.StatusCode
+    $detail = "HTTP $statusCode to unsigned POST (expected 401; gate accepted an unsigned request)"
+    Write-Check -Status "FAIL" -Name "Webhook signature gate" -Detail $detail
+}
+catch {
+    $exResponse = $_.Exception.Response
+    if ($null -ne $exResponse -and $null -ne $exResponse.StatusCode) {
+        $statusCode = [int]$exResponse.StatusCode
+        if ($statusCode -eq 401) {
+            $detail = "HTTP 401 to unsigned POST (signature gate alive, fail-closed)"
+            Write-Check -Status "PASS" -Name "Webhook signature gate" -Detail $detail
+        }
+        elseif ($statusCode -ge 500) {
+            $detail = "HTTP $statusCode to unsigned POST (expected 401; server error, not a clean rejection)"
+            Write-Check -Status "FAIL" -Name "Webhook signature gate" -Detail $detail
+        }
+        else {
+            $detail = "HTTP $statusCode to unsigned POST (expected 401)"
+            Write-Check -Status "FAIL" -Name "Webhook signature gate" -Detail $detail
+        }
+    }
+    else {
+        Write-Check -Status "FAIL" -Name "Webhook signature gate" -Detail "request failed: $($_.Exception.Message) (expected 401)"
     }
 }
 

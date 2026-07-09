@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { resolveArchetypeDisplayName } from '../lib/archetypeDisplay'
+
 import { ArchetypeReveal } from './ArchetypeReveal'
 import { ManualGenreSelector } from './ManualGenreSelector'
 

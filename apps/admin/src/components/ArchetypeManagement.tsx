@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
+import { getArchetypeDisplayName } from '@area-code/shared/constants/archetype-names'
+import { PERSONALITY_DIMENSIONS } from '@area-code/shared/constants/genre-weights'
 import { api } from '@area-code/shared/lib/api'
 import type { PersonalityArchetype, PersonalityDimension } from '@area-code/shared/types'
-import { PERSONALITY_DIMENSIONS } from '@area-code/shared/constants/genre-weights'
-import { getArchetypeDisplayName } from '@area-code/shared/constants/archetype-names'
+import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { ArchetypeTestTool } from './ArchetypeTestTool'
 
 const EMPTY_FORM = {

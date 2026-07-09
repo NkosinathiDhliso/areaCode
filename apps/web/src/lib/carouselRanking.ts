@@ -1,5 +1,5 @@
-import type { Node } from '@area-code/shared/types'
 import { TIER_SIZE_MULTIPLIER } from '@area-code/shared/constants'
+import type { Node } from '@area-code/shared/types'
 
 import { BROWSE_STEP, INITIAL_BROWSE_COUNT } from './carouselConstants'
 
@@ -165,8 +165,16 @@ export function deriveHasLiveGets(
  *      Higher wins. When the consumer has no archetypeId and no friends, this
  *      is 0 for all venues → gracefully degrades to aliveness-first (R7.1).
  *   2. **Aliveness** (pulseScore + checkInCount). Higher wins.
- *   3. **Business tier** (TIER_SIZE_MULTIPLIER[node.businessTier ?? 'starter']).
- *      Higher multiplier wins - the paid lever among equally-alive venues.
+ *   3. **Boost then business tier** — the paid lever among equally-alive venues,
+ *      ordered `(boostActive desc, tierWeight desc)`:
+ *        3a. **Boost active** (node.boostActive, billing R5.3). A venue inside
+ *            its Boost_Window sorts ahead of a non-boosted one. True > false.
+ *        3b. **Business tier** (TIER_SIZE_MULTIPLIER[node.businessTier ??
+ *            'starter']). Higher multiplier wins when boost state ties.
+ *      Because this whole level sits below taste (1) and aliveness (2) and both
+ *      short-circuit first, a boost can NEVER outrank taste-match or aliveness,
+ *      per `discovery-dna-vibe-over-convenience.md`. Boost only reorders venues
+ *      that are already equal on taste and aliveness.
  *   4. **Has live gets** (boolean: at least one live event/offer get). True > false.
  *   5. **Distance** (haversine metres, nearer wins). Only applied when
  *      `positionFresh && lastKnownPosition != null`; otherwise skipped entirely
@@ -177,7 +185,7 @@ export function deriveHasLiveGets(
  * Deterministic for any valid RankInput (R1.8, R5.3, R5.5).
  *
  * Design: .kiro/specs/vibe-ranked-browse/design.md § vibeRank Comparator
- * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 8.1, 8.2, 8.3
+ * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 5.3, 5.4, 8.1, 8.2, 8.3
  */
 export function vibeRank(input: RankInput): Node[] {
   const {
@@ -219,7 +227,16 @@ export function vibeRank(input: RankInput): Node[] {
     const aliveB = (pulseScores[b.id] ?? 0) + (checkInCounts[b.id] ?? 0)
     if (aliveA !== aliveB) return aliveB - aliveA
 
-    // 3) Business tier (higher multiplier wins) - paid lever among equals
+    // 3) Paid lever among equally-alive venues, ordered (boostActive desc, tier desc).
+    //    Sits below taste (1) and aliveness (2), which short-circuit first, so a
+    //    boost can never outrank taste-match or aliveness (billing R5.3,
+    //    discovery-dna-vibe-over-convenience).
+    // 3a) Boost active (true > false) - a live Boost_Window sorts ahead of none.
+    const boostA = a.boostActive ? 1 : 0
+    const boostB = b.boostActive ? 1 : 0
+    if (boostA !== boostB) return boostB - boostA
+
+    // 3b) Business tier (higher multiplier wins) - tiebreak when boost state is equal.
     const tierA = TIER_SIZE_MULTIPLIER[a.businessTier ?? 'starter']
     const tierB = TIER_SIZE_MULTIPLIER[b.businessTier ?? 'starter']
     if (tierA !== tierB) return tierB - tierA

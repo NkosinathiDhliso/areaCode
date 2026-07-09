@@ -1,4 +1,3 @@
-/* eslint-disable no-restricted-globals */
 /* global URL */
 // Service worker for Area Code: Web Push + offline app shell.
 //

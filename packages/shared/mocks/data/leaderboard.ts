@@ -1,4 +1,5 @@
 import type { LeaderboardEntry } from '../../types'
+
 import { MOCK_USERS, CURRENT_USER_ID } from './users'
 
 // Friends of the current user (mock-user-4) for demo purposes

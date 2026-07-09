@@ -24,8 +24,8 @@
  *   exercises only `floorCents` / `duration` validation.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ─── Module mocks ───────────────────────────────────────────────────────────
 //
@@ -64,8 +64,8 @@ vi.mock('../../../shared/db/dynamodb.js', () => ({
 
 // Import AFTER the mock so the module-level `documentClient` import in
 // repository.ts picks up the stub.
-import { updateBoostFloor } from '../service.js'
 import { AppError } from '../../../shared/errors/AppError.js'
+import { updateBoostFloor } from '../service.js'
 
 // ─── Arbitraries ────────────────────────────────────────────────────────────
 

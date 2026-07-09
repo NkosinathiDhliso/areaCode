@@ -20,8 +20,8 @@
  * **Validates: Requirements 6.1, 6.2, 6.4, 7.1, 7.4, 12.3**
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ─── Mocks ──────────────────────────────────────────────────────────────────
 

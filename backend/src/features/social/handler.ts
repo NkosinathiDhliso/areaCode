@@ -1,7 +1,10 @@
 import type { FastifyInstance } from 'fastify'
+import { z } from 'zod'
+
 import { requireAuth, getAuth, getOptionalAuth, optionalAuth } from '../../shared/middleware/auth.js'
-import { validate } from '../../shared/middleware/validation.js'
 import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
+import { validate } from '../../shared/middleware/validation.js'
+
 import * as service from './service.js'
 import {
   followParamsSchema,
@@ -12,7 +15,6 @@ import {
   whoIsHereParamsSchema,
   userSearchQuerySchema,
 } from './types.js'
-import { z } from 'zod'
 
 export async function socialRoutes(app: FastifyInstance) {
   // POST /v1/users/:id/follow

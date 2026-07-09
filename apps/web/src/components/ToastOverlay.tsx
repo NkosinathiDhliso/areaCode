@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
-import { useToastStore } from '@area-code/shared/stores/toastStore'
 import { LiveToast } from '@area-code/shared/components/LiveToast'
+import { useToastStore } from '@area-code/shared/stores/toastStore'
+import { useEffect, useRef, useState, useCallback } from 'react'
 
 export function ToastOverlay() {
   const { queue, isBottomSheetOpen, removeToast } = useToastStore()

@@ -29,7 +29,7 @@ const warnedUnknownIds = new Set<string>()
 export function resolveArchetypeDisplayName(id: string): string {
   if (!(id in ARCHETYPE_NAMES) && !warnedUnknownIds.has(id)) {
     warnedUnknownIds.add(id)
-    // eslint-disable-next-line no-console
+
     console.warn(`[archetype-names] Unknown archetypeId="${id}"; rendering raw id (R9.10).`)
     // Best-effort RUM event so the warning surfaces beyond the user's
     // browser console. `recordEvent` is a no-op when RUM isn't initialised.

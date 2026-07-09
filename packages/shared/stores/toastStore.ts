@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
-import type { Toast } from '../types'
+
 import { TOAST_PRIORITY, admitToQueue, shouldEnqueueCheckInToast } from '../lib/toastAdmission'
+import type { Toast } from '../types'
 
 // `TOAST_PRIORITY` is defined in the pure `toastAdmission` core (single source
 // of truth for the Toast_System) and re-exported here so existing importers of

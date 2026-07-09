@@ -26,8 +26,8 @@ Area Code is a location-based social platform for South African venues: consumer
     ┌────────────┐   ┌────────┐   ┌──────────┴───┐
     │ DynamoDB   │   │   S3   │   │     SQS     │
     │ (6 tables) │   │ media  │   │ reward-eval │
-    └────────────┘   └────────┘   │ push-sender │
-                                  │ report-gen  │
+    └────────────┘   └────────┘   │ report-gen  │
+                                  │ campaign-send│
                                   └──────────────┘
 
 Auth: Cognito (4 pools — consumer, business, staff, admin)

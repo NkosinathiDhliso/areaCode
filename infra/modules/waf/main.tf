@@ -7,17 +7,6 @@ variable "api_gateway_arn" {
   default = ""
 }
 
-variable "alb_arn" {
-  type    = string
-  default = ""
-}
-
-variable "attach_to_alb" {
-  description = "Whether to associate the WAF with an ALB. Set to true when alb_arn is known."
-  type        = bool
-  default     = true
-}
-
 resource "aws_wafv2_web_acl" "this" {
   name  = "area-code-${var.env}-waf"
   scope = "REGIONAL"
@@ -149,11 +138,11 @@ resource "aws_wafv2_web_acl" "this" {
   }
 }
 
-resource "aws_wafv2_web_acl_association" "alb" {
-  count        = var.attach_to_alb ? 1 : 0
-  resource_arn = var.alb_arn
-  web_acl_arn  = aws_wafv2_web_acl.this.arn
-}
+# WAF-to-ALB association removed (billing-revenue-integrity R11.3): ALBs are
+# forbidden infrastructure (serverless-only.md), so the association could never
+# be used. AWS WAFv2 cannot associate with API Gateway v2 HTTP APIs, so edge
+# protection for api.areacode.co.za requires a CloudFront distribution, whose
+# build is deferred pending founder cost approval (docs/GO_LIVE_AUDIT.md).
 
 resource "aws_wafv2_web_acl_logging_configuration" "this" {
   log_destination_configs = [aws_cloudwatch_log_group.waf.arn]

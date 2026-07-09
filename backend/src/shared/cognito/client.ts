@@ -31,8 +31,8 @@ import {
   type AuthFlowType,
 } from '@aws-sdk/client-cognito-identity-provider'
 
-import type { AuthRole } from '../middleware/auth.js'
 import { AWS_REGION, requireEnv } from '../config/env.js'
+import type { AuthRole } from '../middleware/auth.js'
 
 import { withCognitoErrorMapping } from './errors.js'
 

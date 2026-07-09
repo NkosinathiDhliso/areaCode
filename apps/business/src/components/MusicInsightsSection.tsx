@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 import { api } from '@area-code/shared/lib/api'
 import type { BusinessMusicAudience, MusicGenre } from '@area-code/shared/types'
+import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 
 const GENRE_LABELS: Record<MusicGenre, string> = {
   amapiano: 'Amapiano',

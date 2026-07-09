@@ -1,12 +1,13 @@
 import {} from 'react'
-import { useAdminAuthStore } from './stores/adminAuthStore'
-import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
 import { GlobalErrorToast } from '@area-code/shared/components/GlobalErrorToast'
+import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { api } from '@area-code/shared/lib/api'
+
+import { AdminDashboard } from './screens/AdminDashboard'
 import { AdminLogin } from './screens/AdminLogin'
 import { AdminOAuthCallback } from './screens/AdminOAuthCallback'
-import { AdminDashboard } from './screens/AdminDashboard'
+import { useAdminAuthStore } from './stores/adminAuthStore'
 
 export function App() {
   return (

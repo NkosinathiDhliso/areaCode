@@ -45,11 +45,11 @@ export default function MapScreen() {
   const queryClient = useQueryClient()
   const { setNodes, pulseScores } = useMapStore()
   const archetypeIds = useMapStore((s) => s.archetypeIds)
-  const accessToken = useConsumerAuthStore((s) => s.accessToken)
+  const _accessToken = useConsumerAuthStore((s) => s.accessToken)
   const permissionState = useLocationStore((s) => s.permissionState)
   const { onboarding, markHintSeen } = useUserStore()
   const { requestLocation, geoStatus } = useGeolocation()
-  const { checkIn, qrFallback, resetQrFallback } = useCheckIn()
+  const { checkIn, qrFallback: _qrFallback, resetQrFallback } = useCheckIn()
 
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)

@@ -1,8 +1,8 @@
 ################################################################################
 # CloudWatch RUM — Real User Monitoring for the Area Code SPAs.
 #
-# Replaces the previous Sentry integration (free Sentry quota was a non-starter
-# at South African retail volumes; we cover compute with AWS credits anyway).
+# The single frontend error/performance monitoring path (we cover compute with
+# AWS credits, so keeping observability inside CloudWatch avoids a second bill).
 #
 # Cost model (us-east-1, May 2026):
 #   - $1.00 per 100,000 events (pageviews + JS errors + custom events).

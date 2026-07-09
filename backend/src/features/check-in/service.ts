@@ -1,8 +1,13 @@
 import { createHmac } from 'node:crypto'
+
 import { getTierLabel } from '@area-code/shared/constants/tier-levels'
-import { AppError } from '../../shared/errors/AppError.js'
+import { PutCommand } from '@aws-sdk/lib-dynamodb'
+
 import { AWS_REGION, DEV_MODE } from '../../shared/config/env.js'
+import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
+import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet, kvSet, kvIncr, kvTtl } from '../../shared/kv/dynamodb-kv.js'
+import { canEmitIdentity, canEmitToFriends, sanitizeForBusiness } from '../../shared/privacy/privacy-guard.js'
 import {
   emitPulseUpdate,
   emitPresenceUpdate,
@@ -12,18 +17,17 @@ import {
   emitFriendToast,
   emitTierChanged,
 } from '../../shared/socket/events.js'
-import { getMutualFollowIds, getFollowingIds } from '../social/repository.js'
 import { getUserById } from '../auth/repository.js'
-import { canEmitIdentity, canEmitToFriends, sanitizeForBusiness } from '../../shared/privacy/privacy-guard.js'
-import { runAbuseChecks } from './abuse.js'
-import * as repo from './repository.js'
 import { createOrRefreshPresence, getLivePresenceCount, recordPresenceSample } from '../presence/repository.js'
 import { expiryWindowSeconds } from '../presence/window.js'
+import { getMutualFollowIds, getFollowingIds } from '../social/repository.js'
+
+import { runAbuseChecks } from './abuse.js'
 import { getUserCheckInCountAtNode, incrementLeaderboard } from './dynamodb-repository.js'
-import { PutCommand } from '@aws-sdk/lib-dynamodb'
-import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
-import type { CheckInInput, CheckInResponse } from './types.js'
 import { decideProximity, haversineMetres, type ProximityConfig, type ProximityMode } from './proximity.js'
+import { isWithinReplayWindow, replayPresenceStartMs } from './replay.js'
+import * as repo from './repository.js'
+import type { CheckInInput, CheckInResponse } from './types.js'
 
 const REWARD_COOLDOWN = 14400 // 4 hours
 const PRESENCE_COOLDOWN = 3600 // 1 hour
@@ -98,6 +102,24 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
   // 1. Get node
   const node = await repo.getNodeWithCity(input.nodeId)
   if (!node) throw AppError.notFound('Node not found')
+
+  // 1b. Replay support for the offline check-in outbox (R5). A queued check-in
+  // carries its original capture time. Accept it only inside the Replay_Window;
+  // presence still starts at delivery time (never backdated — honest-presence),
+  // because the insert and presence writes below all use server `now`. A double
+  // delivery of the same queued attempt is made a no-op by an idempotency claim
+  // on (userId, nodeId, capturedAt), returning the original success (R5.7). This
+  // runs before the cooldown check so a duplicate returns success, not a 429.
+  const cooldownTtlForType = input.type === 'reward' ? REWARD_COOLDOWN : PRESENCE_COOLDOWN
+  if (input.capturedAt) {
+    if (!isWithinReplayWindow(input.capturedAt, Date.now())) {
+      throw new AppError(422, 'checkin_replay_expired', 'This check-in is too old to submit')
+    }
+    const claimed = await repo.claimReplayCheckIn(userId, input.nodeId, input.capturedAt)
+    if (!claimed) {
+      return { success: true, cooldownUntil: new Date(Date.now() + cooldownTtlForType * 1000).toISOString() }
+    }
+  }
 
   // 2. Proximity or QR validation
   if (input.qrToken) {
@@ -211,7 +233,10 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
   // logged and still returns a successful check-in; the orphan is reconciled by
   // the expiry sweep rather than leaving a permanent over-count (Requirement 4.5).
   try {
-    const presenceNow = Math.floor(Date.now() / 1000)
+    // Presence starts at DELIVERY time, never at a replay's capturedAt
+    // (honest-presence, R5.3). `replayPresenceStartMs` is the seam that enforces
+    // this: it returns `now` and ignores capturedAt (Property 3).
+    const presenceNow = Math.floor(replayPresenceStartMs(Date.now(), input.capturedAt ?? null) / 1000)
     const { opened } = await createOrRefreshPresence({
       userId,
       nodeId: input.nodeId,

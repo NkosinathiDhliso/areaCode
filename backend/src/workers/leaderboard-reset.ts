@@ -1,8 +1,8 @@
 // DynamoDB-backed leaderboard reset worker (replaces Redis + Prisma)
 import { QueryCommand, PutCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
-import { documentClient, TableNames } from '../shared/db/dynamodb.js'
-import { generateId } from '../shared/db/entities.js'
+
 import { getNotificationPreferences } from '../features/notifications/repository.js'
+import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 
 async function getCities() {
   const result = await documentClient.send(

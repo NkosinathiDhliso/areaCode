@@ -1,5 +1,6 @@
 import { Search, List, Users, Gift, BarChart3, Flag, Shield, Inbox, Clock, UserRound } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+
 import { Box, Text } from './primitives'
 
 interface EmptyStateProps {

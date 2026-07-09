@@ -11,24 +11,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+
 import { AppError } from '../../shared/errors/AppError'
-import {
-  updatePrivacyBodySchema,
-  blockParamsSchema,
-  createReportBodySchema,
-  privacyLevelSchema,
-} from '../../features/privacy/types'
-import {
-  determineReportPriority,
-  buildAbuseFlagForReport,
-  HIGH_PRIORITY_CATEGORIES,
-  type ReportCategory,
-} from '../../features/social/report-repository'
 
 // ─── Mock DynamoDB and dependencies ─────────────────────────────────────────
 
 const mockPutCommand = vi.fn()
-const mockDeleteCommand = vi.fn()
+const _mockDeleteCommand = vi.fn()
 const mockGetCommand = vi.fn()
 const mockQueryCommand = vi.fn()
 
@@ -89,13 +78,25 @@ vi.mock('../../features/social/report-repository', async (importOriginal) => {
 
 // Import after mocks are set up
 import { getUserById, updateUser } from '../../features/auth/dynamodb-repository'
-import { blockUser, unblockUser, getBlockedUsers } from '../../features/social/block-repository'
-import { unfollowUser } from '../../features/social/repository'
-import { createReport } from '../../features/social/report-repository'
 import * as privacyService from '../../features/privacy/service'
+import {
+  updatePrivacyBodySchema,
+  blockParamsSchema,
+  createReportBodySchema,
+  privacyLevelSchema,
+} from '../../features/privacy/types'
+import { blockUser, unblockUser, getBlockedUsers } from '../../features/social/block-repository'
+import { createReport } from '../../features/social/report-repository'
+import {
+  determineReportPriority,
+  buildAbuseFlagForReport,
+  HIGH_PRIORITY_CATEGORIES,
+  type ReportCategory,
+} from '../../features/social/report-repository'
+import { unfollowUser } from '../../features/social/repository'
 
-const mockGetUserById = getUserById as ReturnType<typeof vi.fn>
-const mockUpdateUser = updateUser as ReturnType<typeof vi.fn>
+const _mockGetUserById = getUserById as ReturnType<typeof vi.fn>
+const _mockUpdateUser = updateUser as ReturnType<typeof vi.fn>
 const mockBlockUser = blockUser as ReturnType<typeof vi.fn>
 const mockUnblockUser = unblockUser as ReturnType<typeof vi.fn>
 const mockGetBlockedUsers = getBlockedUsers as ReturnType<typeof vi.fn>

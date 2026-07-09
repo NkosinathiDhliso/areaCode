@@ -31,8 +31,8 @@
  *     sequence, the model and store are compared.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ─── Module mocks ───────────────────────────────────────────────────────────
 //

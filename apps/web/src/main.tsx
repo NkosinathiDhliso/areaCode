@@ -1,11 +1,12 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import 'mapbox-gl/dist/mapbox-gl.css'
 
 import { installPreloadErrorHandler } from '@area-code/shared/lib/preloadErrorHandler'
 import { installDomReconciliationGuard } from '@area-code/shared/lib/domReconciliationGuard'
+
 import { App } from './App'
 import './i18n'
 import './app.css'

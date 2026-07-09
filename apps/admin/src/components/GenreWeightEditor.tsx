@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
+import { PERSONALITY_DIMENSIONS } from '@area-code/shared/constants/genre-weights'
 import { api } from '@area-code/shared/lib/api'
 import type { GenreWeightEntry, MusicGenre, PersonalityDimension } from '@area-code/shared/types'
-import { PERSONALITY_DIMENSIONS } from '@area-code/shared/constants/genre-weights'
+import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 
 const GENRE_LABELS: Record<MusicGenre, string> = {
   amapiano: 'Amapiano',

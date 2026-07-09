@@ -1,11 +1,14 @@
 // DynamoDB-backed Nodes Repository (replaces Prisma)
 import { GetCommand, PutCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
+
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
-import * as dynamo from './dynamodb-repository.js'
-import { getActiveRewardsByNodeId } from '../rewards/dynamodb-repository.js'
-import { getCheckInsByNode } from '../check-in/dynamodb-repository.js'
 import { getUserById } from '../auth/dynamodb-repository.js'
+import { getCheckInsByNode } from '../check-in/dynamodb-repository.js'
+import { getActiveRewardsByNodeId } from '../rewards/dynamodb-repository.js'
+
+import { isBoostActive } from './boost.js'
+import * as dynamo from './dynamodb-repository.js'
 
 const PAID_TIERS_SET = new Set(['starter', 'growth', 'pro', 'payg'])
 
@@ -23,6 +26,14 @@ export async function getNodesByCitySlug(citySlug: string) {
   )
   const items = result.Items || []
 
+  // Map membership is a deliberate split from feature gating (billing R4.3).
+  // Feature gating (staff caps, rewards, campaigns, reports) uses Tier_Resolver
+  // (getEffectiveTier), which collapses a lapsed paid tier to starter. Map
+  // membership instead keys off the STORED tier plus isActive: a venue leaves
+  // the consumer map only when storage demotion (deactivateForNonPayment, R3.3)
+  // flips it inactive after the grace window lapses. That storage demotion is
+  // the single removal mechanism, so we intentionally do not resolve the tier
+  // here — doing so would create a second, drifting removal path.
   // Build a map of business-owned nodes whose business is on a paid tier.
   // Nodes without a businessId (legacy/unclaimed) are always visible.
   const businessIds = Array.from(
@@ -60,6 +71,11 @@ export async function getNodesByCitySlug(citySlug: string) {
       isVerified: n['isVerified'],
       headerImageKey: n['headerImageKey'] ?? null,
       businessTier: paidBusinessTiers.get(n['businessId'] as string) ?? 'starter',
+      // Paid Boost_Window, computed at read time (billing R5.2, R5.5). `boostActive`
+      // reverts to false on the next read once the window passes — no expiry worker.
+      // A paid reach signal only; kept separate from pulse/aliveness (honest-presence).
+      boostUntil: (n['boostUntil'] as string | null | undefined) ?? null,
+      boostActive: isBoostActive(n['boostUntil'] as string | null | undefined),
     }))
 }
 

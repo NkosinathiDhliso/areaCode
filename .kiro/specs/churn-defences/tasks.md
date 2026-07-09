@@ -132,14 +132,24 @@ Each phase ships independently. None introduce always-on infra. None violate the
 - [x] 18.1 `GET /v1/staff/first-get/:rewardId/preview` accepts a phone, returns anti-abuse decision.
 - [x] 18.2 `POST /v1/staff/first-get/:rewardId/confirm` creates the GUESTCLAIM row.
 - [x] 18.3 Staff–business ownership check.
-- [ ] 18.4 Staff scanner UI surfacing the new flow (deferred — backend ready, UI pending).
+- [x] 18.4 OBSOLETE — this task described a phone-accepting preview endpoint
+      (18.1) that was never shipped. The token-based `FirstGetIssuer`
+      (`apps/staff/src/components/FirstGetIssuer.tsx`) shipped instead: staff mint an
+      8-char token via `POST /v1/staff/first-get/:rewardId/confirm`, no phone, no
+      preview. `backend/src/features/staff/__tests__/staff-surface.test.ts` pins the
+      phone-preview route ABSENT. See `.kiro/steering/no-sms-no-phone-auth.md` and
+      `.kiro/specs/cross-portal-lifecycle-alignment` R3.4.
 
 ### Task 19: Conversion on signup
 
 - [x] 19.1 `convertGuestClaims` helper invoked on consumer phone signup.
 - [x] 19.2 Looks up open claims within Conversion_Window.
 - [x] 19.3 Credits one historical visit per claim and deletes claim rows.
-- [ ] 19.4 Email-signup branch wiring (deferred — phone signup is the primary path).
+- [x] 19.4 CORRECTED — there is no phone signup. The only identity primitives are
+      email/password and Google OAuth (`.kiro/steering/no-sms-no-phone-auth.md`), and
+      the casual-customer path is the 8-char token exchanged on first launch, not a
+      phone lookup. Guest-claim conversion is keyed on the token, not a phone number.
+      See `.kiro/specs/cross-portal-lifecycle-alignment` R3.4.
 
 ### Task 20: Leaderboard integration
 

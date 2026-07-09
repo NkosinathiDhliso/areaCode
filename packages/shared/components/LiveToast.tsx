@@ -1,5 +1,6 @@
 import type { Toast } from '../types'
-import { Box, Row, Text } from './primitives'
+
+import { Row, Text } from './primitives'
 
 interface LiveToastProps {
   toast: Toast

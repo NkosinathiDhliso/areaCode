@@ -146,4 +146,48 @@ Found while researching this doc properly:
 5. **Casual-customer first-Get path** — a first-time walk-in can claim one introductory reward by phone number alone, with full signup deferred to a follow-up visit. Defends against the §1.6 wall.
 6. **T&C commitment: tier earned = tier kept** — written guarantee that tier is permanent. Defends against the §1.2 perception failure.
 
-These are tracked in `.kiro/specs/churn-defences/`.
+## These are tracked in `.kiro/specs/churn-defences/`.
+
+## Part 6 — POPIA close-out record (churn-defences Phase 6, Task 23)
+
+Executed 2026-07-09 as billing-revenue-integrity task 15.1 (Requirement 12.1).
+Each check was verified against the shipped code, not assumed. Evidence cites the
+file and the specific mechanism that proves the claim.
+
+### 23.1 Threshold_Lock stores only userId — PASS
+
+Verified in `backend/src/features/rewards/threshold-lock.ts`. The `ThresholdLock`
+row (key `pk = LOCK#<userId>#<rewardId>`, `sk = LOCK`) persists only `userId`,
+`rewardId`, `lockedThreshold`, `firstCheckInAt`, and `currentVisits`. The single
+personal identifier is `userId`. No email, name, phone, or coordinates are
+written. `rewardId` is a reward identifier, not personal data. Confirmed at the
+`incrementProgress` PutCommand and UpdateCommand write sites.
+
+### 23.2 Guest_Claim data deletion window — PASS
+
+Verified in `backend/src/features/rewards/guest-claim.ts`. The current model is
+token-based, not phone-based (per `.kiro/steering/no-sms-no-phone-auth.md`), so
+no phone number or personal data is stored at all. Each `GUESTTOKEN#<token>` row
+is written with a `ttl` attribute set to issue time plus 60 days
+(`CONVERSION_WINDOW_DAYS` 30 + `RETENTION_AFTER_WINDOW_DAYS` 30); on redemption
+the `ttl` is reset to redemption time plus 30 days. DynamoDB TTL auto-deletion is
+enabled on the app-data table `ttl` attribute
+(`infra/environments/prod/main.tf`, `aws_dynamodb_table.app_data` ttl block,
+`enabled = true`), so rows are physically removed within the deletion window. The
+original requirement (phone deletion within 60 days) is satisfied and exceeded:
+no phone is collected, and the durable data still expires within 60 days.
+
+### 23.3 Proximity_Nudge persists no coordinates server-side — PASS
+
+Verified across `packages/shared/hooks/useProximityNudge.ts`,
+`backend/src/features/auth/profile-service.ts` (`getVisitedNodes`), and
+`backend/src/features/auth/profile-handler.ts` (`GET /v1/users/me/visited`). The
+proximity comparison runs entirely client-side: the hook reads the device
+position and compares it via Haversine to previously visited venue coordinates,
+with cooldown state held only in `localStorage`. The user's live coordinates are
+never sent to the server. The visited-nodes endpoint accepts no coordinate input;
+it returns deduplicated public venue lat/lng only (already exposed via
+`/v1/nodes`), with no timestamps and no PII. Proximity is evaluated then
+discarded, consistent with `honest-presence.md`.
+
+Outcome: all three POPIA close-out checks pass against the shipped code.

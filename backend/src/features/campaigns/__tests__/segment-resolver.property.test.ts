@@ -21,8 +21,8 @@
  *   - Property 3: First-Timers Correctness    (Requirement 3.1)
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getCheckInsByNode: vi.fn(),

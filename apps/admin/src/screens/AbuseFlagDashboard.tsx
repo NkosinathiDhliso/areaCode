@@ -1,7 +1,6 @@
+import { api } from '@area-code/shared/lib/api'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-
-import { api } from '@area-code/shared/lib/api'
 
 interface AbuseFlag {
   id: string

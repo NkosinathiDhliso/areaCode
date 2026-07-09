@@ -1,4 +1,5 @@
 import { kvGet, kvIncr } from '../../shared/kv/dynamodb-kv.js'
+
 import { getOptOuts, getMarketingConsent } from './repository.js'
 
 // ============================================================================

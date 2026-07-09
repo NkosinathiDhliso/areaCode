@@ -1,6 +1,6 @@
+import { getTierLabel } from '@area-code/shared/constants/tier-levels'
 import { api, type ApiError } from '@area-code/shared/lib/api'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
-import { getTierLabel } from '@area-code/shared/constants/tier-levels'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'

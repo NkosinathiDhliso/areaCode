@@ -20,7 +20,7 @@ const BENCHMARK_SIGNIFICANCE_THRESHOLD = 20
 // Day names for formatting
 // ============================================================================
 
-const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const
+const _DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const
 
 // ============================================================================
 // Recommendations Engine
@@ -114,12 +114,12 @@ function generateMusicRecommendation(report: ReportSections): RecommendationResu
   if (Object.keys(dims).length === 0) return null
 
   // Find the dominant dimension
-  let maxDim = ''
+  let _maxDim = ''
   let maxVal = -1
   for (const [dim, val] of Object.entries(dims)) {
     if (val > maxVal) {
       maxVal = val
-      maxDim = dim
+      _maxDim = dim
     }
   }
 

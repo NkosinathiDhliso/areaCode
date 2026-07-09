@@ -1,7 +1,8 @@
 import type { Tier, NodeCategory } from '../../types'
 import { hoursAgo } from '../helpers'
-import { MOCK_USERS } from './users'
+
 import { MOCK_NODES } from './nodes'
+import { MOCK_USERS } from './users'
 
 export interface FeedItem {
   id: string

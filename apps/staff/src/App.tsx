@@ -1,14 +1,14 @@
-import { useState, useEffect } from 'react'
-
-import { useStaffAuthStore } from './stores/staffAuthStore'
-import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
 import { GlobalErrorToast } from '@area-code/shared/components/GlobalErrorToast'
+import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { api } from '@area-code/shared/lib/api'
+import { useState, useEffect } from 'react'
+
+import { StaffHome } from './screens/StaffHome'
 import { StaffInvite } from './screens/StaffInvite'
 import { StaffLogin } from './screens/StaffLogin'
 import { StaffOAuthCallback } from './screens/StaffOAuthCallback'
-import { StaffHome } from './screens/StaffHome'
+import { useStaffAuthStore } from './stores/staffAuthStore'
 
 export function App() {
   return (

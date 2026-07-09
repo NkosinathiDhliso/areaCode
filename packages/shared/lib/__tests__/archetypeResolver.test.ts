@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
-import { computeDimensionScores, resolveArchetype, matchesArchetype } from '../archetypeResolver'
-import { GENRE_WEIGHT_MATRIX } from '../../constants/genre-weights'
+import { describe, it, expect } from 'vitest'
+
 import { ARCHETYPE_CATALOG } from '../../constants/archetype-catalog'
-import type { MusicGenre, DimensionScoreVector, PersonalityArchetype } from '../../types'
+import { GENRE_WEIGHT_MATRIX } from '../../constants/genre-weights'
+import type { MusicGenre, DimensionScoreVector } from '../../types'
+import { computeDimensionScores, resolveArchetype, matchesArchetype } from '../archetypeResolver'
 
 const ALL_GENRES: MusicGenre[] = [
   'amapiano',

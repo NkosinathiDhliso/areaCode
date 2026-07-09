@@ -8,14 +8,13 @@
  * pitch" failure (see docs/CHURN_DEFENSES.md).
  */
 
-import { useEffect, useState } from 'react'
-import { MapPin, X } from 'lucide-react'
-
+import { useProximityNudge, type VisitedNode } from '@area-code/shared/hooks/useProximityNudge'
 import { api } from '@area-code/shared/lib/api'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import { useUserStore } from '@area-code/shared/stores/userStore'
-import { useProximityNudge, type VisitedNode } from '@area-code/shared/hooks/useProximityNudge'
+import { MapPin, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 import type { AppRoute } from '../types'
 

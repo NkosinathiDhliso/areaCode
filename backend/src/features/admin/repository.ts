@@ -1,6 +1,7 @@
 // DynamoDB-backed Admin Repository (replaces Prisma)
 import { GetCommand, PutCommand, QueryCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import type { ScanCommandInput } from '@aws-sdk/lib-dynamodb'
+
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
 import {

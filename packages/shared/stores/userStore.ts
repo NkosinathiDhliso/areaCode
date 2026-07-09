@@ -1,8 +1,9 @@
 import { create } from 'zustand'
-import { immer } from 'zustand/middleware/immer'
 import { persist } from 'zustand/middleware'
-import type { User, Tier } from '../types'
+import { immer } from 'zustand/middleware/immer'
+
 import { storage } from '../lib/storage'
+import type { User, Tier } from '../types'
 
 interface OnboardingState {
   hintSeen: boolean

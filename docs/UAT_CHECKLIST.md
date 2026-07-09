@@ -385,7 +385,7 @@ These verify WebSocket events flow correctly across portals.
 - [ ] **No memory leaks** — leave consumer web open for 30 min; memory does not climb past 200MB
 - [ ] **WebSocket reconnect** — kill and restore network; socket reconnects within 30s
 - [ ] **No 500s** in CloudWatch logs during the full test run
-- [ ] **No DLQ messages** — `area-code-prod-reward-eval-dlq` and `area-code-prod-push-sender-dlq` have 0 visible messages
+- [ ] **No DLQ messages** — `area-code-prod-reward-eval-dlq` has 0 visible messages
 
 ---
 
@@ -435,7 +435,7 @@ Test each portal at common viewport sizes:
 - [ ] Severity-1 issues (broken core flows) have fixes merged
 - [ ] Severity-2 issues (UX gaps) have tickets and target dates
 - [ ] CloudWatch shows < 0.1% error rate during the test window
-- [ ] Sentry shows no unhandled errors during the test window
+- [ ] CloudWatch RUM console shows no unhandled frontend errors during the test window (four app monitors: `area-code-prod-web`, `-business`, `-staff`, `-admin`)
 
 ---
 

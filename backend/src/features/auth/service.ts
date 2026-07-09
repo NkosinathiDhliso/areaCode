@@ -1,18 +1,18 @@
+import { randomBytes } from 'node:crypto'
+
+import { LEGAL_CLAUSES_VERSION } from '@area-code/shared/constants/legal'
+
 import * as cognito from '../../shared/cognito/client.js'
+import { AWS_REGION, DEV_MODE } from '../../shared/config/env.js'
 import { sendEmailVerificationEmail } from '../../shared/email/ses.js'
 import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet, kvSet, kvDel, kvIncr } from '../../shared/kv/dynamodb-kv.js'
 import { reportOtpFeedback } from '../../shared/sms/feedback.js'
 import { findBusinessByCognitoSub } from '../business/repository.js'
-import { updateBusiness } from './dynamodb-repository.js'
 
+import { updateBusiness } from './dynamodb-repository.js'
 import * as repo from './repository.js'
 
-import { LEGAL_CLAUSES_VERSION } from '@area-code/shared/constants/legal'
-
-import { randomBytes } from 'node:crypto'
-
-import { AWS_REGION, DEV_MODE } from '../../shared/config/env.js'
 /**
  * Canonical consent version. Falls back to `LEGAL_CLAUSES_VERSION` from
  * the shared constants module if the env var isn't set, so a misconfigured

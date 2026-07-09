@@ -1,10 +1,11 @@
+import { haptic, prefersReducedMotion } from '@area-code/shared/lib/haptics'
+import { useNavigationStore } from '@area-code/shared/stores/navigationStore'
+import { Map, Trophy, Activity, User } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Map, Trophy, Activity, User } from 'lucide-react'
-import { useNavigationStore } from '@area-code/shared/stores/navigationStore'
-import { haptic, prefersReducedMotion } from '@area-code/shared/lib/haptics'
+
 import type { AppRoute } from '../types'
-import type { LucideIcon } from 'lucide-react'
 
 type NavRoute = 'map' | 'ranks' | 'feed' | 'profile'
 

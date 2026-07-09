@@ -65,7 +65,7 @@ export async function decideBoostFloorWithMetric(
     } catch (err) {
       // R9.5: rejection MUST NOT be conditional on metric emission succeeding.
       // Swallow and continue so the caller still receives the reject decision.
-      // eslint-disable-next-line no-console
+
       console.warn('[boost-floor] BoostFloorViolation metric emission failed', err)
     }
   }

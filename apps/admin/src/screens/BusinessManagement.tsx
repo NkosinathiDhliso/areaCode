@@ -1,10 +1,12 @@
+import { api } from '@area-code/shared/lib/api'
+import type { BusinessAccount } from '@area-code/shared/types'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { api } from '@area-code/shared/lib/api'
-import type { BusinessAccount } from '@area-code/shared/types'
-import { useAdminAuthStore } from '../stores/adminAuthStore'
 import { BusinessDetailPanel } from '../components/BusinessDetailPanel'
+import { BusinessStateBadge } from '../components/BusinessStateBadge'
+import { SetTierDialog } from '../components/SetTierDialog'
+import { useAdminAuthStore } from '../stores/adminAuthStore'
 
 interface BusinessDetail extends BusinessAccount {
   staffCount: number
@@ -29,11 +31,7 @@ export function BusinessManagement() {
   const [extendTrialId, setExtendTrialId] = useState<string | null>(null)
   const [extendDays, setExtendDays] = useState('7')
   const [setTierId, setSetTierId] = useState<string | null>(null)
-  const [selectedTier, setSelectedTier] = useState<'starter' | 'growth' | 'pro'>('starter')
-  const [tierReason, setTierReason] = useState('')
-  const [trialEndsAt, setTrialEndsAt] = useState('')
-  const [setTierError, setSetTierError] = useState('')
-  const [setTierSuccess, setSetTierSuccess] = useState(false)
+  const [setTierInitial, setSetTierInitial] = useState<'starter' | 'growth' | 'pro'>('starter')
   const [staffBizId, setStaffBizId] = useState<string | null>(null)
   const [staffList, setStaffList] = useState<{ id: string; phone?: string; email?: string; isActive?: boolean }[]>([])
   const [staffLoading, setStaffLoading] = useState(false)
@@ -122,36 +120,6 @@ export function BusinessManagement() {
     }
   }
 
-  async function handleSetTier() {
-    if (!setTierId) return
-    if (!tierReason.trim()) return
-    setSetTierError('')
-    setSetTierSuccess(false)
-    try {
-      const body: { tier: 'starter' | 'growth' | 'pro'; reason: string; trialEndsAt?: string } = {
-        tier: selectedTier,
-        reason: tierReason.trim(),
-      }
-      if (trialEndsAt.trim()) {
-        // Convert datetime-local to ISO datetime with timezone
-        const date = new Date(trialEndsAt.trim())
-        body.trialEndsAt = date.toISOString()
-      }
-      await api.post(`/v1/admin/businesses/${setTierId}/set-tier`, body)
-      setSetTierSuccess(true)
-      setTimeout(() => {
-        setSetTierId(null)
-        setSelectedTier('starter')
-        setTierReason('')
-        setTrialEndsAt('')
-        setSetTierSuccess(false)
-        void handleSearch()
-      }, 1500)
-    } catch (err: unknown) {
-      setSetTierError((err as { message?: string })?.message || 'Failed to set tier')
-    }
-  }
-
   return (
     <div className="p-5">
       <h2 className="text-[var(--text-primary)] font-bold text-xl mb-4 font-[Syne]">{t('admin.businesses.title')}</h2>
@@ -200,6 +168,14 @@ export function BusinessManagement() {
               {biz.email} · {biz.nodeCount} nodes · {biz.staffCount} staff · {biz.activeRewardCount} rewards
             </div>
 
+            <BusinessStateBadge
+              tier={biz.tier}
+              trialEndsAt={biz.trialEndsAt}
+              paidUntil={biz.paidUntil}
+              paidInterval={biz.paidInterval}
+              paymentGraceUntil={biz.paymentGraceUntil}
+            />
+
             {selected?.id === biz.id && (
               <div className="mt-4 pt-4 border-t border-[var(--border)] flex flex-row flex-wrap gap-2">
                 <button
@@ -226,12 +202,11 @@ export function BusinessManagement() {
                     onClick={(e) => {
                       e.stopPropagation()
                       setSetTierId(biz.id)
-                      setSelectedTier(
+                      setSetTierInitial(
                         (['starter', 'growth', 'pro'] as const).includes(biz.tier as 'starter' | 'growth' | 'pro')
                           ? (biz.tier as 'starter' | 'growth' | 'pro')
                           : 'starter',
                       )
-                      setTierReason('')
                     }}
                     className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-3 py-1.5 text-xs"
                   >
@@ -459,62 +434,12 @@ export function BusinessManagement() {
 
       {/* Set Tier dialog */}
       {setTierId && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-5">
-          <div className="bg-[var(--bg-modal)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
-            <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
-              {t('admin.businesses.setTier')}
-            </h3>
-            <p className="text-[var(--text-secondary)] text-sm mb-4">Assign a subscription plan to this business.</p>
-            {setTierSuccess && <p className="text-[var(--success)] text-sm mb-4">Tier updated successfully!</p>}
-            {setTierError && <p className="text-[var(--danger)] text-sm mb-4">{setTierError}</p>}
-            {!setTierSuccess && (
-              <>
-                <div className="flex flex-col gap-3 mb-4">
-                  <label className="text-[var(--text-primary)] text-xs font-medium">Plan</label>
-                  <select
-                    value={selectedTier}
-                    onChange={(e) => setSelectedTier(e.target.value as 'starter' | 'growth' | 'pro')}
-                    className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none"
-                  >
-                    <option value="starter">Starter</option>
-                    <option value="growth">Growth</option>
-                    <option value="pro">Pro</option>
-                  </select>
-                  <label className="text-[var(--text-primary)] text-xs font-medium">Reason (required)</label>
-                  <textarea
-                    value={tierReason}
-                    onChange={(e) => setTierReason(e.target.value)}
-                    placeholder="e.g. Promotion, Payment failure compensation, Enterprise deal"
-                    rows={3}
-                    className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none resize-none"
-                  />
-                  <label className="text-[var(--text-primary)] text-xs font-medium">Trial end date (optional)</label>
-                  <input
-                    type="datetime-local"
-                    value={trialEndsAt}
-                    onChange={(e) => setTrialEndsAt(e.target.value)}
-                    className="w-full bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm focus:border-[var(--accent)] focus:outline-none"
-                  />
-                </div>
-                <div className="flex flex-row gap-3">
-                  <button
-                    onClick={() => setSetTierId(null)}
-                    className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => void handleSetTier()}
-                    disabled={!tierReason.trim()}
-                    className="flex-1 bg-[var(--accent)] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
-                  >
-                    Set Tier
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        <SetTierDialog
+          businessId={setTierId}
+          initialTier={setTierInitial}
+          onClose={() => setSetTierId(null)}
+          onSaved={() => void handleSearch()}
+        />
       )}
 
       {detailBusinessId && (

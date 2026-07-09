@@ -1,7 +1,9 @@
 import { useState } from 'react'
+
 import { api } from '../lib/api'
-import { Spinner } from './Spinner'
 import type { MusicGenre } from '../types'
+
+import { Spinner } from './Spinner'
 
 const GENRES: { id: MusicGenre; label: string }[] = [
   { id: 'amapiano', label: 'Amapiano' },

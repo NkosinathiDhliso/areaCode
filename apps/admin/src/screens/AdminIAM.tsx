@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { api } from '@area-code/shared/lib/api'
 import { Spinner } from '@area-code/shared/components/Spinner'
+import { api } from '@area-code/shared/lib/api'
+import { useEffect, useState } from 'react'
 
 const ROLES = ['super_admin', 'support_agent', 'content_moderator'] as const
 type AdminRole = (typeof ROLES)[number]

@@ -29,8 +29,8 @@
  *   data-producing dependency was never called (fail closed, no data body).
  */
 
-import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
 import type { FastifyInstance } from 'fastify'
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
 
 // ─── Sessions keyed by Bearer token ─────────────────────────────────────────
 //

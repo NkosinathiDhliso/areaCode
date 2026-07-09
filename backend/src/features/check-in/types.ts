@@ -9,6 +9,11 @@ export const checkInBodySchema = z.object({
   qrToken: z.string().optional(),
   type: z.enum(['reward', 'presence']),
   fingerprintHash: z.string().optional(),
+  // Optional original capture time for a replayed (offline outbox) check-in
+  // (cross-portal-lifecycle-alignment R5). Present only when the client is
+  // draining a queued attempt; a live check-in omits it. The server accepts it
+  // only within the Replay_Window and never backdates presence.
+  capturedAt: z.string().datetime().optional(),
 })
 
 export type CheckInInput = z.infer<typeof checkInBodySchema>

@@ -1,27 +1,31 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { useAdminAuthStore } from '../stores/adminAuthStore'
-import { DashboardOverview } from './DashboardOverview'
-import { RetentionDashboard } from './RetentionDashboard'
-import { ConsumerManagement } from './ConsumerManagement'
-import { BusinessManagement } from './BusinessManagement'
-import { NodeManagement } from './NodeManagement'
-import { ReportQueue } from './ReportQueue'
-import { ConsentAudit } from './ConsentAudit'
-import { AbuseFlagDashboard } from './AbuseFlagDashboard'
-import { AuditTrailViewer } from './AuditTrailViewer'
 import { ArchetypeManagement } from '../components/ArchetypeManagement'
 import { GenreWeightEditor } from '../components/GenreWeightEditor'
+import { useAdminAuthStore } from '../stores/adminAuthStore'
+
+import { AbuseFlagDashboard } from './AbuseFlagDashboard'
+import { AdminIAM } from './AdminIAM'
+import { AuditTrailViewer } from './AuditTrailViewer'
 import { BoostFloorEditor } from './BoostFloorEditor'
 import { BoostPurchaseReport } from './BoostPurchaseReport'
-import { AdminIAM } from './AdminIAM'
+import { BusinessManagement } from './BusinessManagement'
+import { ConsentAudit } from './ConsentAudit'
+import { ConsumerManagement } from './ConsumerManagement'
+import { DashboardOverview } from './DashboardOverview'
+import { GraceList } from './GraceList'
+import { NodeManagement } from './NodeManagement'
+import { ReportQueue } from './ReportQueue'
+import { RetentionDashboard } from './RetentionDashboard'
+import { SubscriptionPaymentsReport } from './SubscriptionPaymentsReport'
 
 type Tab =
   | 'dashboard'
   | 'retention'
   | 'consumers'
   | 'businesses'
+  | 'grace'
   | 'nodes'
   | 'reports'
   | 'abuse-flags'
@@ -30,6 +34,7 @@ type Tab =
   | 'archetypes'
   | 'boost-floors'
   | 'boost-purchases'
+  | 'subscription-payments'
   | 'genre-weights'
   | 'iam'
 
@@ -38,6 +43,7 @@ const TAB_LABELS: Record<Tab, string> = {
   retention: 'admin.nav.retention',
   consumers: 'admin.nav.consumers',
   businesses: 'admin.nav.businesses',
+  grace: 'admin.nav.grace',
   nodes: 'admin.nav.nodes',
   reports: 'admin.nav.reports',
   'abuse-flags': 'admin.nav.abuseFlags',
@@ -46,6 +52,7 @@ const TAB_LABELS: Record<Tab, string> = {
   archetypes: 'admin.nav.archetypes',
   'boost-floors': 'admin.nav.boostFloors',
   'boost-purchases': 'admin.nav.boostPurchases',
+  'subscription-payments': 'admin.nav.subscriptionPayments',
   'genre-weights': 'admin.nav.genreWeights',
   iam: 'admin.nav.iam',
 }
@@ -58,6 +65,7 @@ function getVisibleTabs(role: string | null): Tab[] {
         'retention',
         'consumers',
         'businesses',
+        'grace',
         'nodes',
         'reports',
         'abuse-flags',
@@ -66,11 +74,12 @@ function getVisibleTabs(role: string | null): Tab[] {
         'archetypes',
         'boost-floors',
         'boost-purchases',
+        'subscription-payments',
         'genre-weights',
         'iam',
       ]
     case 'support_agent':
-      return ['consumers', 'businesses', 'boost-purchases']
+      return ['consumers', 'businesses', 'grace', 'boost-purchases', 'subscription-payments']
     case 'content_moderator':
       return ['reports', 'abuse-flags']
     default:
@@ -141,6 +150,7 @@ export function AdminDashboard() {
         {activeTab === 'retention' && <RetentionDashboard />}
         {activeTab === 'consumers' && <ConsumerManagement />}
         {activeTab === 'businesses' && <BusinessManagement />}
+        {activeTab === 'grace' && <GraceList />}
         {activeTab === 'nodes' && <NodeManagement />}
         {activeTab === 'reports' && <ReportQueue />}
         {activeTab === 'abuse-flags' && <AbuseFlagDashboard />}
@@ -149,6 +159,7 @@ export function AdminDashboard() {
         {activeTab === 'archetypes' && <ArchetypeManagement />}
         {activeTab === 'boost-floors' && <BoostFloorEditor />}
         {activeTab === 'boost-purchases' && <BoostPurchaseReport />}
+        {activeTab === 'subscription-payments' && <SubscriptionPaymentsReport />}
         {activeTab === 'genre-weights' && <GenreWeightEditor />}
         {activeTab === 'iam' && <AdminIAM />}
       </main>

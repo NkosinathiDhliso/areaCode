@@ -6,8 +6,8 @@
  * etymology line for non-English names. These tests pin that contract.
  */
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
 
 import { ArchetypeReveal } from '../ArchetypeReveal'
 

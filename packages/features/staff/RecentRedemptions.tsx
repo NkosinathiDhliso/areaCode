@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 
+import { Box, Row, Text } from '../../shared/components/primitives'
 import { api } from '../../shared/lib/api'
 import { formatRelativeTime } from '../../shared/lib/formatters'
-import { Box, Row, Text } from '../../shared/components/primitives'
 
 interface Redemption {
   code: string

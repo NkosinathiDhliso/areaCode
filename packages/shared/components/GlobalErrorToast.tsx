@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
-import { useErrorStore } from '../stores/errorStore'
+
 import { setApiErrorHandler } from '../lib/api'
+import { useErrorStore } from '../stores/errorStore'
+
 import { ErrorToast } from './ErrorToast'
 
 export function GlobalErrorToast() {

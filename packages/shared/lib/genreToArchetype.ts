@@ -1,6 +1,7 @@
-import type { MusicGenre, PersonalityArchetype } from '../types'
-import { GENRE_WEIGHT_MATRIX } from '../constants/genre-weights'
 import { ARCHETYPE_CATALOG } from '../constants/archetype-catalog'
+import { GENRE_WEIGHT_MATRIX } from '../constants/genre-weights'
+import type { MusicGenre, PersonalityArchetype } from '../types'
+
 import { computeDimensionScores, resolveArchetype } from './archetypeResolver'
 
 /**

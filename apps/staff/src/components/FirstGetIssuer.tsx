@@ -11,10 +11,9 @@
  * First-Get on mount and renders nothing if the venue hasn't configured one.
  */
 
-import { useEffect, useState } from 'react'
-import { Gift, Printer, X } from 'lucide-react'
-
 import { api, type ApiError } from '@area-code/shared/lib/api'
+import { Gift, Printer, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 interface FirstGet {
   rewardId: string

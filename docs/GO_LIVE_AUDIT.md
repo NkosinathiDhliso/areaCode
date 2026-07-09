@@ -103,12 +103,11 @@ Option 1 is the smallest change.
 
 Option 2 is cleaner; the auto-fix is mechanical.
 
-### 4. WAF Still Not Attached to API Gateway
+### 4. WAF Still Not Attached to API Gateway (CLOSED — superseded by follow-up #17)
 
-`infra/modules/waf/main.tf` has the rules (CommonRuleSet, KnownBadInputs, rate-limit on check-in at 100/5min, rate-limit on auth at 20/5min) but the module is still not referenced from `infra/environments/prod/main.tf`. The module currently only supports ALB association — it needs an `aws_wafv2_web_acl_association` for `aws_apigatewayv2_stage` (or CloudFront), plus a wiring block in prod.
+This item is resolved as a recorded decision. See "17. Edge Protection Decision: CloudFront+WAF Deferred" in the post-launch follow-ups below. That entry captures the WAFv2-cannot-attach-to-API-Gateway-v2 constraint, the CloudFront requirement and cost, the decision to defer pending founder cost approval, and the compensating controls that hold in the meantime. The floating "WAF absence" note from the May audit stops rolling forward here.
 
-**Risk:** No XSS/SQLi/brute-force protection on the API.
-**Cost:** ~$5/month + $0.60/million requests.
+`infra/modules/waf/main.tf` has the rules (CommonRuleSet, KnownBadInputs, rate-limit on check-in at 100/5min, rate-limit on auth at 20/5min). The ALB association block has been removed from the module (ALBs are forbidden infrastructure per `serverless-only.md`, so the association could never be used).
 
 ### 5. SNS Alerts Topic Has Zero Subscribers
 
@@ -201,6 +200,26 @@ Not a launch blocker; the gzipped sizes are still acceptable on 4G.
 ### 16. Live Vibe Canary Plan
 
 The flag default is `false` and the worker short-circuits on it (R12.5 in the spec). Before flipping the flag in prod, confirm: (a) `MusicSchedules` rows exist for at least one venue, (b) `schedule-transition-tick` is logging the empty-window heartbeat, and (c) the WebSocket `node:archetype_change` channel is subscribed on the consumer web app. None of this is blocked by infra; it's a runbook item.
+
+### 17. Edge Protection Decision: CloudFront+WAF Deferred (closes warning #4)
+
+Recorded per the billing-revenue-integrity spec, Requirement 11. This closes the floating "WAF absence" item (#4) that had rolled forward since the May audit.
+
+**Constraint:** AWS WAFv2 cannot associate with API Gateway v2 HTTP APIs. WAF can only attach to a CloudFront distribution, an Application Load Balancer, or a REST (v1) API Gateway stage. Our API is an API Gateway v2 HTTP API, and ALBs are forbidden infrastructure per `serverless-only.md`, so neither of those attachment points is available to us.
+
+**What WAF would require:** A CloudFront distribution placed in front of `api.areacode.co.za`, with the WAF web ACL associated to the distribution. CloudFront is allowed by `serverless-only.md`. Estimated cost is roughly $5 to $15 per month plus request fees.
+
+**Decision: DEFERRED.** The CloudFront+WAF build is deferred pending founder approval of the cost. The build is gated on that approval and is not part of the launch scope.
+
+**Infra change already made (task 14.1):** The ALB association was deleted from `infra/modules/waf`. ALBs are forbidden, so that association could never be used; removing it leaves the WAF module rules in place without a dead attachment path.
+
+**Compensating controls that hold in the meantime:**
+
+- App-level rate limits (DynamoDB TTL sliding window on check-in and auth routes).
+- Cognito auth (`requireAuth`) on every business and admin route.
+- Fail-closed webhook signature verification (an unsigned or bad-signature payment webhook is rejected, never processed).
+
+When the founder approves the cost, the follow-up is: add a CloudFront distribution in front of `api.areacode.co.za`, associate the existing WAF web ACL to it, and wire it from `infra/environments/prod/main.tf`.
 
 ---
 

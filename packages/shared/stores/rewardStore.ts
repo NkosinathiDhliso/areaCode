@@ -15,6 +15,11 @@ export interface UnclaimedReward {
   codeExpiresAt: string
   nodeName: string
   createdAt?: string
+  // Whether the code's venue is still active on Area Code
+  // (cross-portal-lifecycle-alignment R4.2). Carried on the wallet read so the
+  // RedemptionCodeCard can render the honest lapsed-venue line without a
+  // per-card venue fetch. Absent on older payloads is treated as active.
+  venueActive?: boolean
 }
 
 interface RewardState {

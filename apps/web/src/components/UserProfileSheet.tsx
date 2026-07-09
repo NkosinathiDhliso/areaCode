@@ -1,11 +1,11 @@
-import { useTranslation } from 'react-i18next'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Avatar } from '@area-code/shared/components/Avatar'
+import { Skeleton } from '@area-code/shared/components/Skeleton'
+import { TierBadge } from '@area-code/shared/components/TierBadge'
 import { api } from '@area-code/shared/lib/api'
 import { useErrorStore } from '@area-code/shared/stores/errorStore'
-import { Avatar } from '@area-code/shared/components/Avatar'
-import { TierBadge } from '@area-code/shared/components/TierBadge'
-import { Skeleton } from '@area-code/shared/components/Skeleton'
 import type { Tier } from '@area-code/shared/types'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 
 import { UserActionsMenu } from './UserActionsMenu'
 

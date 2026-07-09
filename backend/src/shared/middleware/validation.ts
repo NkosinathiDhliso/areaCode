@@ -1,5 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import { z } from 'zod'
+
 import { AppError } from '../errors/AppError.js'
 
 interface ValidationSchemas {

@@ -9,9 +9,9 @@
  * **Validates: Requirements 6.6, 7.6**
  */
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'
 import * as fc from 'fast-check'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 // ─── Mocks ──────────────────────────────────────────────────────────────────
 //
@@ -36,6 +36,7 @@ vi.mock('@area-code/shared/lib/api', () => ({
 }))
 
 import { api } from '@area-code/shared/lib/api'
+
 import { BoostPurchaseReport } from '../screens/BoostPurchaseReport'
 
 // ─── Arbitraries ────────────────────────────────────────────────────────────

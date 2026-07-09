@@ -42,6 +42,34 @@ Quick path for an API-only change:
 ./deploy-api.ps1 -Env prod
 ```
 
+## Infrastructure Applies via GitHub Actions
+
+`.github/workflows/terraform.yml` runs whenever a push to `master` touches `infra/**`. It applies infrastructure in two legs:
+
+- **Dev** applies automatically. The `apply-dev` job runs `terraform apply -auto-approve` with no gate.
+- **Prod** waits for a human. The `apply-prod` job declares the `prod-infra` GitHub environment, which is configured with a required reviewer. It runs only after `apply-dev` succeeds.
+
+### Prod approval flow
+
+1. A push to `master` that changes `infra/**` triggers the workflow.
+2. `apply-dev` applies dev automatically.
+3. `apply-prod` runs `terraform init` and then `terraform plan`, so the plan is visible in the job output before anything is applied.
+4. The job then pauses on the `prod-infra` environment and waits for a required reviewer.
+5. A reviewer opens the run in the GitHub Actions UI, reads the surfaced plan, and approves or rejects.
+6. On approval the `terraform apply` step runs against prod. On rejection nothing is applied.
+
+Pull requests that touch `infra/**` still run `terraform plan` for both dev and prod and post the result as a PR comment. Only `master` pushes apply.
+
+### Break-glass path
+
+When the workflow is unavailable or an urgent change cannot wait for the approval queue, the canonical scripted path stays available:
+
+```powershell
+./scripts/deploy-serverless.ps1 -Environment prod
+```
+
+This is the repo's standard prod deploy path (build + terraform apply + Lambda code push). Run `terraform plan` intent applies here too: the script wraps `terraform apply`, so review the plan output it prints before confirming. Use this path deliberately, not as the default, since it bypasses the required-reviewer gate.
+
 ## Deploy Frontend
 
 Amplify is wired to the `master` branch of each app. Pushing to `master` triggers a build.
@@ -93,6 +121,24 @@ Secrets live in AWS Secrets Manager (`area-code/<env>/*`) and in Amplify app env
 - `push-env.ps1`
 
 All three are in `.gitignore`. If you need to rotate a secret, use `scripts/deploy-secrets.sh --env prod`.
+
+### Yoco payment secrets
+
+The Yoco keys live in `infra/environments/prod/terraform.tfvars` and are read by `terraform apply` (via `deploy-serverless.ps1`), which sets them as Lambda environment variables. Never commit real values.
+
+| tfvars variable       | Lambda env var         | Source                                                                               |
+| --------------------- | ---------------------- | ------------------------------------------------------------------------------------ |
+| `yoco_secret_key`     | `YOCO_PROD_SECRET_KEY` | Yoco dashboard > Developers > API keys > Live secret key                             |
+| `yoco_webhook_secret` | `YOCO_WEBHOOK_SECRET`  | Yoco dashboard > Developers > Webhooks > the areacode.co.za webhook > Signing secret |
+
+`yoco_webhook_secret` verifies the HMAC signature on every incoming payment webhook. If it is unset or wrong, the API rejects every webhook (fail-closed) and no payment ever activates a tier, so it must be present and correct in prod.
+
+To rotate the webhook secret:
+
+1. In the Yoco dashboard, open the areacode.co.za webhook and regenerate the signing secret.
+2. Copy the new value into `yoco_webhook_secret` in `infra/environments/prod/terraform.tfvars`.
+3. Apply infra only: `./scripts/deploy-serverless.ps1 -Environment prod -TerraformOnly`.
+4. Send a test webhook from the Yoco dashboard and confirm it is accepted (no 401 in `aws logs tail /aws/lambda/area-code-prod-api`).
 
 ## First-time Setup
 

@@ -24,8 +24,8 @@
  * Validates: Requirements 7.2, 7.4, 7.5
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 import { AppError } from '../../../shared/errors/AppError.js'
 import type { BoosterPurchaseRow, BoostDuration } from '../types.js'

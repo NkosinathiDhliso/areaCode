@@ -1,9 +1,12 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
+
+import { APP_ENV, AWS_REGION, DEV_MODE, assertPaymentConfig, requireEnv } from '../../shared/config/env.js'
+import { sendRenewalReminderEmail, sendRenewalUpcomingEmail } from '../../shared/email/ses.js'
 import { AppError } from '../../shared/errors/AppError.js'
-import { AWS_REGION, DEV_MODE, requireEnv } from '../../shared/config/env.js'
-import { decideBoostFloorWithMetric, type BoostMetricInput } from './floor-decision.js'
-import { classifyLifecycle, type Lifecycle } from '../rewards/lifecycle.js'
 import { deactivateNodesForBusiness } from '../nodes/dynamodb-repository.js'
+import { classifyLifecycle, type Lifecycle } from '../rewards/lifecycle.js'
+
+import { decideBoostFloorWithMetric, type BoostMetricInput } from './floor-decision.js'
 import * as repo from './repository.js'
 import {
   BUSINESS_PLANS,
@@ -12,6 +15,11 @@ import {
   BOOST_FLOOR_MAX_CENTS,
   BOOST_FLOOR_MIN_CENTS,
   ADMIN_BOOST_REPORT_MAX_RANGE_DAYS,
+  PAID_INTERVALS,
+  SUBSCRIPTION_GRACE_DAYS,
+  RENEWAL_REMINDER_LEAD_DAYS,
+  addPaidInterval,
+  boostWindowEnd,
   type AdminBoosterPurchaseView,
   type BoostDuration,
   type BoostFloorRow,
@@ -22,7 +30,21 @@ import {
   type BOOST_LOG_BRANCHES,
   type FloorChangeAuditRow,
   type FloorChangeAuditView,
+  type PaidInterval,
+  type SubscriptionPaymentRow,
+  type SubscriptionPaymentView,
+  type SubCheckoutMarkerRow,
 } from './types.js'
+
+// ─── Payment_Config_Guard (billing-revenue-integrity R1.2) ──────────────────
+//
+// Fail loud at cold-start. This module is the one that reads
+// `YOCO_WEBHOOK_SECRET` (in `processYocoWebhook`) and it is loaded by both the
+// API Lambda and the webhook route it serves. Validating the secret here at
+// module load means a prod deploy with the secret unset crashes the Lambda at
+// init — a visible deploy failure — instead of degrading into a runtime 401
+// stream that rejects every payment webhook. Dev/test is unaffected.
+assertPaymentConfig()
 
 // ─── Booster structured logging ─────────────────────────────────────────────
 //
@@ -152,23 +174,57 @@ export async function getOnboardingStatus(businessId: string) {
 
 // ─── Trial Expiry Enforcement ───────────────────────────────────────────────
 
-export function getEffectiveTier(biz: { tier?: string; trialEndsAt?: string | null }): string {
+// Tier_Resolver (billing-revenue-integrity R4.1, design Property 3). The single
+// authority for "what tier is this business entitled to right now" on every
+// feature-gating read path. A paid stored tier resolves only while at least one
+// entitlement window is active — trial, paidUntil, or the payment grace window.
+// When every window has lapsed the business falls back to starter. Free/starter
+// stored tiers always resolve starter. Total: never throws on any input.
+export function getEffectiveTier(
+  biz: {
+    tier?: string
+    trialEndsAt?: string | null
+    paidUntil?: string | null
+    paymentGraceUntil?: string | null
+  },
+  nowMs: number = Date.now(),
+): string {
   const tier = biz.tier ?? 'free'
   if (tier === 'free' || tier === 'starter') return 'starter'
-  // If on a paid tier but trial has expired and no payment, downgrade
-  if (biz.trialEndsAt && new Date(biz.trialEndsAt).getTime() < Date.now()) {
-    // Check if they have a payment method (yocoCustomerId)
-    if (!(biz as any).yocoCustomerId) return 'starter'
+
+  // Paid stored tier: entitled while any window is still open. A malformed date
+  // parses to NaN, and `NaN > now` is false, so a bad value simply fails closed
+  // to "window inactive" rather than throwing.
+  const windowActive = (iso?: string | null): boolean => {
+    if (!iso) return false
+    return new Date(iso).getTime() > nowMs
   }
-  return tier
+
+  if (windowActive(biz.trialEndsAt) || windowActive(biz.paidUntil) || windowActive(biz.paymentGraceUntil)) {
+    return tier
+  }
+  return 'starter'
 }
 
 // ─── Business Profile ───────────────────────────────────────────────────────
 
 export async function getBusinessProfile(cognitoSub: string) {
   if (DEV_MODE) {
-    return { id: 'dev-biz-1', businessName: 'Dev Business', email: 'dev@areacode.co.za', tier: 'growth', cognitoSub }
+    // Representative paid window so the dev portal can render billing state
+    // (R2.6). Values are illustrative only and never reach production.
+    return {
+      id: 'dev-biz-1',
+      businessName: 'Dev Business',
+      email: 'dev@areacode.co.za',
+      tier: 'growth',
+      cognitoSub,
+      paidUntil: addPaidInterval(new Date().toISOString(), 'monthly'),
+      paidInterval: 'monthly' as PaidInterval,
+    }
   }
+  // findBusinessByCognitoSub -> auth repo mapBiz spreads the whole stored item,
+  // so paidUntil / paidInterval / paymentGraceUntil already reach the response
+  // (R2.6). No explicit field projection to keep in sync.
   const biz = await repo.findBusinessByCognitoSub(cognitoSub)
   if (!biz) throw AppError.notFound('Business account not found')
   return biz
@@ -234,7 +290,11 @@ async function createYocoCheckout(
   metadata: Record<string, unknown>,
   pathAfterReturn: string,
 ): Promise<{ id: string; redirectUrl: string }> {
-  const secretKey = process.env['YOCO_PROD_SECRET_KEY'] ?? process.env['YOCO_DEV_SECRET_KEY'] ?? ''
+  // R1.3: explicit env branch, no masking `??` fallback chain. Prod reads ONLY
+  // the prod key; dev/test reads ONLY the dev key. A missing prod key is a
+  // serviceUnavailable, never a silent fall-through to the dev key or an empty
+  // string (`no-fallbacks-no-legacy.md`).
+  const secretKey = APP_ENV === 'dev' ? process.env['YOCO_DEV_SECRET_KEY'] : process.env['YOCO_PROD_SECRET_KEY']
   if (!secretKey) {
     throw AppError.serviceUnavailable('Payment provider is not configured. Please contact support.')
   }
@@ -457,14 +517,204 @@ async function handlePaymentSucceeded(payload: Record<string, unknown>) {
     return
   }
 
-  if (!metadata?.['businessId'] || !metadata['plan']) return
+  // ── Subscription activation branch (billing-revenue-integrity R2) ────────
+  // Everything past the boost branch is a subscription payment. Unlike the
+  // boost branch (which logs-and-returns on unrecognised metadata), a
+  // subscription with malformed metadata MUST throw so the webhook returns
+  // non-2xx and Yoco retries rather than activating an undefined plan (R2.5).
+  await persistSubscriptionPayment(payload)
+}
 
-  const businessId = metadata['businessId']
+// ─── Subscription payment activation (billing-revenue-integrity R2) ──────────
+//
+// See `.kiro/specs/billing-revenue-integrity/design.md` Flow 1.
+//
+// Mirrors `persistBoosterPurchase`'s write choreography (marker-first
+// conditional puts via `putSubscriptionPaymentWithMarker`, idempotent on
+// `yocoCheckoutId`) but with two deliberate differences dictated by R2:
+//
+//   1. Malformed `metadata.plan` / `metadata.interval` THROWS (R2.5) instead of
+//      logging-and-returning. A subscription webhook we cannot shape-validate
+//      must trigger a Yoco retry, never a silent no-op that could strand a
+//      paid business on the wrong tier.
+//   2. The audit row stores `paidUntilProduced` (the exact window end this
+//      payment bought). On a re-delivery under a fresh eventId the marker read
+//      returns `duplicate`; the reconciliation branch re-asserts the
+//      Business_Row from that stored value so a replay never extends the window
+//      a second time (R2.4, design Flow 1 ordering note).
+//
+// Ordering (Flow 1): marker + audit row precede the Business_Row update. A
+// crash between the audit write and the activation is healed by the Yoco
+// retry landing on the duplicate marker and running the reconciliation branch.
+
+const SUBSCRIPTION_PLANS_SET: ReadonlySet<'growth' | 'pro' | 'payg'> = new Set(['growth', 'pro', 'payg'])
+const PAID_INTERVALS_SET: ReadonlySet<PaidInterval> = new Set(PAID_INTERVALS)
+
+function logSubscriptionBranch(branch: string, fields: Record<string, unknown> = {}): void {
+  console.info(
+    JSON.stringify({
+      feature: 'business',
+      operation: 'persistSubscriptionPayment',
+      branch,
+      ...fields,
+    }),
+  )
+}
+
+// Canonical price for a (plan, interval) pair, from the single source of truth
+// `BUSINESS_PLANS` (the same table `createCheckoutSession` charges from). An
+// unsupported combination (e.g. `growth` + `daily`) returns null and is treated
+// as malformed metadata by the caller.
+function subscriptionAmountCents(plan: 'growth' | 'pro' | 'payg', interval: PaidInterval): number | null {
+  if (plan === 'payg') {
+    if (interval === 'daily') return BUSINESS_PLANS.payg.dailyPrice
+    if (interval === 'weekly') return BUSINESS_PLANS.payg.weeklyPrice
+    return null
+  }
+  if (interval === 'monthly') return BUSINESS_PLANS[plan].monthlyPrice
+  if (interval === 'yearly') return BUSINESS_PLANS[plan].yearlyPrice
+  return null
+}
+
+async function persistSubscriptionPayment(payload: Record<string, unknown>): Promise<void> {
+  const metadata = (payload['metadata'] ?? {}) as Record<string, unknown>
+  const businessId = typeof metadata['businessId'] === 'string' ? metadata['businessId'] : ''
   const plan = metadata['plan']
+  const interval = metadata['interval']
 
-  // Clear grace period on successful payment
-  await repo.setPaymentGrace(businessId, null)
-  await repo.updateBusinessTier(businessId, plan)
+  // R2.5: shape-validate plan and interval. Anything malformed THROWS so the
+  // webhook returns non-2xx and Yoco retries (never activate an undefined plan).
+  if (
+    businessId.length === 0 ||
+    businessId.length > 64 ||
+    typeof plan !== 'string' ||
+    !SUBSCRIPTION_PLANS_SET.has(plan as 'growth' | 'pro' | 'payg') ||
+    typeof interval !== 'string' ||
+    !PAID_INTERVALS_SET.has(interval as PaidInterval)
+  ) {
+    throw AppError.badRequest('Subscription webhook metadata failed shape validation')
+  }
+
+  const validPlan = plan as 'growth' | 'pro' | 'payg'
+  const validInterval = interval as PaidInterval
+
+  const amountCents = subscriptionAmountCents(validPlan, validInterval)
+  if (amountCents === null) {
+    // A plan/interval pair with no price is malformed (e.g. growth + daily).
+    throw AppError.badRequest(`Unsupported plan/interval combination: ${validPlan}/${validInterval}`)
+  }
+
+  // Yoco quotes the checkout id back inside `metadata` or at the top level
+  // (same extraction order as `persistBoosterPurchase`).
+  const yocoCheckoutId =
+    typeof metadata['checkoutId'] === 'string' && metadata['checkoutId'].length > 0
+      ? metadata['checkoutId']
+      : typeof payload['checkoutId'] === 'string'
+        ? (payload['checkoutId'] as string)
+        : typeof payload['id'] === 'string'
+          ? (payload['id'] as string)
+          : ''
+  if (yocoCheckoutId.length === 0 || yocoCheckoutId.length > 128) {
+    throw AppError.badRequest('Subscription webhook missing a usable yocoCheckoutId')
+  }
+
+  // The business must exist to activate the paid window on it. A missing
+  // business is surfaced (throw → Yoco retry), never silently swallowed.
+  const biz = await repo.findBusinessById(businessId)
+  if (!biz) {
+    throw AppError.notFound(`Business ${businessId} not found for subscription activation`)
+  }
+
+  // R2.3: extend from max(now, existing paidUntil) so a Renewal_Checkout adds
+  // to the remaining window rather than resetting it.
+  const nowMs = Date.now()
+  const nowIso = new Date(nowMs).toISOString()
+  const existingPaidUntil =
+    typeof (biz as { paidUntil?: unknown }).paidUntil === 'string'
+      ? ((biz as { paidUntil?: string }).paidUntil as string)
+      : null
+  const fromIso = existingPaidUntil && new Date(existingPaidUntil).getTime() > nowMs ? existingPaidUntil : nowIso
+  const paidUntil = addPaidInterval(fromIso, validInterval)
+
+  // Yoco's `payment.succeeded` payload may include a top-level `paidAt`;
+  // otherwise stamp "now" so the audit row always carries a sortable
+  // millisecond-precision UTC timestamp (mirrors `persistBoosterPurchase`).
+  const paidAtRaw = payload['paidAt']
+  const paidAtIso = typeof paidAtRaw === 'string' && paidAtRaw.length > 0 ? paidAtRaw : new Date().toISOString()
+  const createdAtIso = new Date().toISOString()
+
+  const purchase: SubscriptionPaymentRow = {
+    pk: `SUB#${businessId}`,
+    sk: `SUB#${paidAtIso}#${yocoCheckoutId}`,
+    gsi1pk: 'SUB_BY_TIME',
+    gsi1sk: paidAtIso,
+    businessId,
+    plan: validPlan,
+    interval: validInterval,
+    amountCents,
+    currency: 'ZAR',
+    yocoCheckoutId,
+    paidAt: paidAtIso,
+    paidUntilProduced: paidUntil,
+    createdAt: createdAtIso,
+  }
+
+  const marker: SubCheckoutMarkerRow = {
+    pk: `SUB_CHECKOUT#${yocoCheckoutId}`,
+    sk: `SUB_CHECKOUT#${yocoCheckoutId}`,
+    businessId,
+    subPk: purchase.pk,
+    subSk: purchase.sk,
+    createdAt: createdAtIso,
+  }
+
+  const { result } = await repo.putSubscriptionPaymentWithMarker({ purchase, marker })
+
+  if (result === 'duplicate') {
+    // Replay reconciliation (design Flow 1). Re-assert the Business_Row state
+    // idempotently from the ALREADY-persisted row's `paidUntilProduced`, so a
+    // re-delivery never extends the window a second time. Recompute nothing
+    // from `now`.
+    const existingMarker = await repo.getSubCheckoutMarker(yocoCheckoutId)
+    const existingRow = existingMarker
+      ? await repo.getSubscriptionPaymentByKey(existingMarker.subPk, existingMarker.subSk)
+      : null
+    if (existingRow) {
+      await repo.activateSubscriptionOnBusiness(businessId, {
+        tier: existingRow.plan,
+        paidUntil: existingRow.paidUntilProduced,
+        paidInterval: existingRow.interval,
+      })
+      logSubscriptionBranch('activation_replay_reconciled', {
+        businessId,
+        plan: existingRow.plan,
+        interval: existingRow.interval,
+        yocoCheckoutId,
+        paidUntil: existingRow.paidUntilProduced,
+      })
+    } else {
+      // Orphaned marker with no row (a compensating delete that itself failed,
+      // per the repository's documented edge). Nothing to reconcile from; log
+      // loudly so an operator can act rather than silently no-op.
+      logSubscriptionBranch('activation_replay_row_missing', { businessId, yocoCheckoutId })
+    }
+    return
+  }
+
+  // `written`: activate the freshly-produced window.
+  await repo.activateSubscriptionOnBusiness(businessId, {
+    tier: validPlan,
+    paidUntil,
+    paidInterval: validInterval,
+  })
+  logSubscriptionBranch('activation_written', {
+    businessId,
+    plan: validPlan,
+    interval: validInterval,
+    yocoCheckoutId,
+    amountCents,
+    paidUntil,
+  })
 }
 
 // ─── Booster purchase audit (R1) ────────────────────────────────────────────
@@ -606,14 +856,14 @@ async function persistBoosterPurchase(payload: Record<string, unknown>): Promise
         duration: validDuration,
         yocoCheckoutId,
       })
-      return
+    } else {
+      logBoostBranch('purchase_audit_written', {
+        businessId,
+        duration: validDuration,
+        yocoCheckoutId,
+        amountCents: amount,
+      })
     }
-    logBoostBranch('purchase_audit_written', {
-      businessId,
-      duration: validDuration,
-      yocoCheckoutId,
-      amountCents: amount,
-    })
   } catch (err) {
     // R9.6: emit `BoostPurchaseAuditMissing` then re-throw so Yoco retries.
     // The metric emission MUST NOT swallow or suppress the original error —
@@ -628,6 +878,18 @@ async function persistBoosterPurchase(payload: Record<string, unknown>): Promise
     }
     throw err
   }
+
+  // R5.1 (Flow 2): once the audit row has landed, set the node's Boost_Window
+  // to `paidAt + duration`. Runs after both a fresh `written` and a
+  // `duplicate` result: `setNodeBoostWindow` max-merges (it writes only when
+  // the new window ends later), so re-delivery recomputes the identical
+  // `boostUntil` from the row's own `paidAt` and the conditional write is a
+  // benign no-op — never a double-extension. Running it on `duplicate` too
+  // heals the case where an earlier delivery wrote the audit row but crashed
+  // before the window landed. A failure here throws so Yoco retries.
+  const boostUntil = boostWindowEnd(paidAtIso, validDuration)
+  const { setNodeBoostWindow } = await import('../nodes/dynamodb-repository.js')
+  await setNodeBoostWindow(nodeId, boostUntil)
 }
 
 async function handlePaymentFailed(payload: Record<string, unknown>) {
@@ -1052,7 +1314,105 @@ export async function deactivateForNonPayment(
   await repo.deactivateBusiness(businessId)
   const nodesDeactivated = await deactivateNodesForBusiness(businessId)
   await repo.setPaymentGrace(businessId, null)
+  // System-actor audit entry (cross-portal-lifecycle-alignment R2.3) so admin can
+  // answer "why did this venue leave the map". Reuses the admin audit-log write
+  // (one home for audit rows); actor `system:lapse-sweep` renders in the existing
+  // AuditTrailViewer unchanged. A failed audit write must not undo the demotion,
+  // so it is logged and swallowed rather than thrown.
+  try {
+    const { createAuditLog } = await import('../admin/repository.js')
+    await createAuditLog({
+      adminId: 'system:lapse-sweep',
+      adminRole: 'system',
+      action: 'deactivate_for_non_payment',
+      entityType: 'business',
+      entityId: businessId,
+      afterState: { tier: 'free', nodesDeactivated },
+    })
+  } catch (err) {
+    console.warn(`[business] deactivateForNonPayment: audit write failed for ${businessId}: ${String(err)}`)
+  }
   return { businessId, nodesDeactivated }
+}
+
+// ─── Lapse_Sweep phase 1 (billing-revenue-integrity R3.1, R3.6) ─────────────
+//
+// See `.kiro/specs/billing-revenue-integrity/design.md` Flow 3.
+//
+// The daily cleanup worker runs this BEFORE `enforceLapsedPayments` (phase 2).
+// Phase 1 moves a lapsed-but-not-yet-graced paid business into the 7-day
+// renewal grace window and sends one renewal-reminder email; phase 2 later
+// demotes anyone whose grace has itself lapsed via `deactivateForNonPayment`.
+//
+// Selection (`listBusinessesWithLapsedPaidUntil`, R3.1): paid tier, `paidUntil`
+// in the past, no grace set, no active trial. While the grace window is active
+// the Tier_Resolver (getEffectiveTier, R3.2) still returns the paid tier, so the
+// business is not visibly downgraded during grace.
+//
+// Idempotence / one-email-per-lapse (R3.6): grace is set BEFORE the email so a
+// business that has entered grace is excluded from the next run's selection.
+// Setting grace is therefore the dedup key — a lapse produces exactly one email,
+// and a re-run never re-emails a business already in grace. A per-business
+// failure is logged and skipped so one bad row never aborts the sweep (mirrors
+// `enforceLapsedPayments`).
+export async function startLapseSweep(nowMs: number = Date.now()): Promise<{ graced: number }> {
+  if (DEV_MODE) return { graced: 0 }
+  const nowIso = new Date(nowMs).toISOString()
+  const graceUntilIso = new Date(nowMs + SUBSCRIPTION_GRACE_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  const businesses = await repo.listBusinessesWithLapsedPaidUntil(nowIso)
+  let graced = 0
+  for (const biz of businesses) {
+    try {
+      // Grace first (the dedup key), then the single email. If the email throws
+      // after grace is set, the business is already excluded from the next run,
+      // so it is never re-emailed — at most one email per lapse.
+      await repo.setPaymentGrace(biz.businessId, graceUntilIso)
+      await sendRenewalReminderEmail(biz.email, biz.businessName)
+      graced++
+    } catch (err) {
+      console.warn(`[business] startLapseSweep: failed to grace ${biz.businessId}: ${String(err)}`)
+    }
+  }
+  return { graced }
+}
+
+// ─── Pre-lapse renewal reminder (billing-revenue-integrity R3.4) ────────────
+//
+// Composed into `handleTrialReminders` (trial-reminder.ts): the same daily
+// worker that nudges expiring trials also sends this pre-lapse renewal nudge.
+//
+// See design.md: "trial-reminder worker gains the renewal-reminder query (paid
+// tier, `paidUntil` within 7 days, interval monthly/yearly, one send per window
+// recorded on the row as `renewalReminderSentFor = paidUntil`)".
+//
+// Only `monthly` / `yearly` windows get a pre-lapse reminder (R3.4): a `daily`
+// or `weekly` payg window is too short for a 7-day lead to be meaningful, so
+// the selection query excludes them.
+//
+// Dedup / one-send-per-window: `listBusinessesForRenewalReminder` excludes any
+// row whose `renewalReminderSentFor` already equals its current `paidUntil`, and
+// we set that marker after sending. A renewal extends `paidUntil`, so the new
+// window's value differs and re-arms the reminder — exactly one email per paid
+// window. A per-business failure is logged and skipped so one bad row never
+// aborts the sweep (mirrors `startLapseSweep`).
+export async function sendRenewalReminders(nowMs: number = Date.now()): Promise<{ reminded: number }> {
+  if (DEV_MODE) return { reminded: 0 }
+  const nowIso = new Date(nowMs).toISOString()
+  const windowEndIso = new Date(nowMs + RENEWAL_REMINDER_LEAD_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  const businesses = await repo.listBusinessesForRenewalReminder(nowIso, windowEndIso)
+  let reminded = 0
+  for (const biz of businesses) {
+    try {
+      const msLeft = Date.parse(biz.paidUntil) - nowMs
+      const daysLeft = Math.max(1, Math.ceil(msLeft / (24 * 60 * 60 * 1000)))
+      await sendRenewalUpcomingEmail(biz.email, biz.businessName, daysLeft)
+      await repo.setRenewalReminderSent(biz.businessId, biz.paidUntil)
+      reminded++
+    } catch (err) {
+      console.warn(`[business] sendRenewalReminders: failed for ${biz.businessId}: ${String(err)}`)
+    }
+  }
+  return { reminded }
 }
 
 /**
@@ -1313,6 +1673,51 @@ export async function listBoosterPurchasesForBusiness(
   return { items: views, nextCursor }
 }
 
+// ─── Subscription payment history (billing-revenue-integrity R7.5) ──────────
+//
+// Mirrors `listBoosterPurchasesForBusiness`: the business-scope endpoint
+// queries `pk = SUB#<businessId>` newest-first and projects each
+// Subscription_Payment_Row to the `SubscriptionPaymentView`. The view carries
+// only business identifiers and amounts, so there is nothing to strip; it
+// drops the storage-only partition/sort/GSI key attributes and `createdAt`.
+//
+// The repo's `MalformedCursorError` propagates as-is so the handler can map
+// it to 400 Bad Request.
+
+/**
+ * List a business's own `Subscription_Payment_Row`s newest-first, paginated
+ * at `limit` rows per page (default 25). Each row is projected to the
+ * `SubscriptionPaymentView` (businessId, plan, interval, amountCents,
+ * currency, yocoCheckoutId, paidAt, paidUntilProduced).
+ *
+ * If `cursor` is malformed, the underlying repo throws `MalformedCursorError`
+ * which propagates so the handler can return 400.
+ *
+ * Validates: Requirements 7.5
+ */
+export async function listSubscriptionPaymentsForBusiness(
+  businessId: string,
+  cursor: string | null,
+  limit: number = 25,
+): Promise<{ items: SubscriptionPaymentView[]; nextCursor: string | null }> {
+  const { items, nextCursor } = await repo.querySubscriptionPaymentsForBusiness(businessId, cursor, limit)
+
+  // Project to the API view. Drop the row's partition/sort/GSI key attributes
+  // and `createdAt`, which are storage-only concerns.
+  const views: SubscriptionPaymentView[] = items.map((row) => ({
+    businessId: row.businessId,
+    plan: row.plan,
+    interval: row.interval,
+    amountCents: row.amountCents,
+    currency: row.currency,
+    yocoCheckoutId: row.yocoCheckoutId,
+    paidAt: row.paidAt,
+    paidUntilProduced: row.paidUntilProduced,
+  }))
+
+  return { items: views, nextCursor }
+}
+
 // ─── Admin Booster Purchase Queries (R7) ────────────────────────────────────
 //
 // See `.kiro/specs/booster-pricing-floor-and-audit/design.md` Admin Boost
@@ -1392,6 +1797,75 @@ export async function listBoosterPurchasesByDateRange(
     items: items.map(projectAdminBoosterPurchaseView),
     nextCursor,
   }
+}
+
+// ─── Admin Subscription Payment Report (R8) ─────────────────────────────────
+//
+// See `.kiro/specs/billing-revenue-integrity/design.md` access-pattern table
+// (Admin range). Mirrors `listBoosterPurchasesByDateRange` exactly: the
+// admin-facing surface queries GSI1 with `gsi1pk='SUB_BY_TIME'` and
+// `gsi1sk BETWEEN :from AND :to`, paginated newest-first. The single
+// `SubscriptionPaymentView` is already PII-free — rows carry business
+// identifiers and amounts only (R8.2) — so there is no separate admin-only
+// shape to project and nothing to strip beyond the storage-only key
+// attributes and `createdAt`, matching `listSubscriptionPaymentsForBusiness`.
+
+/**
+ * List `Subscription_Payment_Row`s across all businesses whose `paidAt` falls
+ * in the inclusive ISO-8601 range `[fromIso, toIso]`, paginated newest-first
+ * via `nextCursor`. Each row is projected to the `SubscriptionPaymentView`
+ * (R8.2 — business identifiers and amounts only, no consumer PII).
+ *
+ * R8.1: range validation runs BEFORE any DynamoDB call, identical to the
+ * admin boost report. The repo is never touched on a malformed range — the
+ * function throws an `AppError` with status 400 and code `INVALID_DATE_RANGE`.
+ * The bounds use `<=` so a same-instant range (matching exactly one row) is
+ * allowed and exactly `ADMIN_BOOST_REPORT_MAX_RANGE_DAYS` days is allowed.
+ *
+ * Validates: Requirements 8.1, 8.2
+ */
+export async function listSubscriptionPaymentsByDateRange(
+  fromIso: string,
+  toIso: string,
+  cursor: string | null,
+  limit: number = 25,
+): Promise<{ items: SubscriptionPaymentView[]; nextCursor: string | null }> {
+  // R8.1: parseable ISO-8601 timestamps. `Date.parse` returns NaN on garbage.
+  const fromMs = Date.parse(fromIso)
+  const toMs = Date.parse(toIso)
+  if (Number.isNaN(fromMs) || Number.isNaN(toMs)) {
+    throw new AppError(400, 'INVALID_DATE_RANGE', 'from and to must be parseable ISO 8601 timestamps')
+  }
+
+  // R8.1: `from <= to`. Use `<=` so a same-instant range (matching exactly
+  // one row) is allowed.
+  if (fromMs > toMs) {
+    throw new AppError(400, 'INVALID_DATE_RANGE', 'from must be less than or equal to to')
+  }
+
+  // R8.1: `(to - from) <= ADMIN_BOOST_REPORT_MAX_RANGE_DAYS`. Use `<=` so
+  // exactly 367 days is allowed. Same window as the admin boost report.
+  if (toMs - fromMs > ADMIN_BOOST_REPORT_MAX_RANGE_MS) {
+    throw new AppError(400, 'INVALID_DATE_RANGE', `Date range cannot exceed ${ADMIN_BOOST_REPORT_MAX_RANGE_DAYS} days`)
+  }
+
+  const { items, nextCursor } = await repo.querySubscriptionPaymentsByTimeRange(fromIso, toIso, cursor, limit)
+
+  // Project to the API view. The view is already PII-free (R8.2); this drops
+  // only the storage-only partition/sort/GSI key attributes and `createdAt`,
+  // identical to `listSubscriptionPaymentsForBusiness`.
+  const views: SubscriptionPaymentView[] = items.map((row) => ({
+    businessId: row.businessId,
+    plan: row.plan,
+    interval: row.interval,
+    amountCents: row.amountCents,
+    currency: row.currency,
+    yocoCheckoutId: row.yocoCheckoutId,
+    paidAt: row.paidAt,
+    paidUntilProduced: row.paidUntilProduced,
+  }))
+
+  return { items: views, nextCursor }
 }
 
 /**

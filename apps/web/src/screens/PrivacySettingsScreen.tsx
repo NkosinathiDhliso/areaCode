@@ -1,12 +1,13 @@
-import { useTranslation } from 'react-i18next'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '@area-code/shared/lib/api'
 import { Avatar } from '@area-code/shared/components/Avatar'
-import { Skeleton } from '@area-code/shared/components/Skeleton'
-import { PrivacySettingsPicker } from '@area-code/shared/components/PrivacySettingsPicker'
 import { BlockUserButton } from '@area-code/shared/components/BlockUserButton'
-import { ChevronLeft } from 'lucide-react'
+import { PrivacySettingsPicker } from '@area-code/shared/components/PrivacySettingsPicker'
+import { Skeleton } from '@area-code/shared/components/Skeleton'
+import { api } from '@area-code/shared/lib/api'
 import type { Tier } from '@area-code/shared/types'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { ChevronLeft } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+
 import type { AppRoute } from '../types'
 
 interface PrivacySettingsScreenProps {

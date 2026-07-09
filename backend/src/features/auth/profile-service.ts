@@ -1,7 +1,8 @@
+import { DEV_MODE } from '../../shared/config/env.js'
 import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet, kvSet, kvDel } from '../../shared/kv/dynamodb-kv.js'
+
 import * as repo from './repository.js'
-import { DEV_MODE } from '../../shared/config/env.js'
 
 // ─── User Profile ───────────────────────────────────────────────────────────
 

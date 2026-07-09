@@ -1,11 +1,16 @@
 import type { FastifyInstance } from 'fastify'
+import { z } from 'zod'
+
+import { getVerifiedEmailBySub } from '../../shared/cognito/client.js'
+import { AppError } from '../../shared/errors/AppError.js'
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { requireBusinessPermission } from '../../shared/middleware/business-role.js'
-import { validate } from '../../shared/middleware/validation.js'
 import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
-import { AppError } from '../../shared/errors/AppError.js'
-import * as service from './service.js'
+import { validate } from '../../shared/middleware/validation.js'
+import { getRedemptionsByStaffId } from '../rewards/repository.js'
+
 import { MalformedCursorError } from './repository.js'
+import * as service from './service.js'
 import {
   checkoutBodySchema,
   trialStartBodySchema,
@@ -14,9 +19,6 @@ import {
   staffInviteTokenParamsSchema,
   staffIdParamsSchema,
 } from './types.js'
-import { z } from 'zod'
-import { getRedemptionsByStaffId } from '../rewards/repository.js'
-import { getVerifiedEmailBySub } from '../../shared/cognito/client.js'
 
 const nodeIdParamsSchema = z.object({ nodeId: z.string().uuid() })
 const staffRedemptionParamsSchema = z.object({ staffId: z.string().uuid() })
@@ -255,6 +257,42 @@ export async function businessRoutes(app: FastifyInstance) {
         // R6.4: a malformed cursor surfaces from the repo as
         // MalformedCursorError; map to a typed 400 so the operator panel
         // can render an inline error instead of a generic 500.
+        if (err instanceof MalformedCursorError) {
+          throw new AppError(400, 'INVALID_CURSOR', 'Invalid pagination cursor')
+        }
+        throw err
+      }
+    },
+  )
+
+  // GET /v1/business/subscription-payments
+  // Operator-facing recent Subscription_Payment_Row entries for the caller's
+  // own business, newest-first with cursor pagination (R7.5). Mirrors the
+  // boost-purchases endpoint above: same `requireAuth('business', 'staff')`
+  // gate, same (cursor, limit) query schema, same 400-on-malformed-cursor
+  // handling. There is no path-level businessId here — the business scope is
+  // resolved from the auth context (auth.userId), the same identifier the
+  // boost-purchases route matches against. Rows are projected to the
+  // `SubscriptionPaymentView` in the service layer (business identifiers and
+  // amounts only, no PII).
+  app.get(
+    '/v1/business/subscription-payments',
+    {
+      preHandler: [requireAuth('business', 'staff'), validate({ query: boostPurchasesQuerySchema })],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      const query = request.query as z.infer<typeof boostPurchasesQuerySchema>
+
+      const cursor = query.cursor ?? null
+      const limit = query.limit ?? 25
+
+      try {
+        return await service.listSubscriptionPaymentsForBusiness(auth.userId, cursor, limit)
+      } catch (err) {
+        // A malformed cursor surfaces from the repo as MalformedCursorError;
+        // map to a typed 400 so the panel can render an inline error instead
+        // of a generic 500 (R7.5, parity with the boost-purchases route).
         if (err instanceof MalformedCursorError) {
           throw new AppError(400, 'INVALID_CURSOR', 'Invalid pagination cursor')
         }
@@ -658,6 +696,62 @@ export async function businessRoutes(app: FastifyInstance) {
         // pagination cursor surfaces from the repo as MalformedCursorError;
         // map it to 400 INVALID_CURSOR. This only fires on the date-range
         // path (single-payment mode is cursor-less).
+        if (err instanceof MalformedCursorError) {
+          throw new AppError(400, 'INVALID_CURSOR', 'Invalid pagination cursor')
+        }
+        throw err
+      }
+    },
+  )
+
+  // ─── Admin Subscription Payment Report (R8) ────────────────────────────
+  //
+  // GET /v1/admin/subscription-payments?from&to — cross-business
+  // Subscription_Payment_Row report for ops, refund, and revenue
+  // reconciliation (Task 8.3). Mirrors the admin boost report's date-range
+  // mode exactly: both `from` and `to` are required, the service layer
+  // validates the range BEFORE any DynamoDB call and throws
+  // `AppError(400, 'INVALID_DATE_RANGE')` if `from > to` or the span exceeds
+  // `ADMIN_BOOST_REPORT_MAX_RANGE_DAYS` (367 days). Rows are projected to the
+  // `SubscriptionPaymentView` (business identifiers and amounts only, no
+  // consumer PII, R8.2).
+  //
+  // Auth: `requireAuth('admin')` — non-admin tokens are rejected by the
+  // middleware before the handler runs (R8.2), matching the boost report.
+  const subscriptionPaymentsAdminQuerySchema = z.object({
+    from: z.string().optional(),
+    to: z.string().optional(),
+    cursor: z.string().min(1).optional(),
+    limit: z.coerce.number().int().positive().max(100).optional(),
+  })
+
+  app.get(
+    '/v1/admin/subscription-payments',
+    {
+      preHandler: [requireAuth('admin'), validate({ query: subscriptionPaymentsAdminQuerySchema })],
+    },
+    async (request) => {
+      const query = request.query as z.infer<typeof subscriptionPaymentsAdminQuerySchema>
+      const { from, to, cursor } = query
+      const limit = query.limit ?? 25
+
+      const hasFrom = typeof from === 'string' && from.length > 0
+      const hasTo = typeof to === 'string' && to.length > 0
+
+      // Both `from` and `to` are required for the date-range report. Reject an
+      // absent or asymmetric range explicitly rather than querying an
+      // undefined window. The service layer enforces the range bounds (R8.1)
+      // before any DynamoDB call.
+      if (!hasFrom || !hasTo) {
+        throw new AppError(400, 'INVALID_QUERY', 'Both from and to are required')
+      }
+
+      try {
+        return await service.listSubscriptionPaymentsByDateRange(from, to, cursor ?? null, limit)
+      } catch (err) {
+        // Parity with the admin boost report: a malformed pagination cursor
+        // surfaces from the repo as MalformedCursorError; map it to 400
+        // INVALID_CURSOR.
         if (err instanceof MalformedCursorError) {
           throw new AppError(400, 'INVALID_CURSOR', 'Invalid pagination cursor')
         }

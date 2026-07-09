@@ -107,6 +107,7 @@ const mocks = vi.hoisted(() => {
     deleteConnectionsByUser: vi.fn(),
     deleteUserByUsername: vi.fn(),
     cleanupOrphanedLocks: vi.fn(async () => ({ deleted: 0 })),
+    startLapseSweep: vi.fn(async () => ({ graced: 0 })),
     enforceLapsedPayments: vi.fn(async () => ({ processed: 0 })),
   }
 })
@@ -143,6 +144,7 @@ vi.mock('../../features/rewards/threshold-lock.js', () => ({
   cleanupOrphanedLocks: mocks.cleanupOrphanedLocks,
 }))
 vi.mock('../../features/business/service.js', () => ({
+  startLapseSweep: mocks.startLapseSweep,
   enforceLapsedPayments: mocks.enforceLapsedPayments,
 }))
 

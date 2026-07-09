@@ -1,6 +1,6 @@
 import { Spinner } from '@area-code/shared/components/Spinner'
-import { exchangeCodeForTokens } from '@area-code/shared/lib/cognitoHostedUiOAuth'
 import { api } from '@area-code/shared/lib/api'
+import { exchangeCodeForTokens } from '@area-code/shared/lib/cognitoHostedUiOAuth'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'

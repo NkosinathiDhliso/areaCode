@@ -17,8 +17,8 @@
  *
  * Validates: Requirements 5.1, 5.4, 5.7, 5.9, 10.1, 10.2, 10.3
  */
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect } from 'vitest'
 
 import { MUSIC_GENRES } from '../../constants/genre-weights'
 import type { LineupEntry, MusicGenre, MusicSchedule, ScheduleDayOfWeek, ScheduleSlot } from '../../types'

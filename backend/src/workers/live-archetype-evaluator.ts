@@ -32,17 +32,16 @@
 // `eclectic_fallback`, which is the documented behaviour for the
 // pre-denormalisation period.
 
-import { GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
-
-import { documentClient, TableNames } from '../shared/db/dynamodb.js'
-import { getCounter } from '../features/presence/repository.js'
-import { cityRoom } from '../shared/socket/rooms.js'
-import { emitArchetypeChange } from '../shared/socket/events.js'
-import { countRoomConnections } from '../shared/websocket/broadcast.js'
-
 import { getFeatureFlag } from '@area-code/shared/lib/featureGating'
 import { resolveLiveArchetype, type LiveArchetypeCheckIn } from '@area-code/shared/lib/liveArchetype'
 import type { LiveArchetypeBranch, MusicSchedule } from '@area-code/shared/types'
+import { GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+
+import { getCounter } from '../features/presence/repository.js'
+import { documentClient, TableNames } from '../shared/db/dynamodb.js'
+import { emitArchetypeChange } from '../shared/socket/events.js'
+import { cityRoom } from '../shared/socket/rooms.js'
+import { countRoomConnections } from '../shared/websocket/broadcast.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public types

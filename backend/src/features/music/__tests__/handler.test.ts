@@ -23,11 +23,10 @@
  *   "before any DynamoDB I/O" guarantee).
  */
 
-import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
-import type { FastifyInstance } from 'fastify'
-
-import type { MusicSchedule } from '@area-code/shared/types'
 import { ScheduleValidationError } from '@area-code/shared/lib/schedule-validator'
+import type { MusicSchedule } from '@area-code/shared/types'
+import type { FastifyInstance } from 'fastify'
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
 
 // ─── In-memory repository mock ──────────────────────────────────────────────
 //

@@ -1,10 +1,11 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import jwt from 'jsonwebtoken'
 import jwksClient from 'jwks-rsa'
-import { AppError } from '../errors/AppError.js'
-import { AWS_REGION, DEV_MODE, requireEnv } from '../config/env.js'
+
 import { getUserByCognitoSub, getStaffByCognitoSub } from '../../features/auth/dynamodb-repository.js'
 import { findBusinessByCognitoSub } from '../../features/business/repository.js'
+import { AWS_REGION, DEV_MODE, requireEnv } from '../config/env.js'
+import { AppError } from '../errors/AppError.js'
 
 export type AuthRole = 'consumer' | 'business' | 'staff' | 'admin'
 

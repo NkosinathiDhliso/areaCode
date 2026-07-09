@@ -1,8 +1,8 @@
+import { installDomReconciliationGuard } from '@area-code/shared/lib/domReconciliationGuard'
+import { installPreloadErrorHandler } from '@area-code/shared/lib/preloadErrorHandler'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 
-import { installPreloadErrorHandler } from '@area-code/shared/lib/preloadErrorHandler'
-import { installDomReconciliationGuard } from '@area-code/shared/lib/domReconciliationGuard'
 import { App } from './App'
 import './i18n'
 import './app.css'

@@ -23,11 +23,11 @@
  * internals. The real Zustand stores are driven via setState and reset in
  * beforeEach. No network, no WebGL.
  */
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { TROPHY_TAP_GAP_MS } from '@area-code/shared/lib/rapidTap'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useUserStore } from '@area-code/shared/stores/userStore'
-import { TROPHY_TAP_GAP_MS } from '@area-code/shared/lib/rapidTap'
 import type { User } from '@area-code/shared/types'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 

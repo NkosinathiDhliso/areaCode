@@ -6,13 +6,13 @@
  * reconnect payload omits.
  */
 // @vitest-environment jsdom
-import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
+import { describe, expect, it, beforeEach, vi } from 'vitest'
 
-import { useNodeArchetype } from '../useNodeArchetype'
-import { useMapStore } from '../../stores/mapStore'
 import { setSocketOverride } from '../../lib/websocket'
+import { useMapStore } from '../../stores/mapStore'
 import type { Node } from '../../types'
+import { useNodeArchetype } from '../useNodeArchetype'
 
 const RETENTION_MS = 5 * 60 * 1000
 

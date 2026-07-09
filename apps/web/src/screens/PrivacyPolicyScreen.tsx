@@ -1,4 +1,5 @@
 import { ChevronLeft } from 'lucide-react'
+
 import type { AppRoute } from '../types'
 
 interface PrivacyPolicyScreenProps {

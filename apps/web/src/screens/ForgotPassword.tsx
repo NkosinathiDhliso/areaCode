@@ -1,6 +1,7 @@
+import { api } from '@area-code/shared/lib/api'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { api } from '@area-code/shared/lib/api'
+
 import type { AppRoute } from '../types'
 
 interface ForgotPasswordProps {

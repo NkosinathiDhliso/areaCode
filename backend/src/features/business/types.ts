@@ -268,6 +268,166 @@ export const floorChangeAuditViewSchema = z.object({
 
 export type FloorChangeAuditView = z.infer<typeof floorChangeAuditViewSchema>
 
+// ─── Subscription payments (billing-revenue-integrity) ──────────────────────
+//
+// See `.kiro/specs/billing-revenue-integrity/`. Mirrors the BoosterPurchase
+// audit choreography: one durable row per successful subscription payment
+// (7-year financial retention, no `ttl`), an idempotency marker keyed on the
+// Yoco checkout id, and an API view that keeps serialize(deserialize(row))
+// symmetric (Property 6). No phone / SMS / consumer-PII fields.
+
+/** The four billing intervals a paid window can be bought in (R2.3). */
+export const PAID_INTERVALS = ['monthly', 'yearly', 'daily', 'weekly'] as const
+export type PaidInterval = (typeof PAID_INTERVALS)[number]
+
+/** Length of the post-lapse renewal grace window, in days (R3.1). */
+export const SUBSCRIPTION_GRACE_DAYS = 7
+
+/**
+ * Lead time before `paidUntil` lapses for the pre-lapse renewal reminder, in
+ * days (R3.4). The trial-reminder worker sends one reminder when a paid
+ * monthly/yearly window is within this many days of ending.
+ */
+export const RENEWAL_REMINDER_LEAD_DAYS = 7
+
+const paidIntervalSchema = z.enum(PAID_INTERVALS)
+const subscriptionPlanSchema = z.enum(['growth', 'pro', 'payg'])
+
+// ─── Subscription_Payment_Row (audit row) ───────────────────────────────────
+// pk `SUB#<businessId>`, sk `SUB#<paidAt_iso>#<yocoCheckoutId>`, GSI1
+// `SUB_BY_TIME`. `paidUntilProduced` records the window end this row bought so
+// replays recompute Paid_Until exactly (design Flow 1).
+
+export const subscriptionPaymentRowSchema = z.object({
+  pk: z.string().regex(/^SUB#[\w-]{1,64}$/),
+  sk: z.string().min(1),
+  gsi1pk: z.literal('SUB_BY_TIME'),
+  gsi1sk: z.string().min(1),
+  businessId: z.string().min(1).max(64),
+  plan: subscriptionPlanSchema,
+  interval: paidIntervalSchema,
+  amountCents: z.number().int().positive(),
+  currency: zarCurrencySchema,
+  yocoCheckoutId: z.string().min(1).max(128),
+  paidAt: z.string().min(1),
+  paidUntilProduced: z.string().min(1),
+  createdAt: z.string().min(1),
+})
+
+export type SubscriptionPaymentRow = z.infer<typeof subscriptionPaymentRowSchema>
+
+// ─── Idempotency marker row (SUB_CHECKOUT#<yocoCheckoutId>) ─────────────────
+// Same semantics as `BOOST_CHECKOUT#`: `attribute_not_exists` on write blocks
+// a second activation when Yoco re-delivers under a fresh eventId (R2.4).
+
+export const subCheckoutMarkerRowSchema = z.object({
+  pk: z.string().regex(/^SUB_CHECKOUT#[\w-]{1,128}$/),
+  sk: z.string().regex(/^SUB_CHECKOUT#[\w-]{1,128}$/),
+  businessId: z.string().min(1).max(64),
+  subPk: z.string().regex(/^SUB#[\w-]{1,64}$/),
+  subSk: z.string().min(1),
+  createdAt: z.string().min(1),
+})
+
+export type SubCheckoutMarkerRow = z.infer<typeof subCheckoutMarkerRowSchema>
+
+// ─── API view ───────────────────────────────────────────────────────────────
+// Business history (R7.5) and admin cross-business range report (R8.1) share
+// one view: the row carries only business identifiers and amounts (R8.2), so
+// there is no PII to strip and no need for a second admin-only shape.
+
+export const subscriptionPaymentViewSchema = z.object({
+  businessId: z.string().min(1).max(64),
+  plan: subscriptionPlanSchema,
+  interval: paidIntervalSchema,
+  amountCents: z.number().int().positive(),
+  currency: zarCurrencySchema,
+  yocoCheckoutId: z.string().min(1).max(128),
+  paidAt: z.string().min(1),
+  paidUntilProduced: z.string().min(1),
+})
+
+export type SubscriptionPaymentView = z.infer<typeof subscriptionPaymentViewSchema>
+
+// ─── Paid_Until arithmetic (Property 1: total and monotone) ─────────────────
+//
+// `monthly` = +1 calendar month clamped to the last day of the target month
+// (31 Jan + monthly = 28/29 Feb); `yearly` = +1 calendar year (also clamped,
+// so 29 Feb + yearly = 28 Feb); `daily` = +1 day; `weekly` = +7 days. All UTC.
+// The time-of-day components are preserved. Pure and total: the only throw is
+// an invalid input instant, which is a programming error, not a runtime state.
+
+function daysInUtcMonth(year: number, monthZeroBased: number): number {
+  // Day 0 of the next month is the last day of this month.
+  return new Date(Date.UTC(year, monthZeroBased + 1, 0)).getUTCDate()
+}
+
+function addCalendarMonthsClamped(date: Date, months: number): void {
+  const day = date.getUTCDate()
+  // Snap to the 1st before shifting the month so JS cannot overflow
+  // (e.g. 31 Jan + 1 month would otherwise roll into 2/3 March).
+  date.setUTCDate(1)
+  date.setUTCMonth(date.getUTCMonth() + months)
+  const lastDay = daysInUtcMonth(date.getUTCFullYear(), date.getUTCMonth())
+  date.setUTCDate(Math.min(day, lastDay))
+}
+
+/**
+ * Extend a paid window from `fromIso` by one `interval`. Returns a valid ISO
+ * 8601 UTC instant strictly greater than `fromIso`. Callers pass
+ * `max(now, existing paidUntil)` so a renewal extends rather than resets
+ * (R2.3).
+ */
+export function addPaidInterval(fromIso: string, interval: PaidInterval): string {
+  const from = new Date(fromIso)
+  if (Number.isNaN(from.getTime())) {
+    throw new Error(`addPaidInterval: invalid ISO instant "${fromIso}"`)
+  }
+  const result = new Date(from.getTime())
+  switch (interval) {
+    case 'daily':
+      result.setUTCDate(result.getUTCDate() + 1)
+      break
+    case 'weekly':
+      result.setUTCDate(result.getUTCDate() + 7)
+      break
+    case 'monthly':
+      addCalendarMonthsClamped(result, 1)
+      break
+    case 'yearly':
+      addCalendarMonthsClamped(result, 12)
+      break
+  }
+  return result.toISOString()
+}
+
+/** Hours a boost purchase buys, keyed by `BoostDuration` (R5.1). */
+export const BOOST_DURATION_HOURS: Record<BoostDuration, number> = {
+  '2hr': 2,
+  '6hr': 6,
+  '24hr': 24,
+} as const
+
+/**
+ * Compute a Boost_Window end from the payment instant and purchased duration:
+ * `paidAt + duration hours`, returned as a millisecond ISO 8601 UTC string
+ * (as produced by `Date.prototype.toISOString`) so it compares
+ * lexicographically in chronological order and feeds `setNodeBoostWindow`'s
+ * max-merge condition directly (R5.1).
+ *
+ * Pure and deterministic: the same `(paidAtIso, duration)` always yields the
+ * same window end, which is what makes boost activation idempotent under
+ * webhook re-delivery (the max-merge write is a no-op on replay).
+ */
+export function boostWindowEnd(paidAtIso: string, duration: BoostDuration): string {
+  const paidAt = new Date(paidAtIso)
+  if (Number.isNaN(paidAt.getTime())) {
+    throw new Error(`boostWindowEnd: invalid ISO instant "${paidAtIso}"`)
+  }
+  const end = new Date(paidAt.getTime() + BOOST_DURATION_HOURS[duration] * 60 * 60 * 1000)
+  return end.toISOString()
+}
+
 // Zod schemas
 export const checkoutBodySchema = z.object({
   plan: z.enum(['growth', 'pro', 'payg']),

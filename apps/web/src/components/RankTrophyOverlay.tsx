@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useRef, type CSSProperties } from 'react'
-
 import { getTierLabel } from '@area-code/shared/constants/tier-levels'
 import type { Tier } from '@area-code/shared/types'
+import { useCallback, useEffect, useRef, type CSSProperties } from 'react'
 
 import { reducedMotion } from '../lib/reducedMotion'
 import {

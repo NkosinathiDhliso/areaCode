@@ -28,8 +28,8 @@
  *   `sk = BOOST#<paidAt>#<yocoCheckoutId>` shape.
  */
 
-import { describe, it, expect, vi } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect, vi } from 'vitest'
 
 // ─── Mocks ──────────────────────────────────────────────────────────────────
 
@@ -109,8 +109,8 @@ vi.mock('../../../shared/db/dynamodb.js', () => ({
 
 // Imports must come AFTER the `vi.mock` so the module-level singletons in the
 // repo pick up the stubbed `documentClient`.
-import { listBoosterPurchasesForBusiness } from '../service.js'
 import { MalformedCursorError } from '../repository.js'
+import { listBoosterPurchasesForBusiness } from '../service.js'
 import { type BoosterPurchaseRow } from '../types.js'
 
 // ─── Arbitraries ────────────────────────────────────────────────────────────

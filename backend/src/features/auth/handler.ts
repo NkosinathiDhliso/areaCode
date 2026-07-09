@@ -2,9 +2,9 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
+import { originGuard } from '../../shared/middleware/origin-guard.js'
 import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
 import { validate } from '../../shared/middleware/validation.js'
-import { originGuard } from '../../shared/middleware/origin-guard.js'
 
 import * as service from './service.js'
 import {

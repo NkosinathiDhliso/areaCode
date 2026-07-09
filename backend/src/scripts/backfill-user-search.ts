@@ -26,8 +26,8 @@
  */
 import { ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 
-import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 import { deriveSearchAttributes } from '../features/auth/dynamodb-repository.js'
+import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 
 const DRY_RUN = process.argv.includes('--dry-run')
 

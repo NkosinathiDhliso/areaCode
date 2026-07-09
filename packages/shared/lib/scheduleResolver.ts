@@ -1,4 +1,5 @@
 import type { LineupEntry, MusicSchedule, ScheduleDayOfWeek, ScheduleSlot } from '../types'
+
 import { ScheduleValidationError, validateMusicSchedule } from './schedule-validator'
 
 // ─────────────────────────────────────────────────────────────────────────────

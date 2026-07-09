@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
-import { ARCHETYPE_NAMES, getArchetypeDisplayName, getArchetypeEtymology } from '../archetype-names'
+import { describe, it, expect } from 'vitest'
+
 import { ARCHETYPE_CATALOG } from '../archetype-catalog'
+import { ARCHETYPE_NAMES, getArchetypeDisplayName, getArchetypeEtymology } from '../archetype-names'
 
 const DISPLAY_NAME_REGEX = /^[A-Z][a-z]+$/
 

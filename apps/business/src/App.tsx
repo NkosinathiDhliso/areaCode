@@ -1,16 +1,16 @@
-import { useState, useEffect } from 'react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-
-import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
+import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
+import { GlobalErrorToast } from '@area-code/shared/components/GlobalErrorToast'
 import { useTheme } from '@area-code/shared/hooks/useTheme'
 import { api } from '@area-code/shared/lib/api'
 import { getSocket } from '@area-code/shared/lib/socket'
-import { ErrorBoundary } from '@area-code/shared/components/ErrorBoundary'
-import { GlobalErrorToast } from '@area-code/shared/components/GlobalErrorToast'
-import { BusinessLogin } from './screens/BusinessLogin'
-import { BusinessSignup } from './screens/BusinessSignup'
-import { BusinessOAuthCallback } from './screens/BusinessOAuthCallback'
+import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { useState, useEffect } from 'react'
+
 import { BusinessDashboard } from './screens/BusinessDashboard'
+import { BusinessLogin } from './screens/BusinessLogin'
+import { BusinessOAuthCallback } from './screens/BusinessOAuthCallback'
+import { BusinessSignup } from './screens/BusinessSignup'
 
 const queryClient = new QueryClient()
 

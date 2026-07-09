@@ -1,9 +1,18 @@
-import type { Node } from '@area-code/shared/types'
+import { TIER_SIZE_MULTIPLIER } from '@area-code/shared/constants'
+import type { BusinessTier, Node } from '@area-code/shared/types'
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 
-import type { BrowseAction, BrowseState, RankInput, ViewportBounds } from './carouselRanking'
-import { browseReducer, deriveBrowseStrip, haversineMeters, scopeToViewport, vibeRank } from './carouselRanking'
+import type { BrowseState, RankInput, ViewportBounds } from './carouselRanking'
+import {
+  browseReducer,
+  deriveBrowseStrip,
+  haversineMeters,
+  resolveArchetype,
+  scopeToViewport,
+  tasteMatchScore,
+  vibeRank,
+} from './carouselRanking'
 
 /**
  * Map Discovery - proximity-biased ranking + viewport scoping property tests.
@@ -287,5 +296,110 @@ describe('Feature: vibe-ranked-browse, deriveBrowseStrip unit tests', () => {
     const result = deriveBrowseStrip(one, 2)
     expect(result.visible).toHaveLength(1)
     expect(result.showMore).toBe(false)
+  })
+})
+
+// ─── Boost ranking level containment (billing-revenue-integrity) ────────────
+
+/**
+ * Property 4: a paid boost lives entirely inside vibeRank level 3 and can never
+ * cross the taste (level 1) or aliveness (level 2) signals. Within venues that
+ * are equal on taste and aliveness, `boostActive` orders ahead of business tier
+ * (boost breaks before tier). Extends the vibeRank property suite above.
+ *
+ * Validates: Requirements 5.3, 5.5
+ */
+const BOOST_TIERS: BusinessTier[] = ['free', 'starter', 'payg', 'growth', 'pro']
+const BOOST_ARCHETYPES = ['archetype-a', 'archetype-b', 'archetype-c']
+
+/** A venue carrying the level-3 signals (boost, tier) plus a taste archetype. */
+function makeBoostNode(id: string, boostActive: boolean, businessTier: BusinessTier, defaultArchetypeId: string): Node {
+  return { ...makeNode(id, 0, 0), boostActive, businessTier, defaultArchetypeId } as Node
+}
+
+const boostScenarioArb = fc
+  .uniqueArray(
+    fc.record({
+      id: fc.string({ minLength: 1, maxLength: 5 }),
+      boostActive: fc.boolean(),
+      businessTier: fc.constantFrom(...BOOST_TIERS),
+      defaultArchetypeId: fc.constantFrom(...BOOST_ARCHETYPES),
+      // Small score ranges so ties on taste and aliveness are common, forcing
+      // the comparator down into level 3 where boost lives.
+      pulse: fc.nat({ max: 6 }),
+      checkin: fc.nat({ max: 6 }),
+      friends: fc.nat({ max: 3 }),
+    }),
+    { minLength: 2, maxLength: 8, selector: (v) => v.id },
+  )
+  .chain((venues) =>
+    fc.record({
+      venues: fc.constant(venues),
+      // A null archetype degrades taste to friends-only; a set one creates
+      // strict taste winners and losers to test level-1 containment.
+      consumerArchetypeId: fc.option(fc.constantFrom(...BOOST_ARCHETYPES), { nil: null }),
+    }),
+  )
+
+describe('Feature: billing-revenue-integrity, Property 4: boost never crosses ranking levels', () => {
+  it('boost stays inside level 3: it never reorders a taste or aliveness winner, and orders ahead of tier', () => {
+    fc.assert(
+      fc.property(boostScenarioArb, ({ venues, consumerArchetypeId }) => {
+        const nodes = venues.map((v) => makeBoostNode(v.id, v.boostActive, v.businessTier, v.defaultArchetypeId))
+        const pulseScores: Record<string, number> = {}
+        const checkInCounts: Record<string, number> = {}
+        const friendsAtVenue: Record<string, string[]> = {}
+        venues.forEach((v) => {
+          pulseScores[v.id] = v.pulse
+          checkInCounts[v.id] = v.checkin
+          friendsAtVenue[v.id] = Array.from({ length: v.friends }, (_, i) => `u${i}`)
+        })
+
+        const input: RankInput = {
+          venues: nodes,
+          pulseScores,
+          checkInCounts,
+          lastKnownPosition: null,
+          positionFresh: false,
+          consumerArchetypeId,
+          venueArchetypeIds: {},
+          friendsAtVenue,
+          hasLiveGets: {},
+        }
+        const ranked = vibeRank(input)
+
+        const taste = (v: Node) =>
+          tasteMatchScore(consumerArchetypeId, resolveArchetype(v, {}), (friendsAtVenue[v.id] ?? []).length)
+        const alive = (v: Node) => (pulseScores[v.id] ?? 0) + (checkInCounts[v.id] ?? 0)
+        const boost = (v: Node) => (v.boostActive ? 1 : 0)
+        const tier = (v: Node) => TIER_SIZE_MULTIPLIER[v.businessTier ?? 'starter']
+
+        // For every ordered pair (A before B), the lexicographic level hierarchy
+        // holds. This proves a boost assignment can never reorder a pair that is
+        // separated on taste (1) or aliveness (2): whenever A strictly beats B on
+        // taste, or ties taste but strictly beats aliveness, A precedes B no
+        // matter how boostActive is assigned to B. Only when A and B tie on both
+        // does boost decide, and it sorts ahead of tier.
+        for (let i = 0; i < ranked.length; i++) {
+          for (let j = i + 1; j < ranked.length; j++) {
+            const a = ranked[i]!
+            const b = ranked[j]!
+            expect(taste(a)).toBeGreaterThanOrEqual(taste(b))
+            if (taste(a) === taste(b)) {
+              expect(alive(a)).toBeGreaterThanOrEqual(alive(b))
+              if (alive(a) === alive(b)) {
+                // Equal on taste + aliveness: boostActive orders ahead (level 3a).
+                expect(boost(a)).toBeGreaterThanOrEqual(boost(b))
+                // Boost breaks before tier: tier only decides once boost ties (3b).
+                if (boost(a) === boost(b)) {
+                  expect(tier(a)).toBeGreaterThanOrEqual(tier(b))
+                }
+              }
+            }
+          }
+        }
+      }),
+      { numRuns: 200 },
+    )
   })
 })

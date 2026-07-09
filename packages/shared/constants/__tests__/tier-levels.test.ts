@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
-import { getTier, getTierLabel, TIER_LEVELS } from '../tier-levels'
+import { describe, it, expect } from 'vitest'
+
 import type { Tier } from '../../types'
+import { getTier, getTierLabel, TIER_LEVELS } from '../tier-levels'
 
 /**
  * Property 2: Tier assignment monotonicity.

@@ -1,5 +1,6 @@
-import type { LiveArchetypeBranch, MusicSchedule, Node, PersonalityArchetype } from '../types'
 import { ARCHETYPE_CATALOG } from '../constants/archetype-catalog'
+import type { LiveArchetypeBranch, MusicSchedule, Node, PersonalityArchetype } from '../types'
+
 import { genresToArchetype } from './genreToArchetype'
 import { resolveActiveSlot, ScheduleResolverInternalError } from './scheduleResolver'
 

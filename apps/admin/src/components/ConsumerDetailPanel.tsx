@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-
+import { getTierLabel } from '@area-code/shared/constants/tier-levels'
 import { api } from '@area-code/shared/lib/api'
 import type { Tier, User } from '@area-code/shared/types'
-import { getTierLabel } from '@area-code/shared/constants/tier-levels'
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface ConsentRow {
   consentVersion?: string

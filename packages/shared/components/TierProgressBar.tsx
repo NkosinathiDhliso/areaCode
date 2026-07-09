@@ -1,6 +1,7 @@
-import type { Tier } from '../types'
 import { TIER_LEVELS } from '../constants/tier-levels'
 import type { TierLevel } from '../constants/tier-levels'
+import type { Tier } from '../types'
+
 import { Box, Text } from './primitives'
 
 interface TierProgressBarProps {

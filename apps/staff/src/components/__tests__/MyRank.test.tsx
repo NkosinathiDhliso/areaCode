@@ -7,8 +7,8 @@
  * **Validates: Requirements 5.2**
  */
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, waitFor, cleanup } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 

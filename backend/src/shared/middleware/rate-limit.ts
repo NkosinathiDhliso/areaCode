@@ -1,7 +1,8 @@
 import type { FastifyRequest } from 'fastify'
-import { kvIncr, kvTtl } from '../kv/dynamodb-kv.js'
-import { AppError } from '../errors/AppError.js'
+
 import { DEV_MODE } from '../config/env.js'
+import { AppError } from '../errors/AppError.js'
+import { kvIncr, kvTtl } from '../kv/dynamodb-kv.js'
 
 interface RateLimitOptions {
   /** Key prefix for this limiter */

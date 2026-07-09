@@ -1,5 +1,6 @@
 import { getTierLabel } from '../constants/tier-levels'
 import type { Tier } from '../types'
+
 import { Text } from './primitives'
 
 interface TierBadgeProps {

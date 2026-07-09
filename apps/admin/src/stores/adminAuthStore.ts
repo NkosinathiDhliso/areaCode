@@ -1,7 +1,6 @@
-import { create } from 'zustand'
-
 import { storage } from '@area-code/shared/lib/storage'
 import type { AdminRole } from '@area-code/shared/types'
+import { create } from 'zustand'
 
 interface AdminAuthState {
   accessToken: string | null

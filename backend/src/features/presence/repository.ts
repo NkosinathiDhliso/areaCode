@@ -23,13 +23,15 @@
 //
 // No latitude/longitude is ever read or written here (POPIA): proximity is
 // evaluated at check-in time and discarded before any record is constructed.
+import type { VenueMomentum } from '@area-code/shared/types'
 import { UpdateCommand, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb'
+
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { kvGet, kvSet } from '../../shared/kv/dynamodb-kv.js'
-import { livePresenceCount } from './read-model.js'
-import { deriveMomentum, pruneSamples, MOMENTUM_WINDOW_SECONDS, type PresenceSample } from './momentum.js'
 import type { PresenceRecord, PresenceState } from '../check-out/types.js'
-import type { VenueMomentum } from '@area-code/shared/types'
+
+import { deriveMomentum, pruneSamples, MOMENTUM_WINDOW_SECONDS, type PresenceSample } from './momentum.js'
+import { livePresenceCount } from './read-model.js'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

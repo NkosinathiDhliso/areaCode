@@ -1,5 +1,6 @@
-import { AppError } from '../../shared/errors/AppError.js'
 import { AWS_REGION, requireEnv } from '../../shared/config/env.js'
+import { AppError } from '../../shared/errors/AppError.js'
+
 import * as repo from './repository.js'
 import type { AdminRole } from './types.js'
 
@@ -98,26 +99,48 @@ export async function extendTrial(adminId: string, adminRole: AdminRole, busines
   return result
 }
 
+// Admin set-tier as a Comp_Window (cross-portal-lifecycle-alignment R1). A paid
+// tier is written as a Paid_Until window (the comp), clearing trial and grace so
+// the Tier_Resolver honours it exactly like a paid activation; starter clears the
+// window so the business reads as starter. `extendTrial` stays the trial-only
+// path (R1.5). The `paidUntil` presence rule is validated at the HTTP boundary by
+// `setTierBodySchema`; the guard here keeps the service correct for any caller.
 export async function setBusinessTier(
   adminId: string,
   adminRole: AdminRole,
   businessId: string,
   tier: 'starter' | 'growth' | 'pro',
   reason: string,
-  trialEndsAt?: string,
+  paidUntil?: string,
 ) {
   checkPermission(adminRole, 'manage_business')
-  const { updateBusinessTier } = await import('../business/repository.js')
-  await updateBusinessTier(businessId, tier, trialEndsAt)
+  const isPaid = tier === 'growth' || tier === 'pro'
+  if (isPaid && !paidUntil) {
+    throw AppError.badRequest('Paid tiers require an entitlement end date (paidUntil)')
+  }
+  const compWindow = isPaid ? paidUntil! : null
+  const { setBusinessCompWindow } = await import('../business/repository.js')
+  await setBusinessCompWindow(businessId, tier, compWindow)
   await repo.createAuditLog({
     adminId,
     adminRole,
     action: 'set_tier',
     entityType: 'business',
     entityId: businessId,
-    afterState: { tier, reason, trialEndsAt },
+    afterState: { tier, reason, paidUntil: compWindow },
   })
-  return { success: true, tier, trialEndsAt }
+  return { success: true, tier, paidUntil: compWindow }
+}
+
+// Grace_List (cross-portal-lifecycle-alignment R2.2): businesses currently in
+// the renewal grace window, soonest expiry first, projected to id/name/tier/
+// grace expiry only. Reuses the business repository's projection query so the
+// businesses table keeps one read home.
+export async function getBusinessesInGrace(adminRole: AdminRole) {
+  checkPermission(adminRole, 'view_business')
+  const { listBusinessesInGraceProjection } = await import('../business/repository.js')
+  const items = await listBusinessesInGraceProjection(new Date().toISOString())
+  return { items }
 }
 
 // ─── Reports ────────────────────────────────────────────────────────────────

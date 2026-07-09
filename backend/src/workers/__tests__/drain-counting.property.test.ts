@@ -30,8 +30,8 @@
  * **Validates: Requirements 4.1, 4.2, 4.3**
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as fc from 'fast-check'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ─── Module mocks (hoisted so the factory spies exist before import) ─────────
 

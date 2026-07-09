@@ -1,11 +1,12 @@
 import type { FastifyInstance } from 'fastify'
+import { z } from 'zod'
+
+import { AppError } from '../../shared/errors/AppError.js'
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { validate } from '../../shared/middleware/validation.js'
-import { getStaffRecentRedemptions, redeemReward } from '../rewards/service.js'
-import { findRedemptionByCode, getRewardById } from '../rewards/repository.js'
-import { z } from 'zod'
-import { AppError } from '../../shared/errors/AppError.js'
 import { getUserById } from '../auth/dynamodb-repository.js'
+import { findRedemptionByCode, getRewardById } from '../rewards/repository.js'
+import { getStaffRecentRedemptions, redeemReward } from '../rewards/service.js'
 
 const codeParamsSchema = z.object({ code: z.string().min(1) })
 
@@ -155,15 +156,27 @@ export async function staffRoutes(app: FastifyInstance) {
     return { reward: null }
   })
 
-  // GET /v1/staff/business — returns the business name for the staff member's business
+  // GET /v1/staff/business — bootstrap read for the staff home. Returns the
+  // business name and a server-derived lifecycle state so the staff app can show
+  // the Lapsed_Business_Banner (cross-portal-lifecycle-alignment R3.1). No
+  // polling, no socket — one read on load.
   app.get('/v1/staff/business', { preHandler: [requireAuth('staff')] }, async (request) => {
     const auth = getAuth(request)
     const { getStaffById } = await import('../auth/dynamodb-repository.js')
     const { findBusinessById } = await import('../business/repository.js')
+    const { getEffectiveTier } = await import('../business/service.js')
     const staff = await getStaffById(auth.userId)
-    if (!staff?.businessId) return { businessName: null, isActive: true }
+    if (!staff?.businessId) return { businessName: null, isActive: true, businessState: 'active' as const }
     const biz = await findBusinessById(staff.businessId)
     const isActive = biz ? (biz as unknown as Record<string, unknown>)['isActive'] !== false : false
-    return { businessName: biz?.businessName ?? null, isActive }
+    // Lapsed = demoted for non-payment (business inactive) or a paid stored tier
+    // whose windows all lapsed to effective starter. A genuine starter/free
+    // business is NOT lapsed. Earned codes still redeem in this state (R3.2), so
+    // this only drives the banner, never a hard block.
+    const storedTier = biz ? (((biz as unknown as Record<string, unknown>)['tier'] as string) ?? 'free') : 'free'
+    const wasPaid = storedTier === 'growth' || storedTier === 'pro' || storedTier === 'payg'
+    const effectiveStarter = biz ? getEffectiveTier(biz as never) === 'starter' : false
+    const businessState: 'active' | 'lapsed' = biz && (!isActive || (wasPaid && effectiveStarter)) ? 'lapsed' : 'active'
+    return { businessName: biz?.businessName ?? null, isActive, businessState }
   })
 }

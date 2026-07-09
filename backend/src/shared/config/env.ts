@@ -48,3 +48,29 @@ export function requireEnv(name: string, devDefault?: string): string {
   if (devDefault !== undefined) return devDefault
   throw new Error(`[config] Environment variable ${name} is not set (no dev default)`)
 }
+
+/**
+ * Payment_Config_Guard (billing-revenue-integrity R1.2).
+ *
+ * Fail-loud validation of the Yoco webhook signing secret. Called at module
+ * load of the Billing_Service, which is loaded by both the API Lambda and the
+ * webhook route it serves, so a prod cold-start with an unset or empty
+ * `YOCO_WEBHOOK_SECRET` crashes at init. That surfaces the misconfiguration as
+ * a visible deploy failure instead of a silent runtime 401 stream on every
+ * payment webhook (the fail-closed signature gate would otherwise reject every
+ * delivery and no payment would ever land).
+ *
+ * The environment is read from `process.env` directly (not the cached
+ * `APP_ENV` const) so the check reflects the value present at the moment the
+ * module loads. Dev/test (`AREA_CODE_ENV === 'dev'`) requires no secret and is
+ * unaffected: the webhook path returns early in DEV_MODE and the signature
+ * gate is exercised only via fail-closed unit tests.
+ */
+export function assertPaymentConfig(): void {
+  const env = process.env['AREA_CODE_ENV'] ?? 'dev'
+  if (env === 'dev') return
+  const secret = process.env['YOCO_WEBHOOK_SECRET']
+  if (!secret || secret.length === 0) {
+    throw new Error('[config] Required environment variable YOCO_WEBHOOK_SECRET is not set')
+  }
+}

@@ -67,7 +67,7 @@ describe('getNodesByCitySlug — paid-tier filter', () => {
   const CITY_SLUG = 'johannesburg'
   const CITY_ID = 'city-jhb'
 
-  function setupCityLookup() {
+  function _setupCityLookup() {
     // First call: GetCommand for city lookup
     mocks.sendMock.mockImplementation(async (cmd: unknown) => {
       const input = (cmd as { input?: Record<string, unknown> })?.input ?? {}

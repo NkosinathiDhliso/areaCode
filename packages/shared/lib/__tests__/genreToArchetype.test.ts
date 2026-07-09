@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
-import { genresToArchetype } from '../genreToArchetype'
+import { describe, it, expect } from 'vitest'
+
 import { MUSIC_GENRES } from '../../constants/genre-weights'
 import type { MusicGenre } from '../../types'
+import { genresToArchetype } from '../genreToArchetype'
 
 /**
  * Property tests for `genresToArchetype` (R6).

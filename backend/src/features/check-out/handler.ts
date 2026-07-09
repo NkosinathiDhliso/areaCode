@@ -1,10 +1,12 @@
 import type { FastifyInstance } from 'fastify'
+import { z } from 'zod'
+
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
-import { validate } from '../../shared/middleware/validation.js'
 import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
+import { validate } from '../../shared/middleware/validation.js'
+
 import * as service from './service.js'
 import { checkOutBodySchema } from './types.js'
-import { z } from 'zod'
 
 export async function checkOutRoutes(app: FastifyInstance) {
   // POST /v1/check-out
