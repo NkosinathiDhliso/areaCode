@@ -451,6 +451,15 @@ export const staffInviteBodySchema = z
   })
   .refine((d) => d.phone || d.email, { message: 'Phone or email required' })
 
+// Business settings PATCH body (weekly-attribution-digest R4.5). Only the
+// Digest_Optout preference is settable today; the field is required so a PATCH
+// always carries an explicit boolean (no ambiguous partial update).
+export const businessSettingsBodySchema = z.object({
+  digestEmailOptOut: z.boolean(),
+})
+
+export type BusinessSettingsBody = z.infer<typeof businessSettingsBodySchema>
+
 export const staffIdParamsSchema = z.object({
   id: z.string().uuid(),
 })

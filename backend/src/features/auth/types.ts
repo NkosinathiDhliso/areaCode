@@ -175,6 +175,12 @@ export interface BusinessAccount {
    * renewal changes `paidUntil`, so a new window re-arms the reminder.
    */
   renewalReminderSentFor?: string | null
+  /**
+   * Weekly Attribution Digest opt-out (weekly-attribution-digest R4.5).
+   * Absent (the default) means the Digest_Email is on; `true` suppresses the
+   * email from the next weekly run while the dashboard card still renders.
+   */
+  digestEmailOptOut?: boolean
   isActive?: boolean
   createdAt: string
   updatedAt?: string

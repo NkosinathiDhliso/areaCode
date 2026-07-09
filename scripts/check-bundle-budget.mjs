@@ -32,9 +32,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
  * measurement (see task 8.5 before/after record) plus 10 percent headroom.
  *
  * Measured initial gzip total after the Phosphor tree-shake + vendor splits:
- * 385,610 bytes. Budget = ceil(385610 * 1.10) = 424,171 bytes (~414 KB gzip).
+ * 322,105 bytes. Budget = ceil(322105 * 1.10) = 354,316 bytes (~346 KB gzip).
+ * Warning_Ratchet spirit: lower this when the build shrinks; only raise it with
+ * a recorded reason.
  */
-export const BUDGET_BYTES = 424_171
+export const BUDGET_BYTES = 354_316
 
 const DIST_DIR = join(__dirname, '..', 'apps', 'web', 'dist')
 const MANIFEST_PATH = join(DIST_DIR, '.vite', 'manifest.json')

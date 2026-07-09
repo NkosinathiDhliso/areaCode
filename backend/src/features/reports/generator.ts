@@ -4,8 +4,12 @@ import { QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb'
 
 import { requireEnv } from '../../shared/config/env.js'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
-import { sendReportReadyEmail } from '../../shared/email/ses.js'
+import { sendReportReadyEmail, sendDigestEmail } from '../../shared/email/ses.js'
 import { getBusinessById } from '../auth/dynamodb-repository.js'
+import { getEffectiveTier } from '../business/service.js'
+import { getCheckInsByUser } from '../check-in/dynamodb-repository.js'
+import { getRedemptionsByRewardId, getRewardsByNodeId } from '../rewards/dynamodb-repository.js'
+import { listGuestClaimsSince } from '../rewards/guest-claim.js'
 
 import { analyzeBenchmarks } from './analyzers/benchmarks.js'
 import { analyzeCrowdComposition } from './analyzers/crowd-composition.js'
@@ -16,9 +20,17 @@ import { generateRecommendations } from './analyzers/recommendations.js'
 import { analyzeRepeatVisitors } from './analyzers/repeat-visitors.js'
 import { analyzeTrends } from './analyzers/trends.js'
 import { anonymizeCheckIns, hashVisitorToken, type RawCheckIn } from './anonymize.js'
+import { buildDigestCopy, computeDigest, digestWeekFor, type DigestSources } from './digest.js'
 import { scanForPii } from './pii-scanner.js'
-import { storeReport, storeReportTokens, storeBusinessMetrics, getPreviousReport } from './repository.js'
-import type { GenerateReportMessage, Report, ReportMetrics, MusicPrefs } from './types.js'
+import {
+  storeReport,
+  storeReportTokens,
+  storeBusinessMetrics,
+  getPreviousReport,
+  persistDigest,
+  getLatestDigest,
+} from './repository.js'
+import type { GenerateReportMessage, Report, ReportMetrics, MusicPrefs, DigestRow } from './types.js'
 
 // ============================================================================
 // Constants
@@ -351,6 +363,248 @@ async function sendEmailNotification(businessId: string, reportId: string, perio
 }
 
 // ============================================================================
+// Digest Path (Weekly Attribution Digest)
+// ============================================================================
+//
+// Runs alongside the full weekly report for every weekly generation message.
+// It is deliberately NOT gated by the full-report `no_check_ins` early return:
+// a zero-visits week is a designed honest Digest state (R1.1), so the digest is
+// computed and persisted even when the week is quiet. Per-business failures are
+// logged and skipped by the caller (R3.3), never aborting the SQS record or the
+// full-report work for this or any other business.
+
+/** Page size when paginating a visitor's check-in history for first-timer detection. */
+const EARLIEST_CHECKIN_PAGE_SIZE = 100
+
+/**
+ * The earliest recorded check-in (ISO 8601) per visitor at ANY of the business's
+ * nodes, over all time, keyed by userId. Bounded by the week's unique-visitor
+ * count (one read pass per visitor); acceptable at current scale and noted in the
+ * design for a GSI revisit at scale. A visitor absent from the map has no recorded
+ * check-in at the business's nodes and is treated as a first-timer by computeDigest.
+ */
+async function loadEarliestCheckInByUser(
+  businessNodeIds: Set<string>,
+  userIds: string[],
+): Promise<Record<string, string>> {
+  const earliest: Record<string, string> = {}
+
+  for (const userId of userIds) {
+    let cursor: string | undefined
+    let min: string | undefined
+
+    do {
+      const page = await getCheckInsByUser(userId, { limit: EARLIEST_CHECKIN_PAGE_SIZE, cursor })
+      for (const checkIn of page.checkIns) {
+        if (!businessNodeIds.has(checkIn.nodeId)) continue
+        // ISO 8601 timestamps compare correctly lexicographically.
+        if (min === undefined || checkIn.checkedInAt < min) min = checkIn.checkedInAt
+      }
+      cursor = page.nextCursor
+    } while (cursor)
+
+    if (min !== undefined) earliest[userId] = min
+  }
+
+  return earliest
+}
+
+/**
+ * Count confirmed redemptions at the business's nodes whose `redeemedAt` falls
+ * inside the Digest_Week window `[windowStartMs, windowEndMs)`. Joins the rewards
+ * read (rewards by node) to the redemption read (redemptions by reward), reusing
+ * the rewards feature repository rather than forking a query.
+ */
+async function countRedemptionsInWindow(
+  nodeIds: string[],
+  windowStartMs: number,
+  windowEndMs: number,
+): Promise<number> {
+  let count = 0
+
+  for (const nodeId of nodeIds) {
+    const rewards = await getRewardsByNodeId(nodeId)
+    for (const reward of rewards) {
+      const redemptions = await getRedemptionsByRewardId(reward.rewardId)
+      for (const redemption of redemptions) {
+        if (!redemption.redeemedAt) continue
+        const redeemedMs = new Date(redemption.redeemedAt).getTime()
+        if (redeemedMs >= windowStartMs && redeemedMs < windowEndMs) count++
+      }
+    }
+  }
+
+  return count
+}
+
+/**
+ * First-Get counts for the business's nodes over the Digest_Week window:
+ * - firstGetIssued: tokens with `issuedAt` in the window (R1.4).
+ * - firstGetConversions: tokens with `redeemedAt` in the window, regardless of
+ *   when the token was issued (R1.4).
+ *
+ * Reuses the existing guest-claim scan (`listGuestClaimsSince`) for both, once
+ * per timestamp field, then filters to the business's nodes and the window.
+ */
+async function loadFirstGetCounts(
+  businessNodeIds: Set<string>,
+  windowStartUtc: string,
+  windowStartMs: number,
+  windowEndMs: number,
+): Promise<{ firstGetIssued: number; firstGetConversions: number }> {
+  const inWindow = (iso: string | undefined): boolean => {
+    if (!iso) return false
+    const ms = new Date(iso).getTime()
+    return ms >= windowStartMs && ms < windowEndMs
+  }
+
+  const issuedRows = await listGuestClaimsSince(windowStartUtc, 'issuedAt')
+  let firstGetIssued = 0
+  for (const row of issuedRows) {
+    if (businessNodeIds.has(row.nodeId) && inWindow(row.issuedAt)) firstGetIssued++
+  }
+
+  const redeemedRows = await listGuestClaimsSince(windowStartUtc, 'redeemedAt')
+  let firstGetConversions = 0
+  for (const row of redeemedRows) {
+    if (businessNodeIds.has(row.nodeId) && inWindow(row.redeemedAt)) firstGetConversions++
+  }
+
+  return { firstGetIssued, firstGetConversions }
+}
+
+/**
+ * Compute, PII-scan, and persist the Digest_Row for one business over the
+ * just-closed Digest_Week, then attempt the Digest_Email only when the row is
+ * newly written (retry suppression, R3.1).
+ *
+ * The Digest_Week is derived with `digestWeekFor(periodEnd)`. The dispatcher's
+ * `periodEnd` is the just-closed Sunday 23:59:59.999 SAST, an instant strictly
+ * inside the closed week — using it (rather than `periodStart`, which lands
+ * exactly on the Monday 00:00 boundary that `digestWeekFor` attributes to the
+ * PRIOR week) yields the correct, stable weekStart across a delayed or re-run
+ * pass (idempotency key stability).
+ *
+ * `windowCheckIns` is the check-in set already loaded for the report period,
+ * reused here (DRY): the report period and the Digest_Week cover the same
+ * seven-day SAST window.
+ */
+async function runDigestPath(
+  businessId: string,
+  nodes: Array<{ nodeId: string; nodeName: string }>,
+  windowCheckIns: RawCheckIn[],
+  periodEnd: string,
+): Promise<void> {
+  const week = digestWeekFor(periodEnd)
+  const windowStartMs = new Date(week.windowStartUtc).getTime()
+  const windowEndMs = new Date(week.windowEndUtc).getTime()
+
+  const nodeIds = nodes.map((node) => node.nodeId)
+  const businessNodeIds = new Set(nodeIds)
+  const uniqueUserIds = [...new Set(windowCheckIns.map((checkIn) => checkIn.userId))]
+
+  const earliestCheckInByUser = await loadEarliestCheckInByUser(businessNodeIds, uniqueUserIds)
+  const redemptions = await countRedemptionsInWindow(nodeIds, windowStartMs, windowEndMs)
+  const { firstGetIssued, firstGetConversions } = await loadFirstGetCounts(
+    businessNodeIds,
+    week.windowStartUtc,
+    windowStartMs,
+    windowEndMs,
+  )
+
+  const sources: DigestSources = {
+    windowCheckIns,
+    earliestCheckInByUser,
+    redemptions,
+    firstGetIssued,
+    firstGetConversions,
+  }
+
+  // Prior-week metrics for deltas are read BEFORE the conditional put, so
+  // getLatestDigest returns the immediately-prior Digest_Row and never this
+  // week's row (design: deltas from the prior Digest_Row only).
+  const priorRow = await getLatestDigest(businessId)
+
+  // TIER RESOLVER SEAM (R5.4). This is the single call site that resolves the
+  // effective tier for the digest close and the tierAtBuild snapshot. It uses
+  // the existing getEffectiveTier as-is — the canonical resolver today, which
+  // collapses a lapsed paid tier to starter, so a lapsed business gets the
+  // starter close. Swap ONLY this call for the unified tier resolver once
+  // billing-revenue-integrity task 5 has merged; nothing else changes.
+  const business = await getBusinessById(businessId)
+  const tier = getEffectiveTier(
+    (business ?? {}) as {
+      tier?: string
+      trialEndsAt?: string | null
+      paidUntil?: string | null
+      paymentGraceUntil?: string | null
+    },
+  )
+
+  const digest = computeDigest(week, sources, ANONYMIZATION_SALT, priorRow?.metrics ?? null)
+
+  const row: DigestRow = {
+    businessId,
+    weekStart: week.weekStartIso,
+    metrics: digest.metrics,
+    ...(digest.deltas ? { deltas: digest.deltas } : {}),
+    suppressed: digest.suppressed,
+    tierAtBuild: tier,
+    // The actual Digest_Email send + emailSent flip is task 5.1; 4.2 persists
+    // the row with emailSent=false and wires the write-gated email seam below.
+    emailSent: false,
+    createdAt: new Date().toISOString(),
+  }
+
+  // persistDigest PII-scans the payload then conditional-puts (R1.6, R3.1).
+  const result = await persistDigest(row)
+
+  if (result === 'duplicate') {
+    // Replay of the same week: the Digest_Row already exists → no-op, and NO
+    // Digest_Email (retry suppression, R3.1).
+    console.log(
+      `[generator] Digest already exists for business ${businessId} week ${week.weekStartIso}; email suppressed`,
+    )
+    return
+  }
+
+  // result === 'written': send the Digest_Email exactly once (R4.2). It renders
+  // from the shared copy strings built here (buildDigestCopy — one source of
+  // truth with the dashboard card, R4.3), never re-deriving copy in the email
+  // module. The row was persisted above with emailSent:false and is retained
+  // regardless of the send outcome; a successful dispatch is logged rather than
+  // written back, so the single conditional put stays the only Digest_Row write
+  // for this week and the idempotence invariant (Property 4) holds.
+  const copy = buildDigestCopy(digest, tier)
+
+  // Digest_Optout (R4.5): skip the send when the business opted out, keeping the
+  // row. Read defensively as an optional flag — task 5.2 owns the full opt-out
+  // wiring (business row type + settings PATCH route); this check honours it as
+  // soon as the field is present without adding the route here.
+  if ((business as { digestEmailOptOut?: boolean } | null)?.digestEmailOptOut) {
+    console.log(`[generator] Digest_Optout set for business ${businessId}; Digest_Email suppressed (row retained)`)
+    return
+  }
+
+  // No destination address on the row — nothing to deliver to (matches
+  // sendEmailNotification). Log so a misconfigured business surfaces; the row
+  // is already persisted and retained.
+  if (!business?.email) {
+    console.warn(`[generator] No email on business ${businessId}; skipping Digest_Email (row retained)`)
+    return
+  }
+
+  try {
+    await sendDigestEmail(business.email, business.businessName ?? 'Your venue', digest.metrics.visits, copy)
+    console.log(`[generator] Digest_Email sent for business ${businessId} week ${week.weekStartIso}`)
+  } catch (err) {
+    // R4.4: a failed email is logged and never loses the Digest_Row (persisted
+    // above), matching the full-report email handling.
+    console.error(`[generator] Digest_Email send failed for business ${businessId}:`, err)
+  }
+}
+
+// ============================================================================
 // Lambda Handler
 // ============================================================================
 
@@ -417,6 +671,18 @@ async function generateReportInternal(
   for (const node of nodes) {
     const nodeCheckIns = await loadCheckInsForNode(node.nodeId, periodStart, periodEnd)
     allRawCheckIns.push(...nodeCheckIns)
+  }
+
+  // Digest path (weekly only): runs BEFORE the full-report `no_check_ins` early
+  // return so a quiet week still produces an honest Digest_Row (R1.1). A
+  // per-business failure here is logged and skipped, never aborting the full
+  // report for this business or the SQS record for others (R3.3).
+  if (periodType === 'weekly') {
+    try {
+      await runDigestPath(businessId, nodes, allRawCheckIns, periodEnd)
+    } catch (err) {
+      console.error(`[generator] Digest path failed for business ${businessId}:`, err)
+    }
   }
 
   if (allRawCheckIns.length === 0) {

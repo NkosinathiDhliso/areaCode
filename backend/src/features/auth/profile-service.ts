@@ -1,8 +1,21 @@
+import { LEGAL_CLAUSES_VERSION } from '@area-code/shared/constants/legal'
+
 import { DEV_MODE } from '../../shared/config/env.js'
 import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet, kvSet, kvDel } from '../../shared/kv/dynamodb-kv.js'
 
 import * as repo from './repository.js'
+
+/**
+ * Canonical consent version. Falls back to `LEGAL_CLAUSES_VERSION` from the
+ * shared constants module if the env var isn't set, so a misconfigured deploy
+ * still records consent under the version that matches the clauses the user was
+ * actually shown. Single home for this value: the signup paths in `service.ts`
+ * import it from here (`no-fallbacks-no-legacy.md`, one source of truth).
+ */
+export function currentConsentVersion(): string {
+  return process.env['AREA_CODE_CONSENT_VERSION'] ?? LEGAL_CLAUSES_VERSION
+}
 
 // ─── User Profile ───────────────────────────────────────────────────────────
 
@@ -136,15 +149,40 @@ export async function updateConsent(userId: string, consentVersion: string, anal
   return record
 }
 
+/**
+ * Consumer-facing consent read. Returns the user's analytics preference plus
+ * everything the client needs to gate the re-consent prompt (Release Quality &
+ * Ops Hygiene R8): the current required version, the user's latest recorded
+ * version, and a derived `needsReconsent` flag. The prompt fires iff the
+ * recorded version differs from the current one.
+ *
+ * `recordedVersion` and `analyticsOptIn` are cached; `currentVersion` is read
+ * from the env on every call so a consent bump takes effect without waiting for
+ * the cache to expire. Writes (`updateConsent`) invalidate the cache.
+ */
 export async function getUserConsent(userId: string) {
-  if (DEV_MODE) return { analyticsOptIn: false }
+  const currentVersion = currentConsentVersion()
+  if (DEV_MODE) {
+    // Mock mode persists nothing durable, so never gate: treat the user as
+    // already on the current version to avoid a prompt that can never clear.
+    return { analyticsOptIn: false, currentVersion, recordedVersion: currentVersion, needsReconsent: false }
+  }
   const cached = await kvGet(`user:consent:${userId}`)
-  if (cached) return JSON.parse(cached) as { analyticsOptIn: boolean }
+  if (cached) {
+    const parsed = JSON.parse(cached) as { analyticsOptIn: boolean; recordedVersion: string | null }
+    const recordedVersion = parsed.recordedVersion ?? null
+    return {
+      analyticsOptIn: parsed.analyticsOptIn,
+      currentVersion,
+      recordedVersion,
+      needsReconsent: recordedVersion !== currentVersion,
+    }
+  }
   const record = await repo.getLatestConsent(userId)
-  if (!record) return { analyticsOptIn: false }
-  const consent = { analyticsOptIn: record.analyticsOptIn }
+  const recordedVersion = (record?.consentVersion as string | undefined) ?? null
+  const consent = { analyticsOptIn: record?.analyticsOptIn ?? false, recordedVersion }
   await kvSet(`user:consent:${userId}`, JSON.stringify(consent), 3600)
-  return consent
+  return { ...consent, currentVersion, needsReconsent: recordedVersion !== currentVersion }
 }
 
 // ─── Account Deletion (POPIA) ────────────────────────────────────────────────

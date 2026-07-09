@@ -23,6 +23,11 @@ interface Business {
   businessId: string
 }
 
+interface BusinessNode {
+  nodeId: string
+  isActive: boolean
+}
+
 // ============================================================================
 // Period Computation (SAST Calendar Boundaries)
 // ============================================================================
@@ -140,20 +145,31 @@ async function getAllBusinesses(): Promise<Business[]> {
 }
 
 /**
- * Get all node IDs for a business using the BusinessIndex GSI on the nodes table.
+ * Get all nodes for a business using the BusinessIndex GSI on the nodes table.
+ *
+ * Projects `nodeId` and `isActive` so the weekly pass can fan out to every
+ * business with at least one active node (digest needs them) while the monthly
+ * pass keeps working off the full node list. `isActive` defaults to true when
+ * the attribute is absent, matching the nodes repository read semantics
+ * (the one source of truth for node activity state).
  */
-async function getNodeIdsForBusiness(businessId: string): Promise<string[]> {
+async function getNodesForBusiness(businessId: string): Promise<BusinessNode[]> {
   const result = await documentClient.send(
     new QueryCommand({
       TableName: TableNames.nodes,
       IndexName: 'BusinessIndex',
       KeyConditionExpression: 'businessId = :businessId',
-      ProjectionExpression: 'nodeId',
+      ProjectionExpression: 'nodeId, isActive',
       ExpressionAttributeValues: { ':businessId': businessId },
     }),
   )
 
-  return (result.Items || []).map((item) => item['nodeId'] as string).filter(Boolean)
+  return (result.Items || [])
+    .filter((item) => Boolean(item['nodeId']))
+    .map((item) => ({
+      nodeId: item['nodeId'] as string,
+      isActive: (item['isActive'] as boolean | undefined) ?? true,
+    }))
 }
 
 /**
@@ -219,8 +235,13 @@ async function sendGenerationMessage(
  *
  * 1. Compute period boundaries based on SAST calendar
  * 2. Scan all businesses
- * 3. For each business, check if any nodes have check-in activity
- * 4. Send SQS message for qualifying businesses
+ * 3. Decide which businesses qualify for a generation message:
+ *    - weekly: every business with at least one active node, regardless of
+ *      check-in activity in the window (the digest is computed for all of
+ *      them, and the generator keeps its own tier logic for the full report).
+ *    - monthly: report-only, unchanged. A business qualifies only when it has
+ *      at least one node with check-in activity in the window.
+ * 4. Send an SQS message for qualifying businesses.
  */
 export async function handler(event: DispatchEvent): Promise<void> {
   const { periodType } = event
@@ -243,18 +264,34 @@ export async function handler(event: DispatchEvent): Promise<void> {
 
   for (const business of businesses) {
     try {
-      const nodeIds = await getNodeIdsForBusiness(business.businessId)
+      const nodes = await getNodesForBusiness(business.businessId)
 
-      if (nodeIds.length === 0) {
+      if (nodes.length === 0) {
         skipped++
         continue
       }
 
-      const hasActivity = await hasActivityInPeriod(nodeIds, periodStart, periodEnd)
+      if (periodType === 'weekly') {
+        // Weekly digest fan-out: dispatch every business with at least one
+        // active node, regardless of activity in the window (a zero-visits
+        // week is a designed honest digest state, R1.1/R6.1). The generator
+        // applies tier gating for the full report and runs the digest for all.
+        const hasActiveNode = nodes.some((node) => node.isActive)
 
-      if (!hasActivity) {
-        skipped++
-        continue
+        if (!hasActiveNode) {
+          skipped++
+          continue
+        }
+      } else {
+        // Monthly pass is report-only and unchanged: dispatch only when a node
+        // has check-in activity in the window.
+        const nodeIds = nodes.map((node) => node.nodeId)
+        const hasActivity = await hasActivityInPeriod(nodeIds, periodStart, periodEnd)
+
+        if (!hasActivity) {
+          skipped++
+          continue
+        }
       }
 
       await sendGenerationMessage(queueUrl, {

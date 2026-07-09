@@ -808,16 +808,26 @@ function Get-FunctionLastModifiedMs {
 # exists and none is scanned.
 # FAIL when a group returns an ERROR event (print group + first event); PASS
 # when clean; WARN when a group is not queryable.
+#
+# Each worker carries its trigger type. Scheduled (EventBridge) workers fire on
+# a fixed tick regardless of input, so a missing log group on one deployed more
+# than 7 days ago proves it has never run = FAIL (Req 5.3). SQS-triggered
+# workers legitimately stay quiet when no message ever arrives, so a missing
+# log group there stays WARN however old the deploy is. Scheduled: presence-
+# expiry, pulse-decay, streak-reminder. SQS: reward-evaluator, campaign-sender,
+# report-generator (see infra/environments/prod/main.tf eventbridge schedules
+# vs SQS event source mappings).
 $workerLogGroups = @(
-    "/aws/lambda/area-code-prod-reward-evaluator",
-    "/aws/lambda/area-code-prod-presence-expiry",
-    "/aws/lambda/area-code-prod-pulse-decay",
-    "/aws/lambda/area-code-prod-campaign-sender",
-    "/aws/lambda/area-code-prod-report-generator",
-    "/aws/lambda/area-code-prod-streak-reminder"
+    [pscustomobject]@{ LogGroup = "/aws/lambda/area-code-prod-reward-evaluator"; Scheduled = $false },
+    [pscustomobject]@{ LogGroup = "/aws/lambda/area-code-prod-presence-expiry"; Scheduled = $true },
+    [pscustomobject]@{ LogGroup = "/aws/lambda/area-code-prod-pulse-decay"; Scheduled = $true },
+    [pscustomobject]@{ LogGroup = "/aws/lambda/area-code-prod-campaign-sender"; Scheduled = $false },
+    [pscustomobject]@{ LogGroup = "/aws/lambda/area-code-prod-report-generator"; Scheduled = $false },
+    [pscustomobject]@{ LogGroup = "/aws/lambda/area-code-prod-streak-reminder"; Scheduled = $true }
 )
 
-foreach ($workerLogGroup in $workerLogGroups) {
+foreach ($worker in $workerLogGroups) {
+    $workerLogGroup = $worker.LogGroup
     if (-not $script:awsAvailable) {
         Write-Check -Status "WARN" -Name "Worker errors $workerLogGroup" -Detail "AWS CLI unavailable; not checked"
         continue
@@ -847,7 +857,24 @@ foreach ($workerLogGroup in $workerLogGroups) {
     )
     $workerResult = Invoke-AwsJson -AwsArgs $workerArgs
     if ($null -eq $workerResult -or $null -eq $workerResult.events) {
-        Write-Check -Status "WARN" -Name "Worker errors $workerLogGroup" -Detail "log group not queryable (missing group or credentials)"
+        # A non-null $lastModMs means Get-FunctionLastModifiedMs already read the
+        # Lambda config, so credentials work and the function exists: the null
+        # events result then means the log group genuinely does not exist yet
+        # (the worker has never run), not a credentials problem. For a SCHEDULED
+        # worker deployed more than 7 days ago that is a real failure (Req 5.3);
+        # a recent deploy may just not have hit its first tick, and SQS workers
+        # may have had no messages, so both stay WARN. Reuses the deploy-window
+        # LastModified read above rather than making a second AWS call.
+        $sevenDaysAgoMs = [DateTimeOffset]::UtcNow.AddDays(-7).ToUnixTimeMilliseconds()
+        if ($worker.Scheduled -and $null -ne $lastModMs -and $lastModMs -lt $sevenDaysAgoMs) {
+            $nowMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+            $deployedDaysAgo = [int][Math]::Floor(($nowMs - $lastModMs) / 86400000)
+            $detail = "missing log group; scheduled worker last deployed $deployedDaysAgo days ago has never run (expected a log group within 7 days)"
+            Write-Check -Status "FAIL" -Name "Worker errors $workerLogGroup" -Detail $detail
+        }
+        else {
+            Write-Check -Status "WARN" -Name "Worker errors $workerLogGroup" -Detail "log group not queryable (missing group or credentials)"
+        }
     }
     else {
         $workerEvents = @($workerResult.events)

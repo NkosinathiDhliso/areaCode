@@ -31,6 +31,18 @@ import { deleteConnectionsByUser } from '../shared/websocket/broadcast.js'
 // 7-year horizon.
 export const RETENTION_YEARS_MS = 7 * 365.25 * 24 * 60 * 60 * 1000
 
+// ─── Digest 12-month retention ──────────────────────────────────────────────
+//
+// See `.kiro/specs/weekly-attribution-digest/` requirement 3.2.
+//
+// `Digest_Row` rows (pk `DIGEST#<businessId>`, sk `WEEK#<weekStartIso>`)
+// carry no DynamoDB `ttl` attribute, consistent with the other audited rows.
+// Their 12-month retention is enforced here by the daily `cleanup` worker,
+// the same pattern as the 7-year booster retention sweeps above. The
+// `365.25` factor absorbs leap years across the 12-month horizon, matching
+// the booster factor style. The boundary is strict greater-than (below).
+export const DIGEST_RETENTION_MS = 365.25 * 24 * 60 * 60 * 1000
+
 // Per-invocation, per-row-type delete budget. Paginated batches are 25 items
 // (DynamoDB `BatchWriteItem` hard limit), so 1000 deletes ≈ 40 batches per
 // row type per run. The first deletions will not run for at least 7 years
@@ -76,6 +88,18 @@ export function isIdempotencyMarkerExpired(row: { createdAt?: unknown }, nowMs: 
   const ms = parseIsoToMs(row.createdAt)
   if (ms === null) return false
   return nowMs - ms > RETENTION_YEARS_MS
+}
+
+/**
+ * Pure predicate — true iff a `Digest_Row` is older than the 12-month
+ * retention horizon at `nowMs` (R3.2). Strict greater-than: a row exactly
+ * at the boundary is NOT expired. Missing or malformed `createdAt` yields
+ * false so unknown timestamps are never deleted.
+ */
+export function isDigestRowExpired(row: { createdAt?: unknown }, nowMs: number): boolean {
+  const ms = parseIsoToMs(row.createdAt)
+  if (ms === null) return false
+  return nowMs - ms > DIGEST_RETENTION_MS
 }
 
 async function batchDeleteKeys(keys: Array<{ pk: string; sk: string }>): Promise<void> {
@@ -392,6 +416,23 @@ export async function handler() {
     console.warn(`[cleanup] idempotency-marker retention sweep failed: ${String(err)}`)
   }
 
+  // ─── 12-month retention sweep for Digest_Rows ───────────────────────────
+  // weekly-attribution-digest R3.2. Digest_Rows carry no TTL attribute
+  // (consistent with the audited booster rows), so their 12-month retention
+  // is enforced here with the same paged-Scan + batch-delete sweep and the
+  // shared strict greater-than boundary and per-run delete budget.
+  let digestRowsDeleted = 0
+  try {
+    digestRowsDeleted = await sweepExpiredRows({
+      filterExpression: 'begins_with(pk, :prefix) AND attribute_exists(createdAt)',
+      expressionAttributeValues: { ':prefix': 'DIGEST#' },
+      predicate: (row, now) => isDigestRowExpired(row as { createdAt?: unknown }, now),
+      nowMs,
+    })
+  } catch (err) {
+    console.warn(`[cleanup] digest-row retention sweep failed: ${String(err)}`)
+  }
+
   // ─── Lapse_Sweep phase 1: paidUntil lapse → grace + renewal email ────────
   // billing-revenue-integrity R3.1. Businesses whose paid window has lapsed but
   // that have not yet entered the renewal grace window get a 7-day
@@ -425,6 +466,7 @@ export async function handler() {
       `booster purchases deleted: ${boosterPurchasesDeleted}, ` +
       `floor audits deleted: ${floorAuditsDeleted}, ` +
       `idempotency markers deleted: ${idempotencyMarkersDeleted}, ` +
+      `digest rows deleted: ${digestRowsDeleted}, ` +
       `lapse-sweep graced: ${lapseGraced}, ` +
       `lapsed payments processed: ${lapsedPaymentsProcessed}`,
   )
@@ -436,6 +478,7 @@ export async function handler() {
     boosterPurchasesDeleted,
     floorAuditsDeleted,
     idempotencyMarkersDeleted,
+    digestRowsDeleted,
     lapseGraced,
     lapsedPaymentsProcessed,
   }

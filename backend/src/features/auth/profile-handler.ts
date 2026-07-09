@@ -155,6 +155,15 @@ export async function profileRoutes(app: FastifyInstance) {
     return { streakCount, streakStartDate, atRisk }
   })
 
+  // GET /v1/users/me/consent — the current required version, the user's latest
+  // recorded version, and a derived needsReconsent flag. Powers the consumer
+  // re-consent gate (Release Quality & Ops Hygiene R8): the client shows exactly
+  // one prompt when the recorded version differs from the current one.
+  app.get('/v1/users/me/consent', { preHandler: [requireAuth('consumer')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.getUserConsent(auth.userId)
+  })
+
   // PUT /v1/users/me/consent
   app.put(
     '/v1/users/me/consent',

@@ -74,7 +74,11 @@ function sourcesArbFor(week: DigestWeek): fc.Arbitrary<DigestSources> {
       const earliestCheckInByUser: Record<string, string> = {}
       uniqueUsers.forEach((user, i) => {
         const choice = choices[i]
-        if (choice !== 'omit') {
+        // `choices` is built as a tuple of the same length as `uniqueUsers`, so
+        // `choices[i]` is always present; the explicit undefined guard narrows
+        // the noUncheckedIndexedAccess `string | undefined` to `string`. 'omit'
+        // means no recorded earlier visit; any ISO string is a real earliest.
+        if (choice !== undefined && choice !== 'omit') {
           earliestCheckInByUser[user] = choice
         }
       })

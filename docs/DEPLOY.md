@@ -70,6 +70,48 @@ When the workflow is unavailable or an urgent change cannot wait for the approva
 
 This is the repo's standard prod deploy path (build + terraform apply + Lambda code push). Run `terraform plan` intent applies here too: the script wraps `terraform apply`, so review the plan output it prints before confirming. Use this path deliberately, not as the default, since it bypasses the required-reviewer gate.
 
+## Consent Version Bump (founder-timed)
+
+Bumping `AREA_CODE_CONSENT_VERSION` re-prompts every existing consumer to accept the current legal terms once on next open. It is a deliberate, founder-timed ops step. Run it in its own deploy window. Do not bundle it with unrelated infra or code changes.
+
+### Prerequisites (verify before the prod bump)
+
+1. The consumer re-consent gate (`ReconsentGate` in `apps/web/src/components/ReconsentGate.tsx`, wired in `apps/web/src/App.tsx`) is deployed to prod. Without it the env bump changes only what the backend records for new consents and what the admin re-consent list reports; it does not surface a prompt to existing users.
+2. The dev rehearsal (task 7.1) is verified: dev runs `AREA_CODE_CONSENT_VERSION=v1.1`, one re-consent prompt fires in the dev consumer app, the new version is recorded, and the admin Consent Audit re-consent list behaves as expected.
+
+### The change
+
+One line in `infra/environments/prod/main.tf`, in the prod API Lambda environment block:
+
+```hcl
+AREA_CODE_CONSENT_VERSION = "v1.0"   # change to "v1.1"
+```
+
+Apply it as its own infra-only deploy, not bundled with other changes:
+
+```powershell
+./scripts/deploy-serverless.ps1 -Environment prod -TerraformOnly
+```
+
+The gated `terraform.yml` workflow is the alternative when the change lands via a `master` push to `infra/**`. Either way the plan should show a single env var change on `area-code-prod-api`. Confirm the value after apply:
+
+```powershell
+aws lambda get-function-configuration `
+  --function-name area-code-prod-api `
+  --query 'Environment.Variables.AREA_CODE_CONSENT_VERSION' `
+  --output text --region us-east-1 --no-cli-pager
+```
+
+### Release note
+
+Post this in the deploy record for the window:
+
+> Consent version bumped from v1.0 to v1.1 in prod. Every existing consumer sees a one-time re-consent prompt on next app open, asking them to accept the updated Terms (tier-permanence clause). Accepting records v1.1 and preserves the session; the prompt does not appear again. The admin Consent Audit re-consent list will populate with all pre-bump users (latest recorded consent still v1.0) until each re-consents. No other behaviour changes.
+
+### Rollback
+
+Revert `AREA_CODE_CONSENT_VERSION` from `v1.1` back to `v1.0` and re-apply infra only. This stops new re-consent prompts immediately. Consents already recorded at `v1.1` are harmless: they are simply a newer accepted version and require no cleanup.
+
 ## Deploy Frontend
 
 Amplify is wired to the `master` branch of each app. Pushing to `master` triggers a build.

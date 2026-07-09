@@ -27,6 +27,8 @@ const StaffLeaderboardPanel = lazy(() =>
   import('./panels/StaffLeaderboardPanel').then((m) => ({ default: m.StaffLeaderboardPanel })),
 )
 const ReportsPanel = lazy(() => import('./panels/ReportsPanel').then((m) => ({ default: m.ReportsPanel })))
+const DigestCard = lazy(() => import('./panels/DigestCard').then((m) => ({ default: m.DigestCard })))
+const DigestHistory = lazy(() => import('./panels/DigestHistory').then((m) => ({ default: m.DigestHistory })))
 const CampaignsPanel = lazy(() => import('./panels/CampaignsPanel').then((m) => ({ default: m.CampaignsPanel })))
 const MusicSchedulePanel = lazy(() => import('./MusicSchedulePanel').then((m) => ({ default: m.MusicSchedulePanel })))
 
@@ -197,7 +199,15 @@ export function BusinessDashboard() {
       case 'staff-leaderboard':
         return <StaffLeaderboardPanel />
       case 'reports':
-        return <ReportsPanel />
+        return (
+          <>
+            <div className="px-5 pt-5 flex flex-col gap-4">
+              <DigestCard />
+              <DigestHistory />
+            </div>
+            <ReportsPanel />
+          </>
+        )
       case 'campaigns':
         return <CampaignsPanel />
       case 'music-schedule':

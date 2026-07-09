@@ -1,7 +1,5 @@
 import { randomBytes } from 'node:crypto'
 
-import { LEGAL_CLAUSES_VERSION } from '@area-code/shared/constants/legal'
-
 import * as cognito from '../../shared/cognito/client.js'
 import { AWS_REGION, DEV_MODE } from '../../shared/config/env.js'
 import { sendEmailVerificationEmail } from '../../shared/email/ses.js'
@@ -11,17 +9,8 @@ import { reportOtpFeedback } from '../../shared/sms/feedback.js'
 import { findBusinessByCognitoSub } from '../business/repository.js'
 
 import { updateBusiness } from './dynamodb-repository.js'
+import { currentConsentVersion } from './profile-service.js'
 import * as repo from './repository.js'
-
-/**
- * Canonical consent version. Falls back to `LEGAL_CLAUSES_VERSION` from
- * the shared constants module if the env var isn't set, so a misconfigured
- * deploy still records consent under the version that matches the clauses
- * the user was actually shown.
- */
-function currentConsentVersion(): string {
-  return process.env['AREA_CODE_CONSENT_VERSION'] ?? LEGAL_CLAUSES_VERSION
-}
 
 /**
  * Redeem a guest-claim token (Churn-defences spec, Req 6) for a newly

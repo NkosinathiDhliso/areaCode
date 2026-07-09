@@ -410,6 +410,9 @@ export interface BusinessAccount {
   paidInterval: PaidInterval | null
   paymentGraceUntil: string | null
   yocoCustomerId: string | null
+  // Digest_Optout (weekly-attribution-digest R4.5). Disables the weekly digest
+  // email; absent means emails are on. The dashboard card always renders.
+  digestEmailOptOut?: boolean
   isActive: boolean
   createdAt: string
 }
@@ -443,6 +446,20 @@ export interface ConsentRecord {
   consentVersion: string
   analyticsOptIn: boolean
   consentedAt: string
+}
+
+/**
+ * Consumer-facing consent status from GET /v1/users/me/consent. Carries the
+ * current required consent version, the user's latest recorded version, and a
+ * derived `needsReconsent` flag so the client can gate the re-consent prompt
+ * without duplicating the comparison. `recordedVersion` is null when the user
+ * has no recorded consent yet.
+ */
+export interface ConsentStatus {
+  analyticsOptIn: boolean
+  currentVersion: string
+  recordedVersion: string | null
+  needsReconsent: boolean
 }
 
 export interface AbuseFlag {

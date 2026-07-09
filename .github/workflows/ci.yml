@@ -124,6 +124,12 @@ jobs:
     needs: [lint-format, typecheck, test]
     strategy:
       matrix:
+        # Mobile exclusion decision (R6.3): apps/mobile (Expo React Native) is
+        # intentionally excluded from CI. Mobile CI enablement is deferred, not
+        # forgotten; the app builds through Expo, not vite build, so it needs a
+        # separate pipeline. See the C1 Mobile app finding and deferral note in
+        # docs/PLATFORM_AUDIT_FINDINGS.md. Add a mobile leg here when that work
+        # is picked up.
         app: [web, admin, business, staff]
     steps:
       - uses: actions/checkout@v4
@@ -140,6 +146,13 @@ jobs:
         working-directory: apps/${{ matrix.app }}
         env:
           VITE_DEV_MOCK: 'false'
+      # Bundle_Budget (R9.3): enforce the consumer web initial-gzip ceiling
+      # right after its build, per the design ("vite-bundle measurement in CI
+      # after pnpm --filter @area-code/web build"). Web only; the budget and the
+      # initial-vs-lazy chunk logic live in scripts/check-bundle-budget.mjs.
+      - name: Check consumer web bundle budget
+        if: matrix.app == 'web'
+        run: node scripts/check-bundle-budget.mjs
 
   # ── Deploy to Dev ──────────────────────────────────────────────────────────
 

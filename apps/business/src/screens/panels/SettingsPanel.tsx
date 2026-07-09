@@ -35,6 +35,7 @@ export function SettingsPanel() {
   const [qrCheckinUrl, setQrCheckinUrl] = useState<string | null>(null)
   const [qrError, setQrError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState(false)
+  const [savingDigest, setSavingDigest] = useState(false)
 
   // Invite form state
   const [inviteEmail, setInviteEmail] = useState('')
@@ -113,6 +114,26 @@ export function SettingsPanel() {
     }
   }
 
+  // Digest_Optout (weekly-attribution-digest R4.5). The switch shows whether the
+  // weekly digest email is ON; ON means digestEmailOptOut is false. Toggling
+  // PATCHes the settings route and reflects the saved value. The control is
+  // disabled while the request is in flight so a double-tap cannot race.
+  async function handleToggleDigestEmail() {
+    if (!biz || savingDigest) return
+    const nextOptOut = !(biz.digestEmailOptOut ?? false)
+    setSavingDigest(true)
+    try {
+      const res = await api.patch<{ digestEmailOptOut: boolean }>('/v1/business/settings', {
+        digestEmailOptOut: nextOptOut,
+      })
+      setBiz((prev) => (prev ? { ...prev, digestEmailOptOut: res.digestEmailOptOut } : prev))
+    } catch {
+      useErrorStore.getState().showError(t('biz.settings.digestSaveFailed'))
+    } finally {
+      setSavingDigest(false)
+    }
+  }
+
   async function handleGenerateQr() {
     setQrError(null)
     try {
@@ -187,6 +208,45 @@ export function SettingsPanel() {
           <button onClick={() => setPanel('plans')} className="text-[var(--accent)] text-xs mt-2">
             {t('biz.plans.changePlan')}
           </button>
+        </div>
+      )}
+
+      {/* Digest email (weekly-attribution-digest R4.5) */}
+      {biz && (
+        <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
+          <h3 className="text-[var(--text-secondary)] text-xs uppercase tracking-wider mb-3">
+            {t('biz.settings.digest')}
+          </h3>
+          <div className="flex flex-row items-center justify-between gap-4">
+            <div className="flex flex-col">
+              <span className="text-[var(--text-primary)] text-sm font-medium">
+                {t('biz.settings.digestEmailLabel')}
+              </span>
+              <span className="text-[var(--text-muted)] text-xs mt-1">
+                {biz.digestEmailOptOut ? t('biz.settings.digestOff') : t('biz.settings.digestOn')}
+              </span>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={!biz.digestEmailOptOut}
+              aria-label={t('biz.settings.digestEmailLabel')}
+              disabled={savingDigest}
+              onClick={() => void handleToggleDigestEmail()}
+              className={`relative w-11 h-11 shrink-0 rounded-full transition-all active:scale-95 disabled:opacity-50 ${
+                biz.digestEmailOptOut
+                  ? 'bg-[var(--bg-raised)] border border-[var(--border-strong)]'
+                  : 'bg-[var(--accent)]'
+              }`}
+            >
+              <span
+                className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white transition-all ${
+                  biz.digestEmailOptOut ? 'left-1.5' : 'left-[1.375rem]'
+                }`}
+              />
+            </button>
+          </div>
+          <p className="text-[var(--text-muted)] text-xs mt-3">{t('biz.settings.digestEmailExplainer')}</p>
         </div>
       )}
 

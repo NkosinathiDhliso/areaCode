@@ -573,7 +573,9 @@ module "lambda_api" {
     AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
     AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
     AREA_CODE_S3_MEDIA_BUCKET               = module.s3_media.bucket_name
-    AREA_CODE_CONSENT_VERSION               = "v1.0"
+    # Dev rehearsal of the C12 consent bump (tier-permanence clause). Bumping
+    # this re-prompts every consumer once on next open. Prod bump is separate.
+    AREA_CODE_CONSENT_VERSION = "v1.1"
     # Win-back campaigns: the API async-invokes this dispatcher on send-now.
     AREA_CODE_CAMPAIGN_DISPATCHER_FUNCTION = module.lambda_campaign_dispatcher.function_name
   }
@@ -700,17 +702,6 @@ module "lambda_cleanup" {
   source        = "../../modules/lambda"
   env           = local.env
   function_name = "cleanup"
-  timeout       = 120
-  memory_size   = 256
-  environment_variables = {
-    AREA_CODE_ENV = local.env
-  }
-}
-
-module "lambda_run_migration" {
-  source        = "../../modules/lambda"
-  env           = local.env
-  function_name = "run-migration"
   timeout       = 120
   memory_size   = 256
   environment_variables = {

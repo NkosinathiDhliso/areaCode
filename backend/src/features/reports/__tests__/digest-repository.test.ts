@@ -25,7 +25,7 @@ vi.mock('../../../shared/db/dynamodb.js', () => ({
   TableNames: { appData: 'app-data' },
 }))
 
-import { putDigestRow, getLatestDigest, queryDigestHistory } from '../repository.js'
+import { putDigestRow, getLatestDigest, queryDigestHistory, persistDigest, scanDigestForPii } from '../repository.js'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -118,6 +118,55 @@ describe('getLatestDigest', () => {
     mocks.send.mockResolvedValueOnce({ Items: [] })
 
     expect(await getLatestDigest('biz-1')).toBeNull()
+  })
+})
+
+describe('scanDigestForPii (R1.6)', () => {
+  it('passes an honest digest payload (no consumer PII) without throwing', () => {
+    // The clean fixture row carries only counts, a tier label, dates, and the
+    // structural businessId (allowed by the scanner). It must not trip.
+    expect(() => scanDigestForPii(row)).not.toThrow()
+  })
+
+  it('throws when a consumer identifier leaks into the payload', () => {
+    // A displayName is a known PII field name: the scanner flags it and the
+    // guard must throw loudly (no silent scrub, no partial persist).
+    const leaked = { ...row, tierAtBuild: 'starter', businessId: row.businessId } as DigestRow & {
+      displayName: string
+    }
+    leaked.displayName = 'Thabo M'
+
+    expect(() => scanDigestForPii(leaked)).toThrow(/PII/)
+  })
+
+  it('throws when a consumer email leaks into the payload', () => {
+    const leaked = { ...row } as DigestRow & { note: string }
+    leaked.note = 'contact thabo@example.com'
+
+    expect(() => scanDigestForPii(leaked)).toThrow(/PII/)
+  })
+})
+
+describe('persistDigest (R1.6 + R3.1)', () => {
+  it('scans then writes, returning the putDigestRow result on a clean payload', async () => {
+    mocks.send.mockResolvedValueOnce({})
+
+    const result = await persistDigest(row)
+
+    expect(result).toBe('written')
+    // The scan ran on the payload BEFORE the write, and the write happened.
+    expect(mocks.send).toHaveBeenCalledTimes(1)
+    const input = mocks.send.mock.calls[0]![0].input as { ConditionExpression: string }
+    expect(input.ConditionExpression).toBe('attribute_not_exists(pk)')
+  })
+
+  it('throws and never writes when the payload contains PII', async () => {
+    const leaked = { ...row } as DigestRow & { userId: string }
+    leaked.userId = '11111111-2222-4333-8444-555555555555'
+
+    await expect(persistDigest(leaked)).rejects.toThrow(/PII/)
+    // Persistence must not be attempted once PII is detected.
+    expect(mocks.send).not.toHaveBeenCalled()
   })
 })
 

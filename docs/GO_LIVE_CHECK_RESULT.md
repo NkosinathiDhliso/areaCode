@@ -390,3 +390,403 @@ region us-east-1.
 
 On completion, record the observed decision, alarm states, and a confirming log
 line here, then mark task 2.5 complete.
+
+## Task 7.1 verification: consent bump dev rehearsal (release-quality-and-ops-hygiene)
+
+Rehearsal of the deferred C12 consent bump (spec `release-quality-and-ops-hygiene`,
+R8.1 and R8.3). This records the repo-side change made in this checkout, the
+fmt/validate results, and the exact live steps the founder must run to complete
+the dev-deploy portion. The live steps are not yet executed; they need AWS
+credentials and running dev apps this checkout does not have. Nothing below
+claims a deploy or a re-consent observation that was not made.
+
+### Changed in the repo (this checkout)
+
+- `infra/environments/dev/main.tf`: `AREA_CODE_CONSENT_VERSION` bumped
+  `"v1.0"` -> `"v1.1"` (dev only). Prod `main.tf` is untouched; the prod bump is
+  task 7.2, in its own window.
+- `terraform fmt -check -recursive infra/` passes (exit 0, no drift).
+- `terraform validate` in `infra/environments/dev` passes ("Success! The
+  configuration is valid.", exit 0).
+
+### Source-of-truth check (dry-reuse)
+
+`AREA_CODE_CONSENT_VERSION` is the runtime source of truth for the consent gate:
+the backend reads `process.env['AREA_CODE_CONSENT_VERSION']` directly
+(`backend/src/features/auth/service.ts` `currentConsentVersion()`, and
+`backend/src/features/admin/service.ts` `getReconsentList()`). There is no shared
+`v1.x` constant to bump. `LEGAL_CLAUSES_VERSION` in
+`packages/shared/constants/legal.ts` (`'2026.05.1'`) is a separate clause-content
+identifier used only as the fallback when the env var is unset; since dev and
+prod both set the env var, the fallback never applies there. So the dev main.tf
+bump is the complete repo-side change for R8. (`CURRENT_CONSENT_VERSION = 'v1.0'`
+in `packages/shared/mocks/data/consent.ts` is dev-showcase mock data, not the
+production source of truth, and is deliberately left untouched.)
+
+### Blocking finding: the consumer re-consent prompt is not implemented
+
+R8.1 requires "confirming the consumer app re-prompts and records the new
+version." That client-side re-consent gate does not exist in the consumer web
+app today:
+
+- `apps/web` has zero references to any consent endpoint. It never calls
+  `PUT /v1/users/me/consent`, and there is no bottom-sheet, modal, or app-open
+  gate that compares the user's recorded consent version to the current one.
+- The consumer-facing read `getUserConsent` (`auth/profile-service.ts`) returns
+  only `{ analyticsOptIn }`. It exposes neither the recorded consent version nor
+  a "needs re-consent" flag, so the client has nothing to gate on.
+
+Consequence: bumping `AREA_CODE_CONSENT_VERSION` alone will NOT surface a
+re-consent prompt to consumers on next open. It will only change what the backend
+records for NEW consents (signup / OAuth-first-login write `v1.1`) and what the
+admin re-consent export reports. The "exactly one re-consent prompt fires"
+portion of R8.1 cannot be observed until the consumer re-consent Bottom_Sheet
+(originally specified in `area-code-app` requirements, Req 17.9) is built and
+wired to a current-version signal. This is a decision/work item, not something an
+env bump can satisfy. Options: (a) build the consumer re-consent gate as its own
+task before executing R8, or (b) adjust R8.1/R8.3 to the parts an env bump can
+actually prove (admin re-consent list + recorded version on new consents). Do not
+mark 7.1 fully done on the strength of the env bump alone.
+
+### What the env bump CAN prove in dev (steps that will pass)
+
+Run from the repo root with AWS credentials for the dev account, region
+us-east-1, after the change above is pushed.
+
+1. Dev deploy (canonical scripted path):
+
+   ```powershell
+   ./scripts/deploy-serverless.ps1 -Environment dev
+   ```
+
+   Expected: `area-code-dev-api` and the dev worker Lambdas update without error,
+   and `area-code-dev-api` now carries `AREA_CODE_CONSENT_VERSION=v1.1`. Confirm:
+
+   ```powershell
+   aws lambda get-function-configuration `
+     --function-name area-code-dev-api `
+     --query 'Environment.Variables.AREA_CODE_CONSENT_VERSION' `
+     --output text --region us-east-1 --no-cli-pager
+   ```
+
+   Expected output: `v1.1`.
+
+2. New consent records the new version. Create a fresh consumer account in the
+   dev consumer app (email or Google). The backend writes a consent row at
+   `v1.1` (`insertConsentRecord` via `currentConsentVersion()`).
+
+3. Admin ConsentAudit shows the bump taking effect (R8.3). In the dev admin
+   portal, open the Consent Audit screen and use "Export re-consent list"
+   (`GET /v1/admin/consent/export-reconsent`, backed by
+   `getUsersNeedingReconsent(v1.1)`). Expected: every consumer whose latest
+   recorded consent is still `v1.0` (i.e. all pre-bump users) now appears on the
+   re-consent list, and the new `v1.1` account from step 2 does not. A per-user
+   consent history row renders as `v1.1 - <date>` for the new account.
+
+### What CANNOT be verified without building the client gate
+
+- "Exactly one re-consent prompt fires in the consumer app on next open"
+  (R8.1). No such prompt exists in `apps/web`; see the blocking finding above.
+
+Rollback: the version is an env var. Reverting `v1.1` -> `v1.0` in dev main.tf
+and re-deploying stops new `v1.1` writes; already-recorded `v1.1` consents are
+harmless.
+
+On completion of the deploy portion, record the confirmed
+`AREA_CODE_CONSENT_VERSION=v1.1` on `area-code-dev-api`, the re-consent list
+result, and the decision taken on the missing consumer re-consent gate here,
+then update task 7.1 accordingly.
+
+## Task 5.1 First_Run_Proof (release-quality-and-ops-hygiene)
+
+First_Run_Proof for the two prod workers that have never produced a log group
+(spec `release-quality-and-ops-hygiene`, R5.1 and R5.3). This records the
+trigger configuration confirmed in prod Terraform, the heartbeat line each
+worker emits, and the exact turnkey commands the founder runs to trigger and
+verify each worker. The live invocation is not yet executed: it needs AWS
+credentials for account 562691664641 (region us-east-1) and founder timing that
+this repo checkout does not have. Nothing below claims an invocation, log group,
+or heartbeat that was observed. Live execution remains founder-pending.
+
+### Trigger configuration (confirmed in `infra/environments/prod/main.tf`)
+
+- `streak-reminder` is a scheduled (EventBridge) worker.
+  - Lambda: `area-code-prod-streak-reminder` (`module.lambda_streak_reminder`,
+    arm64, 256 MB, 120s timeout, not in VPC).
+  - Log group: `/aws/lambda/area-code-prod-streak-reminder`.
+  - Schedule: `module.eventbridge_schedules` entry `streak-reminder`,
+    `schedule_expression = "cron(0 16 * * ? *)"` (daily 18:00 SAST / 16:00 UTC),
+    described "Streak-at-risk reminder daily 18:00 SAST (16:00 UTC)".
+  - The handler takes no event input (`export async function handler()`), so a
+    manual invoke with any payload runs the same scan the schedule triggers.
+- `campaign-sender` is an SQS-triggered worker.
+  - Lambda: `area-code-prod-campaign-sender` (`module.lambda_campaign_sender`,
+    arm64, 512 MB, 120s timeout, not in VPC).
+  - Log group: `/aws/lambda/area-code-prod-campaign-sender`.
+  - Trigger: `module.sqs_campaign_send` (queue `area-code-prod-campaign-send`,
+    DLQ `area-code-prod-campaign-send-dlq`, `visibility_timeout = 150`,
+    `max_receive_count = 2`, `enable_lambda_mapping = true`), so the queue owns
+    an `aws_lambda_event_source_mapping` with `batch_size = 1`. Upstream, the API
+    async-invokes `campaign-dispatcher` on send-now, which fans batches of up to
+    100 recipients out to this queue.
+
+### Heartbeat lines (confirmed in source; verified by task 5.2)
+
+- `streak-reminder` logs one start-of-invocation heartbeat unconditionally at
+  the top of the handler (`backend/src/workers/streak-reminder.ts`):
+
+  ```
+  [streak-reminder] Starting streak-at-risk reminder worker
+  ```
+
+  and a completion line `[streak-reminder] Reminded <n> of <m> streak-holders`.
+
+- `campaign-sender` logs one heartbeat per SQS batch record, before any delivery
+  work (`backend/src/features/campaigns/sender.ts`, handler over `event.Records`):
+
+  ```
+  [campaign-sender] processing batch messageId=<id> campaignId=<id> recipients=<count>
+  ```
+
+### First_Run_Proof procedure (founder-run, live access required)
+
+Run from the repo root with AWS credentials for account 562691664641, region
+us-east-1. PowerShell mangles inline JSON for the AWS CLI, so the SQS step below
+uses a file-based payload (see `tech.md` common gotchas).
+
+#### A. streak-reminder (scheduled worker)
+
+Option 1, wait for the natural tick: the EventBridge schedule fires daily at
+16:00 UTC. No action needed; verify (step A.2) after the next 16:00 UTC tick.
+
+Option 2, manual no-op-safe invoke (immediate). The handler ignores its payload
+and only scans for at-risk opted-in streak-holders, so an empty payload is
+safe; it sends real reminders only to users who genuinely qualify, and logs
+`Reminded 0 of <m>` when none do.
+
+1. Invoke with an empty payload:
+
+   ```powershell
+   aws lambda invoke `
+     --function-name area-code-prod-streak-reminder `
+     --payload '{}' `
+     --cli-binary-format raw-in-base64-out `
+     --region us-east-1 --no-cli-pager `
+     streak-reminder-out.json
+   ```
+
+   Expected: `StatusCode 200`, no `FunctionError` field. `streak-reminder-out.json`
+   holds the returned `{ "scanned": <m>, "reminded": <n> }`.
+
+2. Verify the log group exists, the heartbeat is present, and there are zero
+   ERROR events in the window:
+
+   ```powershell
+   aws logs filter-log-events `
+     --log-group-name /aws/lambda/area-code-prod-streak-reminder `
+     --filter-pattern '"[streak-reminder] Starting"' `
+     --start-time ([DateTimeOffset]::UtcNow.AddMinutes(-15).ToUnixTimeMilliseconds()) `
+     --region us-east-1 --no-cli-pager
+   ```
+
+   Expected: at least one event whose message is
+   `[streak-reminder] Starting streak-at-risk reminder worker`. A resolved log
+   group (no "group does not exist" error) proves the group now exists.
+
+   ```powershell
+   aws logs filter-log-events `
+     --log-group-name /aws/lambda/area-code-prod-streak-reminder `
+     --filter-pattern ERROR `
+     --start-time ([DateTimeOffset]::UtcNow.AddMinutes(-15).ToUnixTimeMilliseconds()) `
+     --region us-east-1 --no-cli-pager
+   ```
+
+   Expected: zero `events`.
+
+#### B. campaign-sender (SQS-triggered worker)
+
+Option 1, natural path: run one small real win-back campaign send-now from the
+business portal to a controlled internal segment. The API invokes
+`campaign-dispatcher`, which enqueues one or more batches on
+`area-code-prod-campaign-send`, and the event source mapping delivers them to
+`campaign-sender`.
+
+Option 2, manual no-op-safe SQS message (immediate). Send one batch with an
+empty `recipients` array pointing at an existing campaign. The handler logs the
+heartbeat, `processBatch` loads the campaign, iterates zero recipients (no
+sends, no send records), and returns cleanly. Use a real `businessId` and
+`campaignId` for an existing campaign: a message referencing a non-existent
+campaign makes the worker log a `campaign not found` error-level line, which
+would defeat the zero-ERROR proof.
+
+1. Resolve the queue URL:
+
+   ```powershell
+   aws sqs get-queue-url `
+     --queue-name area-code-prod-campaign-send `
+     --region us-east-1 --no-cli-pager
+   ```
+
+2. Write the payload to a file (avoids the PowerShell inline-JSON gotcha).
+   Replace the ids with an existing campaign's `businessId` / `campaignId`:
+
+   ```powershell
+   '{"campaignId":"<existing-campaign-id>","businessId":"<owning-business-id>","recipients":[]}' `
+     | Out-File -Encoding ascii campaign-send-noop.json
+   ```
+
+3. Send the message to the queue (the event source mapping invokes the worker):
+
+   ```powershell
+   aws sqs send-message `
+     --queue-url <queue-url-from-step-1> `
+     --message-body file://campaign-send-noop.json `
+     --region us-east-1 --no-cli-pager
+   ```
+
+4. Verify the log group exists, the heartbeat is present, and there are zero
+   ERROR events:
+
+   ```powershell
+   aws logs filter-log-events `
+     --log-group-name /aws/lambda/area-code-prod-campaign-sender `
+     --filter-pattern '"[campaign-sender] processing batch"' `
+     --start-time ([DateTimeOffset]::UtcNow.AddMinutes(-15).ToUnixTimeMilliseconds()) `
+     --region us-east-1 --no-cli-pager
+   ```
+
+   Expected: at least one event
+   `[campaign-sender] processing batch messageId=... campaignId=... recipients=0`.
+
+   ```powershell
+   aws logs filter-log-events `
+     --log-group-name /aws/lambda/area-code-prod-campaign-sender `
+     --filter-pattern ERROR `
+     --start-time ([DateTimeOffset]::UtcNow.AddMinutes(-15).ToUnixTimeMilliseconds()) `
+     --region us-east-1 --no-cli-pager
+   ```
+
+   Expected: zero `events`. Also confirm the DLQ stays empty:
+
+   ```powershell
+   aws sqs get-queue-attributes `
+     --queue-url (aws sqs get-queue-url --queue-name area-code-prod-campaign-send-dlq `
+       --region us-east-1 --query QueueUrl --output text) `
+     --attribute-names ApproximateNumberOfMessages `
+     --region us-east-1 --no-cli-pager
+   ```
+
+   Expected: `ApproximateNumberOfMessages=0`.
+
+#### C. Re-run the go-live check and confirm the WARNs clear
+
+```powershell
+./scripts/go-live-check.ps1 -Environment prod
+```
+
+Expected result: the two worker lines flip from WARN to PASS:
+
+```
+[PASS] Worker errors /aws/lambda/area-code-prod-campaign-sender: no ERROR events since deploy ...
+[PASS] Worker errors /aws/lambda/area-code-prod-streak-reminder: no ERROR events since deploy ...
+```
+
+This clears the two "log group not queryable (missing group or credentials)"
+WARNs recorded in the 2026-07-05 run (Follow-up items, WARN 2) and closes
+launch-morning confirmation 9.1.
+
+### Time pressure on streak-reminder (from task 5.3)
+
+Task 5.3 already shipped the escalation in `scripts/go-live-check.ps1`: the
+worker scan tags `streak-reminder` as a scheduled worker, so once its Lambda
+`LastModified` is older than 7 days with no log group, the check reports FAIL,
+not WARN ("missing log group; scheduled worker last deployed N days ago has
+never run"). `streak-reminder` must therefore produce its log group (procedure A
+above) before that 7-day window elapses, or the next go-live check turns red.
+`campaign-sender` is an SQS worker and stays WARN however old the deploy is
+(it legitimately stays quiet with no messages), but its First_Run_Proof is
+still owed to clear the WARN and prove the win-back path executes in prod.
+
+### Status
+
+Repo-side confirmation complete: triggers, log-group names, and heartbeat lines
+are documented above and the turnkey procedure is ready. Live invocation,
+observation, and the go-live-check re-run remain founder-pending (they require
+prod AWS access). Task 5.1 stays open until the founder runs the procedure and
+records the observed heartbeat lines, zero-ERROR windows, and cleared WARNs here.
+
+## Launch-morning confirmations (task 9)
+
+The two launch-morning confirmations (spec `release-quality-and-ops-hygiene`,
+tasks 9.1 and 9.2) are live, human, on-the-day actions. Neither can be run from
+a repo checkout: 9.1 needs prod AWS access for account 562691664641, and 9.2
+needs a physical 2019-era Android on mobile data. Nothing below claims a run,
+render, or result that was observed. Both remain founder/launch-day pending.
+
+### 9.1 Re-run the go-live check end to end (founder-run, live access required)
+
+Re-run the full check against prod:
+
+```powershell
+./scripts/go-live-check.ps1 -Environment prod
+```
+
+Run order matters. This must run AFTER:
+
+- the task 5.1 First_Run_Proof procedure (section above) has invoked
+  `streak-reminder` and `campaign-sender` so each produces its log group, and
+- this spec's changes are deployed to prod (the deploy-aware worker scan reads
+  each worker's `LastModified`, so the run should follow the deploy that carries
+  these changes).
+
+Expected outcome: the two worker lines flip from WARN to PASS once the
+First_Run_Proof is done, with no new FAIL or WARN introduced:
+
+```
+[PASS] Worker errors /aws/lambda/area-code-prod-campaign-sender: no ERROR events since deploy ...
+[PASS] Worker errors /aws/lambda/area-code-prod-streak-reminder: no ERROR events since deploy ...
+```
+
+These are the two "log group not queryable (missing group or credentials)" WARNs
+from the 2026-07-05 run (Follow-up items, WARN 2). Note the go-live check now
+escalates a stale scheduled-worker missing log group to FAIL, not WARN (task
+5.3): if `streak-reminder`'s Lambda `LastModified` is older than 7 days and it
+still has no log group, the check reports FAIL. So `streak-reminder` must have
+produced its log group (task 5.1 procedure A) before this re-run, or the run
+turns red rather than green. `campaign-sender` is an SQS worker and would stay
+WARN if left un-invoked, so its First_Run_Proof is likewise owed before the
+re-run to reach a clean all-PASS result.
+
+Expected exit code: 0 (no failing checks), tally with the two worker WARNs
+cleared to PASS and the four manual gates still MANUAL by design. On completion,
+record the observed tally and the two PASS lines here.
+
+### 9.2 §1.4 manual gate re-check on a 2019 Android (founder-run, real device)
+
+This is manual gate §1.4 (Manual gates section above): a purely visual,
+real-device human check, layer 3 of the coverage model, that no script and no
+e2e sweep can verify.
+
+Procedure: on a 2019-era Android on mobile data (a throttled, representative
+connection, not office wifi), open the consumer web app at areacode.co.za and
+confirm the map plus at least one node render within 10 seconds.
+
+This ties to the bundle-split work (tasks 8.1 and 8.3). The consumer initial
+gzip payload dropped from ~1,353 KB (after Mapbox was inlined at 8.1's starting
+point) and the earlier ~735 KB May baseline to ~315 KB initial (314.56 KB
+measured), with Mapbox GL now a lazy chunk excluded from the initial payload.
+That reduction is what should make the 10s gate pass on a slow device and
+connection. See the task 8.5 before/after gzip record above.
+
+Because this is a visual and real-device fidelity check, a green go-live-check
+run (9.1) and a green e2e sweep do not clear it. It stays a mandatory
+launch-day human gate. On completion, record the device, connection, and the
+observed time-to-first-node here.
+
+### Status
+
+Both confirmations are documented and ready to run. 9.1 (prod go-live-check
+re-run) and 9.2 (§1.4 real-device map-load gate) remain founder/launch-day
+pending: they require prod AWS access and a physical 2019 Android on mobile
+data respectively, neither available from this checkout. Record the observed
+results here on the day.

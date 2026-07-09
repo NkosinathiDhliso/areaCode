@@ -26,12 +26,19 @@ export default defineConfig({
     // initial entry chunks (isEntry + static imports) from lazy/dynamic chunks
     // and enforce the consumer Bundle_Budget in CI (R9.3).
     manifest: true,
+    // Bundle_Budget R9.4 decision: we do NOT raise chunkSizeWarningLimit. Real
+    // splitting is done below (heavy vendors carved out; the Phosphor icon
+    // barrel was replaced by a curated tree-shaken registry). After that, the
+    // only chunk over Vite's 500 kB warning is mapbox-gl (~1.7 MB), a single
+    // third-party module that is already loaded via dynamic import() and cannot
+    // be split further. That one warning is accepted and expected; it never
+    // ships on first paint. The enforced regression gate is the initial-gzip
+    // ceiling in scripts/check-bundle-budget.mjs (R9.3), not this dev-time nag.
     rollupOptions: {
       output: {
-        // Real vendor splits (R9.4): keep no single initial chunk above Vite's
-        // chunk-size warning limit by carving the heavy, always-loaded vendors
-        // into their own chunks. This is deliberate splitting, NOT raising
-        // build.chunkSizeWarningLimit to hide the size.
+        // Real vendor splits (R9.4): keep every INITIAL chunk small by carving
+        // the heavy, always-loaded vendors into their own chunks. Deliberate
+        // splitting, NOT raising build.chunkSizeWarningLimit to hide the size.
         manualChunks(id) {
           if (!id.includes('node_modules')) return
           // Mapbox GL is loaded via dynamic import() in useMapInit, so Rollup

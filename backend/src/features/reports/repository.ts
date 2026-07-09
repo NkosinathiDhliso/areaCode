@@ -2,6 +2,7 @@ import { GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 
 import { documentClient, TableNames, isConditionalCheckFailedError } from '../../shared/db/dynamodb.js'
 
+import { scanForPii } from './pii-scanner.js'
 import { digestRowSchema, reportTokensSchema, type DigestRow, type Report, type ReportMetrics } from './types.js'
 
 // ============================================================================
@@ -380,6 +381,47 @@ export async function putDigestRow(row: DigestRow): Promise<'written' | 'duplica
     }
     throw err
   }
+}
+
+/**
+ * Scan a Digest_Row for consumer PII (R1.6) using the existing reports PII
+ * scanner, throwing on any finding. This is the persistence boundary guard: the
+ * Digest_Email renders from the same payload, so a row that reaches DynamoDB has
+ * already been proven clean.
+ *
+ * The scanner reads a serialized JSON string; the whole row (metrics, deltas,
+ * suppression list, tier snapshot, business id) is stringified and scanned. The
+ * scanner's `ALLOWED_UUID_FIELDS` covers the structural `businessId`, so an
+ * honest row passes while any leaked consumer identifier (userId, cognitoSub,
+ * displayName, phone, email, avatarUrl, or a stray UUID/URL) trips it.
+ *
+ * Per the no-fallbacks posture this THROWS rather than degrading: a digest that
+ * contains PII is a defect that must stop the write loudly, never persist a
+ * scrubbed-or-partial row silently.
+ */
+export function scanDigestForPii(row: DigestRow): void {
+  const result = scanForPii(JSON.stringify(row))
+  if (!result.clean) {
+    throw new Error(
+      `Digest for business ${row.businessId} week ${row.weekStart} contains PII; ` +
+        `refusing to persist. Violations: ${result.violations.join('; ')}`,
+    )
+  }
+}
+
+/**
+ * Scan the digest payload for PII (R1.6), then persist the Digest_Row (R3.1).
+ *
+ * This is the single scan-then-persist seam the generator's digest path (task
+ * 4.2) calls: the PII scan runs on the exact payload the row and the
+ * Digest_Email render from, and it runs BEFORE the conditional write, so no row
+ * carrying consumer PII can ever reach DynamoDB. On a clean payload it returns
+ * the underlying `putDigestRow` result (`written | duplicate`) unchanged so the
+ * caller keeps its retry-suppression and email-dispatch decision.
+ */
+export async function persistDigest(row: DigestRow): Promise<'written' | 'duplicate'> {
+  scanDigestForPii(row)
+  return putDigestRow(row)
 }
 
 /**

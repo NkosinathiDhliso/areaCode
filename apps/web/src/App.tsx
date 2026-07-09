@@ -15,6 +15,7 @@ import type { User } from '@area-code/shared/types'
 import { useState, useEffect, useCallback, useRef } from 'react'
 
 import { BottomNav } from './components/BottomNav'
+import { ReconsentGate } from './components/ReconsentGate'
 import { VerifyEmailBanner } from './components/VerifyEmailBanner'
 import { useCheckinOutbox } from './hooks/useCheckinOutbox'
 import { useFriendsPresence } from './hooks/useFriendsPresence'
@@ -302,6 +303,7 @@ function AppContent() {
   return (
     <div className="flex flex-col h-full bg-[var(--bg-base)]">
       {isAuthenticated && !showAuthGate && <VerifyEmailBanner />}
+      {isAuthenticated && !showAuthGate && <ReconsentGate onNavigate={setRoute} />}
       <div ref={contentRef} className="flex-1 relative overflow-x-hidden overflow-y-auto overscroll-y-contain">
         {showAuthGate ? (
           <AuthLanding onNavigate={setRoute} />

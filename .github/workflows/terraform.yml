@@ -9,6 +9,25 @@ on:
       - 'infra/**'
 
 jobs:
+  # Format enforcement runs on every trigger (PR and push to master) so drift
+  # fails CI going forward. It only needs the Terraform CLI, no AWS creds, so it
+  # is fast and independent of the plan/apply legs. Fix locally with
+  # `terraform fmt -recursive infra/`.
+  fmt:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive infra
+
   plan:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

@@ -4,6 +4,9 @@ import { APP_ENV, AWS_REGION, DEV_MODE, assertPaymentConfig, requireEnv } from '
 import { sendRenewalReminderEmail, sendRenewalUpcomingEmail } from '../../shared/email/ses.js'
 import { AppError } from '../../shared/errors/AppError.js'
 import { deactivateNodesForBusiness } from '../nodes/dynamodb-repository.js'
+import { buildDigestCopy, type DigestData } from '../reports/digest.js'
+import { getLatestDigest, queryDigestHistory } from '../reports/repository.js'
+import type { DigestRow } from '../reports/types.js'
 import { classifyLifecycle, type Lifecycle } from '../rewards/lifecycle.js'
 
 import { decideBoostFloorWithMetric, type BoostMetricInput } from './floor-decision.js'
@@ -220,6 +223,9 @@ export async function getBusinessProfile(cognitoSub: string) {
       cognitoSub,
       paidUntil: addPaidInterval(new Date().toISOString(), 'monthly'),
       paidInterval: 'monthly' as PaidInterval,
+      // Digest_Optout (weekly-attribution-digest R4.5): surfaced so the dev
+      // SettingsPanel can render the toggle's current state. Emails default on.
+      digestEmailOptOut: false,
     }
   }
   // findBusinessByCognitoSub -> auth repo mapBiz spreads the whole stored item,
@@ -1442,6 +1448,90 @@ export async function downgradeToFree(businessId: string) {
   if (DEV_MODE) return { success: true, tier: 'free' }
   await deactivateForNonPayment(businessId)
   return { success: true, tier: 'free' }
+}
+
+// ─── Business settings: Digest_Optout (weekly-attribution-digest R4.5) ──────
+//
+// Persist the `digestEmailOptOut` preference on the Business_Row through the
+// shared repository write. The report generator reads `business?.digestEmailOptOut`
+// on each weekly run, so a change takes effect from the next run (the dashboard
+// card always renders; only the email is suppressed). Returns the resolved
+// value so the client can reflect the saved state. A missing business surfaces
+// as a typed 404, never a silent no-op.
+export async function updateDigestOptOut(businessId: string, optOut: boolean) {
+  if (DEV_MODE) return { digestEmailOptOut: optOut }
+  const updated = await repo.setDigestEmailOptOut(businessId, optOut)
+  if (!updated) throw AppError.notFound('Business not found')
+  return { digestEmailOptOut: optOut }
+}
+
+// ─── Business API: Digest read views (weekly-attribution-digest R4.1) ───────
+//
+// The dashboard DigestCard and history list render entirely from the API, and
+// the copy strings are the SAME strings the Digest_Email sends: one source of
+// truth for the copy (R4.3). Rather than duplicate the sentence-building in the
+// client, the API returns the raw Attribution_Metrics PLUS the rendered copy,
+// rebuilt from the persisted row via `buildDigestCopy` (the reports feature owns
+// digest logic; these views only read from its repository and copy builder — no
+// forked reads, no re-derived metrics).
+//
+// Copy is rebuilt from the row's own `tierAtBuild` snapshot, not the business's
+// current tier: a digest reads with the close it was generated under, so history
+// stays stable if the business later changes tier.
+
+/** The per-week digest as the business API returns it: the stored metrics and
+ * the rendered copy strings together, so the card and email share one copy. */
+export interface DigestView {
+  weekStart: string
+  metrics: DigestRow['metrics']
+  deltas: DigestRow['deltas'] | null
+  suppressed: DigestRow['suppressed']
+  tierAtBuild: string
+  copy: string[]
+  createdAt: string
+}
+
+/** Assemble a Digest_Row into the API view: raw metrics plus the copy strings
+ * rebuilt from the row's own tier snapshot (one source of truth for copy). */
+function toDigestView(row: DigestRow): DigestView {
+  const data: DigestData = {
+    metrics: row.metrics,
+    ...(row.deltas ? { deltas: row.deltas } : {}),
+    suppressed: row.suppressed,
+  }
+  return {
+    weekStart: row.weekStart,
+    metrics: row.metrics,
+    deltas: row.deltas ?? null,
+    suppressed: row.suppressed,
+    tierAtBuild: row.tierAtBuild,
+    copy: buildDigestCopy(data, row.tierAtBuild),
+    createdAt: row.createdAt,
+  }
+}
+
+/**
+ * The latest Digest for a business as the dashboard card renders it, or a clean
+ * `{ digest: null }` empty state when no digest has been generated yet (R4.1).
+ * The empty state is honest, never an error: a business with no closed
+ * Digest_Week has nothing to show, not a fault.
+ */
+export async function getLatestDigestView(businessId: string): Promise<{ digest: DigestView | null }> {
+  const row = await getLatestDigest(businessId)
+  return { digest: row ? toDigestView(row) : null }
+}
+
+/**
+ * A page of prior Digests for a business, newest first, with cursor pagination
+ * (R4.1). Each item carries the metrics plus the rendered copy strings, so the
+ * history list renders from the same copy source as the card and email.
+ */
+export async function getDigestHistoryView(
+  businessId: string,
+  cursor?: string,
+): Promise<{ items: DigestView[]; nextCursor: string | null }> {
+  const { items, nextCursor } = await queryDigestHistory(businessId, cursor)
+  return { items: items.map(toDigestView), nextCursor: nextCursor ?? null }
 }
 
 // ─── Admin Boost Floor Management (R4, R5) ──────────────────────────────────

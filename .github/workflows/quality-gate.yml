@@ -47,18 +47,16 @@ jobs:
       - name: Tests with coverage
         run: pnpm exec vitest run --coverage
 
-      - name: SonarCloud Scan
-        if: env.SONAR_TOKEN != ''
-        uses: SonarSource/sonarqube-scan-action@v4
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      # SonarCloud decision (R6.2): removed. We have no SONAR_TOKEN provisioned,
+      # so the step could never run and only added a silent skip. Deleted rather
+      # than left as a dead conditional. Re-add the SonarCloud scan step here
+      # once a SONAR_TOKEN secret is configured for the repo.
 
   e2e-smoke:
     # Cross-cutting smoke from UAT_CHECKLIST.md §"Cross-Cutting Smoke Test".
     # No AWS / Cognito seeding — just hits public URLs.
     runs-on: ubuntu-latest
     needs: quality-check
-    if: ${{ vars.E2E_API_URL != '' }}
     env:
       E2E_API_URL: ${{ vars.E2E_API_URL }}
       E2E_CONSUMER_URL: ${{ vars.E2E_CONSUMER_URL }}
@@ -66,18 +64,37 @@ jobs:
       E2E_STAFF_URL: ${{ vars.E2E_STAFF_URL }}
       E2E_ADMIN_URL: ${{ vars.E2E_ADMIN_URL }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      # Loud skip (R6.1): when E2E_API_URL is unset the smoke suite has nowhere
+      # to point, so emit a visible warning annotation naming the variable
+      # instead of silently skipping the whole job. Subsequent steps run only
+      # when the variable is present.
+      - name: Check E2E_API_URL
+        id: e2e_target
+        run: |
+          if [ -z "${E2E_API_URL}" ]; then
+            echo "::warning::E2E_API_URL is not set; skipping e2e smoke. Set the E2E_API_URL repository variable to run it."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.e2e_target.outputs.present == 'true'
+        uses: actions/checkout@v4
+      - if: steps.e2e_target.outputs.present == 'true'
+        uses: pnpm/action-setup@v4
         with:
           version: 9
-      - uses: actions/setup-node@v4
+      - if: steps.e2e_target.outputs.present == 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @area-code/e2e exec playwright install --with-deps chromium
-      - run: pnpm --filter @area-code/e2e test:smoke
-      - if: always()
+      - if: steps.e2e_target.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile
+      - if: steps.e2e_target.outputs.present == 'true'
+        run: pnpm --filter @area-code/e2e exec playwright install --with-deps chromium
+      - if: steps.e2e_target.outputs.present == 'true'
+        run: pnpm --filter @area-code/e2e test:smoke
+      - if: steps.e2e_target.outputs.present == 'true' && always()
         uses: actions/upload-artifact@v4
         with:
           name: smoke-report-${{ github.run_id }}

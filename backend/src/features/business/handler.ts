@@ -18,10 +18,17 @@ import {
   staffInviteBodySchema,
   staffInviteTokenParamsSchema,
   staffIdParamsSchema,
+  businessSettingsBodySchema,
 } from './types.js'
 
 const nodeIdParamsSchema = z.object({ nodeId: z.string().uuid() })
 const staffRedemptionParamsSchema = z.object({ staffId: z.string().uuid() })
+
+// Weekly Attribution Digest history pagination (weekly-attribution-digest
+// R4.1). `cursor` is an opaque, optional base64 DynamoDB key echoed back from a
+// prior page; validated only as a non-empty string here (the repository decodes
+// it). No cursor means the first (newest) page.
+const digestHistoryQuerySchema = z.object({ cursor: z.string().min(1).optional() })
 const checkInQuerySchema = z.object({
   date: z.string().optional(),
   cursor: z.string().optional(),
@@ -512,6 +519,61 @@ export async function businessRoutes(app: FastifyInstance) {
     async (request) => {
       const auth = getAuth(request)
       return service.downgradeToFree(auth.userId)
+    },
+  )
+
+  // GET /v1/business/digest/latest
+  // Latest Weekly Attribution Digest for the authenticated business
+  // (weekly-attribution-digest R4.1). `requireAuth('business')` gates on the
+  // business Cognito pool, so `auth.userId` IS the businessId (the same
+  // identifier the other business-scoped reads resolve from). Returns the raw
+  // Attribution_Metrics plus the rendered copy strings (one source of truth with
+  // the Digest_Email, R4.3), or a clean `{ digest: null }` when no digest has
+  // been generated yet — an honest empty state, never an error. camelCase JSON,
+  // typed errors, fail-closed auth (401 when unauthenticated).
+  app.get('/v1/business/digest/latest', { preHandler: [requireAuth('business')] }, async (request) => {
+    const auth = getAuth(request)
+    return service.getLatestDigestView(auth.userId)
+  })
+
+  // GET /v1/business/digest/history?cursor=...
+  // Prior Digests for the authenticated business, newest first, with cursor
+  // pagination (weekly-attribution-digest R4.1). Same `requireAuth('business')`
+  // gate and businessId resolution as the latest route. Each item carries
+  // metrics plus copy strings; the opaque cursor is echoed back from a prior
+  // page and passed straight through to the reports repository. Returns
+  // `{ items, nextCursor }` (nextCursor null on the last page).
+  app.get(
+    '/v1/business/digest/history',
+    { preHandler: [requireAuth('business'), validate({ query: digestHistoryQuerySchema })] },
+    async (request) => {
+      const auth = getAuth(request)
+      const query = request.query as z.infer<typeof digestHistoryQuerySchema>
+      return service.getDigestHistoryView(auth.userId, query.cursor)
+    },
+  )
+
+  // PATCH /v1/business/settings
+  // Weekly Attribution Digest opt-out preference (weekly-attribution-digest
+  // R4.5). Body `{ digestEmailOptOut: boolean }` is Zod-validated (a non-boolean
+  // or missing field is rejected 400 by the validate middleware). Gated by
+  // `manage_settings`, an owner-only permission, matching the write-permission
+  // convention of the other business routes. The service persists the flag via
+  // the shared `updateBusiness` write path; the report generator honours it from
+  // the next weekly run. camelCase JSON, typed errors only.
+  app.patch(
+    '/v1/business/settings',
+    {
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('manage_settings'),
+        validate({ body: businessSettingsBodySchema }),
+      ],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      const body = request.body as z.infer<typeof businessSettingsBodySchema>
+      return service.updateDigestOptOut(auth.userId, body.digestEmailOptOut)
     },
   )
 

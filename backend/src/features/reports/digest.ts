@@ -165,15 +165,29 @@ function deltaClause(delta: number | undefined): string {
 }
 
 /**
+ * Close shown to growth and pro (R5.3): a link to the full weekly report
+ * surface they already own. No upgrade pointer (they are not upgrading).
+ */
+export const FULL_REPORT_CLOSE = 'Your full weekly report has the complete breakdown. Open it from your dashboard.'
+
+/**
+ * Close shown to starter and any lapsed-to-starter tier (R5.2): one concrete
+ * capability the full report adds (peak-hours analysis) plus an upgrade pointer,
+ * in Honest_Framing — no invented numbers from the locked report.
+ */
+export const STARTER_UPGRADE_CLOSE = 'The full weekly report adds peak-hours analysis. Upgrade to unlock it.'
+
+/**
  * The tier-aware closing line (R5.2, R5.3). Growth and pro are pointed at the
  * full report they own; every other resolved tier (starter and lapsed) gets one
  * named locked capability plus an upgrade pointer, with no invented numbers.
+ *
+ * `tier` is the already-resolved effective tier (see `getEffectiveTier`, the
+ * Tier_Resolver), so a lapsed paid business arrives here as 'starter' and gets
+ * the starter close.
  */
 function tierClose(tier: string): string {
-  if (FULL_ACCESS_TIERS.has(tier)) {
-    return 'Your full weekly report has the complete breakdown. Open it from your dashboard.'
-  }
-  return 'The full weekly report adds peak-hours analysis. Upgrade to unlock it.'
+  return FULL_ACCESS_TIERS.has(tier) ? FULL_REPORT_CLOSE : STARTER_UPGRADE_CLOSE
 }
 
 /**

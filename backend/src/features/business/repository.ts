@@ -94,6 +94,15 @@ export async function setPaymentGrace(id: string, until: string | null) {
   return updateBusiness(id, { paymentGraceUntil: until } as any)
 }
 
+// Weekly Attribution Digest opt-out (weekly-attribution-digest R4.5). Persists
+// the `digestEmailOptOut` flag on the Business_Row through the single shared
+// `updateBusiness` write path (dry-reuse-no-duplication) so the report
+// generator's `business?.digestEmailOptOut` read is backed from the next
+// weekly run. Returns the updated account (or null when the id is unknown).
+export async function setDigestEmailOptOut(id: string, optOut: boolean) {
+  return updateBusiness(id, { digestEmailOptOut: optOut })
+}
+
 /**
  * Business ids whose payment grace window has lapsed - `paymentGraceUntil` is
  * a past ISO timestamp at `nowIso`. Absent or null grace never matches: a

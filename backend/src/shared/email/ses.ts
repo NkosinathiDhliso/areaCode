@@ -202,6 +202,54 @@ export async function sendReportReadyEmail(
 }
 
 /**
+ * Weekly Attribution Digest email (weekly-attribution-digest R4.2, R4.3, R4.4).
+ *
+ * Renderer only. The copy strings are the single source of truth built by
+ * `buildDigestCopy` in the reports feature and shared with the dashboard card
+ * (R4.3), so this sender never re-derives copy: it takes the already-built,
+ * ordered `copyLines` plus the venue name and the headline visit count for the
+ * subject. Body (Text and Html) renders those lines in order; every dynamic
+ * value interpolated into the Html body is escaped via `escapeHtml`.
+ *
+ * No consumer PII: the payload behind these strings is PII-scanned before
+ * persistence (R1.6), and only the venue name and aggregate counts reach here.
+ * Transactional, email-only, no SMS or phone path (no-sms-no-phone-auth.md).
+ * Follows the `sendReportReadyEmail` shape. The generator wraps this in its own
+ * try/catch so a send failure is logged and the Digest_Row is retained (R4.4).
+ */
+export async function sendDigestEmail(
+  to: string,
+  venueName: string,
+  headlineVisits: number,
+  copyLines: string[],
+): Promise<void> {
+  const subject = `${venueName}: ${headlineVisits} visits recorded this week`
+  const text = copyLines.join('\n\n')
+  const htmlLines = copyLines
+    .map((line) => `<p style="color:#444;font-size:15px;line-height:1.5;margin:0 0 12px">${escapeHtml(line)}</p>`)
+    .join('')
+  const html =
+    `<div style="font-family:sans-serif;max-width:440px;margin:0 auto;padding:24px">` +
+    `<h2 style="color:#333">${escapeHtml(venueName)}</h2>${htmlLines}</div>`
+
+  await ses.send(
+    new SendEmailCommand({
+      FromEmailAddress: FROM_EMAIL,
+      Destination: { ToAddresses: [to] },
+      Content: {
+        Simple: {
+          Subject: { Data: subject },
+          Body: {
+            Text: { Data: text },
+            Html: { Data: html },
+          },
+        },
+      },
+    }),
+  )
+}
+
+/**
  * Base URL of the business portal (Reports/Plans panels live here). Mirrors the
  * `webBaseUrl()` accessor in auth/service.ts; the default matches the prod
  * business subdomain in `shared/security/origins.ts`.
