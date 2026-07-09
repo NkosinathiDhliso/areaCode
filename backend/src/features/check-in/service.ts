@@ -183,11 +183,14 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
   const streakValue = await repo.updateStreak(userId)
 
   // 4b. Advance threshold-lock progress on every active reward at this venue
-  // (Churn-defences spec, Requirement 1). Failures here are logged but not
-  // fatal — the check-in is the source of truth, locks self-heal on next visit.
+  // (Churn-defences spec, Requirement 1). Only a Qualifying_Visit (type='reward')
+  // advances a lock, so lock progress matches the displayed progress and
+  // mint-time qualification (Loyalty-repeat-redemption spec, Requirement 3.3).
+  // Failures here are logged but not fatal — the check-in is the source of
+  // truth, locks self-heal on next visit.
   try {
     const { processCheckInRewardLocks } = await import('../rewards/threshold-lock.js')
-    await processCheckInRewardLocks(userId, input.nodeId)
+    await processCheckInRewardLocks(userId, input.nodeId, input.type)
   } catch (err) {
     console.warn(`[check-in] threshold-lock advance failed: ${String(err)}`)
   }
@@ -512,6 +515,11 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
               userId,
               nodeId: input.nodeId,
               checkInId: checkIn.checkInId,
+              // Thread the device fingerprint (when the check-in carried one)
+              // so the mint-site Reward_Drain flag can record it as evidence
+              // (loyalty-repeat-redemption R4.1). Omission never disables the
+              // user-keyed drain check (R4.4).
+              ...(input.fingerprintHash ? { fingerprintHash: input.fingerprintHash } : {}),
             }),
           }),
         )

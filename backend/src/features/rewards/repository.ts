@@ -69,6 +69,8 @@ export async function createReward(data: {
   startsAt?: string
   endsAt?: string
   claimRequiresCheckIn?: boolean
+  // Repeat_Policy (R1.1). Optional on disk; absent reads back as `once`.
+  repeatPolicy?: 'once' | 'per_visit'
 }) {
   return dynamo.createReward(data as any)
 }
@@ -102,6 +104,9 @@ export async function updateReward(
     startsAt: string
     endsAt: string
     claimRequiresCheckIn: boolean
+    // Repeat_Policy (R1.1). Persisted so a venue can flip a loyalty nth_checkin
+    // get between `once` and `per_visit`.
+    repeatPolicy: 'once' | 'per_visit'
   }>,
 ) {
   return dynamo.updateReward(id, data as any)
@@ -298,21 +303,23 @@ export async function getUnclaimedRewards(userId: string) {
   const enriched = []
   for (const rdm of active) {
     const rec = rdm as unknown as Record<string, unknown>
-    // Prefer the denormalised fields written at claim time; fall back to a
+    // Resolve the reward behind the code once, reusing the existing enrichment
+    // lookup both to fill missing denormalised fields AND to drop dead codes
+    // (R5.3). A reward that was deleted (no row) or deactivated
+    // (`isActive === false`) is a code the staff validator will refuse, so it
+    // must never appear in the wallet (fail closed toward the business).
+    const reward = rec['rewardId'] ? await dynamo.getRewardById(rec['rewardId'] as string) : null
+    if (!reward || reward.isActive === false) continue
+
+    // Prefer the denormalised fields written at claim time; fall back to the
     // reward/node lookup for older rows that predate the denormalisation.
     let rewardTitle = (rec['rewardTitle'] as string) ?? ''
     let nodeName = (rec['nodeName'] as string) ?? ''
-    let rewardType = ''
-    if (!rewardTitle || !nodeName) {
-      const reward = rec['rewardId'] ? await dynamo.getRewardById(rec['rewardId'] as string) : null
-      if (reward) {
-        rewardTitle = rewardTitle || reward.title
-        rewardType = reward.type
-        if (!nodeName) {
-          const node = await getNodeById(reward.nodeId)
-          nodeName = node?.name ?? ''
-        }
-      }
+    const rewardType = reward.type
+    if (!rewardTitle) rewardTitle = reward.title
+    if (!nodeName) {
+      const node = await getNodeById(reward.nodeId)
+      nodeName = node?.name ?? ''
     }
     enriched.push({
       id: (rec['redemptionId'] ?? rec['pk']) as string,

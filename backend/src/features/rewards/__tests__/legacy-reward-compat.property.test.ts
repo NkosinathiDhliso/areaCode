@@ -3,6 +3,7 @@ import * as fc from 'fast-check'
 
 import { mapReward } from '../dynamodb-repository.js'
 import { isVisibleInFeed, isClaimEligible } from '../lifecycle.js'
+import { decideMint, type GuardState } from '../repeat-policy.js'
 
 /**
  * Event & Offer Gets — backwards-compatibility property test.
@@ -108,6 +109,58 @@ describe('Feature: event-and-offer-gets, Property 5: Backwards compatibility', (
           expect(legacyDecision).toEqual({ eligible: true })
         },
       ),
+    )
+  })
+})
+
+// ─── Loyalty Repeat Redemption — Property 5: missing repeatPolicy reads as once ─
+
+/**
+ * A `Reward` row serialized before Loyalty Repeat Redemption also lacks a
+ * `repeatPolicy` attribute. The read model must surface such a row as `once`
+ * (R1.1, R7.1) so an existing loyalty get stops repeating implicitly, and a
+ * Claim_Guard row without a redemption stamp must decide mints exactly as an
+ * explicit `once` reward does (R2.7).
+ *
+ * **Validates: Requirements 1.1, 2.7, 7.1**
+ */
+
+/** A Claim_Guard state as `decideMint` consumes it: expiry always present, an
+ *  optional redemption stamp. `null` models "no guard row yet". */
+const guardStateArb = fc.option(
+  fc.record({
+    codeExpiresAt: epochMsArb.map(iso),
+    redeemedAt: fc.option(epochMsArb.map(iso), { nil: undefined }),
+  }),
+  { nil: null },
+) as fc.Arbitrary<GuardState | null>
+
+describe('Feature: loyalty-repeat-redemption, Property 5: Backwards compatibility', () => {
+  it('normalises a row serialized without repeatPolicy to once', () => {
+    fc.assert(
+      fc.property(legacyRowArb, (legacyRow) => {
+        // The raw row genuinely lacks the attribute on disk (R7.1 precondition,
+        // no backfill): the read mapper is what surfaces the default.
+        expect('repeatPolicy' in legacyRow).toBe(false)
+
+        const mapped = mapReward(legacyRow)
+        // The read model surfaces `once` so callers never observe `undefined`
+        // and the legacy get stops repeating implicitly (R1.1, R1.2).
+        expect(mapped.repeatPolicy).toBe('once')
+      }),
+    )
+  })
+
+  it('decides mints for a missing-policy row exactly as an explicit once reward (R1.1, R2.7)', () => {
+    fc.assert(
+      fc.property(legacyRowArb, guardStateArb, epochMsArb, (legacyRow, guard, nowMs) => {
+        const resolved = mapReward(legacyRow).repeatPolicy ?? 'once'
+
+        // The absent policy resolves to `once`, so its mint decision over any
+        // guard state (including legacy stamp-less rows, R2.7) and any clock
+        // must match an explicit `once` reward exactly.
+        expect(decideMint(resolved, guard, nowMs)).toEqual(decideMint('once', guard, nowMs))
+      }),
     )
   })
 })

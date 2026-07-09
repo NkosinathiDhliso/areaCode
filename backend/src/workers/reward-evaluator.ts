@@ -6,6 +6,8 @@ import {
   emitBusinessRewardClaimed,
 } from '../shared/socket/events.js'
 import { classifyLifecycle, isClaimEligible } from '../features/rewards/lifecycle.js'
+import { decideMint } from '../features/rewards/repeat-policy.js'
+import { getEffectiveThreshold } from '../features/rewards/threshold-lock.js'
 import { isConditionalCheckFailedError } from '../shared/db/dynamodb.js'
 import * as repo from './reward-evaluator-repository.js'
 
@@ -13,6 +15,11 @@ interface CheckInMessage {
   userId: string
   nodeId: string
   checkInId: string
+  // Present when the triggering check-in carried a device fingerprint. Threaded
+  // through to the mint-site Reward_Drain flag as evidence only
+  // (loyalty-repeat-redemption R4.1); the drain check itself keys on `userId`,
+  // so omission never disables it (R4.4).
+  fingerprintHash?: string
 }
 
 /**
@@ -32,11 +39,11 @@ const REDEMPTION_CODE_TTL_MS = 24 * 60 * 60 * 1000
 export async function handler(event: { Records: Array<{ body: string }> }) {
   for (const record of event.Records) {
     const msg: CheckInMessage = JSON.parse(record.body)
-    await evaluateRewards(msg.userId, msg.nodeId)
+    await evaluateRewards(msg.userId, msg.nodeId, msg.fingerprintHash)
   }
 }
 
-async function evaluateRewards(userId: string, nodeId: string) {
+async function evaluateRewards(userId: string, nodeId: string, fingerprintHash?: string) {
   const rewards = await repo.getActiveRewardsForNode(nodeId)
   const nowMs = Date.now()
 
@@ -84,23 +91,45 @@ async function evaluateRewards(userId: string, nodeId: string) {
     const code = generateRedemptionCode()
     const codeExpiresAt = new Date(Date.now() + REDEMPTION_CODE_TTL_MS).toISOString()
 
+    const policy = reward.repeatPolicy ?? 'once'
     let redemptionId: string
+    let redemptionCount: number
     try {
       const created = await repo.createRedemption({
         rewardId: reward.id,
         userId,
         redemptionCode: code,
         codeExpiresAt,
+        // Repeat_Policy resolution: absent on disk reads as `once`
+        // (loyalty-repeat-redemption R1.1). The repository transcribes this
+        // into the policy-specific Claim_Guard condition (R2).
+        repeatPolicy: policy,
         ...(reward.node?.businessId ? { businessId: reward.node.businessId } : {}),
         nodeId,
         ...(reward.node?.name ? { nodeName: reward.node.name } : {}),
         rewardTitle: reward.title,
       })
       redemptionId = created.id
+      redemptionCount = created.redemptionCount
     } catch (err) {
       if (isConditionalCheckFailedError(err)) {
-        // ON CONFLICT , already claimed. The unique-claim condition tripped,
-        // so this reward is already minted for the user. Skip it.
+        // Mint skipped by the Claim_Guard condition (R2). Recover the precise
+        // rejection code from the pure `decideMint` against the current guard
+        // state and emit a debug log (R8.2). Best-effort: never throw here — a
+        // failed guard read or a benign race just yields a generic skip log.
+        try {
+          const guard = await repo.getClaimGuard(reward.id, userId)
+          const decision = decideMint(policy, guard, nowMs)
+          const code = decision.mint ? 'skipped' : decision.code
+          console.debug(
+            `[reward-evaluator] Mint skipped by guard: user=${userId} reward=${reward.id} policy=${policy} code=${code}`,
+          )
+        } catch (logErr) {
+          console.debug(
+            `[reward-evaluator] Mint skipped by guard: user=${userId} reward=${reward.id} policy=${policy}`,
+            logErr,
+          )
+        }
         continue
       }
       // Any other failure is a real (likely transient) fault. Do not silently
@@ -135,6 +164,32 @@ async function evaluateRewards(userId: string, nodeId: string) {
         )
       console.error(`[reward-evaluator] incrementClaimedCount failed: user=${userId} reward=${reward.id}`, err)
       throw err
+    }
+
+    // Reward_Drain-on-mint (R4.1, R4.3, R8.3). The mint has succeeded and the
+    // slot cap held, so this is the authoritative claim site. Count the mint
+    // per (consumer, node) and, above the 24h threshold, raise a high-priority
+    // abuse flag with the mint timestamps (and fingerprint when present) as
+    // evidence. Never blocks the mint: the helper swallows its own failures and
+    // makes no mint decision. Awaited so the counter/flag writes actually land
+    // before the Lambda freezes on return (a fire-and-forget promise is lost).
+    await repo.recordDrainOnMint(userId, nodeId, fingerprintHash)
+
+    // R8.1: structured info log on a repeat mint (`per_visit`, second or later
+    // code for this consumer+reward). `redemptionCount` is the running mint
+    // count carried on the Claim_Guard.
+    if (policy === 'per_visit' && redemptionCount > 1) {
+      console.info(
+        JSON.stringify({
+          feature: 'loyalty-repeat-redemption',
+          operation: 'repeatMint',
+          rewardId: reward.id,
+          nodeId,
+          userId,
+          policy,
+          redemptionCount,
+        }),
+      )
     }
 
     await emitClaimEvents(userId, nodeId, reward, code, codeExpiresAt)
@@ -213,14 +268,20 @@ async function emitClaimEvents(
 async function checkQualification(
   userId: string,
   nodeId: string,
-  reward: { type: string; triggerValue?: number | null },
+  reward: { id: string; type: string; triggerValue?: number | null },
 ): Promise<boolean> {
   const trigger = reward.triggerValue ?? 1
 
   switch (reward.type) {
     case 'nth_checkin': {
-      const count = await repo.countUserCheckInsAtNode(userId, nodeId)
-      return count >= trigger
+      // R3.1/R3.4: qualify against the consumer's Effective_Threshold
+      // (min(lockedThreshold, current triggerValue)), so a grandfathered lock
+      // at 5 still qualifies at 5 visits after the venue raises the threshold.
+      const [count, effectiveThreshold] = await Promise.all([
+        repo.countQualifyingVisits(userId, nodeId),
+        getEffectiveThreshold(userId, reward.id),
+      ])
+      return count >= effectiveThreshold
     }
     case 'daily_first': {
       const count = await repo.countCheckInsTodayAtNode(nodeId)
@@ -270,9 +331,9 @@ function toSASTDate(date: string | Date): Date {
 
 function generateRedemptionCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  const bytes = randomBytes(6)
+  const bytes = randomBytes(8)
   let code = ''
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     code += chars[bytes[i]! % chars.length]
   }
   return code

@@ -146,8 +146,19 @@ export async function incrementProgress({
  * venue. Called from the check-in pipeline. Errors are logged but do not
  * fail the check-in itself — losing a lock write is recoverable, losing
  * a check-in is not.
+ *
+ * Threshold_Lock progress advances only on a Qualifying_Visit — a check-in
+ * with `type = 'reward'` (Loyalty-repeat-redemption spec, Requirement 3.3).
+ * Presence check-ins never advance a lock, so lock progress, the displayed
+ * progress read, and mint-time qualification all share one visit definition.
  */
-export async function processCheckInRewardLocks(userId: string, nodeId: string): Promise<void> {
+export async function processCheckInRewardLocks(
+  userId: string,
+  nodeId: string,
+  checkInType: 'reward' | 'presence',
+): Promise<void> {
+  if (checkInType !== 'reward') return
+
   let rewards
   try {
     rewards = await getActiveRewardsByNodeId(nodeId)

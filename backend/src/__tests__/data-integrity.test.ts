@@ -5,7 +5,7 @@ import { z } from 'zod'
 // ─── Import all Zod schemas (source of truth for validation) ────────────────
 import { checkInBodySchema } from '../features/check-in/types'
 import { consumerSignupBodySchema, verifyOtpBodySchema, consentBodySchema } from '../features/auth/types'
-import { createRewardBodySchema, redeemBodySchema } from '../features/rewards/types'
+import { createRewardBodySchema, updateRewardBodySchema, redeemBodySchema } from '../features/rewards/types'
 import { createNodeBodySchema, reportNodeBodySchema, claimNodeBodySchema } from '../features/nodes/types'
 import { boostBodySchema } from '../features/business/types'
 import { reportActionBodySchema } from '../features/admin/types'
@@ -94,6 +94,107 @@ describe('Schema validation: invalid data is always rejected', () => {
     )
   })
 
+  // ─── Repeat_Policy refinement (R1.3, R1.5) ────────────────────────────────
+  const validNodeId = '550e8400-e29b-41d4-a716-446655440000'
+
+  it('reward creation accepts per_visit for a loyalty nth_checkin get', () => {
+    const result = createRewardBodySchema.safeParse({
+      nodeId: validNodeId,
+      type: 'nth_checkin',
+      title: 'Free coffee',
+      triggerValue: 5,
+      repeatPolicy: 'per_visit',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('reward creation accepts once for any loyalty type', () => {
+    fc.assert(
+      fc.property(fc.constantFrom('nth_checkin', 'daily_first', 'streak', 'milestone'), (type) => {
+        const result = createRewardBodySchema.safeParse({
+          nodeId: validNodeId,
+          type,
+          title: 'Loyalty get',
+          repeatPolicy: 'once',
+        })
+        expect(result.success).toBe(true)
+      }),
+      { numRuns: 25 },
+    )
+  })
+
+  it('reward creation rejects per_visit for non-nth_checkin loyalty types', () => {
+    fc.assert(
+      fc.property(fc.constantFrom('daily_first', 'streak', 'milestone'), (type) => {
+        const result = createRewardBodySchema.safeParse({
+          nodeId: validNodeId,
+          type,
+          title: 'Loyalty get',
+          repeatPolicy: 'per_visit',
+        })
+        expect(result.success).toBe(false)
+      }),
+      { numRuns: 25 },
+    )
+  })
+
+  it('reward creation rejects per_visit for event and offer gets', () => {
+    fc.assert(
+      fc.property(fc.constantFrom('event', 'offer'), (getCategory) => {
+        const result = createRewardBodySchema.safeParse({
+          nodeId: validNodeId,
+          title: 'Windowed get',
+          getCategory,
+          startsAt: '2030-01-01T00:00:00.000Z',
+          endsAt: '2030-01-02T00:00:00.000Z',
+          repeatPolicy: 'per_visit',
+        })
+        expect(result.success).toBe(false)
+      }),
+      { numRuns: 25 },
+    )
+  })
+
+  it('reward creation rejects invalid repeatPolicy values', () => {
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 1, maxLength: 20 }).filter((s) => !['once', 'per_visit'].includes(s)),
+        (repeatPolicy) => {
+          const result = createRewardBodySchema.safeParse({
+            nodeId: validNodeId,
+            type: 'nth_checkin',
+            title: 'Test',
+            repeatPolicy,
+          })
+          expect(result.success).toBe(false)
+        },
+      ),
+      { numRuns: 25 },
+    )
+  })
+
+  it('reward update rejects per_visit when explicitly targeting event/offer', () => {
+    fc.assert(
+      fc.property(fc.constantFrom('event', 'offer'), (getCategory) => {
+        const result = updateRewardBodySchema.safeParse({
+          getCategory,
+          startsAt: '2030-01-01T00:00:00.000Z',
+          endsAt: '2030-01-02T00:00:00.000Z',
+          repeatPolicy: 'per_visit',
+        })
+        expect(result.success).toBe(false)
+      }),
+      { numRuns: 25 },
+    )
+  })
+
+  it('reward update accepts per_visit without an explicit non-loyalty category', () => {
+    const result = updateRewardBodySchema.safeParse({
+      repeatPolicy: 'per_visit',
+    })
+    expect(result.success).toBe(true)
+  })
+
   it('node creation rejects invalid categories', () => {
     fc.assert(
       fc.property(
@@ -177,10 +278,10 @@ describe('Schema validation: invalid data is always rejected', () => {
     )
   })
 
-  it('redemption code must be exactly 6 characters', () => {
+  it('redemption code must be exactly 8 characters', () => {
     fc.assert(
       fc.property(
-        fc.string({ minLength: 1, maxLength: 20 }).filter((s) => s.length !== 6),
+        fc.string({ minLength: 1, maxLength: 20 }).filter((s) => s.length !== 8),
         (code) => {
           const result = redeemBodySchema.safeParse({ code })
           expect(result.success).toBe(false)
@@ -533,14 +634,14 @@ describe('Data flow consistency', () => {
     )
   })
 
-  it('redemption code is always 6 characters alphanumeric', () => {
+  it('redemption code is always 8 characters alphanumeric', () => {
     fc.assert(
       fc.property(fc.integer({ min: 1, max: 1000 }), () => {
         // Simulate the code generation from reward-evaluator
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-        const code = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
-        expect(code).toHaveLength(6)
-        expect(/^[A-Z0-9]{6}$/.test(code)).toBe(true)
+        const code = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+        expect(code).toHaveLength(8)
+        expect(/^[A-Z0-9]{8}$/.test(code)).toBe(true)
       }),
       { numRuns: 25 },
     )

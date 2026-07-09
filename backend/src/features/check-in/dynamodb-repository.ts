@@ -209,6 +209,36 @@ export async function getUserCheckInCountAtNode(userId: string, nodeId: string):
   return result.Count || 0
 }
 
+/**
+ * Count a consumer's Qualifying_Visits at a node: check-ins with
+ * `type = 'reward'` at that node (loyalty-repeat-redemption R3.2). This is the
+ * single definition of "visit" shared by the Reward_Evaluator's qualification
+ * and the consumer-facing progress read, so the two can never disagree (R3.4).
+ *
+ * Bounded by the user partition on `UserIndex` and counted server-side with
+ * `Select: 'COUNT'`, so it never fetches the consumer's full check-in history
+ * (R3.5). `type` is a DynamoDB reserved word, hence the `#type` alias.
+ */
+export async function countQualifyingVisits(userId: string, nodeId: string): Promise<number> {
+  const result = await documentClient.send(
+    new QueryCommand({
+      TableName: TableNames.checkins,
+      IndexName: 'UserIndex',
+      KeyConditionExpression: 'userId = :userId',
+      FilterExpression: 'nodeId = :nodeId AND #type = :type',
+      ExpressionAttributeNames: { '#type': 'type' },
+      ExpressionAttributeValues: {
+        ':userId': userId,
+        ':nodeId': nodeId,
+        ':type': 'reward',
+      },
+      Select: 'COUNT',
+    }),
+  )
+
+  return result.Count || 0
+}
+
 export async function getUserCheckInCount(userId: string): Promise<number> {
   const result = await documentClient.send(
     new QueryCommand({

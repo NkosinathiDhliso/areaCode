@@ -1,19 +1,18 @@
-import { kvGet, kvSet, kvIncr } from '../../shared/kv/dynamodb-kv.js'
+import { kvIncr } from '../../shared/kv/dynamodb-kv.js'
 import { PutCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
 import { getUserById } from '../auth/dynamodb-repository.js'
-import { AppError } from '../../shared/errors/AppError.js'
 
 interface AbuseCheckResult {
-  blocked: boolean
   flags: Array<{ type: string; evidence: Record<string, unknown> }>
 }
 
 /**
  * Abuse detection checks run after proximity validation, before DB insert.
- * Flags with auto-action return 429. Flags without auto-action allow check-in
- * and create abuse_flags records asynchronously.
+ * These checks never block a check-in; they record abuse_flags records
+ * asynchronously for admin review. Reward-drain detection lives at the mint
+ * site in the Reward_Evaluator, not here (a check-in is not a claim).
  */
 export async function runAbuseChecks(
   userId: string,
@@ -22,7 +21,6 @@ export async function runAbuseChecks(
   ip: string,
 ): Promise<AbuseCheckResult> {
   const flags: AbuseCheckResult['flags'] = []
-  let blocked = false
 
   // 1. Device fingerprint velocity: >3 check-ins at different nodes in 30 min
   if (fingerprintHash) {
@@ -53,28 +51,12 @@ export async function runAbuseChecks(
     }
   }
 
-  // 3. Reward slot draining: same device >2 rewards at same node in 24h
-  if (fingerprintHash) {
-    const drainCount = await kvIncr(`abuse:drain:${fingerprintHash}:${nodeId}`, 86400)
-    if (drainCount > 2) {
-      blocked = true
-      flags.push({
-        type: 'reward_drain',
-        evidence: { fingerprintHash, nodeId, claimCount: drainCount },
-      })
-    }
-  }
-
-  // Persist flags asynchronously (don't block check-in for non-blocking flags)
+  // Persist flags asynchronously (these checks never block a check-in)
   if (flags.length > 0) {
     void persistFlags(userId, nodeId, flags)
   }
 
-  if (blocked) {
-    throw AppError.tooManyRequests('Check-in temporarily unavailable')
-  }
-
-  return { blocked, flags }
+  return { flags }
 }
 
 async function persistFlags(
@@ -84,34 +66,49 @@ async function persistFlags(
 ) {
   try {
     for (const f of flags) {
-      const flagId = generateId()
-      const now = new Date().toISOString()
-      // Priority: reward_drain is high, others are normal
-      const priority = f.type === 'reward_drain' ? 'high' : 'normal'
-      await documentClient.send(
-        new PutCommand({
-          TableName: TableNames.appData,
-          Item: {
-            pk: `ABUSE#${flagId}`,
-            sk: `USER#${userId}`,
-            // GSI1 keys for admin abuse queue ordering
-            gsi1pk: 'ABUSE_QUEUE',
-            gsi1sk: `${priority}#${now}`,
-            flagId,
-            type: f.type,
-            entityId: userId,
-            entityType: 'user',
-            evidenceJson: f.evidence,
-            autoActioned: f.type === 'reward_drain',
-            reviewed: false,
-            priority,
-            createdAt: now,
-          },
-        }),
-      )
+      // Check-in-side flags (device_velocity, new_account_velocity) are advisory.
+      await writeAbuseFlag(userId, { type: f.type, evidence: f.evidence, priority: 'normal' })
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     process.stderr.write(`[abuse] Failed to persist flags: ${msg}\n`)
   }
+}
+
+/**
+ * Write a single abuse flag row to the admin abuse queue (the existing
+ * `ABUSE_QUEUE` GSI shape). One home for the flag-row layout so every abuse
+ * producer (check-in velocity checks here, the mint-site Reward_Drain in the
+ * Reward_Evaluator) writes an identically-shaped row. `priority` orders the
+ * queue via `gsi1sk` (`high` surfaces before `normal` under the descending
+ * scan the admin queue uses).
+ */
+export async function writeAbuseFlag(
+  entityId: string,
+  flag: { type: string; evidence: Record<string, unknown>; priority?: 'normal' | 'high' },
+): Promise<void> {
+  const flagId = generateId()
+  const now = new Date().toISOString()
+  const priority = flag.priority ?? 'normal'
+  await documentClient.send(
+    new PutCommand({
+      TableName: TableNames.appData,
+      Item: {
+        pk: `ABUSE#${flagId}`,
+        sk: `USER#${entityId}`,
+        // GSI1 keys for admin abuse queue ordering
+        gsi1pk: 'ABUSE_QUEUE',
+        gsi1sk: `${priority}#${now}`,
+        flagId,
+        type: flag.type,
+        entityId,
+        entityType: 'user',
+        evidenceJson: flag.evidence,
+        autoActioned: false,
+        reviewed: false,
+        priority,
+        createdAt: now,
+      },
+    }),
+  )
 }

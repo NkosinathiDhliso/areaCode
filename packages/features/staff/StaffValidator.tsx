@@ -389,11 +389,11 @@ export function StaffValidator() {
         inputMode="text"
         autoCapitalize="characters"
         autoComplete="off"
-        maxLength={6}
+        maxLength={8}
         value={code}
         onChange={(e) => setCode(e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())}
         onKeyDown={handleKeyDown}
-        placeholder="------"
+        placeholder="--------"
         aria-label="Redemption code"
         className="w-full max-w-xs bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-6 text-center text-3xl tracking-[0.4em] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
       />

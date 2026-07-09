@@ -16,6 +16,41 @@ const rewardTypeEnum = z.enum(['nth_checkin', 'daily_first', 'streak', 'mileston
 const getCategoryEnum = z.enum(['loyalty', 'event', 'offer'])
 
 /**
+ * Repeat_Policy (R1.1). `once` (default) = at most one redemption per consumer,
+ * ever. `per_visit` = a consumer past the threshold can earn the get again on a
+ * later visit, gated by the 4-hour Repeat_Window. Absent on disk reads as `once`.
+ */
+const repeatPolicyEnum = z.enum(['once', 'per_visit'])
+
+/**
+ * Repeat_Policy refinement (R1.3, R1.5). `per_visit` is accepted only for
+ * loyalty `nth_checkin` gets. Any other category or type is rejected with a
+ * `repeat_not_supported` error (surfaced as 400 by the handler's Zod mapping).
+ *
+ * `type` is only known here on create. On update the reward `type` is immutable
+ * and not part of the body, so the update refinement can only reject an explicit
+ * non-loyalty `getCategory`; the authoritative category+type check against the
+ * persisted row lives in the service layer (task 6.2), mirroring the window
+ * refinement's split.
+ */
+function refineRepeatPolicy(
+  repeatPolicy: 'once' | 'per_visit' | undefined,
+  category: 'loyalty' | 'event' | 'offer',
+  type: string | undefined,
+  ctx: z.RefinementCtx,
+): void {
+  if (repeatPolicy !== 'per_visit') return
+
+  if (category !== 'loyalty' || type !== 'nth_checkin') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'repeat_not_supported: per_visit is only valid for loyalty nth_checkin gets',
+      path: ['repeatPolicy'],
+    })
+  }
+}
+
+/**
  * Shared window refinement for event/offer gets (R1.3, R1.6).
  *
  * Enforces the clock-independent rules only — both bounds present, parseable,
@@ -91,6 +126,12 @@ export const createRewardBodySchema = z
     endsAt: z.string().datetime().optional(),
     /** Claim-on-check-in flag (R1.5). Defaults to `true` in the service layer. */
     claimRequiresCheckIn: z.boolean().optional(),
+    /**
+     * Repeat_Policy (R1.1, R1.5). Optional; absent → `once` in the service
+     * layer. `per_visit` is valid only for loyalty `nth_checkin` gets (R1.3),
+     * enforced by the refinement below.
+     */
+    repeatPolicy: repeatPolicyEnum.optional(),
   })
   .superRefine((data, ctx) => {
     const category = data.getCategory ?? 'loyalty'
@@ -108,6 +149,9 @@ export const createRewardBodySchema = z
         })
       }
     }
+
+    // Repeat_Policy: per_visit only on loyalty nth_checkin gets (R1.3, R1.4).
+    refineRepeatPolicy(data.repeatPolicy, category, data.type, ctx)
   })
 
 export const updateRewardBodySchema = z
@@ -133,6 +177,14 @@ export const updateRewardBodySchema = z
     startsAt: z.string().datetime().optional(),
     endsAt: z.string().datetime().optional(),
     claimRequiresCheckIn: z.boolean().optional(),
+    /**
+     * Repeat_Policy (R1.1, R1.5). Optional on update. `per_visit` is valid only
+     * for loyalty `nth_checkin` gets (R1.3). The reward `type` is immutable and
+     * not part of this body, so the refinement below only rejects an explicit
+     * non-loyalty `getCategory`; the authoritative category+type check against
+     * the persisted row lives in the service layer (task 6.2).
+     */
+    repeatPolicy: repeatPolicyEnum.optional(),
   })
   .superRefine((data, ctx) => {
     const targetsEventOffer = data.getCategory === 'event' || data.getCategory === 'offer'
@@ -145,6 +197,17 @@ export const updateRewardBodySchema = z
     if (targetsEventOffer || touchesWindow) {
       refineEventOfferWindow(data.startsAt, data.endsAt, ctx)
     }
+
+    // Repeat_Policy: reject per_visit when the update explicitly targets a
+    // non-loyalty category (R1.3, R1.4). The full loyalty+nth_checkin check
+    // against the persisted row is enforced in the service layer (task 6.2).
+    if (data.repeatPolicy === 'per_visit' && targetsEventOffer) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'repeat_not_supported: per_visit is only valid for loyalty nth_checkin gets',
+        path: ['repeatPolicy'],
+      })
+    }
   })
 
 export const rewardIdParamsSchema = z.object({
@@ -152,7 +215,7 @@ export const rewardIdParamsSchema = z.object({
 })
 
 export const redeemBodySchema = z.object({
-  code: z.string().length(6),
+  code: z.string().length(8),
 })
 
 export const nearMeQuerySchema = z.object({
@@ -190,6 +253,12 @@ export interface Reward {
   endsAt?: string
   /** Claim-on-check-in flag for event/offer gets, defaults `true` (R1.5). */
   claimRequiresCheckIn?: boolean
+  /**
+   * Repeat_Policy (R1.1). Optional on disk: existing rows lack it and are
+   * interpreted as `once` by the read model, so no backfill is needed
+   * (R1.2, R7.1). Valid as `per_visit` only on loyalty `nth_checkin` gets (R1.3).
+   */
+  repeatPolicy?: 'once' | 'per_visit'
   createdAt: string
   updatedAt: string
 }

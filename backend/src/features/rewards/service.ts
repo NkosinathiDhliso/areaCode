@@ -121,6 +121,27 @@ const DEV_REWARDS = [
     endsAt: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
     claimRequiresCheckIn: true,
   },
+  // Repeat_Policy dev fixture (R7.3). One loyalty `nth_checkin` get with
+  // `repeatPolicy: 'per_visit'` so the dev surfaces exercise the new policy:
+  // a regular past the 5th visit can earn it again each visit, gated by the
+  // 4-hour Repeat_Window. All synthetic data stays behind the DEV_MODE guard.
+  {
+    id: 'rew-8',
+    title: 'Free Coffee Every 5th Visit',
+    type: 'nth_checkin',
+    totalSlots: 100,
+    claimedCount: 22,
+    nodeId: 'dev-1',
+    nodeName: 'Father Coffee',
+    nodeSlug: 'father-coffee',
+    distance: 150,
+    pulseScore: 8,
+    liveCount: 2,
+    expiresAt: null,
+    getCategory: 'loyalty',
+    triggerValue: 5,
+    repeatPolicy: 'per_visit',
+  },
 ]
 
 const TIER_REWARD_LIMITS: Record<string, number | null> = {
@@ -150,6 +171,11 @@ export async function createReward(
     startsAt?: string | undefined
     endsAt?: string | undefined
     claimRequiresCheckIn?: boolean | undefined
+    // Repeat_Policy (R1.1, R1.3). Absent → `once` (the read model default).
+    // `per_visit` is accepted only for loyalty `nth_checkin` gets; the
+    // authoritative check lives below (the Zod refinement covers the create
+    // body, this is the service-layer guard against any other caller path).
+    repeatPolicy?: 'once' | 'per_visit' | undefined
   },
 ) {
   // Verify the node belongs to this business
@@ -194,11 +220,23 @@ export async function createReward(
     claimRequiresCheckIn = data.claimRequiresCheckIn ?? true
   }
 
+  // Resolve the on-disk `type` once so both the Repeat_Policy check and
+  // persistence agree (R1.4: loyalty gets always supply `type`).
+  const resolvedType = data.type ?? (isEventOrOffer ? getCategory : 'nth_checkin')
+
+  // Repeat_Policy authoritative validation (R1.3). `per_visit` is valid only on
+  // loyalty `nth_checkin` gets; anything else is rejected 400 `repeat_not_supported`
+  // and never persisted. Mirrors the Zod refinement, kept here as the service-layer
+  // source of truth for any non-HTTP caller.
+  if (data.repeatPolicy === 'per_visit' && (getCategory !== 'loyalty' || resolvedType !== 'nth_checkin')) {
+    throw AppError.badRequest('repeat_not_supported')
+  }
+
   const createData: Parameters<typeof repo.createReward>[0] = {
     nodeId: data.nodeId,
     // Keep `type` non-null on disk. When omitted for an event/offer get it
     // falls back to the category (R1.4); loyalty gets always supply `type`.
-    type: data.type ?? (isEventOrOffer ? getCategory : 'nth_checkin'),
+    type: resolvedType,
     title: data.title,
   }
   if (data.description !== undefined) createData.description = data.description
@@ -206,6 +244,10 @@ export async function createReward(
   if (data.totalSlots !== undefined) createData.totalSlots = data.totalSlots
   if (data.expiresAt !== undefined) createData.expiresAt = data.expiresAt
   if (data.isFirstGet !== undefined) (createData as { isFirstGet?: boolean }).isFirstGet = data.isFirstGet
+
+  // Persist Repeat_Policy when supplied (R1.1). Absent stays absent on disk and
+  // reads back as `once`; no backfill (R7.1).
+  if (data.repeatPolicy !== undefined) createData.repeatPolicy = data.repeatPolicy
 
   // Thread the event/offer attributes through to persistence (R2.5). Loyalty
   // gets leave these undefined so existing rows are untouched.
@@ -264,6 +306,10 @@ export async function updateReward(
     startsAt?: string | undefined
     endsAt?: string | undefined
     claimRequiresCheckIn?: boolean | undefined
+    // Repeat_Policy (R1.1, R1.3). `type` is immutable and not part of the update
+    // body, so the authoritative loyalty + `nth_checkin` check runs against the
+    // persisted row below.
+    repeatPolicy?: 'once' | 'per_visit' | undefined
   },
 ) {
   const reward = await repo.getRewardById(rewardId)
@@ -315,6 +361,17 @@ export async function updateReward(
     }
   }
 
+  // Repeat_Policy authoritative validation against the persisted row (R1.3).
+  // `type` is immutable, so `per_visit` is accepted only when the row is — or
+  // becomes — a loyalty get AND its persisted `type` is `nth_checkin`.
+  // Otherwise reject 400 `repeat_not_supported` and never persist.
+  if (data.repeatPolicy === 'per_visit') {
+    const persistedType = (reward as { type?: string }).type
+    if (effectiveCategory !== 'loyalty' || persistedType !== 'nth_checkin') {
+      throw AppError.badRequest('repeat_not_supported')
+    }
+  }
+
   const updateData: Parameters<typeof repo.updateReward>[1] = {}
   if (data.title !== undefined) updateData.title = data.title
   if (data.description !== undefined) updateData.description = data.description
@@ -334,6 +391,8 @@ export async function updateReward(
   if (data.startsAt !== undefined) updateData.startsAt = data.startsAt
   if (data.endsAt !== undefined) updateData.endsAt = data.endsAt
   if (data.claimRequiresCheckIn !== undefined) updateData.claimRequiresCheckIn = data.claimRequiresCheckIn
+  // Persist Repeat_Policy when supplied (R1.1); absent leaves the row untouched.
+  if (data.repeatPolicy !== undefined) updateData.repeatPolicy = data.repeatPolicy
 
   return repo.updateReward(rewardId, updateData)
 }
@@ -468,23 +527,34 @@ export async function redeemReward(code: string, staffId?: string) {
   if (redemption.codeExpiresAt && redemption.codeExpiresAt < new Date().toISOString())
     throw AppError.badRequest('expired_code')
 
-  // Validate staff belongs to the business that owns this reward
+  // Fail closed: resolve the reward and its owning node BEFORE any redemption
+  // write (R5.1). A code whose reward or node cannot be resolved is never
+  // honoured — the old behaviour of skipping the ownership check when the
+  // lookup failed is removed. A code for a deactivated reward is rejected as a
+  // dead get (R5.2).
   const rewardId = redemption.rewardId ?? redemption.id
+  const rewardDetail = await repo.getRewardById(rewardId)
+  if (!rewardDetail || !rewardDetail.node?.businessId) {
+    throw AppError.badRequest('invalid_code')
+  }
+  if (rewardDetail.isActive === false) {
+    throw AppError.badRequest('reward_inactive')
+  }
+
+  // The staff-to-business ownership check always runs when a staffId is present
+  // (never skipped now that the reward and node are resolved above).
   let staffName: string | undefined
   if (staffId) {
-    const rewardDetail = await repo.getRewardById(rewardId)
-    if (rewardDetail?.node?.businessId) {
-      const { getStaffById } = await import('../auth/dynamodb-repository.js')
-      const staff = await getStaffById(staffId)
-      // Fail closed: reject unknown staff, staff from another business, and
-      // removed staff (isActive === false). A still-valid access token must not
-      // let a removed member keep validating redemptions, since the Cognito
-      // disable on removal only stops refresh/new logins.
-      if (!staff || staff.isActive === false || staff.businessId !== rewardDetail.node.businessId) {
-        throw AppError.forbidden('You cannot redeem rewards for this business')
-      }
-      staffName = staff?.name
+    const { getStaffById } = await import('../auth/dynamodb-repository.js')
+    const staff = await getStaffById(staffId)
+    // Fail closed: reject unknown staff, staff from another business, and
+    // removed staff (isActive === false). A still-valid access token must not
+    // let a removed member keep validating redemptions, since the Cognito
+    // disable on removal only stops refresh/new logins.
+    if (!staff || staff.isActive === false || staff.businessId !== rewardDetail.node.businessId) {
+      throw AppError.forbidden('You cannot redeem rewards for this business')
     }
+    staffName = staff.name
   }
 
   try {

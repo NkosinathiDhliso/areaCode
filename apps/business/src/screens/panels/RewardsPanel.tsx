@@ -4,8 +4,10 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@area-code/shared/lib/api'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 import { useErrorStore } from '@area-code/shared/stores/errorStore'
-import type { GetCategory, GetLifecycle, Node, Reward } from '@area-code/shared/types'
+import type { GetCategory, GetLifecycle, Node, RepeatPolicy, Reward } from '@area-code/shared/types'
 import { formatRelativeTime } from '@area-code/shared/lib/formatters'
+
+import { RepeatPolicyControl } from './RepeatPolicyControl'
 
 const MAX_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
 
@@ -211,11 +213,13 @@ const THRESHOLD_TYPES = ['nth_checkin', 'streak', 'milestone']
 
 function RewardEditForm({ reward, onSaved, onCancel }: { reward: Reward; onSaved: () => void; onCancel: () => void }) {
   const supportsThreshold = !isEventOrOffer(reward.getCategory) && THRESHOLD_TYPES.includes(reward.type)
+  const supportsRepeat = !isEventOrOffer(reward.getCategory) && reward.type === 'nth_checkin'
   const originalThreshold = reward.triggerValue
 
   const [title, setTitle] = useState(reward.title)
   const [slots, setSlots] = useState(reward.totalSlots != null ? String(reward.totalSlots) : '')
   const [threshold, setThreshold] = useState(reward.triggerValue != null ? String(reward.triggerValue) : '')
+  const [repeatPolicy, setRepeatPolicy] = useState<RepeatPolicy>(reward.repeatPolicy ?? 'once')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Grandfather confirm dialog (R1.7): holds the affected-customer count while
@@ -228,6 +232,8 @@ function RewardEditForm({ reward, onSaved, onCancel }: { reward: Reward; onSaved
     const body: Record<string, unknown> = { title: title.trim() }
     if (slots) body['totalSlots'] = parseInt(slots, 10)
     if (supportsThreshold && threshold.trim()) body['triggerValue'] = parseInt(threshold, 10)
+    // Repeat_Policy applies only to loyalty nth_checkin gets (R6.1, R6.4).
+    if (supportsRepeat) body['repeatPolicy'] = repeatPolicy
     return body
   }
 
@@ -303,6 +309,14 @@ function RewardEditForm({ reward, onSaved, onCancel }: { reward: Reward; onSaved
           </p>
         </>
       )}
+      {supportsRepeat && (
+        <RepeatPolicyControl
+          value={repeatPolicy}
+          onChange={setRepeatPolicy}
+          disabled={loading}
+          slotsSet={slots.trim() !== ''}
+        />
+      )}
       <input
         type="number"
         value={slots}
@@ -370,6 +384,7 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
   const [title, setTitle] = useState('')
   const [getCategory, setGetCategory] = useState<GetCategory>('loyalty')
   const [type, setType] = useState('nth_checkin')
+  const [repeatPolicy, setRepeatPolicy] = useState<RepeatPolicy>('once')
   const [triggerValue, setTriggerValue] = useState('')
   const [startsAt, setStartsAt] = useState('')
   const [endsAt, setEndsAt] = useState('')
@@ -427,6 +442,8 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
       } else {
         body['type'] = type
         if (triggerValue) body['triggerValue'] = parseInt(triggerValue, 10)
+        // Repeat_Policy applies only to loyalty nth_checkin gets (R6.1, R6.4).
+        if (type === 'nth_checkin') body['repeatPolicy'] = repeatPolicy
       }
       if (isFirstGet) body['isFirstGet'] = true
       if (slots) body['totalSlots'] = parseInt(slots, 10)
@@ -497,6 +514,14 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
                 Existing customers stay on their original visit count. Only new customers see the new threshold.
               </p>
             </>
+          )}
+          {type === 'nth_checkin' && (
+            <RepeatPolicyControl
+              value={repeatPolicy}
+              onChange={setRepeatPolicy}
+              disabled={loading}
+              slotsSet={slots.trim() !== ''}
+            />
           )}
         </>
       )}

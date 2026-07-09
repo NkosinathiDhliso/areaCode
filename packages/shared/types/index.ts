@@ -324,7 +324,13 @@ export interface Reward {
   endsAt?: string
   claimRequiresCheckIn?: boolean
   lifecycle?: GetLifecycle
+  // Loyalty repeat redemption (additive, optional on disk; absent reads as 'once').
+  // Valid as 'per_visit' only on loyalty nth_checkin gets.
+  repeatPolicy?: RepeatPolicy
 }
+
+// Repeat behaviour of a loyalty get. Absent on disk reads as 'once'.
+export type RepeatPolicy = 'once' | 'per_visit'
 
 export interface RewardRedemption {
   id: string

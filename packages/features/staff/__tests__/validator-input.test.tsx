@@ -2,9 +2,9 @@
  * Staff polish (item E) — manual redemption-code input.
  *
  * The validator's manual input must accept the canonical redemption code:
- * 6 characters over `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (uppercase A-Z minus
+ * 8 characters over `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (uppercase A-Z minus
  * I/O plus digits 2-9). Any code that can be scanned must also be typable,
- * so the input filters to alphanumerics, uppercases, and caps at 6 chars.
+ * so the input filters to alphanumerics, uppercases, and caps at 8 chars.
  *
  * **Validates: Requirements 5.3**
  */
@@ -37,10 +37,10 @@ vi.mock('../../../shared/components/primitives', () => ({
 
 const CANONICAL_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
-/** 1–6 char strings over the canonical redemption-code alphabet. */
+/** 1–8 char strings over the canonical redemption-code alphabet. */
 const canonicalCodeArb = fc.string({
   minLength: 1,
-  maxLength: 6,
+  maxLength: 8,
   unit: fc.constantFrom(...CANONICAL_ALPHABET.split('')),
 })
 
@@ -58,10 +58,10 @@ describe('Staff validator manual input — canonical code entry (R5.3)', () => {
     cleanup()
   })
 
-  it('exposes a text input capped at the canonical 6-char length', () => {
+  it('exposes a text input capped at the canonical 8-char length', () => {
     const input = renderInput()
     expect(input.getAttribute('inputMode')).toBe('text')
-    expect(input.maxLength).toBe(6)
+    expect(input.maxLength).toBe(8)
   })
 
   it('accepts every character of the canonical alphabet (A-Z minus I/O, 2-9)', () => {

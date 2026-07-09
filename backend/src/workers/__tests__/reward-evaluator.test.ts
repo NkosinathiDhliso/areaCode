@@ -33,7 +33,9 @@ const mocks = vi.hoisted(() => {
     getActiveRewardsForNode: vi.fn(),
     createRedemption: vi.fn(),
     incrementClaimedCount: vi.fn(async () => ({})),
-    countUserCheckInsAtNode: vi.fn(async () => 1),
+    recordDrainOnMint: vi.fn(async () => undefined),
+    countQualifyingVisits: vi.fn(async () => 1),
+    getEffectiveThreshold: vi.fn(async () => 1),
     countCheckInsTodayAtNode: vi.fn(async () => 0),
     getRecentCheckInsForStreak: vi.fn(async () => []),
     hasCheckInInWindow: vi.fn(async () => false),
@@ -50,10 +52,15 @@ vi.mock('../reward-evaluator-repository.js', () => ({
   getActiveRewardsForNode: mocks.getActiveRewardsForNode,
   createRedemption: mocks.createRedemption,
   incrementClaimedCount: mocks.incrementClaimedCount,
-  countUserCheckInsAtNode: mocks.countUserCheckInsAtNode,
+  recordDrainOnMint: mocks.recordDrainOnMint,
+  countQualifyingVisits: mocks.countQualifyingVisits,
   countCheckInsTodayAtNode: mocks.countCheckInsTodayAtNode,
   getRecentCheckInsForStreak: mocks.getRecentCheckInsForStreak,
   hasCheckInInWindow: mocks.hasCheckInInWindow,
+}))
+
+vi.mock('../../features/rewards/threshold-lock.js', () => ({
+  getEffectiveThreshold: mocks.getEffectiveThreshold,
 }))
 
 vi.mock('../../shared/socket/events.js', () => ({
@@ -74,7 +81,7 @@ const USER_ID = 'user-1'
 const NODE_ID = 'node-1'
 
 /** A minimal qualifying loyalty reward: `nth_checkin` with trigger 1, and the
- *  mocked `countUserCheckInsAtNode` returns 1, so `checkQualification` passes
+ *  mocked `countQualifyingVisits` returns 1, so `checkQualification` passes
  *  and the evaluator reaches the `createRedemption` call. */
 function makeReward(id: string, overrides: Record<string, unknown> = {}) {
   return {
@@ -103,7 +110,8 @@ function conditionalCheckError() {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.emitRewardClaimed.mockResolvedValue(1)
-  mocks.countUserCheckInsAtNode.mockResolvedValue(1)
+  mocks.countQualifyingVisits.mockResolvedValue(1)
+  mocks.getEffectiveThreshold.mockResolvedValue(1)
   mocks.incrementClaimedCount.mockResolvedValue({})
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -134,6 +142,34 @@ describe('Branch A: ConditionalCheckFailedException is treated as already-claime
     // Both rewards were attempted; the second one was minted (not dropped).
     expect(mocks.createRedemption).toHaveBeenCalledTimes(2)
     expect(mocks.incrementClaimedCount).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ─── Effective_Threshold at mint time (R3.1, R3.4) ───────────────────────────
+
+describe('nth_checkin qualifies against the Effective_Threshold, not raw triggerValue (R3.1, R3.4)', () => {
+  it('mints when visits meet the grandfathered lock even after the venue raised triggerValue', async () => {
+    // Venue raised the threshold to 10, but the consumer's lock says 5.
+    mocks.getActiveRewardsForNode.mockResolvedValue([makeReward('reward-a', { triggerValue: 10 })])
+    mocks.countQualifyingVisits.mockResolvedValue(5)
+    mocks.getEffectiveThreshold.mockResolvedValue(5)
+    mocks.createRedemption.mockResolvedValue({ id: 'redemption-a' })
+
+    await expect(handler(sqsEvent())).resolves.toBeUndefined()
+
+    // Effective_Threshold (5) governs: 5 visits qualify, so a code is minted.
+    expect(mocks.getEffectiveThreshold).toHaveBeenCalledWith(USER_ID, 'reward-a')
+    expect(mocks.createRedemption).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not mint when visits fall short of the Effective_Threshold', async () => {
+    mocks.getActiveRewardsForNode.mockResolvedValue([makeReward('reward-a', { triggerValue: 10 })])
+    mocks.countQualifyingVisits.mockResolvedValue(4)
+    mocks.getEffectiveThreshold.mockResolvedValue(5)
+
+    await expect(handler(sqsEvent())).resolves.toBeUndefined()
+
+    expect(mocks.createRedemption).not.toHaveBeenCalled()
   })
 })
 
