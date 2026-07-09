@@ -3,12 +3,11 @@ import { ARCHETYPE_CATALOG } from '@area-code/shared/constants/archetype-catalog
 import { api } from '@area-code/shared/lib/api'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import type { CrowdVibeSnapshot, MusicGenre } from '@area-code/shared/types'
-import * as PhosphorIcons from '@phosphor-icons/react'
-import type { Icon } from '@phosphor-icons/react'
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { resolveArchetypeDisplayName } from '../lib/archetypeDisplay'
+import { resolveArchetypeIconComponent } from '../lib/archetypeIconComponents'
 
 interface CrowdVibeSectionProps {
   nodeId: string
@@ -17,8 +16,7 @@ interface CrowdVibeSectionProps {
 /** Small Phosphor icon for an archetype iconId. */
 function ArchetypeChipIcon({ iconId }: { iconId: string | undefined }) {
   const spec = (iconId ? getArchetypeIcon(iconId) : undefined) ?? FALLBACK_ARCHETYPE_ICON
-  const registry = PhosphorIcons as unknown as Record<string, Icon | undefined>
-  const Component = registry[spec.name]
+  const Component = resolveArchetypeIconComponent(spec.name)
   if (!Component) return null
   return <Component size={16} weight={spec.weight} className="text-[var(--text-secondary)]" />
 }

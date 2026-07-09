@@ -6,10 +6,10 @@ import {
   type ArchetypeIconSpec,
 } from '@area-code/shared/constants'
 import type { NodeCategory, NodeState } from '@area-code/shared/types'
-import * as PhosphorIcons from '@phosphor-icons/react'
 import type { Icon } from '@phosphor-icons/react'
 import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from 'react'
 
+import { resolveArchetypeIconComponent } from '../lib/archetypeIconComponents'
 import { getCategoryColour } from '../lib/mapHelpers'
 
 /**
@@ -55,10 +55,9 @@ function resolveIconId(archetypeId: string): string | null {
   return ARCHETYPE_CATALOG.find((a) => a.id === archetypeId)?.iconId ?? null
 }
 
-/** Resolve a Phosphor component by name, or null if it isn't in the package. */
+/** Resolve a Phosphor component by name, or null if the curated registry omits it. */
 function resolvePhosphorComponent(name: string): Icon | null {
-  const registry = PhosphorIcons as unknown as Record<string, Icon | undefined>
-  return registry[name] ?? null
+  return resolveArchetypeIconComponent(name)
 }
 
 /**

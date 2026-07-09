@@ -20,11 +20,10 @@
 
 import { getArchetypeEtymology, getArchetypeIcon, FALLBACK_ARCHETYPE_ICON } from '@area-code/shared/constants'
 import { ARCHETYPE_CATALOG } from '@area-code/shared/constants/archetype-catalog'
-import * as PhosphorIcons from '@phosphor-icons/react'
-import type { Icon } from '@phosphor-icons/react'
 import { useTranslation } from 'react-i18next'
 
 import { resolveArchetypeDisplayName } from '../lib/archetypeDisplay'
+import { resolveArchetypeIconComponent } from '../lib/archetypeIconComponents'
 
 const UNCHARTED_ARCHETYPE_ID = 'archetype-uncharted'
 
@@ -35,8 +34,7 @@ interface ArchetypeRevealProps {
 /** Render the archetype's Phosphor icon at a given size. */
 function ArchetypeIcon({ iconId, size = 28 }: { iconId: string; size?: number }) {
   const spec = getArchetypeIcon(iconId) ?? FALLBACK_ARCHETYPE_ICON
-  const registry = PhosphorIcons as unknown as Record<string, Icon | undefined>
-  const Component = registry[spec.name]
+  const Component = resolveArchetypeIconComponent(spec.name)
   if (!Component) return null
   return <Component size={size} weight={spec.weight} className="text-[var(--accent)]" />
 }
