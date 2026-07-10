@@ -961,6 +961,34 @@ module "lambda_presence_expiry" {
   }
 }
 
+# The API Lambda emits realtime events (node:created, node:pulse_update,
+# check-in fan-out) via broadcastToRoom, which Queries the connections-table
+# GSIs and calls PostToConnection. Without this policy every broadcast dies
+# with AccessDeniedException (observed 2026-07-09/10 go-live FAIL).
+resource "aws_iam_role_policy" "api_websocket" {
+  name = "websocket-manage"
+  role = module.lambda_api.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["execute-api:ManageConnections", "execute-api:Invoke"]
+        Resource = "arn:aws:execute-api:us-east-1:*:${module.websocket.websocket_api_id}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = ["dynamodb:GetItem", "dynamodb:Query", "dynamodb:DeleteItem"]
+        Resource = [
+          module.websocket.connections_table_arn,
+          "${module.websocket.connections_table_arn}/index/*"
+        ]
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role_policy" "presence_expiry_websocket" {
   name = "websocket-manage"
   role = module.lambda_presence_expiry.role_name
@@ -1066,17 +1094,11 @@ module "lambda_cleanup" {
   }
 }
 
-module "lambda_yoco_webhook" {
-  source        = "../../modules/lambda"
-  env           = local.env
-  function_name = "yoco-webhook"
-  timeout       = 30
-  environment_variables = {
-    AREA_CODE_ENV       = local.env
-    BUSINESSES_TABLE    = aws_dynamodb_table.businesses.name
-    YOCO_WEBHOOK_SECRET = var.yoco_webhook_secret
-  }
-}
+# The dedicated yoco-webhook Lambda was deleted 2026-07-10: it never had a
+# code home in the repo, so prod ran the module placeholder (200 'placeholder'
+# to every request), silently swallowing payment webhooks. The one path is the
+# monolith's POST /v1/webhooks/yoco (processYocoWebhook, fail-closed HMAC),
+# reached via the api_catchall $default route.
 
 # Report dispatcher Lambda — triggered by EventBridge, fans out SQS messages per business
 module "lambda_report_dispatcher" {
@@ -1245,7 +1267,6 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
   for_each = {
     api               = module.lambda_api.role_name
     pulse_decay       = module.lambda_pulse_decay.role_name
-    yoco_webhook      = module.lambda_yoco_webhook.role_name
     reward_evaluator  = module.lambda_reward_evaluator.role_name
     leaderboard_reset = module.lambda_leaderboard_reset.role_name
     cleanup           = module.lambda_cleanup.role_name
@@ -1767,11 +1788,6 @@ module "api_gateway" {
       invoke_arn = module.lambda_api.invoke_arn
       route_key  = "$default"
     }
-    # Specific routes kept as overrides for yoco webhook (different Lambda)
-    yoco_webhook = {
-      invoke_arn = module.lambda_yoco_webhook.invoke_arn
-      route_key  = "POST /v1/webhooks/yoco"
-    }
   }
 }
 
@@ -1780,14 +1796,6 @@ resource "aws_lambda_permission" "apigw_api" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
   function_name = module.lambda_api.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${module.api_gateway.api_execution_arn}/*/*"
-}
-
-resource "aws_lambda_permission" "apigw_yoco_webhook" {
-  statement_id  = "AllowAPIGatewayInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = module.lambda_yoco_webhook.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${module.api_gateway.api_execution_arn}/*/*"
 }
@@ -2261,6 +2269,16 @@ module "lambda_websocket" {
     AREA_CODE_COGNITO_STAFF_CLIENT_ID       = module.cognito_staff.client_id
     AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
     AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
+    # verifyBearerToken resolves identities from DynamoDB when the JWT lacks
+    # custom claims: users (consumer), businesses (business), app-data (staff).
+    # Missing vars crash requireEnv at $connect in prod (2026-07-10 go-live FAIL).
+    USERS_TABLE      = aws_dynamodb_table.users.name
+    BUSINESSES_TABLE = aws_dynamodb_table.businesses.name
+    APP_DATA_TABLE   = aws_dynamodb_table.app_data.name
+    # The auth middleware's import of business/repository.ts requires the salt
+    # at module load; without it the bundle crashes at cold start (Uncaught
+    # Exception, observed 2026-07-10) and every route 502s.
+    AREA_CODE_ANONYMIZATION_SALT = var.anonymization_salt
   }
 }
 

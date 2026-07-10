@@ -66,11 +66,10 @@ export const PROD_TF_PATH = join(REPO_ROOT, 'infra', 'environments', 'prod', 'ma
  */
 export const BROAD_IAM_ALLOWLIST = new Map([
   ['pulse_decay', 'Shared policy grants all tables; pulse sweep sets USERS/APP_DATA/NODES only.'],
-  ['yoco_webhook', 'Shared policy grants all tables; webhook only touches BUSINESSES (tier updates).'],
   ['reward_evaluator', 'Shared policy grants all tables; evaluator sets REWARDS/APP_DATA/NODES/CHECKINS.'],
   ['leaderboard_reset', 'Shared policy grants all tables; reset only touches APP_DATA (leaderboard KV).'],
   ['cleanup', 'Shared policy grants all tables; POPIA/billing sweep sets USERS/CHECKINS/APP_DATA/BUSINESSES/NODES/REWARDS.'],
-  ['websocket', 'Shared policy grants all tables; $connect sets no TableNames env (only CONNECTIONS_TABLE).'],
+  ['websocket', 'Shared policy grants all tables; $connect identity resolution sets USERS/BUSINESSES/APP_DATA only.'],
   ['presence_expiry', 'Shared policy grants all tables; sweep sets USERS/NODES/APP_DATA/PRESENCE.'],
   ['streak_reminder', 'Shared policy grants all tables; reminder sets USERS/CHECKINS/APP_DATA.'],
 ])

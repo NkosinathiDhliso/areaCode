@@ -109,15 +109,24 @@ else {
     aws lambda wait function-updated --function-name $WsFunctionName --region $Region
     Write-Host "  [OK] $WsFunctionName deployed" -ForegroundColor Green
 
-    # Set WEBSOCKET_ENDPOINT env var (resolves circular dep from Terraform)
+    # Set WEBSOCKET_ENDPOINT env var (resolves circular dep from Terraform).
+    # Merge into the current env: terraform owns the rest of the map (Cognito
+    # pool/client IDs etc). Replacing the whole map wipes them and 502s $connect.
     if ($WsEndpoint) {
         # Convert wss:// endpoint to https:// for API Gateway Management API
         $ManagementEndpoint = $WsEndpoint -replace "^wss://", "https://"
         Write-Host "  Setting WEBSOCKET_ENDPOINT=$ManagementEndpoint" -ForegroundColor Gray
+        $CurrentVars = aws lambda get-function-configuration `
+            --function-name $WsFunctionName --region $Region `
+            --query 'Environment.Variables' --output json --no-cli-pager | ConvertFrom-Json
+        $CurrentVars | Add-Member -NotePropertyName WEBSOCKET_ENDPOINT -NotePropertyValue $ManagementEndpoint -Force
+        $WsEnvFile = [System.IO.Path]::Combine($BackendDir, "dist", "ws-env.json")
+        @{ Variables = $CurrentVars } | ConvertTo-Json -Depth 5 | Out-File $WsEnvFile -Encoding ascii
         aws lambda update-function-configuration `
             --function-name $WsFunctionName `
-            --environment "Variables={AREA_CODE_ENV=$Environment,CONNECTIONS_TABLE=area-code-$Environment-websocket-connections,WEBSOCKET_ENDPOINT=$ManagementEndpoint}" `
+            --environment "file://$WsEnvFile" `
             --region $Region --no-cli-pager
+        aws lambda wait function-updated --function-name $WsFunctionName --region $Region
     }
 }
 

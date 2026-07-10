@@ -468,11 +468,15 @@ else {
                 $branch = $app.productionBranch.branchName
             }
 
+            # Fetch a few jobs, not just one: a manually triggered RELEASE job
+            # records the literal string "HEAD" as its commitId (not a sha), so
+            # the sha-based checks below need the newest job that carries a
+            # real commit id.
             $jobsArgs = @(
                 "amplify", "list-jobs",
                 "--app-id", $app.appId,
                 "--branch-name", $branch,
-                "--max-items", "1",
+                "--max-items", "5",
                 "--region", $Region
             )
             $jobsResult = Invoke-AwsJson -AwsArgs $jobsArgs
@@ -496,7 +500,17 @@ else {
                 continue
             }
 
-            $commitId = $latestJob.commitId
+            # Sha work uses the newest SUCCEED job whose commitId is a real hex
+            # sha. A manually triggered RELEASE job records the literal "HEAD"
+            # (and rebuilds the branch head), so it gates status above but can
+            # never anchor a sha comparison.
+            $commitId = $null
+            foreach ($job in $jobs) {
+                if ($job.status -eq "SUCCEED" -and $job.commitId -match '^[0-9a-fA-F]{7,40}$') {
+                    $commitId = $job.commitId
+                    break
+                }
+            }
             $shortSha = "unknown"
             if (-not [string]::IsNullOrEmpty($commitId)) {
                 $shortSha = $commitId.Substring(0, [Math]::Min(7, $commitId.Length))
@@ -1079,10 +1093,11 @@ foreach ($worker in $workerLogGroups) {
 Write-Host ""
 
 # ── Payment configuration (billing-revenue-integrity R1.4 / checklist §10.1) ──
-# Assert the Yoco payment secrets are present and non-empty on the prod Lambdas
-# that read them. The monolith API Lambda (area-code-prod-api) reads both
-# YOCO_WEBHOOK_SECRET and YOCO_PROD_SECRET_KEY; the webhook Lambda
-# (area-code-prod-yoco-webhook) reads YOCO_WEBHOOK_SECRET. A secret that is
+# Assert the Yoco payment secrets are present and non-empty on the prod Lambda
+# that reads them. The monolith API Lambda (area-code-prod-api) reads both
+# YOCO_WEBHOOK_SECRET and YOCO_PROD_SECRET_KEY; it is the single webhook path
+# (the dedicated yoco-webhook Lambda, deleted 2026-07-10, only ever ran the
+# infra placeholder and swallowed webhooks with a 200). A secret that is
 # absent from the function's environment, or present but empty, is a FAIL (the
 # deploy did not inject it, matching defect R1.1). An unresolvable configuration
 # (CLI absent, no permission, or missing function) is a WARN (cannot verify),
@@ -1143,7 +1158,6 @@ function Assert-LambdaSecrets {
 }
 
 Assert-LambdaSecrets -FunctionName "area-code-prod-api" -RequiredKeys @("YOCO_WEBHOOK_SECRET", "YOCO_PROD_SECRET_KEY")
-Assert-LambdaSecrets -FunctionName "area-code-prod-yoco-webhook" -RequiredKeys @("YOCO_WEBHOOK_SECRET")
 
 # R10.2: Unsigned-POST probe against the live webhook route. POST a harmless
 # dummy JSON body to POST /v1/webhooks/yoco with NO valid signature header and

@@ -59,21 +59,53 @@ log, docs sync. Founder-run steps are marked; they need prod AWS access.
   - [x] 5.3 `rules/tech.md` env sections completed (backend + all VITE keys); run `pnpm sync:rules`
     - _Requirements: 9.1, 9.2_
 
-- [ ] 6. SHIP (founder-run, live access) (R1, R2)
+- [x] 6. SHIP (founder-run, live access) (R1, R2)
   - [x] 6.1 Gates green locally, commit the working tree (fixes + this spec), push master; wait for four Amplify SUCCEED on the sha
     - List any known-pending fix by name in the commit body.
     - _Requirements: 1.1, 1.2, 1.3, 1.4_
-  - [~] 6.2 `./scripts/deploy-serverless.ps1 -Environment prod` with plan review
+  - [x] 6.2 `./scripts/deploy-serverless.ps1 -Environment prod` with plan review
+    - Done 2026-07-10: plan reviewed (5 destroys all accounted for), applied,
+      `/health` commit=1d70007 matches origin/master. The deploy script's
+      websocket env write was fixed to MERGE `WEBSOCKET_ENDPOINT` into the
+      terraform-owned env instead of replacing it (a replace wiped the eight
+      Cognito vars and re-broke the socket).
     - _Requirements: 2.1, 2.3_
-  - [~] 6.3 Set the new Amplify env vars (`update-all-amplify-apps.ps1`) and rebuild the apps that gained keys
+  - [x] 6.3 Set the new Amplify env vars (`update-all-amplify-apps.ps1`) and rebuild the apps that gained keys
+    - Done 2026-07-10: Cognito Hosted UI domain/client-id pairs, `VITE_CDN_URL`
+      (CloudFront d21t9pfba50e0v), RUM ids set; all four apps rebuilt SUCCEED.
+      Stale `VITE_SOCKET_URL` (all four) and misplaced `VITE_VAPID_PUBLIC_KEY`
+      (admin/business/staff, unread there) removed from Amplify. VAPID stays an
+      honest gap: no keypair is provisioned in prod (backend vars empty too).
     - _Requirements: 5.2, 6.1_
-  - [~] 6.4 Read `/aws/lambda/area-code-prod-websocket` logs for the recorded 502 cause; record it; fix if anything beyond stale artifact + missing env
+  - [x] 6.4 Read `/aws/lambda/area-code-prod-websocket` logs for the recorded 502 cause; record it; fix if anything beyond stale artifact + missing env
+    - Done 2026-07-10, recorded in GO_LIVE_CHECK_RESULT: stale artifact
+      (GSI-querying old bundle) plus missing env, but the env gap is wider than
+      the eight Cognito vars: the current bundle needs
+      `AREA_CODE_ANONYMIZATION_SALT` at module load and USERS/BUSINESSES/
+      APP_DATA tables at runtime. Fixed in dev+prod main.tf. Two adjacent
+      parity failures found and fixed: missing `api_websocket` IAM (API
+      broadcasts died AccessDenied) and the placeholder `yoco-webhook` Lambda
+      swallowing payment webhooks (deleted; monolith is the one path). Prod
+      apply of these fixes is pending the gated terraform workflow approval.
     - _Requirements: 3.3_
-  - [~] 6.5 Run PENDING prod backfills (`backfill-user-locks`, `backfill-user-search`) and record outcomes in the Ops_Log
+  - [x] 6.5 Run PENDING prod backfills (`backfill-user-locks`, `backfill-user-search`) and record outcomes in the Ops_Log
+    - Done 2026-07-10, recorded in RUNBOOK Ops_Log: locks complete for all 26
+      users, zero real duplicates; search index 24 indexed / 2 skipped.
     - _Requirements: 8.2_
 
 - [ ] 7. Verify (founder-run, live access) (R10)
   - [~] 7.1 Re-test all reported failures in prod and record before/after in GO_LIVE_CHECK_RESULT: WS connect, digest card, settings toggle, payments list, music schedule (with and without schedule), photo preview, Instagram save
+    - 2026-07-10: before/after recorded in GO_LIVE_CHECK_RESULT. All five
+      formerly-404 routes now 401 (live, fail closed); CDN photo fetch 200.
+      Remaining: WS connect re-test after the gated infra apply lands, and the
+      founder's in-portal UI checks (digest card, settings toggle, music
+      schedule with/without, photo preview, Instagram save).
     - _Requirements: 2.2, 3.2, 4.2, 5.4, 10.1_
   - [~] 7.2 `go-live-check.ps1 -Environment prod -WsToken <fresh token>` passes with the new gates
+    - 2026-07-10 run: FAIL (6). Root causes fixed in-tree (websocket env,
+      api_websocket IAM, yoco placeholder deletion, Sha_Parity "HEAD" false
+      negative in the check itself); staff-build FAIL was transient. To close:
+      approve the gated prod terraform apply, redrive the reward-eval DLQ (3
+      poisoned messages from 2026-07-09, command in Ops_Log), re-run with a
+      fresh `-WsToken`. Full record in GO_LIVE_CHECK_RESULT.
     - _Requirements: 10.2_

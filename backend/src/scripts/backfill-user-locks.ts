@@ -22,7 +22,7 @@
  *
  * Requires the same AWS credentials + USERS_TABLE env the Lambda uses.
  */
-import { ScanCommand, PutCommand } from '@aws-sdk/lib-dynamodb'
+import { ScanCommand, PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb'
 
 import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 
@@ -78,14 +78,12 @@ async function existingLockOwner(lockKey: string): Promise<string> {
   if (DRY_RUN) return '(unknown in dry-run)'
   try {
     const res = await documentClient.send(
-      new ScanCommand({
+      new GetCommand({
         TableName: TableNames.users,
-        FilterExpression: 'userId = :k',
-        ExpressionAttributeValues: { ':k': lockKey },
-        Limit: 1,
+        Key: { userId: lockKey },
       }),
     )
-    return (res.Items?.[0]?.['linkedUserId'] as string) ?? '(unknown)'
+    return (res.Item?.['linkedUserId'] as string) ?? '(unknown)'
   } catch {
     return '(unknown)'
   }

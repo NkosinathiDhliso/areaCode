@@ -1008,3 +1008,92 @@ evidence template are ready. Live verification remains founder-pending: it
 requires prod AWS access this checkout does not have. Task 8.1 stays open until
 the founder runs a query above, records the distinct-IP evidence here, and
 confirms PASS (or applies the fix on FAIL).
+
+## Deployment-parity SHIP and Verify record (2026-07-10, tasks 6.2 to 7.2)
+
+Executed against prod (account 562691664641) on 2026-07-10. Backend deployed at
+commit 1d70007 via `deploy-serverless.ps1 -Environment prod` after a reviewed
+plan (4 add, 41 change, 5 destroy; the destroys were the recorded push-sender
+deletion and two orphan `presencejoin`/`presenceleave` websocket routes that
+existed only in state). `GET /health` returns `commit=1d70007`, matching
+origin/master.
+
+### Task 6.4: recorded cause of the July websocket 502s (R3.3)
+
+Read from `/aws/lambda/area-code-prod-websocket`:
+
+1. Stale artifact, confirmed. All 40 ERROR events in the 14 days before the
+   deploy are `joinroom`/`leaveroom` DynamoDB ValidationExceptions querying a
+   `UserIndex`/`RoomIndex` GSI with a NULL key. The deployed bundle was an old
+   implementation that queried GSIs and never stored the verified identity at
+   `$connect`; the current source does a keyed GetItem plus targeted update and
+   has no such queries. No timeout or throttle events found.
+2. Missing env, confirmed and wider than the eight Cognito vars. After the
+   2026-07-10 deploy shipped the current bundle, the websocket Lambda crashed at
+   cold start: `AREA_CODE_ANONYMIZATION_SALT is not set` (the auth middleware
+   imports `features/business/repository.ts`, which requires the salt at module
+   load). Identity resolution in `verifyBearerToken` also needs `USERS_TABLE`,
+   `BUSINESSES_TABLE`, and `APP_DATA_TABLE` at runtime. All four vars were added
+   to `module.lambda_websocket` in dev and prod main.tf.
+
+Nothing beyond stale artifact plus missing env was found in the websocket log
+group itself, but the go-live run surfaced two adjacent parity failures, fixed
+under the same change:
+
+- The API Lambda had no websocket IAM at all (`dynamodb:Query` on the
+  connections-table GSIs plus `execute-api:ManageConnections`), so every live
+  broadcast from the API (`node:created`, `node:pulse_update`, check-in fanout)
+  died with AccessDeniedException. Added `aws_iam_role_policy.api_websocket`
+  (dev and prod).
+- `POST /v1/webhooks/yoco` was routed to a dedicated `yoco-webhook` Lambda that
+  has no code home in the repo and was running the 218-byte infra placeholder,
+  returning `200 'placeholder'` to every request, including unsigned ones. Prod
+  payment webhooks on this route were never processed. The route override and
+  the placeholder Lambda were deleted; the monolith's fail-closed
+  `processYocoWebhook` (which already reads `YOCO_WEBHOOK_SECRET`) is the one
+  path via the `$default` catch-all.
+
+### Task 7.1: before/after re-tests of the reported failures
+
+| Failure (July report)                                   | Before                                 | After (2026-07-10)                                                                                                                         |
+| ------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Digest card (`/v1/business/digest/latest`)              | 404 (stale API Lambda)                 | 401 unauthenticated, route live                                                                                                            |
+| Settings toggle (`PATCH /v1/business/settings`)         | 404                                    | 401 unauthenticated, route live                                                                                                            |
+| Payments list (`/v1/business/subscription-payments`)    | 404                                    | 401 unauthenticated, route live                                                                                                            |
+| Music schedule (`/v1/business/:id/music-schedule`)      | 404 / AccessDenied 400                 | 401 unauthenticated, route live; `music_schedules` IAM shipped in the deploy                                                               |
+| Instagram save (`PUT /v1/business/nodes/:id/instagram`) | 404                                    | 401 unauthenticated, route live                                                                                                            |
+| Photo preview (CDN)                                     | No CDN existed, photos never displayed | CloudFront `d21t9pfba50e0v.cloudfront.net` deployed; media object fetch = 200 image/jpeg; `VITE_CDN_URL` set on Web + Business and rebuilt |
+| WS connect                                              | 502 (stale artifact, missing env)      | Still failing at this run: new bundle crashes on missing salt/table env vars. Terraform fix authored, pending the gated prod apply below   |
+
+The 401 probes prove route presence and fail-closed auth from outside; the
+in-portal UI checks (digest card rendering, settings toggle persisting, photo
+preview in the editor, music schedule with and without a schedule) still need a
+founder session in the business portal.
+
+### Task 7.2: go-live-check run and remaining blockers
+
+`go-live-check.ps1 -Environment prod -WsToken <fresh consumer JWT>` was run with
+a token minted via `ADMIN_USER_PASSWORD_AUTH` for the standard e2e account
+(`e2e-consumer-a@areacode.test`, created in the prod consumer pool per the e2e
+suite's stable-account pattern; password not stored). Result: FAIL (6), of
+which:
+
+- Amplify staff RUNNING: transient, the rebuild finished SUCCEED afterwards.
+- Sha_Parity FAIL: false negative. Manually triggered RELEASE jobs record the
+  literal `commitId = "HEAD"`, which the check compared as a sha. Fixed in
+  `go-live-check.ps1` (sha work now anchors on the newest SUCCEED job with a
+  real hex sha).
+- API error logs FAIL: the broadcast AccessDeniedException above, fix authored.
+- WebSocket probes FAIL (reachability and authenticated): the websocket env
+  crash above, fix authored.
+- Webhook signature gate FAIL (200 to unsigned POST): the placeholder Lambda
+  above, fix authored.
+- DLQ `area-code-prod-reward-eval-dlq` FAIL (3 messages): three check-in
+  evaluations from 2026-07-09, poisoned when the old reward-evaluator artifact
+  crashed on missing `CONNECTIONS_TABLE` (fixed by the 2026-07-10 deploy). The
+  messages are retryable; founder to redrive:
+  `aws sqs start-message-move-task --source-arn arn:aws:sqs:us-east-1:562691664641:area-code-prod-reward-eval-dlq`
+
+To close 7.2: approve the gated prod terraform apply (or run
+`./scripts/deploy-serverless.ps1 -Environment prod`), redrive the DLQ, then
+re-run the check with a fresh `-WsToken`.
