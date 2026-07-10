@@ -1,4 +1,5 @@
 import { api } from '@area-code/shared/lib/api'
+import { trackEvent } from '@area-code/shared/lib/usageEvents'
 
 /**
  * First-Get token helpers - the single home for the casual-customer token
@@ -36,4 +37,8 @@ export function isCompleteFirstGetToken(token: string): boolean {
  */
 export async function redeemFirstGetToken(token: string): Promise<void> {
   await api.post('/v1/users/me/redeem-guest-token', { token: cleanFirstGetToken(token) })
+  // First-Get funnel: a token was successfully redeemed. This is the one home
+  // for the redemption call (both signup entry points use it), so it is the one
+  // home for the event too (audit-gap-closure R4.1). Beacon gates on consent.
+  trackEvent('firstget_token_redeemed')
 }

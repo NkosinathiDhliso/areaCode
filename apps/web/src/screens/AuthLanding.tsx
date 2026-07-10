@@ -1,5 +1,6 @@
 import { api } from '@area-code/shared/lib/api'
 import { recordEvent } from '@area-code/shared/lib/rum'
+import { trackEvent } from '@area-code/shared/lib/usageEvents'
 import { useQuery } from '@tanstack/react-query'
 import {
   Flame,
@@ -101,6 +102,10 @@ export function AuthLanding({ onNavigate }: AuthLandingProps) {
   // split test, until traffic supports one). No-op when RUM is not configured.
   useEffect(() => {
     recordEvent('landing_view')
+    // Signup-funnel entry: the auth landing / auth gate is on screen. The usage
+    // beacon gates this on consent, so an anonymous session emits nothing
+    // (audit-gap-closure R4.1, R4.2).
+    trackEvent('auth_gate_shown')
   }, [])
 
   return (

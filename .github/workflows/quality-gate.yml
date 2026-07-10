@@ -35,6 +35,17 @@ jobs:
         shell: pwsh
         run: pwsh ./scripts/assert-no-em-dashes.ps1
 
+      # Parity locks (R4.4 / R6.4): the closure scripts are the regression tests
+      # for Table_Closure and Amplify_Env_Closure. Wired here as real gates so a
+      # new table (env/IAM gap) or a new VITE key (unmanaged in
+      # update-all-amplify-apps.ps1) cannot land without closing the gap. Static
+      # parsers, no AWS calls; a non-zero exit fails the job.
+      - name: Table closure lock
+        run: node scripts/check-table-closure.mjs
+
+      - name: Amplify env closure lock
+        run: node scripts/check-amplify-env-closure.mjs
+
       - name: TypeScript check (monorepo)
         run: pnpm exec tsc --noEmit
 

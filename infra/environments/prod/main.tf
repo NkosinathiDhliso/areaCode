@@ -36,12 +36,6 @@ locals {
   env = "prod"
 }
 
-variable "git_sha" {
-  description = "Git commit SHA for release tracking"
-  type        = string
-  default     = "unknown"
-}
-
 variable "spotify_client_id" {
   description = "Spotify OAuth client ID (from developer.spotify.com/dashboard)"
   type        = string
@@ -378,6 +372,15 @@ module "s3_media" {
     "https://staff.areacode.co.za",
     "https://admin.areacode.co.za"
   ]
+}
+
+# --- Media CDN (CloudFront in front of the private media bucket) ---
+module "media_cdn" {
+  source                      = "../../modules/cdn"
+  env                         = local.env
+  bucket_id                   = module.s3_media.bucket_id
+  bucket_arn                  = module.s3_media.bucket_arn
+  bucket_regional_domain_name = module.s3_media.bucket_regional_domain_name
 }
 
 # =============================================================================
@@ -863,7 +866,9 @@ module "lambda_api" {
     APPLE_MUSIC_TEAM_ID     = var.apple_music_team_id
     APPLE_MUSIC_KEY_ID      = var.apple_music_key_id
     APPLE_MUSIC_PRIVATE_KEY = var.apple_music_private_key
-    GIT_SHA                 = var.git_sha
+    # Release identity is baked into the bundle at build:lambda time and served
+    # by GET /health as `commit`; there is no separate GIT_SHA env var (one
+    # source of truth, and the baked sha tracks the artifact, not terraform).
   }
 }
 
@@ -894,6 +899,11 @@ module "lambda_reward_evaluator" {
     APP_DATA_TABLE = aws_dynamodb_table.app_data.name
     NODES_TABLE    = aws_dynamodb_table.nodes.name
     CHECKINS_TABLE = aws_dynamodb_table.checkins.name
+    # CONNECTIONS_TABLE is read at module load by the broadcast helper (imported
+    # transitively via shared/socket/events for the reward-claimed emitters), so
+    # it must be set or the Lambda crashes at cold start in prod. Delivery still
+    # falls back to push (no execute-api IAM / endpoint here, by design).
+    CONNECTIONS_TABLE = module.websocket.connections_table_name
     # Web push (VAPID) - reward-earned delivery always falls back to push from
     # Lambda (no in-process socket).
     AREA_CODE_VAPID_PUBLIC_KEY  = var.vapid_public_key
@@ -916,6 +926,10 @@ module "lambda_pulse_decay" {
     # APP_DATA_TABLE was a 2026-07-03 go-live FAIL (worker crashed at startup).
     APP_DATA_TABLE = aws_dynamodb_table.app_data.name
     NODES_TABLE    = aws_dynamodb_table.nodes.name
+    # emitStateChange pulls in the broadcast helper, which reads CONNECTIONS_TABLE
+    # at module load, so it must be set or the worker crashes at cold start in
+    # prod (the room broadcast itself no-ops without an endpoint, by design).
+    CONNECTIONS_TABLE = module.websocket.connections_table_name
   }
 }
 
@@ -987,6 +1001,10 @@ module "lambda_streak_reminder" {
     USERS_TABLE    = aws_dynamodb_table.users.name
     CHECKINS_TABLE = aws_dynamodb_table.checkins.name
     APP_DATA_TABLE = aws_dynamodb_table.app_data.name
+    # sendNotification (notifications/service) pulls in the broadcast helper,
+    # which reads CONNECTIONS_TABLE at module load, so it must be set or the
+    # worker crashes at cold start in prod. Delivery falls back to push.
+    CONNECTIONS_TABLE = module.websocket.connections_table_name
     # Web push (VAPID) — reminder falls back to push for backgrounded users.
     AREA_CODE_VAPID_PUBLIC_KEY  = var.vapid_public_key
     AREA_CODE_VAPID_PRIVATE_KEY = var.vapid_private_key
@@ -1030,10 +1048,19 @@ module "lambda_cleanup" {
     AREA_CODE_ENV = local.env
     # POPIA erasure sweep touches users, check-ins, app-data, live socket
     # connections, and the consumer Cognito pool.
-    USERS_TABLE                             = aws_dynamodb_table.users.name
-    CHECKINS_TABLE                          = aws_dynamodb_table.checkins.name
-    APP_DATA_TABLE                          = aws_dynamodb_table.app_data.name
-    CONNECTIONS_TABLE                       = module.websocket.connections_table_name
+    USERS_TABLE       = aws_dynamodb_table.users.name
+    CHECKINS_TABLE    = aws_dynamodb_table.checkins.name
+    APP_DATA_TABLE    = aws_dynamodb_table.app_data.name
+    CONNECTIONS_TABLE = module.websocket.connections_table_name
+    # The daily cleanup also runs the billing lapse sweep (business/service
+    # startLapseSweep + enforceLapsedPayments → businesses, nodes, rewards) and
+    # the orphaned threshold-lock cleanup (rewards, via getRewardById). Without
+    # these three the prod sweeps fail: the lapse sweeps throw and are swallowed
+    # (silent no-op, businesses never demoted), and the lock cleanup's swallowed
+    # requireEnv makes every reward read as deleted and wrongly drops every lock.
+    BUSINESSES_TABLE                        = aws_dynamodb_table.businesses.name
+    NODES_TABLE                             = aws_dynamodb_table.nodes.name
+    REWARDS_TABLE                           = aws_dynamodb_table.rewards.name
     AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID = local.consumer_pool_id
     AREA_CODE_COGNITO_CONSUMER_CLIENT_ID    = local.consumer_client_id
   }
@@ -1151,6 +1178,13 @@ module "lambda_schedule_transition_tick" {
     CHECKINS_TABLE        = aws_dynamodb_table.checkins.name
     APP_DATA_TABLE        = aws_dynamodb_table.app_data.name
     LIVE_VIBE_ON_MAP_FLAG = "false"
+    # The tick imports live-archetype-evaluator, which loads the broadcast helper
+    # at module load; CONNECTIONS_TABLE must be set or the worker crashes at cold
+    # start in prod. It emits node:archetype_change to the city room (it already
+    # holds execute-api IAM below), so it also needs the WebSocket endpoint to
+    # actually broadcast once LIVE_VIBE_ON_MAP_FLAG flips — mirrors presence-expiry.
+    CONNECTIONS_TABLE  = module.websocket.connections_table_name
+    WEBSOCKET_ENDPOINT = replace(module.websocket.websocket_api_endpoint, "wss://", "https://")
   }
 }
 
@@ -1243,13 +1277,15 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
         aws_dynamodb_table.businesses.arn,
         aws_dynamodb_table.app_data.arn,
         aws_dynamodb_table.presence.arn,
+        aws_dynamodb_table.music_schedules.arn,
         "${aws_dynamodb_table.users.arn}/index/*",
         "${aws_dynamodb_table.nodes.arn}/index/*",
         "${aws_dynamodb_table.checkins.arn}/index/*",
         "${aws_dynamodb_table.rewards.arn}/index/*",
         "${aws_dynamodb_table.businesses.arn}/index/*",
         "${aws_dynamodb_table.app_data.arn}/index/*",
-        "${aws_dynamodb_table.presence.arn}/index/*"
+        "${aws_dynamodb_table.presence.arn}/index/*",
+        "${aws_dynamodb_table.music_schedules.arn}/index/*"
       ]
     }]
   })
@@ -2180,6 +2216,10 @@ output "media_bucket" {
   value = module.s3_media.bucket_name
 }
 
+output "media_cdn_url" {
+  value = module.media_cdn.media_cdn_url
+}
+
 output "sqs_reward_eval_url" {
   value = module.sqs_reward_eval.queue_url
 }
@@ -2209,6 +2249,18 @@ module "lambda_websocket" {
     AREA_CODE_ENV     = local.env
     CONNECTIONS_TABLE = "area-code-${local.env}-websocket-connections"
     # WEBSOCKET_ENDPOINT is set post-deploy via deploy script (avoids circular dep)
+    # Cognito pool/client IDs so $connect can verify bearer tokens. Mirrors the
+    # API Lambda block's sources exactly (verifyBearerToken/getPoolConfig read
+    # these lazily; fail-closed if absent). Without them the socket 502s.
+    # Consumer is pinned to the v2 pool via locals, matching the API block.
+    AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID = local.consumer_pool_id
+    AREA_CODE_COGNITO_CONSUMER_CLIENT_ID    = local.consumer_client_id
+    AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID = module.cognito_business.user_pool_id
+    AREA_CODE_COGNITO_BUSINESS_CLIENT_ID    = module.cognito_business.client_id
+    AREA_CODE_COGNITO_STAFF_USER_POOL_ID    = module.cognito_staff.user_pool_id
+    AREA_CODE_COGNITO_STAFF_CLIENT_ID       = module.cognito_staff.client_id
+    AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
+    AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
   }
 }
 

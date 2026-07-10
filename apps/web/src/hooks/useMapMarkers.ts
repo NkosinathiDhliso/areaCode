@@ -1,4 +1,5 @@
 import { TIER_SIZE_MULTIPLIER } from '@area-code/shared/constants'
+import { trackEvent } from '@area-code/shared/lib/usageEvents'
 import { useLocationStore, useMapStore, useSelectionStore } from '@area-code/shared/stores'
 import { useUserStore } from '@area-code/shared/stores/userStore'
 import type { Node, NodeCategory, NodeState } from '@area-code/shared/types'
@@ -268,6 +269,10 @@ function buildMarkerElement(
     colour,
     state,
     () => {
+      // Constellation Funnel entry: a country-zoom beam was tapped
+      // (beam_tap -> zoom_commit -> checkin_completed), audit-gap-closure R4.1.
+      // Tracking only; the selection/zoom behaviour below is unchanged.
+      trackEvent('beam_tap')
       const now = Date.now()
       if (now - lastBeamTapAt < 350 && onCommitZoom) {
         lastBeamTapAt = 0

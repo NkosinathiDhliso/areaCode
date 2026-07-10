@@ -15,6 +15,7 @@
 import { BottomSheet } from '@area-code/shared/components/BottomSheet'
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { api, type ApiError } from '@area-code/shared/lib/api'
+import { setAnalyticsOptIn } from '@area-code/shared/lib/usageEvents'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import type { ConsentStatus } from '@area-code/shared/types'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -48,6 +49,11 @@ export function ReconsentGate({ onNavigate }: ReconsentGateProps) {
         const result = await api.get<ConsentStatus>('/v1/users/me/consent')
         if (cancelled) return
         setStatus(result)
+        // Wire the usage beacon's hard opt-in gate from the consent read: the
+        // beacon no-ops until this reports the signed-in user opted in
+        // (audit-gap-closure R4.2). This is the app's one consent read, so it
+        // is the one home for the gate. Reset to false on logout (unmount).
+        setAnalyticsOptIn(result.analyticsOptIn)
         if (result.needsReconsent) setOpen(true)
       } catch {
         // Reading consent is best-effort on open. Leaving the gate closed on a
@@ -59,6 +65,11 @@ export function ReconsentGate({ onNavigate }: ReconsentGateProps) {
       cancelled = true
     }
   }, [isAuthenticated])
+
+  // Close the usage beacon's opt-in gate when the gate unmounts, which happens
+  // only on logout (it stays mounted for the whole authenticated session). A
+  // signed-out session must emit nothing (R4.2).
+  useEffect(() => () => setAnalyticsOptIn(false), [])
 
   const handleAccept = useCallback(async () => {
     if (!status || saving) return

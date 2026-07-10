@@ -79,6 +79,10 @@ describe('1. Health & Infrastructure', () => {
     expect(body.env).toBe('dev')
     expect(body.version).toBeDefined()
     expect(body.timestamp).toBeDefined()
+    // Build sha is baked in by build:lambda; unbuilt test runs report 'dev'.
+    expect(typeof body.commit).toBe('string')
+    expect(body.commit.length).toBeGreaterThan(0)
+    expect(body.commit).toBe('dev')
   })
 
   it('unknown route returns 404', async () => {

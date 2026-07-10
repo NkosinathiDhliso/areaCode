@@ -3,3 +3,63 @@ packages:
   - 'packages/*'
   - 'backend'
   - 'tests/*'
+
+# Dependency audit accepted-risk register (Requirement 6.1).
+#
+# The quality gate runs `pnpm audit --audit-level high` on every push to master
+# (see .github/workflows/ci.yml, "Dependency audit" job) and fails on any high
+# or critical advisory that is NOT listed below. pnpm honours this
+# auditConfig.ignoreGhsas list natively, so it is the single source of truth for
+# accepted risks. YAML comments carry the per-entry justification the design
+# calls for (the design's "audit-ignore.json" is not used because pnpm has no
+# native reader for an arbitrary JSON file, and a second unread file would rot).
+#
+# Rules for this list:
+#   - One GHSA id per entry, with a comment: package, why accepted, date.
+#   - Only add an advisory here with a real justification. A new high or critical
+#     advisory that is not listed fails the gate, which is the ratchet we want.
+#   - Prefer fixing (dependency bump) over ignoring. Re-audit and prune entries
+#     whose upstream fix has been taken.
+#   - Reviewed: 2026-07-10 (July 2026 platform audit gap closure).
+auditConfig:
+  ignoreGhsas:
+    # apps/mobile is a half-built Expo React Native app that is not deployed and
+    # is intentionally excluded from CI builds (see the build-frontends matrix in
+    # ci.yml). These are dev/build-time transitive dependencies of expo and
+    # react-native only; none reach any shipped runtime. Re-audit when the mobile
+    # app is resumed and given its own pipeline.
+    - GHSA-w7jw-789q-3m8p # shell-quote (critical) via react-native>react-devtools-core, mobile dev tool only. 2026-07-10
+    - GHSA-34x7-hfp2-rc4v # tar via expo>@expo/cli, mobile build tool only. 2026-07-10
+    - GHSA-8qq5-rm4j-mr97 # tar via expo>@expo/cli, mobile build tool only. 2026-07-10
+    - GHSA-83g3-92jg-28cx # tar via expo>@expo/cli, mobile build tool only. 2026-07-10
+    - GHSA-qffp-2rhf-9h96 # tar via expo>@expo/cli, mobile build tool only. 2026-07-10
+    - GHSA-9ppj-qmqm-q256 # tar via expo>@expo/cli, mobile build tool only. 2026-07-10
+    - GHSA-r6q2-hw4h-h46w # tar via expo>@expo/cli, mobile build tool only. 2026-07-10
+    - GHSA-wh4c-j3r5-mjhp # @xmldom/xmldom via expo>@expo/cli plist tooling, mobile only. 2026-07-10
+    - GHSA-2v35-w6hq-6mfw # @xmldom/xmldom via expo plist tooling, mobile only. 2026-07-10
+    - GHSA-f6ww-3ggp-fr8h # @xmldom/xmldom via expo plist tooling, mobile only. 2026-07-10
+    - GHSA-x6wf-f3px-wcqx # @xmldom/xmldom via expo plist tooling, mobile only. 2026-07-10
+    - GHSA-j759-j44w-7fr8 # @xmldom/xmldom via expo plist tooling, mobile only. 2026-07-10
+    - GHSA-q3j6-qgpj-74h6 # fast-uri via expo-router>schema-utils>ajv, mobile build only. 2026-07-10
+    - GHSA-v39h-62p7-jpjc # fast-uri via expo-router>schema-utils>ajv, mobile build only. 2026-07-10
+    - GHSA-fv7c-fp4j-7gwp # @babel/plugin-transform-modules-systemjs via babel-preset-expo, mobile build only. 2026-07-10
+    - GHSA-hmw2-7cc7-3qxx # form-data via expo>@expo/cli, mobile build tool only. 2026-07-10
+    - GHSA-96hv-2xvq-fx4p # ws via expo/react-native metro dev middleware, mobile dev tool only. 2026-07-10
+    # vite is a build-time devDependency, not shipped to any runtime. Both
+    # advisories require a running vite dev server exposed to an attacker, which
+    # does not happen in CI or production (Amplify serves the static build). Take
+    # the vite patch on the next routine bump and prune these.
+    - GHSA-p9ff-h696-f583 # vite dev-server file read, build tool only, not shipped. 2026-07-10
+    - GHSA-fx2h-pf6j-xcff # vite dev-server fs.deny bypass (Windows), build tool only, not shipped. 2026-07-10
+    # undici arrives only through jsdom, which is a test-environment
+    # devDependency (component/hook tests). It is never bundled into the backend
+    # Lambda or any frontend build. No production exposure.
+    - GHSA-vmh5-mc38-953g # undici via jsdom, test-only devDependency. 2026-07-10
+    - GHSA-hm92-r4w5-c3mj # undici via jsdom, test-only devDependency. 2026-07-10
+    - GHSA-vxpw-j846-p89q # undici via jsdom (test) and expo (mobile), neither in a shipped runtime. 2026-07-10
+    # Backend production-runtime transitive advisories. Accepted short-term, not
+    # ignored blind: bumping these is a separate dependency task (do not silently
+    # rewrite core deps here). Both have limited practical exposure, noted below.
+    # Re-audit and take the upstream fix; do not let these linger.
+    - GHSA-247c-9743-5963 # fastify content-type schema bypass. Handlers validate with Zod, not fastify content-type schema selection, so exposure is limited. Bump fastify to >=5.8.5 in a follow-up. 2026-07-10
+    - GHSA-5wm8-gmm8-39j9 # fast-xml-builder via @aws-sdk xml-builder. XML is built from app-controlled values for AWS API calls, not attacker input. Take the AWS SDK bump in a follow-up. 2026-07-10

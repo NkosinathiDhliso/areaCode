@@ -1,4 +1,6 @@
+import { PhotoUnavailable } from '@area-code/shared/components/PhotoUnavailable'
 import { api } from '@area-code/shared/lib/api'
+import { mediaUrl } from '@area-code/shared/lib/mediaUrl'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useErrorStore } from '@area-code/shared/stores/errorStore'
@@ -119,8 +121,8 @@ export const NodeDetailContent = memo(function NodeDetailContent({
 
   const isDormant = state === 'dormant' && rewards.length === 0
   const activeRewards = rewards.filter((r) => r.isActive)
-  const cdnUrl = import.meta.env['VITE_CDN_URL'] as string | undefined
-  const headerImageUrl = node.headerImageKey && cdnUrl ? `${cdnUrl}/${node.headerImageKey}` : null
+  const hasHeaderKey = typeof node.headerImageKey === 'string' && node.headerImageKey.trim() !== ''
+  const headerImageUrl = mediaUrl(node.headerImageKey)
 
   function handleCheckIn() {
     if (!isAuthenticated) {
@@ -275,7 +277,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
         </div>
       </div>
 
-      {headerImageUrl && (
+      {headerImageUrl ? (
         <img
           src={headerImageUrl}
           alt={node.name}
@@ -283,7 +285,9 @@ export const NodeDetailContent = memo(function NodeDetailContent({
           decoding="async"
           className="w-full h-40 object-cover rounded-2xl border border-[var(--border)] mb-4 bg-[var(--bg-raised)]"
         />
-      )}
+      ) : hasHeaderKey ? (
+        <PhotoUnavailable className="w-full h-40 mb-4" />
+      ) : null}
 
       {/* Dormant empty state - "be the first in" (R2.7). */}
       {isDormant ? (

@@ -29,6 +29,7 @@ import {
   getPreviousReport,
   persistDigest,
   getLatestDigest,
+  markDigestEmailSent,
 } from './repository.js'
 import type { GenerateReportMessage, Report, ReportMetrics, MusicPrefs, DigestRow } from './types.js'
 
@@ -489,6 +490,24 @@ async function loadFirstGetCounts(
  * reused here (DRY): the report period and the Digest_Week cover the same
  * seven-day SAST window.
  */
+/**
+ * Best-effort flip of the Digest_Row `emailSent` flag after a confirmed send
+ * (R7.3, decision docs/decisions/digest-email-sent-field.md). A failure is
+ * logged and swallowed: the row is already persisted and the email already
+ * sent, so the flip must never throw, roll back, or resend. Kept separate from
+ * the idempotence conditional put in persistDigest so Property 4 is unaffected.
+ */
+async function flipDigestEmailSent(businessId: string, weekStart: string): Promise<void> {
+  try {
+    await markDigestEmailSent(businessId, weekStart)
+  } catch (flipErr) {
+    console.error(
+      `[generator] Failed to flip emailSent for business ${businessId} week ${weekStart} (email was sent):`,
+      flipErr,
+    )
+  }
+}
+
 async function runDigestPath(
   businessId: string,
   nodes: Array<{ nodeId: string; nodeName: string }>,
@@ -550,8 +569,11 @@ async function runDigestPath(
     ...(digest.deltas ? { deltas: digest.deltas } : {}),
     suppressed: digest.suppressed,
     tierAtBuild: tier,
-    // The actual Digest_Email send + emailSent flip is task 5.1; 4.2 persists
-    // the row with emailSent=false and wires the write-gated email seam below.
+    // Persisted false; flipped to true by markDigestEmailSent only after a
+    // confirmed Digest_Email send below (R7.3, decision
+    // docs/decisions/digest-email-sent-field.md). The flip is a separate
+    // best-effort update, so this conditional put stays the single idempotence
+    // gate (Property 4).
     emailSent: false,
     createdAt: new Date().toISOString(),
   }
@@ -572,9 +594,10 @@ async function runDigestPath(
   // from the shared copy strings built here (buildDigestCopy — one source of
   // truth with the dashboard card, R4.3), never re-deriving copy in the email
   // module. The row was persisted above with emailSent:false and is retained
-  // regardless of the send outcome; a successful dispatch is logged rather than
-  // written back, so the single conditional put stays the only Digest_Row write
-  // for this week and the idempotence invariant (Property 4) holds.
+  // regardless of the send outcome. After a confirmed send we flip emailSent to
+  // true via a separate best-effort update (markDigestEmailSent, R7.3), so the
+  // conditional put above stays the only idempotence write for this week and the
+  // invariant (Property 4) holds.
   const copy = buildDigestCopy(digest, tier)
 
   // Digest_Optout (R4.5): skip the send when the business opted out, keeping the
@@ -597,6 +620,12 @@ async function runDigestPath(
   try {
     await sendDigestEmail(business.email, business.businessName ?? 'Your venue', digest.metrics.visits, copy)
     console.log(`[generator] Digest_Email sent for business ${businessId} week ${week.weekStartIso}`)
+
+    // Flip emailSent to true so the field carries real signal (R7.3). Best
+    // effort: a failed flip is logged and swallowed — the row is already
+    // persisted and the email already sent, so it must not throw, roll back, or
+    // resend. The idempotence conditional put above is unaffected (Property 4).
+    await flipDigestEmailSent(businessId, week.weekStartIso)
   } catch (err) {
     // R4.4: a failed email is logged and never loses the Digest_Row (persisted
     // above), matching the full-report email handling.

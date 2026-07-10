@@ -84,6 +84,7 @@ const h = vi.hoisted(() => {
     getPreviousReportMock: vi.fn(async () => null),
     persistDigestMock: vi.fn(async (_row: import('../types.js').DigestRow) => state.persistResult),
     getLatestDigestMock: vi.fn(async () => null),
+    markDigestEmailSentMock: vi.fn(async (_businessId: string, _weekStart: string) => {}),
     broadcastMock: vi.fn(async () => {}),
     getBusinessByIdMock: vi.fn(async () => state.business),
     getEffectiveTierMock: vi.fn(() => state.effectiveTier),
@@ -123,6 +124,7 @@ vi.mock('../repository.js', () => ({
   getPreviousReport: h.getPreviousReportMock,
   persistDigest: h.persistDigestMock,
   getLatestDigest: h.getLatestDigestMock,
+  markDigestEmailSent: h.markDigestEmailSentMock,
 }))
 
 // Partial mock: keep the real computeDigest/digestWeekFor so the metrics and
@@ -229,6 +231,18 @@ describe('Digest_Email is sent only when the row is newly written (R4.2)', () =>
     ])
   })
 
+  it('flips emailSent to true after a successful send (R7.3)', async () => {
+    h.state.persistResult = 'written'
+    await generateReportNow(BUSINESS_ID, 'weekly', PERIOD_START, PERIOD_END)
+
+    // The row was persisted with emailSent:false, then flipped by a separate
+    // best-effort update keyed on businessId + weekStart once the send succeeded.
+    const row = h.persistDigestMock.mock.calls[0]![0] as DigestRow
+    expect(row.emailSent).toBe(false)
+    expect(h.markDigestEmailSentMock).toHaveBeenCalledTimes(1)
+    expect(h.markDigestEmailSentMock).toHaveBeenCalledWith(BUSINESS_ID, EXPECTED_WEEK_START)
+  })
+
   it('suppresses the email on a duplicate replay (R3.1)', async () => {
     h.state.persistResult = 'duplicate'
     await generateReportNow(BUSINESS_ID, 'weekly', PERIOD_START, PERIOD_END)
@@ -236,6 +250,8 @@ describe('Digest_Email is sent only when the row is newly written (R4.2)', () =>
     expect(h.persistDigestMock).toHaveBeenCalledTimes(1)
     expect(h.buildDigestCopySpy).not.toHaveBeenCalled()
     expect(h.sendDigestEmailMock).not.toHaveBeenCalled()
+    // No send → no flip; emailSent stays false.
+    expect(h.markDigestEmailSentMock).not.toHaveBeenCalled()
   })
 })
 
@@ -248,6 +264,8 @@ describe('Digest_Optout suppresses the email but not the row (R4.5)', () => {
 
     expect(h.persistDigestMock).toHaveBeenCalledTimes(1)
     expect(h.sendDigestEmailMock).not.toHaveBeenCalled()
+    // Opt-out means no send, so emailSent is never flipped.
+    expect(h.markDigestEmailSentMock).not.toHaveBeenCalled()
   })
 })
 
@@ -260,6 +278,8 @@ describe('a missing business email skips the send but retains the row (R4.4)', (
 
     expect(h.persistDigestMock).toHaveBeenCalledTimes(1)
     expect(h.sendDigestEmailMock).not.toHaveBeenCalled()
+    // No address to send to → no flip.
+    expect(h.markDigestEmailSentMock).not.toHaveBeenCalled()
   })
 })
 
@@ -274,6 +294,22 @@ describe('a Digest_Email send failure never aborts the record or loses the row (
     // logged so the full report still generates and stores.
     expect(h.persistDigestMock).toHaveBeenCalledTimes(1)
     expect(h.sendDigestEmailMock).toHaveBeenCalledTimes(1)
+    // The send failed, so emailSent is not flipped — the field stays honest.
+    expect(h.markDigestEmailSentMock).not.toHaveBeenCalled()
+    expect(result).toHaveProperty('reportId')
+    expect(h.storeReportMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('swallows a failed flip after a successful send (R7.3 best-effort)', async () => {
+    h.state.persistResult = 'written'
+    h.markDigestEmailSentMock.mockRejectedValueOnce(new Error('DynamoDB throttled'))
+
+    const result = await generateReportNow(BUSINESS_ID, 'weekly', PERIOD_START, PERIOD_END)
+
+    // The email sent, the flip failed, but the record still completes: a failed
+    // flip never throws, rolls back, or resends.
+    expect(h.sendDigestEmailMock).toHaveBeenCalledTimes(1)
+    expect(h.markDigestEmailSentMock).toHaveBeenCalledTimes(1)
     expect(result).toHaveProperty('reportId')
     expect(h.storeReportMock).toHaveBeenCalledTimes(1)
   })

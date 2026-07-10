@@ -1,5 +1,7 @@
+import { PhotoUnavailable } from '@area-code/shared/components/PhotoUnavailable'
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { api } from '@area-code/shared/lib/api'
+import { mediaUrl } from '@area-code/shared/lib/mediaUrl'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import { useBusinessStore, type DashboardPanel } from '@area-code/shared/stores/businessStore'
 import { useErrorStore } from '@area-code/shared/stores/errorStore'
@@ -100,8 +102,8 @@ export function BusinessDashboard() {
   const containerRef = useRef<HTMLDivElement>(null)
   const [touchStart, setTouchStart] = useState<number | null>(null)
   const primaryNode = nodes[0] ?? null
-  const cdnUrl = import.meta.env['VITE_CDN_URL'] as string | undefined
-  const headerImageUrl = primaryNode?.headerImageKey && cdnUrl ? `${cdnUrl}/${primaryNode.headerImageKey}` : null
+  const hasHeaderKey = typeof primaryNode?.headerImageKey === 'string' && primaryNode.headerImageKey.trim() !== ''
+  const headerImageUrl = mediaUrl(primaryNode?.headerImageKey)
 
   useEffect(() => {
     if (nodes.length > 0) return
@@ -229,13 +231,15 @@ export function BusinessDashboard() {
         style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top, 0px))' }}
       >
         <div className="flex flex-row items-center gap-2">
-          {headerImageUrl && (
+          {headerImageUrl ? (
             <img
               src={headerImageUrl}
               alt={primaryNode?.name ?? 'Business'}
               className="w-9 h-9 rounded-xl object-cover border border-[var(--border)]"
             />
-          )}
+          ) : hasHeaderKey ? (
+            <PhotoUnavailable variant="compact" className="w-9 h-9" />
+          ) : null}
           <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">Area Code</span>
           {role && role !== 'owner' && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent)]/10 text-[var(--accent)] font-medium capitalize">

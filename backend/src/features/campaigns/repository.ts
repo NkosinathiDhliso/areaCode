@@ -412,7 +412,11 @@ export async function getCampaignById(businessId: string, campaignId: string): P
 
   try {
     return JSON.parse(item['data'] as string) as Campaign
-  } catch {
+  } catch (err) {
+    console.error(
+      `[campaigns/repository] Corrupt campaign JSON, skipping row pk=${item['pk']} sk=${item['sk']} campaignId=${campaignId}:`,
+      err,
+    )
     return null
   }
 }
@@ -476,8 +480,12 @@ export async function listCampaigns(
   for (const item of result.Items || []) {
     try {
       items.push(JSON.parse(item['data'] as string) as Campaign)
-    } catch {
+    } catch (err) {
       // Skip a malformed row rather than failing the whole page.
+      console.error(
+        `[campaigns/repository] Corrupt campaign JSON, skipping row pk=${item['pk']} sk=${item['sk']}:`,
+        err,
+      )
     }
   }
 

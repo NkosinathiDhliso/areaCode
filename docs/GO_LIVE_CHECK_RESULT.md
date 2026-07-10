@@ -5,6 +5,10 @@ read-only. This file records one run, its verbatim output, and the follow-up
 items every FAIL and WARN implies. It is not launch approval on its own: the
 four MANUAL gates below are human launch-day checks the script cannot make.
 
+The go-live check is the final gate of the Release Ritual, the single ordered
+deploy sequence documented in `docs/DEPLOY.md`. Run it as the last step of that
+ritual with a fresh `-WsToken`; this file does not restate the deploy steps.
+
 ## Coverage layers
 
 Go-live readiness has three layers, kept distinct on purpose. The first two are
@@ -790,3 +794,217 @@ re-run) and 9.2 (§1.4 real-device map-load gate) remain founder/launch-day
 pending: they require prod AWS access and a physical 2019 Android on mobile
 data respectively, neither available from this checkout. Record the observed
 results here on the day.
+
+## Load smoke (first run) (audit-gap-closure)
+
+First run of the dev load smoke (spec `audit-gap-closure`, R6.4). This section
+records the RESULT of the run; the how lives in `docs/DEPLOY.md` "Load Smoke
+(dev, manual only)" and is not duplicated here.
+
+This is a founder-run live step. It needs dev AWS access, a dev consumer bearer
+token (`K6_DEV_TOKEN`) for the dev Cognito pool, the dev API base URL, and a dev
+node id. The executing agent has none of these and must not run k6 against dev
+(or any) environment, so the run below is not yet executed. Nothing in the
+results table is observed; every value is a placeholder until the founder fills
+it in. Status: pending, not yet run.
+
+### Turnkey command (founder-run)
+
+The script (`scripts/load-smoke.js`), its thresholds, and the env-var table are
+documented once in `docs/DEPLOY.md`. Point k6 at dev, never prod: the
+check-in burst writes real check-ins.
+
+Local run:
+
+```bash
+k6 run \
+  -e BASE_URL=https://<dev-api-host> \
+  -e K6_DEV_TOKEN=<consumer bearer JWT for the dev pool> \
+  -e CHECKIN_NODE_ID=<a dev node id> \
+  scripts/load-smoke.js
+```
+
+`CHECKIN_CITY` defaults to `johannesburg`; `CHECKIN_QR_TOKEN` is optional and not
+needed on dev (the check-in path short-circuits there).
+
+GitHub Actions run (`workflow_dispatch` only, never on push or schedule):
+
+```bash
+gh workflow run load-smoke.yml \
+  -f base_url=https://<dev-api-host> \
+  -f checkin_node_id=<a dev node id> \
+  -f checkin_city=johannesburg
+```
+
+`K6_DEV_TOKEN` comes from the repository secret of the same name. `base_url` and
+`checkin_node_id` fall back to the `LOAD_SMOKE_BASE_URL` and `LOAD_SMOKE_NODE_ID`
+repository variables when the inputs are blank. Trigger it from the Actions tab
+or with the command above, then watch the run:
+
+```bash
+gh run watch --exit-status
+```
+
+### Results (founder to fill in)
+
+Thresholds (from `scripts/load-smoke.js`, the run fails if any is breached):
+`http_req_duration` p95 < 800ms per scenario, `http_req_failed` < 1% on
+`nodes_read`, `server_errors` < 1% overall (5xx and network/timeout only; 401
+and 429 are correct fail-closed responses, not faults).
+
+- Date: _pending first run_
+- Environment: dev
+- Command: _pending first run_ (local `k6 run` or `load-smoke.yml` dispatch)
+
+| Metric                             | Threshold | Observed            | PASS/FAIL |
+| ---------------------------------- | --------- | ------------------- | --------- |
+| `nodes_read` p95 latency           | < 800ms   | _pending first run_ | _pending_ |
+| `checkin_burst` p95 latency        | < 800ms   | _pending first run_ | _pending_ |
+| `http_req_failed` on `nodes_read`  | < 1%      | _pending first run_ | _pending_ |
+| `server_errors` (overall, 5xx/net) | < 1%      | _pending first run_ | _pending_ |
+
+Overall result: _pending first run_.
+
+Notes: _pending first run_ (record the dev node id used, whether the token was
+set, and any threshold breaches with their k6 summary line).
+
+### Status
+
+The script, workflow, and DEPLOY.md docs shipped in task 6.2. The turnkey
+commands and the results template are ready here. The run itself remains
+founder-pending: it requires dev AWS access, a dev consumer token, the dev API
+base URL, and a dev node id, none available from this checkout. On completion,
+replace the placeholders above with the observed values and the k6 summary, then
+mark task 6.3 complete.
+
+## Rate-limiter client IP verification (audit-gap-closure)
+
+Verification that the rate limiter buckets by real client identity in prod (spec
+`audit-gap-closure`, R8.1). This is a founder-run live step: it needs prod AWS
+access for account 562691664641, region us-east-1. The executing agent has no
+prod log access and has not read prod logs. Nothing in the evidence block below
+is observed; every value is a placeholder until the founder fills it in. Status:
+pending, not yet run.
+
+### Code-path finding (no fix required as of this checkout)
+
+The limiter (`backend/src/shared/middleware/rate-limit.ts`) keys its DynamoDB TTL
+sliding window on `request.ip` (unless a caller passes `identifierFn`). In prod
+`request.ip` resolves to the genuine per-client source IP, not a constant proxy
+address, by this chain:
+
+1. The API is an API Gateway v2 HTTP API with `payload_format_version = "2.0"`
+   (`infra/modules/api-gateway/main.tf`), and nothing fronts it: the WAF/edge
+   CloudFront distribution is deferred (`infra/modules/waf/main.tf`), so API
+   Gateway terminates client connections directly and
+   `event.requestContext.http.sourceIp` is the real client IP.
+2. `@fastify/aws-lambda` (v5.1.4) reads `event.requestContext.http.sourceIp` and
+   passes it to Fastify's `app.inject` as `remoteAddress` (its HTTP-API-v2
+   branch, `index.js`).
+3. Fastify is built with no `trustProxy` option (`backend/src/app.ts`), so
+   `request.ip` returns the injected socket `remoteAddress`, i.e. that per-client
+   `sourceIp`. It is not the API Gateway's own address and does not depend on
+   `X-Forwarded-For` parsing.
+
+So the limiter already buckets by distinct client IP. No identifier-extraction
+fix is made in this checkout. The live evidence below exists to confirm that
+finding in prod; if it shows a constant IP across distinct sources, the finding
+is wrong and the fix in "If the evidence shows a constant IP" applies before
+launch.
+
+### Turnkey verification (founder-run, live access required)
+
+The API Gateway access log already records the client source IP per request as
+the `ip` field (`$context.identity.sourceIp` in the stage `access_log_settings`,
+`infra/modules/api-gateway/main.tf`), written to the log group
+`/aws/apigateway/area-code-prod`. For an HTTP API v2, `$context.identity.sourceIp`
+is the same client source IP that `request.ip` resolves to (step 2 above), so
+the access log is the direct, already-captured evidence, no new logging in the
+limiter needed.
+
+Run from the repo root with prod AWS credentials, region us-east-1.
+
+Option A, `aws logs filter-log-events` (eyeball the raw `ip` fields over the last
+hour):
+
+```powershell
+aws logs filter-log-events `
+  --log-group-name /aws/apigateway/area-code-prod `
+  --filter-pattern '{ $.ip = "*" }' `
+  --start-time ([DateTimeOffset]::UtcNow.AddHours(-1).ToUnixTimeMilliseconds()) `
+  --query 'events[].message' --output text `
+  --region us-east-1 --no-cli-pager
+```
+
+Expected: JSON access-log lines whose `ip` field varies across requests that
+came from different devices/networks. Two or more distinct `ip` values from two
+or more distinct sources is the PASS signal.
+
+Option B, CloudWatch Logs Insights (aggregate distinct IPs, clearer signal). Kick
+off the query, then read the results:
+
+```powershell
+$qid = aws logs start-query `
+  --log-group-name /aws/apigateway/area-code-prod `
+  --start-time ([DateTimeOffset]::UtcNow.AddHours(-1).ToUnixTimeSeconds()) `
+  --end-time ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds()) `
+  --query-string 'fields ip | stats count(*) as requests by ip | sort requests desc' `
+  --region us-east-1 --query queryId --output text --no-cli-pager
+
+# wait a few seconds for the query to complete, then:
+aws logs get-query-results --query-id $qid --region us-east-1 --no-cli-pager
+```
+
+To make the distinct sources unambiguous, generate traffic from two networks
+before running the query, e.g. hit `GET /health` from a phone on mobile data and
+from a laptop on wifi:
+
+```powershell
+curl.exe https://api.areacode.co.za/health
+```
+
+Expected PASS: the Insights result lists more than one distinct `ip` row, with
+the two known sources' public IPs among them. Expected FAIL: a single `ip` row
+that every request shares (a constant/proxy address).
+
+### Evidence (founder to fill in)
+
+- Date: _pending first run_
+- Region: us-east-1
+- Query used: _pending_ (Option A filter-log-events or Option B Logs Insights)
+- Distinct sources exercised: _pending_ (e.g. phone on mobile data + laptop on wifi)
+
+| Source                | Observed `ip`       | Distinct? |
+| --------------------- | ------------------- | --------- |
+| Source 1 (_describe_) | _pending first run_ | _pending_ |
+| Source 2 (_describe_) | _pending first run_ | _pending_ |
+
+Result: _pending first run_. Distinct IPs for distinct sources => PASS
+(`request.ip` is the real client identity, limiter buckets correctly). A single
+constant IP across distinct sources => FAIL (limiter buckets all users together;
+apply the fix below before launch).
+
+### If the evidence shows a constant IP (fix, only if FAIL)
+
+Only if the evidence contradicts the code-path finding above: harden the limiter
+to read the API Gateway source IP explicitly rather than via `request.ip`. Add a
+single shared `clientIp(request)` helper (one home, per `dry-reuse-no-duplication.md`)
+that reads `request.awsLambda.event.requestContext.http.sourceIp` (the decorated
+event the adapter already exposes, `decorateRequest: true` in
+`backend/src/lambda.ts`) and falls back to `request.ip`, then have
+`rate-limit.ts` use it as the default identifier. Keep the `DEV_MODE` skip and
+the existing `identifierFn` override untouched, and add a unit test that mocks a
+request whose `requestContext.http.sourceIp` is set and asserts the resolved
+identifier equals that IP. This fix is not applied now because the code path
+already resolves the real client IP; it is recorded here so the FAIL branch is
+turnkey.
+
+### Status
+
+Repo-side confirmation complete: the code path resolves the real per-client
+source IP (no `trustProxy`, HTTP API v2 `sourceIp` via the adapter), and the
+access log already captures that IP as the `ip` field, so the turnkey query and
+evidence template are ready. Live verification remains founder-pending: it
+requires prod AWS access this checkout does not have. Task 8.1 stays open until
+the founder runs a query above, records the distinct-IP evidence here, and
+confirms PASS (or applies the fix on FAIL).

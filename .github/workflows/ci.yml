@@ -92,10 +92,55 @@ jobs:
         shell: pwsh
         run: pwsh -ExecutionPolicy Bypass -File scripts/assert-serverless-only.ps1
 
+  # Supply-chain gate (R6.1): runs on every push to master (and on PRs) and
+  # fails on any high or critical advisory that is not an accepted risk. It
+  # lives here, not in quality-gate.yml, because quality-gate.yml is PR-only and
+  # the requirement is "on every push to master"; this workflow has the push
+  # trigger. Accepted risks are the committed auditConfig.ignoreGhsas list in
+  # pnpm-workspace.yaml, one entry per advisory with a justification comment.
+  # pnpm audit honours that list natively, so the ignore mechanism is the single
+  # source of truth. build-lambdas depends on this job, so a new high or
+  # critical vulnerability blocks deploy.
+  dependency-audit:
+    name: Dependency Audit (high/critical)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      # pnpm audit reads pnpm-lock.yaml and the auditConfig ignore list from
+      # pnpm-workspace.yaml; it does not need node_modules, so no install step.
+      - name: Dependency audit
+        run: pnpm audit --audit-level high
+
+  # Parity locks (R4.4 / R6.4): the closure scripts are the regression tests for
+  # Table_Closure and Amplify_Env_Closure. quality-gate.yml runs them on PRs;
+  # this job mirrors them on push to master (same rationale as the lint cap) so
+  # master cannot drift a new table or VITE key past closure. Static parsers
+  # that only read repo files (node builtins, zero deps), so no pnpm install.
+  # build-lambdas depends on this job, so an unclosed gap blocks deploy.
+  closure-locks:
+    name: Parity Closure Locks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Table closure lock
+        run: node scripts/check-table-closure.mjs
+      - name: Amplify env closure lock
+        run: node scripts/check-amplify-env-closure.mjs
+
   build-lambdas:
     name: Build Lambda Functions
     runs-on: ubuntu-latest
-    needs: [lint-format, typecheck, test, data-integrity, serverless-guard]
+    needs: [lint-format, typecheck, test, data-integrity, serverless-guard, dependency-audit, closure-locks]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

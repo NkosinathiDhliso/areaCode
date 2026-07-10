@@ -293,3 +293,83 @@ describe('getNodesByCitySlug — paid-tier filter', () => {
     expect(nodes).toHaveLength(0)
   })
 })
+
+// ─── Anchored paginated query (audit-gap-closure R2.1) ───────────────────────
+
+/**
+ * Pins the anchored access path: `getNodesByCitySlug` reads via a Query on the
+ * `CityIndex` GSI (`cityId = :cityId`), loops over `LastEvaluatedKey` so every
+ * page is accumulated, and NEVER issues a full-table Scan on the nodes table.
+ * A regression to Scan (the pre-R2 behaviour) would fail these assertions.
+ *
+ * _Requirements: 2.1_
+ */
+describe('getNodesByCitySlug — anchored paginated CityIndex query (R2.1)', () => {
+  const CITY_SLUG = 'johannesburg'
+  const CITY_ID = 'city-jhb'
+
+  function nodeRow(nodeId: string, businessId: string) {
+    return {
+      nodeId,
+      name: `${nodeId} name`,
+      slug: `${nodeId}-slug`,
+      category: 'nightlife',
+      lat: -26.2,
+      lng: 28.0,
+      cityId: CITY_ID,
+      isActive: true,
+      businessId,
+      claimStatus: 'claimed',
+    }
+  }
+
+  it('queries CityIndex by cityId, loops LastEvaluatedKey, accumulates pages, and never Scans', async () => {
+    const sent: Array<{ name: string; input: Record<string, unknown> }> = []
+
+    mocks.sendMock.mockImplementation(async (cmd: unknown) => {
+      const command = cmd as { constructor: { name: string }; input?: Record<string, unknown> }
+      const input = command.input ?? {}
+      sent.push({ name: command.constructor.name, input })
+
+      // City lookup (GetCommand)
+      if ('Key' in input) {
+        const key = input['Key'] as { pk?: string }
+        if (key?.pk === `CITY#${CITY_SLUG}`) {
+          return { Item: { cityId: CITY_ID, name: 'Johannesburg', slug: CITY_SLUG } }
+        }
+        return { Item: undefined }
+      }
+
+      // Paginated CityIndex query: page 1 returns a LastEvaluatedKey, page 2 ends it.
+      if (input['KeyConditionExpression']) {
+        if (!input['ExclusiveStartKey']) {
+          return { Items: [nodeRow('node-page1', 'biz-1')], LastEvaluatedKey: { nodeId: 'node-page1' } }
+        }
+        return { Items: [nodeRow('node-page2', 'biz-2')] }
+      }
+
+      return {}
+    })
+
+    mocks.findBusinessById.mockImplementation(async (id: string) => ({ id, name: id, tier: 'growth' }))
+
+    const nodes = await getNodesByCitySlug(CITY_SLUG)
+
+    // Both pages read and accumulated.
+    expect(nodes.map((n) => n.id).sort()).toEqual(['node-page1', 'node-page2'])
+
+    const queries = sent.filter((c) => c.input['KeyConditionExpression'])
+    expect(queries).toHaveLength(2)
+    for (const q of queries) {
+      expect(q.name).toBe('QueryCommand')
+      expect(q.input['IndexName']).toBe('CityIndex')
+      expect(q.input['KeyConditionExpression']).toBe('cityId = :cityId')
+      expect((q.input['ExpressionAttributeValues'] as Record<string, unknown>)[':cityId']).toBe(CITY_ID)
+    }
+    // The second page is anchored on the first page's LastEvaluatedKey.
+    expect(queries[1]!.input['ExclusiveStartKey']).toEqual({ nodeId: 'node-page1' })
+
+    // Never an unanchored full-table Scan on the nodes table.
+    expect(sent.some((c) => c.name === 'ScanCommand')).toBe(false)
+  })
+})

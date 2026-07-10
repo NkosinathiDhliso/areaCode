@@ -1,5 +1,6 @@
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { exchangeCodeForTokens } from '@area-code/shared/lib/cognitoHostedUiOAuth'
+import { trackEvent } from '@area-code/shared/lib/usageEvents'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -96,6 +97,12 @@ export function ConsumerOAuthCallback({ onNavigate }: ConsumerOAuthCallbackProps
         if (cancelled) return
 
         setAuth(tokens.access_token, tokens.refresh_token, sync.userId)
+        // Signup funnel completion for the Google OAuth path: a brand-new user
+        // is a signup, a returning user is a sign-in (R4.1). Beacon gates on
+        // consent (R4.2).
+        if (sync.isNewUser) {
+          trackEvent('signup_completed', { method: 'google' })
+        }
         // Route new users through the First-Get prompt; everyone else lands on the map.
         if (sync.isNewUser) {
           window.history.replaceState({}, '', '/first-get-prompt')

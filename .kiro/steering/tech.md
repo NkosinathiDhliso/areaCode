@@ -107,9 +107,85 @@ Amplify builds from git, so local changes need a push to take effect.
 
 ## Environment variables
 
-- Backend (Lambda): AREA_CODE_ENV, table names, Cognito pool IDs + client IDs, S3
-  bucket, SQS URLs, QR HMAC secret, VAPID keys, consent version.
-- Frontend (Amplify): VITE_API_URL, VITE_WEBSOCKET_URL, VITE_VAPID_PUBLIC_KEY.
+These lists are the source of truth the closure checks compare against:
+`scripts/check-table-closure.mjs` (backend table env vs Terraform IAM) and
+`scripts/check-amplify-env-closure.mjs` (used `VITE_*` keys vs the keys
+`update-all-amplify-apps.ps1` provisions). Keep them in sync when a var is added
+or removed. Required prod vars are validated at startup and crash on absence; no
+masking defaults (see `no-fallbacks-no-legacy.md`).
+
+### Backend (Lambda), consumed via `requireEnv` / `process.env`
+
+- Environment and build: `AREA_CODE_ENV`, `AREA_CODE_FORCE_LIVE` (dev-only live
+  override), `AWS_REGION`, `AREA_CODE_BUILD_SHA` (git sha baked at
+  `build:lambda`, returned by `GET /health` as `commit`), `PORT` (local server
+  only).
+- DynamoDB table names (one per `TableNames` accessor in
+  `shared/db/dynamodb.ts`): `USERS_TABLE`, `NODES_TABLE`, `CHECKINS_TABLE`,
+  `REWARDS_TABLE`, `BUSINESSES_TABLE`, `APP_DATA_TABLE`,
+  `MUSIC_SCHEDULES_TABLE`, `PRESENCE_TABLE`. Plus `CONNECTIONS_TABLE`
+  (websocket-connections; used by the broadcast and websocket handlers, not a
+  `TableNames` accessor).
+- Cognito, per pool ID and client ID for all four pools:
+  `AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID` / `..._CONSUMER_CLIENT_ID`,
+  `..._BUSINESS_USER_POOL_ID` / `..._BUSINESS_CLIENT_ID`,
+  `..._STAFF_USER_POOL_ID` / `..._STAFF_CLIENT_ID`,
+  `..._ADMIN_USER_POOL_ID` / `..._ADMIN_CLIENT_ID`.
+- Media storage: `AREA_CODE_S3_MEDIA_BUCKET`.
+- Async queues and invokes: `AREA_CODE_REPORT_QUEUE_URL`,
+  `AREA_CODE_REWARD_QUEUE_URL`, `AREA_CODE_CAMPAIGN_SEND_QUEUE_URL`,
+  `AREA_CODE_CAMPAIGN_DISPATCHER_FUNCTION` (campaign dispatcher Lambda name).
+- Real-time: `WEBSOCKET_ENDPOINT` (API Gateway management endpoint for fan-out).
+- Secrets and signing: `AREA_CODE_QR_HMAC_SECRET` (required in prod),
+  `AREA_CODE_CAMPAIGN_UNSUB_SECRET` (falls back to the QR HMAC secret),
+  `AREA_CODE_ANONYMIZATION_SALT`.
+- Web Push (VAPID): `AREA_CODE_VAPID_PUBLIC_KEY`, `AREA_CODE_VAPID_PRIVATE_KEY`,
+  `AREA_CODE_VAPID_SUBJECT`.
+- Consent: `AREA_CODE_CONSENT_VERSION` (required in prod).
+- Email and app URLs: `AREA_CODE_FROM_EMAIL`, `AREA_CODE_WEB_URL`,
+  `AREA_CODE_BUSINESS_URL`, `BUSINESS_APP_URL`.
+- Payments (Yoco): `YOCO_DEV_SECRET_KEY`, `YOCO_PROD_SECRET_KEY`,
+  `YOCO_WEBHOOK_SECRET` (required outside dev).
+- Music streaming (Spotify): `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`,
+  `SPOTIFY_REDIRECT_URI`.
+- Music streaming (Apple Music): `APPLE_MUSIC_TEAM_ID`, `APPLE_MUSIC_KEY_ID`,
+  `APPLE_MUSIC_PRIVATE_KEY`.
+- Geocoding: `MAPBOX_TOKEN` (falls back to `VITE_MAPBOX_TOKEN`).
+- Check-in: `CHECKIN_PROXIMITY_MODE`.
+
+### Frontend (Amplify), provisioned by `update-all-amplify-apps.ps1`
+
+Every `import.meta.env.VITE_*` key read in `apps/` or `packages/` for the apps
+that read it:
+
+- Core: `VITE_API_URL`, `VITE_WEBSOCKET_URL`, `VITE_MAPBOX_TOKEN`,
+  `VITE_CDN_URL` (Media_CDN), `VITE_STAFF_URL`, `VITE_VAPID_PUBLIC_KEY`.
+- RUM (CloudWatch real user monitoring): `VITE_RUM_APP_MONITOR_ID`,
+  `VITE_RUM_IDENTITY_POOL_ID`, `VITE_RUM_REGION`.
+- Cognito Hosted UI domain, per portal: `VITE_COGNITO_HOSTED_UI_DOMAIN`
+  (consumer), `VITE_COGNITO_HOSTED_UI_DOMAIN_BUSINESS`,
+  `VITE_COGNITO_HOSTED_UI_DOMAIN_STAFF`, `VITE_COGNITO_HOSTED_UI_DOMAIN_ADMIN`.
+- Cognito client ID, per portal: `VITE_COGNITO_CLIENT_ID_CONSUMER`,
+  `VITE_COGNITO_CLIENT_ID_BUSINESS`, `VITE_COGNITO_CLIENT_ID_STAFF`,
+  `VITE_COGNITO_CLIENT_ID_ADMIN`.
+
+### Frontend build-time and dev-only (read in code, not Amplify-managed)
+
+These are read in the frontend but are deliberately not Amplify branch vars, so
+they are allowlisted in `check-amplify-env-closure.mjs` rather than provisioned:
+
+- `VITE_GIT_SHA`: build-time define injected at `vite build` for RUM release
+  tagging.
+- `VITE_DEV_MOCK`: dev-only mock toggle, never set on a production branch.
+- `VITE_APP_SHARE_URL`: optional share deep-link override with a hardcoded prod
+  default, so unset is correct.
+- `VITE_FLAG_*`: dynamically built feature-flag keys
+  (`VITE_FLAG_LIVE_VIBE_ON_MAP`, `VITE_FLAG_LIVE_VIBE_DECLARATION`), read as a
+  dev/runtime override that defaults to false.
+
+`VITE_SOCKET_URL` is retired: the websocket client reads `VITE_WEBSOCKET_URL`
+only. Do not reintroduce it.
+
 - `DEV_MODE` is only true when `AREA_CODE_ENV === 'dev'` and
   `AREA_CODE_FORCE_LIVE` is not set. All synthetic/hardcoded data must sit behind
   a `DEV_MODE` guard. No mock data or mock fallbacks in production.

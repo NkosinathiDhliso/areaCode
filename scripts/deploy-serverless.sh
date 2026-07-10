@@ -36,7 +36,9 @@ if [ "$SKIP_TERRAFORM" != "true" ]; then
     echo "[2/5] Running Terraform apply..."
     cd "$INFRA_DIR"
     terraform init -input=false
-    terraform apply -auto-approve -var="git_sha=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+    # Release commit is baked into the Lambda bundle at build:lambda time
+    # (esbuild define -> GET /health `commit`); no git_sha var needed.
+    terraform apply -auto-approve
 
     API_ENDPOINT=$(terraform output -raw api_endpoint)
     WS_ENDPOINT=$(terraform output -raw websocket_api_endpoint 2>/dev/null || echo "")

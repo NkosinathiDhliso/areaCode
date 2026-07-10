@@ -33,14 +33,6 @@ locals {
   env = "dev"
 }
 
-# Declared for parity with prod: deploy-serverless.ps1 passes -var git_sha for
-# every environment. Dev does not wire it anywhere yet.
-variable "git_sha" {
-  description = "Git commit SHA for release tracking"
-  type        = string
-  default     = "unknown"
-}
-
 # --- VPC (kept for Lambda VPC access — VPC itself is free) ---
 module "vpc" {
   source             = "../../modules/vpc"
@@ -161,6 +153,15 @@ module "s3_media" {
     "https://master.d166bb81tg4k61.amplifyapp.com",
     "https://master.d1ay6jict0ql9w.amplifyapp.com",
   ]
+}
+
+# --- Media CDN (CloudFront in front of the private media bucket) ---
+module "media_cdn" {
+  source                      = "../../modules/cdn"
+  env                         = local.env
+  bucket_id                   = module.s3_media.bucket_id
+  bucket_arn                  = module.s3_media.bucket_arn
+  bucket_regional_domain_name = module.s3_media.bucket_regional_domain_name
 }
 
 # =============================================================================
@@ -896,6 +897,17 @@ module "lambda_websocket" {
   environment_variables = {
     AREA_CODE_ENV     = local.env
     CONNECTIONS_TABLE = "area-code-${local.env}-websocket-connections"
+    # Cognito pool/client IDs so $connect can verify bearer tokens. Mirrors the
+    # API Lambda block's sources exactly (verifyBearerToken/getPoolConfig read
+    # these lazily; fail-closed if absent). Without them the socket 502s.
+    AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID = module.cognito_consumer.user_pool_id
+    AREA_CODE_COGNITO_CONSUMER_CLIENT_ID    = module.cognito_consumer.client_id
+    AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID = module.cognito_business.user_pool_id
+    AREA_CODE_COGNITO_BUSINESS_CLIENT_ID    = module.cognito_business.client_id
+    AREA_CODE_COGNITO_STAFF_USER_POOL_ID    = module.cognito_staff.user_pool_id
+    AREA_CODE_COGNITO_STAFF_CLIENT_ID       = module.cognito_staff.client_id
+    AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
+    AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
   }
 }
 
@@ -939,13 +951,15 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
         aws_dynamodb_table.businesses.arn,
         aws_dynamodb_table.app_data.arn,
         aws_dynamodb_table.presence.arn,
+        aws_dynamodb_table.music_schedules.arn,
         "${aws_dynamodb_table.users.arn}/index/*",
         "${aws_dynamodb_table.nodes.arn}/index/*",
         "${aws_dynamodb_table.checkins.arn}/index/*",
         "${aws_dynamodb_table.rewards.arn}/index/*",
         "${aws_dynamodb_table.businesses.arn}/index/*",
         "${aws_dynamodb_table.app_data.arn}/index/*",
-        "${aws_dynamodb_table.presence.arn}/index/*"
+        "${aws_dynamodb_table.presence.arn}/index/*",
+        "${aws_dynamodb_table.music_schedules.arn}/index/*"
       ]
     }]
   })
@@ -1525,6 +1539,10 @@ output "cognito_admin_pool_id" {
 
 output "media_bucket" {
   value = module.s3_media.bucket_name
+}
+
+output "media_cdn_url" {
+  value = module.media_cdn.media_cdn_url
 }
 
 output "vpc_id" {

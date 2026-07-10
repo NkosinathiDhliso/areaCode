@@ -10,6 +10,7 @@
  */
 
 import { Spinner } from '@area-code/shared/components/Spinner'
+import { trackEvent } from '@area-code/shared/lib/usageEvents'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -31,6 +32,9 @@ export function FirstGetPrompt({ onNavigate }: FirstGetPromptProps) {
       setError(t('auth.firstGet.tokenInvalid', 'Codes are exactly 8 characters.'))
       return
     }
+    // First-Get funnel: a complete token was entered and submitted on the claim
+    // screen (audit-gap-closure R4.1). Beacon gates on consent (R4.2).
+    trackEvent('firstget_token_entered')
     setLoading(true)
     setError(null)
     try {

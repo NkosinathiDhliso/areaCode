@@ -1,15 +1,82 @@
 # Deployment Checklist
 
-## Pre-deploy
+## Release Ritual
 
-Run these locally before pushing to `master`:
+This is the single source of truth for a full prod release. It is the exact,
+ordered sequence that takes a green working tree to a verified prod. Run the
+steps in this order. Every other deploy doc links here rather than restating the
+sequence. The supporting sections below cover script flags and one-off paths,
+not ordering, so read this list first.
+
+Order matters at each step: a frontend push auto-deploys via Amplify, but the
+backend deploys only when `deploy-serverless.ps1` runs, so the backend must
+follow the push, and the go-live check must follow the backend.
+
+1. Pre-flight gates, all green before proceeding. For infra changes also run
+   `terraform fmt -check -recursive infra/` and `terraform validate` in the
+   changed environment.
+
+   ```powershell
+   pnpm typecheck
+   pnpm test
+   pnpm lint
+   pnpm guard:serverless
+   ```
+
+2. Commit the working tree in reviewable commits. If any in-flight fix is
+   incomplete at ship time, list it by name in the commit body as known-pending
+   rather than leaving it silent.
+
+   ```powershell
+   git add -A
+   git commit
+   ```
+
+3. Push `master`, then wait for all four Amplify apps (web, business, staff,
+   admin) to report SUCCEED on the pushed sha before continuing. A partial set
+   of green builds is not done.
+
+   ```powershell
+   git push origin master
+   ```
+
+4. Set or refresh Amplify env vars only if any `VITE_*` key changed. The script
+   merges managed keys over the current app env, so it is safe to run when
+   nothing changed. It now manages the Cognito Hosted UI domain and client-id
+   keys, `VITE_CDN_URL`, and `VITE_VAPID_PUBLIC_KEY` in addition to the API,
+   WebSocket, Mapbox, and RUM keys. Rebuild the apps that gained a key so the
+   new value is baked into the bundle.
+
+   ```powershell
+   ./scripts/update-all-amplify-apps.ps1
+   ```
+
+5. Deploy the backend (build, terraform apply, Lambda code push). Review the
+   `terraform plan` the script prints before you confirm the apply. Any
+   unexpected destroy is a stop.
+
+   ```powershell
+   ./scripts/deploy-serverless.ps1 -Environment prod
+   ```
+
+6. Run the go-live check with a fresh authenticated WebSocket token. All gates
+   must pass, including Sha_Parity (the API `/health` `commit` matches the
+   latest successful Amplify build sha on master), the authenticated WebSocket
+   probe, and the table-closure and Amplify-env-closure checks. Without
+   `-WsToken` the authenticated socket probe reports SKIPPED, never PASS.
+
+   ```powershell
+   ./scripts/go-live-check.ps1 -Environment prod -WsToken <fresh token>
+   ```
+
+## Pre-deploy build check (optional, reference)
+
+The Release Ritual gates in step 1 are the required checks. As an extra local
+guard before pushing, you can build every frontend the way Amplify will, so a
+build break surfaces on your machine instead of in the Amplify job:
 
 ```powershell
 pnpm install
-pnpm guard:serverless               # must exit 0
-pnpm typecheck                      # must exit 0
-pnpm lint                           # must exit 0
-pnpm test                           # must pass
 pnpm --filter backend build:lambda  # must produce backend/dist/{lambda,websocket,workers}
 pnpm --filter web build
 pnpm --filter business build
@@ -17,17 +84,12 @@ pnpm --filter staff build
 pnpm --filter admin build
 ```
 
-If any of the frontend builds fails, the Amplify build will also fail — fix before pushing.
+If any frontend build fails, the Amplify build will also fail, so fix it before pushing.
 
-## Deploy Backend
+## Deploy Backend (script flags, reference)
 
-Full deploy (build + terraform apply + Lambda code push):
-
-```powershell
-./scripts/deploy-serverless.ps1 -Environment prod
-```
-
-Options:
+Step 5 of the Release Ritual runs the full deploy (build + terraform apply +
+Lambda code push). These flags narrow what it does:
 
 | Flag                | Effect                                     |
 | ------------------- | ------------------------------------------ |
@@ -112,19 +174,17 @@ Post this in the deploy record for the window:
 
 Revert `AREA_CODE_CONSENT_VERSION` from `v1.1` back to `v1.0` and re-apply infra only. This stops new re-consent prompts immediately. Consents already recorded at `v1.1` are harmless: they are simply a newer accepted version and require no cleanup.
 
-## Deploy Frontend
+## Deploy Frontend (reference)
 
-Amplify is wired to the `master` branch of each app. Pushing to `master` triggers a build.
-
-To trigger manual rebuilds (e.g. to pick up new env vars):
-
-```powershell
-./scripts/update-all-amplify-apps.ps1
-```
-
-If you changed the API URL or any `VITE_*` env var that Amplify reads, run `update-amplify-api-url.ps1` first, then trigger the rebuild.
+Amplify is wired to the `master` branch of each app. Pushing to `master` (step 3
+of the Release Ritual) triggers a build. Env-var provisioning and rebuilds are
+step 4 of the ritual, via `./scripts/update-all-amplify-apps.ps1`. This section
+is background, not a separate sequence.
 
 ## Post-deploy Verification
+
+The Release Ritual ends with the go-live check (step 6), which is the gate. These
+manual spot checks are a quick supplement, not a replacement for it:
 
 ```bash
 # 1. Health endpoint
@@ -145,6 +205,51 @@ Portal smoke checks:
 - <https://business.areacode.co.za> — login lands on the venue editor
 - <https://staff.areacode.co.za> — scan/entry screen loads
 - <https://admin.areacode.co.za> — dashboard loads
+
+## Load Smoke (dev, manual only)
+
+`scripts/load-smoke.js` is a k6 script that loads the dev API on the consumer hot path: the city nodes read and a check-in burst. It is manual only, never wired to push or PR, to respect the dev budget.
+
+It runs two scenarios:
+
+- `nodes_read`: `GET /v1/nodes/{city}` at 50 requests/sec for 2 minutes.
+- `checkin_burst`: `POST /v1/check-in` at 10 requests/sec for 30 seconds with a dev consumer token.
+
+Pass thresholds (the run fails if any is breached):
+
+- `http_req_duration` p95 < 800ms on each scenario.
+- `http_req_failed` rate < 1% on the public nodes read (it must return 200).
+- `server_errors` rate < 1% overall, counting only 5xx and network/timeout errors. The check-in route is rate limited to 10 requests per 60s per user, so a single-token burst is mostly 429 by design. Rate limit 429s and auth 401s are the server responding correctly under load, not faults, so they are not counted as errors.
+
+### Run locally
+
+Install k6 (`https://grafana.com/docs/k6/latest/set-up/install-k6/`), then point it at the dev API. Never point it at prod: the check-in burst writes real check-ins and consumes the prod budget.
+
+```bash
+k6 run \
+  -e BASE_URL=https://<dev-api-host> \
+  -e K6_DEV_TOKEN=<consumer bearer JWT for the dev pool> \
+  -e CHECKIN_NODE_ID=<a dev node id> \
+  scripts/load-smoke.js
+```
+
+Environment variables:
+
+| Var                | Required | Purpose                                                              |
+| ------------------ | -------- | -------------------------------------------------------------------- |
+| `BASE_URL`         | yes      | Dev API base, no trailing slash. No default, so dev is never guessed |
+| `K6_DEV_TOKEN`     | yes      | Consumer bearer token for the dev pool. Never hardcoded              |
+| `CHECKIN_NODE_ID`  | yes      | Dev node id for the check-in burst                                   |
+| `CHECKIN_CITY`     | no       | City slug for the nodes read (default `johannesburg`)                |
+| `CHECKIN_QR_TOKEN` | no       | QR token for the node; not needed on dev (check-in short-circuits)   |
+
+Without `K6_DEV_TOKEN` the check-in requests return 401 and the scenario honestly reports an unauthenticated result rather than faking success.
+
+### Run via GitHub Actions
+
+`.github/workflows/load-smoke.yml` runs the same script on `workflow_dispatch` only. Trigger it from the Actions tab. It reads `BASE_URL` from the `base_url` input or the `LOAD_SMOKE_BASE_URL` repository variable, the node id from the `checkin_node_id` input or the `LOAD_SMOKE_NODE_ID` variable, and `K6_DEV_TOKEN` from the repository secret of the same name. It is not on any push or schedule trigger, so it never runs automatically.
+
+Record the first run's results in `docs/GO_LIVE_CHECK_RESULT.md`.
 
 ## Rollback
 

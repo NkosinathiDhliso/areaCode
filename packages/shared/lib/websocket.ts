@@ -297,17 +297,10 @@ function getWebSocketUrl(): string | null {
     if (typeof import.meta !== 'undefined') {
       const env = (import.meta as unknown as Record<string, Record<string, string>>).env
 
-      // VITE_WEBSOCKET_URL must point to a WebSocket API Gateway (wss://)
-      // VITE_SOCKET_URL is the legacy fallback (only works for local dev with Socket.io)
+      // VITE_WEBSOCKET_URL must point to a WebSocket API Gateway (wss://).
+      // It is the single source of truth for the socket origin; when unset the
+      // client is a no-op (getWebSocket returns a disabled manager).
       url = env?.VITE_WEBSOCKET_URL ?? null
-
-      // Fall back to VITE_SOCKET_URL only in local dev (localhost)
-      if (!url) {
-        const fallback = env?.VITE_SOCKET_URL
-        if (fallback && (fallback.includes('localhost') || fallback.includes('127.0.0.1'))) {
-          url = fallback
-        }
-      }
     }
   } catch {
     /* import.meta unavailable (RN) */

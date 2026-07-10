@@ -1,4 +1,6 @@
+import { PhotoUnavailable } from '@area-code/shared/components/PhotoUnavailable'
 import { api } from '@area-code/shared/lib/api'
+import { mediaUrl } from '@area-code/shared/lib/mediaUrl'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 import type { Node } from '@area-code/shared/types'
 import { useEffect, useRef, useState } from 'react'
@@ -99,12 +101,7 @@ export function NodeEditorPanel() {
     setEditLng(undefined)
 
     // Seed header image preview
-    const cdnUrl = import.meta.env['VITE_CDN_URL'] as string | undefined
-    if (selected.headerImageKey && cdnUrl) {
-      setHeaderImageUrl(`${cdnUrl}/${selected.headerImageKey}`)
-    } else {
-      setHeaderImageUrl(null)
-    }
+    setHeaderImageUrl(mediaUrl(selected.headerImageKey))
 
     // Seed Instagram handle
     setInstagramHandle(selected.instagramHandle ?? '')
@@ -218,10 +215,7 @@ export function NodeEditorPanel() {
       } catch {
         /* keep raw key */
       }
-      const cdnUrl = import.meta.env['VITE_CDN_URL'] as string | undefined
-      if (cdnUrl) {
-        setHeaderImageUrl(`${cdnUrl}/${finalKey}`)
-      }
+      setHeaderImageUrl(mediaUrl(finalKey))
       const updated = { ...selected, headerImageKey: finalKey }
       setSelected(updated)
       setNodes(nodes.map((node) => (node.id === selected.id ? updated : node)))
@@ -235,7 +229,10 @@ export function NodeEditorPanel() {
   }
 
   async function handlePhotoDelete() {
-    if (!selected || !headerImageUrl) return
+    // Gate on the stored key, not the resolved preview URL: a photo uploaded
+    // while the CDN base is unset has a key but no previewable URL, and the
+    // owner must still be able to remove it.
+    if (!selected || !selected.headerImageKey) return
     setPhotoDeleting(true)
     setPhotoMessage(null)
     try {
@@ -252,6 +249,11 @@ export function NodeEditorPanel() {
       setPhotoDeleting(false)
     }
   }
+
+  // Whether the selected venue has a stored photo key. Distinct from
+  // `headerImageUrl` (the resolved preview URL): a key can exist while the URL
+  // is null because the CDN base is unset, which drives the unavailable state.
+  const hasHeaderKey = typeof selected?.headerImageKey === 'string' && selected.headerImageKey.trim() !== ''
 
   if (loading) {
     return (
@@ -368,17 +370,22 @@ export function NodeEditorPanel() {
                 >
                   {headerImageUrl ? (
                     <img src={headerImageUrl} alt="Header preview" className="w-full h-full object-cover" />
+                  ) : hasHeaderKey ? (
+                    // Photo exists but the CDN base is unset, so it cannot be
+                    // previewed. Show the honest unavailable state rather than
+                    // "Add business photo" (R5.3, no silent success-without-preview).
+                    <PhotoUnavailable className="absolute inset-0" />
                   ) : (
                     <span className="absolute inset-0 flex items-center justify-center px-6 text-center text-[var(--text-muted)] text-sm">
                       Add business photo
                     </span>
                   )}
-                  {(photoUploading || headerImageUrl) && (
+                  {(photoUploading || hasHeaderKey) && (
                     <span className="absolute inset-x-0 bottom-0 bg-black/55 text-white text-xs font-medium py-2">
                       {photoUploading ? 'Uploading...' : 'Replace'}
                     </span>
                   )}
-                  {headerImageUrl && (
+                  {hasHeaderKey && (
                     <span
                       role="button"
                       tabIndex={0}

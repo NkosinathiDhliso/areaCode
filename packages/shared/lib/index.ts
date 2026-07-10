@@ -13,6 +13,7 @@ export {
   getCurrentPosition,
 } from './platform'
 export { haversineDistance, isWithinRadius } from './geoUtils'
+export { mediaUrl } from './mediaUrl'
 export { formatZAR, formatRelativeTime, formatLocalTime, formatLocalDate, formatCountdown, toE164 } from './formatters'
 export * from './featureGating'
 export { computeDimensionScores, resolveArchetype, matchesArchetype } from './archetypeResolver'
@@ -51,3 +52,14 @@ export {
   type RapidTapOptions,
   type RapidTapDetector,
 } from './rapidTap'
+export {
+  trackEvent,
+  flushEvents,
+  setAnalyticsOptIn,
+  isAnalyticsOptedIn,
+  resetUsageBeaconForTest,
+  USAGE_EVENT_NAMES,
+  isUsageEventName,
+  type UsageEventName,
+  type UsageEventProps,
+} from './usageEvents'

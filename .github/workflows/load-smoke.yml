@@ -1,0 +1,53 @@
+name: Load Smoke (dev)
+# Manual only. Never runs on push or PR, to respect the dev budget (R6.3).
+# Exercises the dev API city nodes read and a check-in burst with pass
+# thresholds on p95 latency and error rate (R6.2). See scripts/load-smoke.js
+# and docs/DEPLOY.md.
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Dev API base URL (no trailing slash). Must be dev, never prod.'
+        required: false
+        default: ''
+        type: string
+      checkin_node_id:
+        description: 'Dev node id for the check-in burst'
+        required: false
+        default: ''
+        type: string
+      checkin_city:
+        description: 'City slug for the nodes read'
+        required: false
+        default: johannesburg
+        type: string
+
+jobs:
+  load-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve BASE_URL
+        id: target
+        env:
+          INPUT_BASE_URL: ${{ github.event.inputs.base_url }}
+          VAR_BASE_URL: ${{ vars.LOAD_SMOKE_BASE_URL }}
+        run: |
+          BASE_URL="${INPUT_BASE_URL:-$VAR_BASE_URL}"
+          if [ -z "$BASE_URL" ]; then
+            echo "::error::No dev API base URL. Provide the base_url input or set the LOAD_SMOKE_BASE_URL repository variable."
+            exit 1
+          fi
+          echo "base_url=$BASE_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Run load smoke
+        env:
+          BASE_URL: ${{ steps.target.outputs.base_url }}
+          K6_DEV_TOKEN: ${{ secrets.K6_DEV_TOKEN }}
+          CHECKIN_NODE_ID: ${{ github.event.inputs.checkin_node_id || vars.LOAD_SMOKE_NODE_ID }}
+          CHECKIN_CITY: ${{ github.event.inputs.checkin_city }}
+        run: k6 run scripts/load-smoke.js

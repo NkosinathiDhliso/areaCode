@@ -45,7 +45,9 @@ export async function getNodesByCitySlug(citySlug: string) {
   // the single removal mechanism, so we intentionally do not resolve the tier
   // here — doing so would create a second, drifting removal path.
   // Build a map of business-owned nodes whose business is on a paid tier.
-  // Nodes without a businessId (legacy/unclaimed) are always visible.
+  // Only paid-tier venues join the consumer map. Orphan/legacy nodes (no
+  // businessId) and free-tier nodes are excluded. Rule recorded in
+  // docs/decisions/map-membership.md.
   const businessIds = Array.from(
     new Set(items.map((n) => n['businessId']).filter((b): b is string => typeof b === 'string' && b.length > 0)),
   )

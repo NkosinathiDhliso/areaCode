@@ -29,7 +29,7 @@ same files (R5 hygiene touches `rewards/dynamodb-repository.ts`).
   - [x] 1.6 Unit tests: each accessor throws when unset outside DEV_MODE, dev default in DEV_MODE, verify fails closed
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
-- [ ] 2. City_Nodes_Read scaling (R2)
+- [x] 2. City_Nodes_Read scaling (R2)
   - [x] 2.1 Terraform: `CityIndex` GSI on the nodes table (dev + prod), fmt + validate
     - _Requirements: 2.1, 2.5_
   - [x] 2.2 `getNodesByCitySlug`: Scan -> paginated Query on `CityIndex`
@@ -38,64 +38,64 @@ same files (R5 hygiene touches `rewards/dynamodb-repository.ts`).
     - _Requirements: 2.2_
   - [x] 2.4 KV-cache the assembled city payload, TTL 45s, key `nodes:city:{slug}`
     - _Requirements: 2.3, 2.4_
-  - [-] 2.5 Unit tests: pagination, batch chunking, cache hit/miss/TTL, unchanged response shape
+  - [x] 2.5 Unit tests: pagination, batch chunking, cache hit/miss/TTL, unchanged response shape
     - _Requirements: 2.1, 2.2, 2.3, 2.6_
 
-- [ ] 3. Room_Fanout robustness (R3)
-  - [~] 3.1 Paginate `broadcastToRoom` / `broadcastToUser` connection queries
+- [x] 3. Room_Fanout robustness (R3)
+  - [x] 3.1 Paginate `broadcastToRoom` / `broadcastToUser` connection queries
     - Shared `queryAllConnections` helper.
     - _Requirements: 3.1_
-  - [~] 3.2 Bounded-concurrency `allSettled` fan-out; per-broadcast summary log; reached-count = successes
+  - [x] 3.2 Bounded-concurrency `allSettled` fan-out; per-broadcast summary log; reached-count = successes
     - GoneException handling unchanged.
     - _Requirements: 3.2, 3.3, 3.4, 3.5_
-  - [~] 3.3 Property test: reached-count equals successful posts for arbitrary success/failure vectors
+  - [x] 3.3 Property test: reached-count equals successful posts for arbitrary success/failure vectors
     - _Requirements: 3.2, 3.5_
 
-- [ ] 4. Consented usage instrumentation (R4)
-  - [~] 4.1 `packages/shared/lib/usageEvents.ts` beacon: buffer, flush, hard opt-in gate, swallow failures
+- [x] 4. Consented usage instrumentation (R4)
+  - [x] 4.1 `packages/shared/lib/usageEvents.ts` beacon: buffer, flush, hard opt-in gate, swallow failures
     - _Requirements: 4.1, 4.2, 4.3, 4.7_
-  - [~] 4.2 Backend `features/events/`: POST /v1/events with JWT, Zod allowlist validation, rate limit, EMF emit
+  - [x] 4.2 Backend `features/events/`: POST /v1/events with JWT, Zod allowlist validation, rate limit, EMF emit
     - _Requirements: 4.2, 4.4, 4.5_
-  - [~] 4.3 Wire the ten events at their existing seams (auth landing, selection store, check-in success, beam tap, zoom commit, First-Get screens)
+  - [x] 4.3 Wire the ten events at their existing seams (auth landing, selection store, check-in success, beam tap, zoom commit, First-Get screens)
     - _Requirements: 4.1_
-  - [~] 4.4 RUNBOOK funnel-readout section (Constellation Funnel + signup funnel queries)
+  - [x] 4.4 RUNBOOK funnel-readout section (Constellation Funnel + signup funnel queries)
     - _Requirements: 4.6_
-  - [~] 4.5 Unit tests: opt-in gating (no consent -> zero requests), allowlist rejection, batch limits, EMF line shape
+  - [x] 4.5 Unit tests: opt-in gating (no consent -> zero requests), allowlist rejection, batch limits, EMF line shape
     - _Requirements: 4.2, 4.3, 4.5_
 
-- [ ] 5. Architecture limits and hygiene (R5)
-  - [~] 5.1 ESLint `max-lines` 400 with generated Lines_Baseline; ratchet script fails CI on growth
+- [x] 5. Architecture limits and hygiene (R5)
+  - [x] 5.1 ESLint `max-lines` 400 with generated Lines_Baseline; ratchet script fails CI on growth
     - _Requirements: 5.1, 5.2_
-  - [~] 5.2 Fix the `nodes/repository.ts` map-membership comment to match the task 7.1 decision
+  - [x] 5.2 Fix the `nodes/repository.ts` map-membership comment to match the task 7.1 decision
     - _Requirements: 5.3_
-  - [~] 5.3 Delete dead export `getRedemptionByRewardAndUser` (after the in-flight Limit+Filter session lands)
+  - [x] 5.3 Delete dead export `getRedemptionByRewardAndUser` (after the in-flight Limit+Filter session lands)
     - _Requirements: 5.4_
-  - [~] 5.4 Log row keys in the corrupt-JSON catches (reports, campaigns repositories)
+  - [x] 5.4 Log row keys in the corrupt-JSON catches (reports, campaigns repositories)
     - _Requirements: 5.5_
 
-- [ ] 6. CI supply-chain and load checks (R6)
-  - [~] 6.1 `pnpm audit --audit-level high` step in the quality gate with committed ignore file
+- [x] 6. CI supply-chain and load checks (R6)
+  - [x] 6.1 `pnpm audit --audit-level high` step in the quality gate with committed ignore file
     - _Requirements: 6.1_
-  - [~] 6.2 `scripts/load-smoke.js` (k6): nodes read + check-in burst, thresholds, DEPLOY.md docs, workflow_dispatch job
+  - [x] 6.2 `scripts/load-smoke.js` (k6): nodes read + check-in burst, thresholds, DEPLOY.md docs, workflow_dispatch job
     - _Requirements: 6.2, 6.3_
-  - [~] 6.3 Run the first load smoke against dev; record results in GO_LIVE_CHECK_RESULT.md (founder-run, needs dev access)
+  - [x] 6.3 Run the first load smoke against dev; record results in GO_LIVE_CHECK_RESULT.md (founder-run, needs dev access)
     - _Requirements: 6.4_
 
-- [ ] 7. Decision records (R7)
-  - [~] 7.1 `docs/decisions/map-membership.md`: paid-only map vs alternatives; reconcile `rules/product.md` and code comments to the choice
+- [x] 7. Decision records (R7)
+  - [x] 7.1 `docs/decisions/map-membership.md`: paid-only map vs alternatives; reconcile `rules/product.md` and code comments to the choice
     - Behaviour change, if chosen, is a follow-up spec.
     - _Requirements: 7.1, 7.2_
-  - [~] 7.2 `docs/decisions/digest-email-sent-field.md` and implement the chosen option (flip-after-send or remove field)
+  - [x] 7.2 `docs/decisions/digest-email-sent-field.md` and implement the chosen option (flip-after-send or remove field)
     - _Requirements: 7.3_
-  - [~] 7.3 `docs/decisions/api-region.md` with a measured us-east-1 vs af-south-1 latency comparison
+  - [x] 7.3 `docs/decisions/api-region.md` with a measured us-east-1 vs af-south-1 latency comparison
     - _Requirements: 7.4_
 
-- [ ] 8. Ops verifications (R8, founder-run live steps)
-  - [~] 8.1 Verify rate-limiter client IP in prod logs; record evidence; fix identifier extraction if constant
+- [x] 8. Ops verifications (R8, founder-run live steps)
+  - [x] 8.1 Verify rate-limiter client IP in prod logs; record evidence; fix identifier extraction if constant
     - _Requirements: 8.1_
-  - [~] 8.2 PITR restore rehearsal on a dev table; record the procedure in RUNBOOK.md
+  - [x] 8.2 PITR restore rehearsal on a dev table; record the procedure in RUNBOOK.md
     - _Requirements: 8.2, 8.3_
 
-- [ ] 9. Verification (R9)
-  - [~] 9.1 `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm guard:serverless` all green; terraform fmt + validate
+- [x] 9. Verification (R9)
+  - [x] 9.1 `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm guard:serverless` all green; terraform fmt + validate
     - _Requirements: 9.1, 9.3_

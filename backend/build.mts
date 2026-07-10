@@ -1,6 +1,25 @@
 import { build } from 'esbuild'
+import { execSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
+
+// Single source of truth for the deployed commit: the sha is baked into the
+// bundle here so `GET /health`'s `commit` reflects the code that is actually
+// running, not whenever terraform last ran. CI may pre-set AREA_CODE_BUILD_SHA;
+// otherwise we read HEAD. If git is genuinely absent (source tarball with no
+// .git) we stamp 'unknown' and warn loudly rather than mask the gap.
+function resolveBuildSha(): string {
+  const fromEnv = process.env.AREA_CODE_BUILD_SHA?.trim()
+  if (fromEnv) return fromEnv
+  try {
+    return execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim()
+  } catch {
+    console.warn('⚠ build:lambda could not resolve git sha; stamping "unknown"')
+    return 'unknown'
+  }
+}
+
+const buildSha = resolveBuildSha()
 
 const sharedBuildOptions = {
   bundle: true,
@@ -10,6 +29,10 @@ const sharedBuildOptions = {
   minify: true,
   sourcemap: true,
   treeShaking: true,
+  define: {
+    // Textually replaced into the bundle; app.ts reads it via dot access.
+    'process.env.AREA_CODE_BUILD_SHA': JSON.stringify(buildSha),
+  },
   external: [
     // AWS SDK v3 is provided in the Lambda runtime
     '@aws-sdk/*',
@@ -64,4 +87,6 @@ await Promise.all(
   ),
 )
 
-console.log(`✓ Built monolith Lambda + WebSocket Lambda + ${workers.length} worker Lambdas`)
+console.log(
+  `✓ Built monolith Lambda + WebSocket Lambda + ${workers.length} worker Lambdas (commit ${buildSha})`,
+)

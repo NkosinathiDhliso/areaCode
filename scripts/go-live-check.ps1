@@ -11,7 +11,14 @@
 # native stderr is not redirected with 2>&1.
 param(
     [string]$Environment = "prod",
-    [string]$Region = "us-east-1"
+    [string]$Region = "us-east-1",
+    # Sha_Parity + authenticated WebSocket gate (Deployment Parity R7.3). A
+    # fresh JWT (dev-issued or founder-supplied) for the authenticated $connect
+    # probe. Passed to $connect exactly as the frontend passes it: the `token`
+    # query param (packages/shared/lib/websocket.ts -> backend/src/lambdas/
+    # websocket.ts). When empty the authenticated probe is SKIPPED (reported
+    # WARN, never PASS); the unauthenticated handshake alone never gates.
+    [string]$WsToken = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,6 +32,13 @@ $RootDir = Split-Path $PSScriptRoot -Parent
 # Failure counter. Any [FAIL] increments this; the script exits 1 when it is
 # greater than zero. WARNs and MANUAL lines never change the exit code.
 $script:failures = 0
+
+# Sha_Parity state (Deployment Parity R7.2). The API build sha from GET /health
+# (set in the §2.1 block) and the latest SUCCEED Amplify master build sha
+# (captured in the §3.3 build-parity loop). Compared in the Sha_Parity check.
+$script:apiCommit = $null
+$script:amplifyMasterSha = $null
+$script:amplifyMasterShaSource = $null
 
 # Write-Check emits the one-line-per-check output contract:
 #   [PASS] name: observed
@@ -76,6 +90,10 @@ try {
     $health = Invoke-RestMethod -Uri "https://api.areacode.co.za/health"
     $observedStatus = $health.status
     $observedEnv = $health.env
+    # Capture the build sha (Deployment Parity R7.1) for the Sha_Parity check in
+    # the Amplify parity section below. Null/empty when the deployed artifact
+    # predates the /health `commit` field (itself a parity failure).
+    $script:apiCommit = $health.commit
     if ($observedStatus -eq "ok" -and $observedEnv -eq "prod") {
         Write-Check -Status "PASS" -Name "API health" -Detail "status=$observedStatus, env=$observedEnv"
     }
@@ -484,6 +502,18 @@ else {
                 $shortSha = $commitId.Substring(0, [Math]::Min(7, $commitId.Length))
             }
 
+            # Capture the latest SUCCEED master sha for the Sha_Parity check
+            # (Deployment Parity R7.2) - reuse this data rather than re-querying.
+            # All four apps build from the same master repo, so any SUCCEED
+            # master sha is the master build sha; prefer the web app when found.
+            if ($branch -eq "master" -and -not [string]::IsNullOrEmpty($commitId)) {
+                $isWebApp = $appName -match "web"
+                if ($null -eq $script:amplifyMasterSha -or $isWebApp) {
+                    $script:amplifyMasterSha = $commitId
+                    $script:amplifyMasterShaSource = "$appName ($branch)"
+                }
+            }
+
             $parity = Test-CommitParity -CommitId $commitId
             if ($parity -eq "ancestor") {
                 $detail = "SUCCEED at $shortSha (includes $fixCommit)"
@@ -501,6 +531,43 @@ else {
     }
 }
 
+# Sha_Parity (Deployment Parity R7.2): the API's build sha (GET /health
+# `.commit`, captured in §2.1) must match the latest SUCCEED Amplify master
+# build sha (captured in the §3.3 loop). A deployed prod artifact MUST carry a
+# real sha: a 'dev' or empty commit is a FAIL (the build-sha embed at
+# build:lambda time did not take, or a dev artifact reached prod). A genuine
+# mismatch (backend behind the pushed frontends, the July-2026 class) is a FAIL
+# printing both shas. Cannot-verify (no AWS master sha, or /health unreachable)
+# is a WARN. Full-vs-short shas compare by prefix (git HEAD is full 40 chars;
+# an Amplify commitId may be full or short).
+$healthCommit = $script:apiCommit
+if ([string]::IsNullOrEmpty($healthCommit) -or $healthCommit -eq "dev") {
+    $observed = "commit=$healthCommit"
+    if ([string]::IsNullOrEmpty($healthCommit)) { $observed = "commit=(absent)" }
+    $detail = "$observed (expected a real git sha; a prod artifact must carry AREA_CODE_BUILD_SHA)"
+    Write-Check -Status "FAIL" -Name "Sha_Parity" -Detail $detail
+}
+elseif ([string]::IsNullOrEmpty($script:amplifyMasterSha)) {
+    $shortHealth = $healthCommit.Substring(0, [Math]::Min(7, $healthCommit.Length))
+    $detail = "API commit=$shortHealth; no Amplify master SUCCEED sha available to compare (AWS unavailable or no successful build); not verified"
+    Write-Check -Status "WARN" -Name "Sha_Parity" -Detail $detail
+}
+else {
+    $a = $healthCommit.ToLower()
+    $b = $script:amplifyMasterSha.ToLower()
+    $shortHealth = $a.Substring(0, [Math]::Min(7, $a.Length))
+    $shortAmplify = $b.Substring(0, [Math]::Min(7, $b.Length))
+    $match = $a.StartsWith($b) -or $b.StartsWith($a)
+    if ($match) {
+        $detail = "API commit=$shortHealth matches Amplify master $shortAmplify ($script:amplifyMasterShaSource)"
+        Write-Check -Status "PASS" -Name "Sha_Parity" -Detail $detail
+    }
+    else {
+        $detail = "API commit=$shortHealth != Amplify master $shortAmplify ($script:amplifyMasterShaSource); backend is out of parity with the deployed frontends"
+        Write-Check -Status "FAIL" -Name "Sha_Parity" -Detail $detail
+    }
+}
+
 Write-Host ""
 
 # ── Backend end-to-end sweep (Task 9: read-only, us-east-1) ──────────────────
@@ -511,13 +578,17 @@ Write-Host ""
 # existing Write-Check, Invoke-AwsJson, $script:awsAvailable, $RootDir, $Region.
 Write-Host "Backend end-to-end sweep" -ForegroundColor Yellow
 
-# 9.1 WebSocket reachability: open a read-only handshake to the prod WebSocket
-# API Gateway URL and assert it reaches State=Open, then close immediately. The
-# $connect route has no authorizer, so an unauthenticated handshake is expected
-# to open. The URL is resolved WITHOUT hardcoding: AREA_CODE_WEBSOCKET_URL env
-# var, then VITE_WEBSOCKET_URL (the frontend var), then the prod Terraform
-# output `websocket_api_endpoint`. An unresolved URL is a WARN (cannot verify
-# locally), never a FAIL.
+# 9.1 WebSocket reachability (INFORMATIONAL ONLY - Deployment Parity R7.3):
+# open a read-only handshake to the prod WebSocket API Gateway URL and report
+# whether it reaches State=Open, then close immediately. The $connect route has
+# no authorizer, so an unauthenticated handshake opening proves only that the
+# endpoint is reachable - NOT that token verification works (the July-2026 502s
+# were a $connect that opened anonymously but 502'd on a real token because the
+# WS Lambda had no Cognito env). Per R7.3 this probe no longer counts as a
+# WebSocket PASS: every outcome here is a WARN. The authenticated probe below
+# (via -WsToken) is the real WebSocket gate. The URL is resolved WITHOUT
+# hardcoding: AREA_CODE_WEBSOCKET_URL env var, then VITE_WEBSOCKET_URL (the
+# frontend var), then the prod Terraform output `websocket_api_endpoint`.
 
 # Resolve-WebSocketUrl returns the wss URL string, or $null when unresolved.
 # Order: AREA_CODE_WEBSOCKET_URL, VITE_WEBSOCKET_URL, then `terraform output
@@ -569,7 +640,8 @@ else {
         $connectTask.Wait()
 
         if ($ws.State -eq [System.Net.WebSockets.WebSocketState]::Open) {
-            Write-Check -Status "PASS" -Name "WebSocket reachability" -Detail "handshake opened (State=Open) at $wsUrl"
+            $detail = "handshake opened (State=Open) at $wsUrl (reachability only; the authenticated probe via -WsToken is the WebSocket gate)"
+            Write-Check -Status "WARN" -Name "WebSocket reachability" -Detail $detail
 
             # Read-only probe: close the socket immediately.
             $closeCts = New-Object System.Threading.CancellationTokenSource
@@ -586,17 +658,128 @@ else {
             }
         }
         else {
-            Write-Check -Status "FAIL" -Name "WebSocket reachability" -Detail "connection state=$($ws.State) (expected Open) at $wsUrl"
+            $detail = "connection state=$($ws.State) (expected Open) at $wsUrl (reachability only; the authenticated probe via -WsToken is the WebSocket gate)"
+            Write-Check -Status "WARN" -Name "WebSocket reachability" -Detail $detail
         }
     }
     catch {
         $msg = $_.Exception.Message
         if ($null -ne $_.Exception.InnerException) { $msg = $_.Exception.InnerException.Message }
-        Write-Check -Status "FAIL" -Name "WebSocket reachability" -Detail "handshake failed: $msg"
+        $detail = "handshake failed: $msg (reachability only; the authenticated probe via -WsToken is the WebSocket gate)"
+        Write-Check -Status "WARN" -Name "WebSocket reachability" -Detail $detail
     }
     finally {
         if ($null -ne $ws) { $ws.Dispose() }
         if ($null -ne $cts) { $cts.Dispose() }
+    }
+}
+
+# 9.1b Authenticated WebSocket gate (Deployment Parity R7.3): the real
+# WebSocket PASS. Opens a $connect handshake carrying a real JWT exactly as the
+# frontend does - the `token` query param (packages/shared/lib/websocket.ts
+# getWebSocket -> backend/src/lambdas/websocket.ts handleConnect reads
+# queryStringParameters['token'] and verifies it via verifyBearerToken). A
+# valid token that opens proves the WS Lambda can verify tokens (it has the
+# Cognito env, the July-2026 502 root cause). Then it exercises a `joinroom`
+# echo: the client maps app-level room:join to the `joinroom` route key
+# (colons are illegal in route keys), the handler authorises the room and
+# replies with a `room:joined` message on the same socket. city:johannesburg is
+# allowed for any connection (isRoomAllowed, shared/socket/rooms.ts), so the
+# echo works for any pool's token. PASS requires BOTH open AND the echo.
+#
+# Without -WsToken the gate is SKIPPED: one WARN line (never PASS), so a green
+# run without a token is never mistaken for a verified socket.
+if ([string]::IsNullOrEmpty($WsToken)) {
+    $detail = "SKIPPED: no -WsToken supplied; pass -WsToken <fresh jwt> to gate the authenticated socket (never counts as PASS)"
+    Write-Check -Status "WARN" -Name "WebSocket authenticated probe" -Detail $detail
+}
+elseif ([string]::IsNullOrEmpty($wsUrl)) {
+    $detail = "SKIPPED: -WsToken supplied but WebSocket URL unresolved (set AREA_CODE_WEBSOCKET_URL or VITE_WEBSOCKET_URL, or run from a clone with terraform + prod state)"
+    Write-Check -Status "WARN" -Name "WebSocket authenticated probe" -Detail $detail
+}
+else {
+    # Append the token exactly as the client does (?token=...&citySlug=...).
+    $sep = "?"
+    if ($wsUrl.Contains("?")) { $sep = "&" }
+    $authUrl = "$wsUrl$sep" + "token=$WsToken&citySlug=johannesburg"
+
+    $aws = $null
+    $acts = $null
+    try {
+        $aws = New-Object System.Net.WebSockets.ClientWebSocket
+        $acts = New-Object System.Threading.CancellationTokenSource
+        $acts.CancelAfter(10000)
+        $auri = New-Object System.Uri($authUrl)
+
+        # A rejected token (401 at $connect) makes ConnectAsync throw; only a
+        # verified token reaches State=Open.
+        $aconnect = $aws.ConnectAsync($auri, $acts.Token)
+        $aconnect.Wait()
+
+        if ($aws.State -ne [System.Net.WebSockets.WebSocketState]::Open) {
+            $detail = "authenticated handshake did not open (state=$($aws.State)); token rejected or endpoint down"
+            Write-Check -Status "FAIL" -Name "WebSocket authenticated probe" -Detail $detail
+        }
+        else {
+            # Send a joinroom for the public city room and await the echo.
+            $joinMsg = '{"action":"joinroom","payload":{"room":"city:johannesburg"}}'
+            $sendBytes = [System.Text.Encoding]::UTF8.GetBytes($joinMsg)
+            $sendSegment = New-Object System.ArraySegment[byte] -ArgumentList (, $sendBytes)
+            $sendTask = $aws.SendAsync($sendSegment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $acts.Token)
+            $sendTask.Wait()
+
+            # Receive the reply (bounded by the same 10s token). The handler
+            # replies with {"type":"room:joined","payload":{"room":...}}.
+            $recvBytes = New-Object byte[] 8192
+            $recvSegment = New-Object System.ArraySegment[byte] -ArgumentList (, $recvBytes)
+            $recvTask = $aws.ReceiveAsync($recvSegment, $acts.Token)
+            $recvTask.Wait()
+            $recvResult = $recvTask.Result
+            $replyText = [System.Text.Encoding]::UTF8.GetString($recvBytes, 0, $recvResult.Count)
+
+            $echoOk = $false
+            try {
+                $reply = $replyText | ConvertFrom-Json
+                if ($null -ne $reply -and $reply.type -eq "room:joined") { $echoOk = $true }
+            }
+            catch {
+                $echoOk = $false
+            }
+
+            if ($echoOk) {
+                $detail = "authenticated handshake opened (State=Open) and joinroom echoed room:joined at $wsUrl"
+                Write-Check -Status "PASS" -Name "WebSocket authenticated probe" -Detail $detail
+            }
+            else {
+                $snippet = $replyText
+                if ($snippet.Length -gt 80) { $snippet = $snippet.Substring(0, 80) }
+                $detail = "handshake opened but no room:joined echo (got: $snippet); joinroom path not working"
+                Write-Check -Status "FAIL" -Name "WebSocket authenticated probe" -Detail $detail
+            }
+
+            $acloseCts = New-Object System.Threading.CancellationTokenSource
+            $acloseCts.CancelAfter(5000)
+            try {
+                $acloseTask = $aws.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "go-live-check", $acloseCts.Token)
+                $acloseTask.Wait()
+            }
+            catch {
+                # A close-handshake hiccup is irrelevant to the gate; ignore.
+            }
+            finally {
+                $acloseCts.Dispose()
+            }
+        }
+    }
+    catch {
+        $msg = $_.Exception.Message
+        if ($null -ne $_.Exception.InnerException) { $msg = $_.Exception.InnerException.Message }
+        $detail = "authenticated handshake failed: $msg (token rejected at `$connect, or endpoint unreachable/timed out)"
+        Write-Check -Status "FAIL" -Name "WebSocket authenticated probe" -Detail $detail
+    }
+    finally {
+        if ($null -ne $aws) { $aws.Dispose() }
+        if ($null -ne $acts) { $acts.Dispose() }
     }
 }
 
@@ -1126,6 +1309,104 @@ try {
 catch {
     Write-Check -Status "FAIL" -Name "Seed-data readiness" -Detail "nodes read failed: $($_.Exception.Message)"
 }
+
+Write-Host ""
+
+# ── Closure checks (Deployment Parity R7.4) ─────────────────────────────────
+# Run the two static closure scripts as go-live gates: Table_Closure (R4.4,
+# scripts/check-table-closure.mjs) and Amplify_Env_Closure (R6.4,
+# scripts/check-amplify-env-closure.mjs). Both are static (no AWS/network),
+# exit non-zero on a real gap, and print gap detail on stderr. A non-zero exit
+# is a FAIL (offending lines echoed); exit 0 is a PASS. node absent is a WARN,
+# matching the AWS-CLI-absent pattern used above.
+Write-Host "Closure checks" -ForegroundColor Yellow
+
+$script:nodeAvailable = $null -ne (Get-Command node -ErrorAction SilentlyContinue)
+
+# Invoke-ClosureCheck runs one closure script via node and gates on its exit
+# code (0 = PASS, non-zero = FAIL). node stderr (where the scripts print gap
+# detail) is redirected to a temp file so the offending lines can be echoed on
+# a FAIL. This is NOT `2>&1`: stdout and stderr never merge. $ErrorActionPreference
+# is dropped to Continue only around the node call, because under Stop a native
+# command's first stderr write is promoted to a terminating error (the same
+# reason the AWS calls above use 2>$null); it is restored immediately after.
+# WARNs when node is missing, the script is absent, or node cannot be launched.
+function Invoke-ClosureCheck {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ScriptRelPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    if (-not $script:nodeAvailable) {
+        Write-Check -Status "WARN" -Name $Name -Detail "node not on PATH; closure check not run"
+        return
+    }
+
+    $scriptPath = Join-Path $RootDir $ScriptRelPath
+    if (-not (Test-Path $scriptPath)) {
+        Write-Check -Status "WARN" -Name $Name -Detail "$ScriptRelPath not found; closure check not run"
+        return
+    }
+
+    $tmpErr = [System.IO.Path]::GetTempFileName()
+    $code = $null
+    $prevEap = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & node $scriptPath 2>$tmpErr | Out-Null
+        $code = $LASTEXITCODE
+    }
+    catch {
+        $ErrorActionPreference = $prevEap
+        if (Test-Path $tmpErr) { Remove-Item $tmpErr -ErrorAction SilentlyContinue }
+        Write-Check -Status "WARN" -Name $Name -Detail "could not run node $ScriptRelPath`: $($_.Exception.Message)"
+        return
+    }
+    finally {
+        $ErrorActionPreference = $prevEap
+    }
+
+    $stderrText = ""
+    if (Test-Path $tmpErr) {
+        $raw = Get-Content $tmpErr -Raw
+        if ($null -ne $raw) { $stderrText = $raw }
+        Remove-Item $tmpErr -ErrorAction SilentlyContinue
+    }
+
+    if ($code -eq 0) {
+        Write-Check -Status "PASS" -Name $Name -Detail "no closure gaps (exit 0)"
+        return
+    }
+
+    # Non-zero: collect the offending lines. The scripts print `x`-prefixed gap
+    # lines plus a FAIL summary on stderr; drop PowerShell error-record noise
+    # (the `+ CategoryInfo`/`+ FullyQualifiedErrorId` metadata and the leading
+    # `node.exe : ` wrapper the console-error records pick up).
+    $offending = @()
+    foreach ($line in ($stderrText -split "`n")) {
+        $t = $line.Trim()
+        if ($t -eq "") { continue }
+        if ($t.StartsWith("+")) { continue }
+        if ($t -match "^\S+\.exe\s*:\s*") { $t = ($t -replace "^\S+\.exe\s*:\s*", "").Trim() }
+        if ($t -eq "") { continue }
+        if ($t -like "*FAIL*" -or $t -like "x *") { $offending += $t }
+    }
+    if ($offending.Count -eq 0 -and $stderrText.Trim() -ne "") {
+        $offending = @(($stderrText.Trim() -split "`n" | Select-Object -First 1).Trim())
+    }
+
+    $detail = "exit $code"
+    if ($offending.Count -gt 0) {
+        $detail = "exit $code`: " + (($offending | Select-Object -First 6) -join " | ")
+    }
+    Write-Check -Status "FAIL" -Name $Name -Detail $detail
+}
+
+Invoke-ClosureCheck -ScriptRelPath "scripts/check-table-closure.mjs" -Name "Table_Closure"
+Invoke-ClosureCheck -ScriptRelPath "scripts/check-amplify-env-closure.mjs" -Name "Amplify_Env_Closure"
 
 Write-Host ""
 

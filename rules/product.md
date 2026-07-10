@@ -17,6 +17,22 @@ binding rules behind that promise.
 - Business: responsive, works on phone and desktop.
 - Admin: responsive, works on phone and desktop.
 
+## Map membership (which venues appear)
+
+The consumer map shows only paid-tier venues. A venue joins the map when its
+owning business is on a paid tier (`starter`, `payg`, `growth`, `pro`) and the
+node is active. Free-tier businesses and orphan/legacy nodes (no `businessId`)
+are excluded. The rule lives in `backend/src/features/nodes/repository.ts`
+`getNodesByCitySlug` and the broadcast path in `nodes/service.ts`.
+
+Membership is a hard gate, separate from ranking. Business tier is also a minor
+lever inside `vibeRank` that breaks ties among equally-alive, equally-taste-matched
+venues (below taste and aliveness), but that lever is a different mechanism from
+the membership gate. The membership gate keys off the stored tier plus `isActive`;
+the single removal mechanism is storage demotion after the non-payment grace
+window. This is a recorded decision: see `docs/decisions/map-membership.md`. Any
+change to paid-only membership is a follow-up spec, not a silent edit.
+
 ## Gets (rewards) product rules
 
 Gets are a free engagement layer, not a deals catalog. Belonging beats bargains:

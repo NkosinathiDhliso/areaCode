@@ -23,7 +23,32 @@ param(
     [string]$RumStaffMonitorId = $env:RUM_STAFF_MONITOR_ID,
     [string]$RumStaffIdentityPool = $env:RUM_STAFF_IDENTITY_POOL,
     [string]$RumAdminMonitorId = $env:RUM_ADMIN_MONITOR_ID,
-    [string]$RumAdminIdentityPool = $env:RUM_ADMIN_IDENTITY_POOL
+    [string]$RumAdminIdentityPool = $env:RUM_ADMIN_IDENTITY_POOL,
+
+    # Media CDN base URL (CloudFront in front of the private s3_media bucket).
+    # Source: `terraform output -raw media_cdn_url`. Consumed by the Web and
+    # Business photo surfaces (the shared mediaUrl helper). Unset -> those
+    # surfaces render the explicit "Photos unavailable" state (parity R5).
+    [string]$CdnUrl = $env:VITE_CDN_URL,
+
+    # Web Push VAPID public key. Source: the VAPID keypair (Secrets Manager
+    # area-code/{env}/vapid). Consumed by the consumer web push opt-in only.
+    [string]$VapidPublicKey = $env:VITE_VAPID_PUBLIC_KEY,
+
+    # Cognito Hosted UI (Google OAuth) domains + app-client IDs, one pair per
+    # pool. The domain is the pool's Hosted UI domain (e.g.
+    # https://area-code-consumer.auth.us-east-1.amazoncognito.com); the client
+    # id is each cognito module's `client_id` output. These previously lived
+    # only in the Amplify console (untracked drift); the script now owns them
+    # so it is the single source of truth (parity R6.1, R6.2).
+    [string]$CognitoHostedUiDomainConsumer = $env:VITE_COGNITO_HOSTED_UI_DOMAIN,
+    [string]$CognitoClientIdConsumer = $env:VITE_COGNITO_CLIENT_ID_CONSUMER,
+    [string]$CognitoHostedUiDomainBusiness = $env:VITE_COGNITO_HOSTED_UI_DOMAIN_BUSINESS,
+    [string]$CognitoClientIdBusiness = $env:VITE_COGNITO_CLIENT_ID_BUSINESS,
+    [string]$CognitoHostedUiDomainStaff = $env:VITE_COGNITO_HOSTED_UI_DOMAIN_STAFF,
+    [string]$CognitoClientIdStaff = $env:VITE_COGNITO_CLIENT_ID_STAFF,
+    [string]$CognitoHostedUiDomainAdmin = $env:VITE_COGNITO_HOSTED_UI_DOMAIN_ADMIN,
+    [string]$CognitoClientIdAdmin = $env:VITE_COGNITO_CLIENT_ID_ADMIN
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,6 +58,19 @@ function Write-Info($msg) { Write-Host $msg -ForegroundColor Cyan }
 function Write-Success($msg) { Write-Host $msg -ForegroundColor Green }
 function Write-Err($msg) { Write-Host $msg -ForegroundColor Red }
 function Write-Warn($msg) { Write-Host $msg -ForegroundColor Yellow }
+
+# Set a managed key on the overlay map only when we actually have a value.
+# No-fallbacks (see .kiro/steering/no-fallbacks-no-legacy.md): a missing
+# required value is a provisioning gap that is reported loudly, never papered
+# over with a silent default. Because we MERGE (below), skipping a key leaves
+# any existing console value untouched rather than wiping it.
+function Set-ManagedKey($Map, [string]$Key, [string]$Value, [string]$AppName) {
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        Write-Warn "  [gap] $Key not provided for ${AppName}: leaving any existing Amplify value in place (provisioning gap)"
+        return
+    }
+    $Map[$Key] = $Value
+}
 
 # Your 4 Amplify Apps
 $AmplifyApps = @(
@@ -86,11 +124,12 @@ foreach ($app in $AmplifyApps) {
     # Mapbox token.
     $managed = [ordered]@{
         VITE_API_URL       = $ApiUrl
-        VITE_SOCKET_URL    = $ApiUrl
         VITE_WEBSOCKET_URL = $WebSocketUrl
     }
-    if (($app.Name -eq "Web (Main)" -or $app.Name -eq "Business") -and $MapboxToken) {
-        $managed['VITE_MAPBOX_TOKEN'] = $MapboxToken
+    # Mapbox: Web (basemap) and Business (address autocomplete via the Mapbox
+    # Geocoding API) both read it.
+    if ($app.Name -eq "Web (Main)" -or $app.Name -eq "Business") {
+        Set-ManagedKey $managed 'VITE_MAPBOX_TOKEN' $MapboxToken $app.Name
     }
     # The Business dashboard generates staff invite links pointing at the staff
     # portal. Give it the staff origin explicitly so the link never depends on a
@@ -98,6 +137,44 @@ foreach ($app in $AmplifyApps) {
     if ($app.Name -eq "Business") {
         $managed['VITE_STAFF_URL'] = "https://staff.areacode.co.za"
     }
+
+    # Media CDN base URL: read by the shared mediaUrl helper on the photo
+    # surfaces. Only the Web (consumer venue detail) and Business (node editor,
+    # dashboard) apps render venue photos, so only they get the key.
+    if ($app.Name -eq "Web (Main)" -or $app.Name -eq "Business") {
+        Set-ManagedKey $managed 'VITE_CDN_URL' $CdnUrl $app.Name
+    }
+
+    # Web Push VAPID public key: only the consumer web app subscribes to push.
+    if ($app.Name -eq "Web (Main)") {
+        Set-ManagedKey $managed 'VITE_VAPID_PUBLIC_KEY' $VapidPublicKey $app.Name
+    }
+
+    # Cognito Hosted UI (Google OAuth) keys, one pair per portal. Each portal
+    # has its own pool and reads its own suffixed keys. The Business portal also
+    # drives the Staff OAuth callback (staff-invite acceptance), so it carries
+    # the staff pool keys in addition to its own.
+    switch ($app.Name) {
+        "Web (Main)" {
+            Set-ManagedKey $managed 'VITE_COGNITO_HOSTED_UI_DOMAIN' $CognitoHostedUiDomainConsumer $app.Name
+            Set-ManagedKey $managed 'VITE_COGNITO_CLIENT_ID_CONSUMER' $CognitoClientIdConsumer $app.Name
+        }
+        "Admin" {
+            Set-ManagedKey $managed 'VITE_COGNITO_HOSTED_UI_DOMAIN_ADMIN' $CognitoHostedUiDomainAdmin $app.Name
+            Set-ManagedKey $managed 'VITE_COGNITO_CLIENT_ID_ADMIN' $CognitoClientIdAdmin $app.Name
+        }
+        "Business" {
+            Set-ManagedKey $managed 'VITE_COGNITO_HOSTED_UI_DOMAIN_BUSINESS' $CognitoHostedUiDomainBusiness $app.Name
+            Set-ManagedKey $managed 'VITE_COGNITO_CLIENT_ID_BUSINESS' $CognitoClientIdBusiness $app.Name
+            Set-ManagedKey $managed 'VITE_COGNITO_HOSTED_UI_DOMAIN_STAFF' $CognitoHostedUiDomainStaff $app.Name
+            Set-ManagedKey $managed 'VITE_COGNITO_CLIENT_ID_STAFF' $CognitoClientIdStaff $app.Name
+        }
+        "Staff" {
+            Set-ManagedKey $managed 'VITE_COGNITO_HOSTED_UI_DOMAIN_STAFF' $CognitoHostedUiDomainStaff $app.Name
+            Set-ManagedKey $managed 'VITE_COGNITO_CLIENT_ID_STAFF' $CognitoClientIdStaff $app.Name
+        }
+    }
+
     if ($app.RumMonitorId -and $app.RumIdentityPool) {
         $managed['VITE_RUM_APP_MONITOR_ID'] = $app.RumMonitorId
         $managed['VITE_RUM_IDENTITY_POOL_ID'] = $app.RumIdentityPool
@@ -108,9 +185,10 @@ foreach ($app in $AmplifyApps) {
 
     # MERGE, never replace. update-branch --environment-variables overwrites the
     # ENTIRE env set, so we must fetch the existing vars and overlay only the
-    # keys we own. Otherwise out-of-band vars (Cognito Hosted-UI OAuth domains +
-    # client IDs, VAPID keys) would be silently wiped, breaking Google sign-in
-    # and web push on the next run.
+    # keys we own. This script now manages the Cognito Hosted-UI and VAPID keys,
+    # but any remaining out-of-band key (e.g. build-time VITE_GIT_SHA, feature
+    # flags) must survive the run rather than be silently wiped. Unmanaged keys
+    # are preserved AND reported as drift (below).
     $existingJson = aws amplify get-branch `
         --app-id $app.AppId `
         --branch-name $app.Branch `
@@ -124,6 +202,16 @@ foreach ($app in $AmplifyApps) {
         Write-Warn "  [warn] Could not read existing env vars; proceeding with managed keys only"
     }
     foreach ($k in $managed.Keys) { $merged[$k] = $managed[$k] }
+
+    # DRIFT REPORT: any key already on the Amplify branch that this script does
+    # not manage. It is never deleted here (the merge above preserves it); it is
+    # surfaced so an operator can decide whether it belongs in the script (parity
+    # R6.2) or is stale (the R6.4 diff script formalizes both directions).
+    foreach ($k in $merged.Keys) {
+        if (-not $managed.Contains($k)) {
+            Write-Warn "  [drift] $k is set on Amplify but not managed by this script"
+        }
+    }
 
     $payload = [ordered]@{ appId = $app.AppId; branchName = $app.Branch; environmentVariables = $merged }
     $payloadPath = Join-Path $env:TEMP "amplify-env-$($app.AppId).json"

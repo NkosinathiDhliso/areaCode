@@ -1,3 +1,4 @@
+import { trackEvent } from '@area-code/shared/lib/usageEvents'
 import {
   useLocationStore,
   useMapStore,
@@ -462,6 +463,10 @@ export function useCarouselSelection({
     (opts?: { skipFly?: boolean }) => {
       const id = useSelectionStore.getState().activeVenueId
       if (!id) return
+      // Constellation Funnel: the user committed to zoom in from the country-zoom
+      // peek (beam_tap -> zoom_commit -> checkin_completed), the ship-gate signal
+      // (audit-gap-closure R4.1). Tracking only; behaviour below is unchanged.
+      trackEvent('zoom_commit')
       const map = useMapStore.getState().mapInstance
       const node = useMapStore.getState().nodes[id]
       if (!opts?.skipFly && map && node) {
@@ -526,6 +531,10 @@ export function useCarouselSelection({
 
   const onMarkerTap = useCallback(
     (nodeId: string) => {
+      // Check-in funnel: a genuine user venue selection (marker/beam tap). No
+      // venue id is sent (POPIA: no venue+user trail), R4.1/R4.3. This is a
+      // user gesture, not a programmatic re-selection loop.
+      trackEvent('venue_selected')
       selectVenueRaw(nodeId, 'marker')
       let zoom = MAP_ARRIVAL_ZOOM
       try {
@@ -541,6 +550,9 @@ export function useCarouselSelection({
 
   const onSearchSelect = useCallback(
     (nodeId: string) => {
+      // Check-in funnel: a genuine user venue selection from Search_Sheet
+      // (R4.1). No venue id (R4.3).
+      trackEvent('venue_selected')
       selectVenueRaw(nodeId, 'search')
       let zoom = MAP_ARRIVAL_ZOOM
       try {

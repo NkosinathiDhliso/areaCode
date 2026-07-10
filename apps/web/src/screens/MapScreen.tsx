@@ -2,6 +2,7 @@ import { useGeolocation, useNodeArchetype, useCityPulseToast, useCheckOut } from
 import { api } from '@area-code/shared/lib/api'
 import { useLiveVibeOnMap } from '@area-code/shared/lib/featureGating'
 import { haptic } from '@area-code/shared/lib/haptics'
+import { trackEvent } from '@area-code/shared/lib/usageEvents'
 import {
   useMapStore,
   useConsumerAuthStore,
@@ -159,6 +160,18 @@ export function MapScreen({ onNavigate, active }: MapScreenProps) {
 
   const { brushedNodeId, whisperText } = useConstellationSweep(mapRef, mapReady)
 
+  // Check-in funnel: the Commit_Mode check-in CTA becomes visible when the
+  // carousel enters `commit`. Fire once per transition into Commit_Mode
+  // (audit-gap-closure R4.1). Beacon gates on consent (R4.2).
+  const prevCarouselModeRef = useRef(carouselMode)
+  useEffect(() => {
+    const prev = prevCarouselModeRef.current
+    prevCarouselModeRef.current = carouselMode
+    if (prev !== 'commit' && carouselMode === 'commit') {
+      trackEvent('checkin_cta_shown')
+    }
+  }, [carouselMode])
+
   const handleCommitZoom = useCallback(
     (node: Node) => {
       if (useSelectionStore.getState().activeVenueId !== node.id) {
@@ -315,6 +328,12 @@ export function MapScreen({ onNavigate, active }: MapScreenProps) {
   // notification priming (R14.7).
   const handleCheckInSuccess = useCallback(
     (nodeId: string) => {
+      // Check-in funnel completion, and the terminal step of the Constellation
+      // Funnel ship gate (beam_tap -> zoom_commit -> checkin_completed). This is
+      // the one check-in success side-effect home (audit-gap-closure R4.1). No
+      // venue id is sent (POPIA, R4.3).
+      trackEvent('checkin_completed')
+
       // Establish client-side Active_Presence so the venue surface shows the
       // Check_Out_CTA (honest-presence-ui R3.1). Only set on a real success.
       usePresenceStore.getState().setPresent(nodeId)

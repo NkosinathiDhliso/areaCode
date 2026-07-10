@@ -40,15 +40,13 @@ if (-not $SkipTerraform) {
     Write-Host ""
     Write-Host "[2/5] Running Terraform apply..." -ForegroundColor Yellow
 
-    # Resolve the short git SHA in PowerShell (the bash `cmd || echo` idiom is
-    # not valid PowerShell, so compute it here and pass it as a plain value).
-    $GitSha = (git rev-parse --short HEAD 2>$null)
-    if (-not $GitSha) { $GitSha = "unknown" }
-
+    # The release commit is baked into the Lambda bundle at build:lambda time
+    # (esbuild define -> GET /health `commit`), so terraform no longer needs a
+    # git_sha var. The baked sha tracks the artifact, not when terraform ran.
     Push-Location $InfraDir
     terraform init -input=false
     if ($LASTEXITCODE -ne 0) { Pop-Location; throw "Terraform init failed" }
-    terraform apply -auto-approve -var="git_sha=$GitSha"
+    terraform apply -auto-approve
     if ($LASTEXITCODE -ne 0) { Pop-Location; throw "Terraform apply failed" }
 
     # Capture outputs

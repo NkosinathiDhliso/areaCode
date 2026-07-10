@@ -169,23 +169,6 @@ export async function getRedemptionsByUserId(userId: string): Promise<RewardRede
   return (result.Items || []) as RewardRedemption[]
 }
 
-export async function getRedemptionByRewardAndUser(rewardId: string, userId: string): Promise<RewardRedemption | null> {
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.appData,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'gsi1pk = :userKey',
-      FilterExpression: 'rewardId = :rewardId',
-      ExpressionAttributeValues: {
-        ':userKey': `USER_REDEMPTIONS#${userId}`,
-        ':rewardId': rewardId,
-      },
-      Limit: 1,
-    }),
-  )
-  return result.Items?.[0] ? (result.Items[0] as RewardRedemption) : null
-}
-
 export async function createRedemption(
   data: Omit<RewardRedemption, 'redemptionId' | 'createdAt'>,
 ): Promise<RewardRedemption> {

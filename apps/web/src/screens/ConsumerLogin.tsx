@@ -1,6 +1,7 @@
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { api } from '@area-code/shared/lib/api'
 import { classifyLoginError } from '@area-code/shared/lib/loginError'
+import { trackEvent } from '@area-code/shared/lib/usageEvents'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -103,6 +104,9 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
    * not a missing account.
    */
   async function createAccountWithSameCredentials() {
+    // Signup funnel: account creation is genuinely starting (the sign-in failed
+    // because no account exists). Beacon gates on consent (R4.1, R4.2).
+    trackEvent('signup_started')
     let created: AuthTokens
     try {
       created = await api.post<AuthTokens>('/v1/auth/consumer/email-signup', { email, password })
@@ -119,6 +123,8 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
     }
 
     setAuth(created.accessToken, created.refreshToken, created.user.id)
+    // Signup funnel completion for the email/password path (R4.1).
+    trackEvent('signup_completed', { method: 'email' })
 
     // Redeem an optional First-Get token. Failure is non-fatal: the account is
     // ready either way, so surface a soft notice and still land on the map.

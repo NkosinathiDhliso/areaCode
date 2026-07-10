@@ -33,6 +33,65 @@ Frontend crash and JS error triage lives in the **CloudWatch RUM console** (`us-
 
 Each monitor's Errors tab shows `JsErrorCount` and session counts. The auto-rollback gate (`release-health-gate.yml`) reads these same monitors; see `ROLLBACK.md`. RUM writes to CloudWatch Logs only (no analytics cookies, POPIA-friendly). Sentry is no longer used for any frontend or backend monitoring.
 
+## Funnel Readout
+
+Usage events are emitted from the API Lambda as CloudWatch Embedded Metric Format (EMF) log lines (`backend/src/features/events/service.ts`). CloudWatch Logs parses them into metrics with no `PutMetricData` call and no extra infrastructure:
+
+- Namespace: `AreaCode/Usage`
+- Metric: `Count` (Unit `Count`)
+- Dimension: `event` (the only dimension; the event name is the value)
+
+The ten event names: `auth_gate_shown`, `signup_started`, `signup_completed`, `venue_selected`, `checkin_cta_shown`, `checkin_completed`, `beam_tap`, `zoom_commit`, `firstget_token_entered`, `firstget_token_redeemed`.
+
+### Funnels
+
+| Funnel               | Steps                                                        | Answers                                       |
+| -------------------- | ------------------------------------------------------------ | --------------------------------------------- |
+| Constellation (gate) | `beam_tap` → `zoom_commit` → `checkin_completed`             | Does Phase A lift the country-zoom ship gate? |
+| Signup               | `auth_gate_shown` → `signup_started` → `signup_completed`    | Where do new accounts drop off?               |
+| Check-in             | `venue_selected` → `checkin_cta_shown` → `checkin_completed` | Where do check-ins drop off?                  |
+| First-Get            | `firstget_token_entered` → `firstget_token_redeemed`         | Do casual-customer tokens convert?            |
+
+The Constellation funnel is the ship gate from `constellation-mode.md`: measure `beam_tap → zoom_commit → checkin_completed`, not time spent sweeping. If Phase A does not lift this funnel, do not stack more spectacle.
+
+### Option A: CloudWatch metric math (dashboard or Metrics console)
+
+In CloudWatch → Metrics → source view, paste these. Each `SEARCH` sums one event's `Count` per period; the `mN/m1*100` lines give step-to-step conversion percentages. Set the period to `1 day` and the statistic to `Sum`.
+
+Constellation funnel:
+
+```
+m1 = SEARCH('{AreaCode/Usage,event} MetricName="Count" event="beam_tap"', 'Sum', 86400)
+m2 = SEARCH('{AreaCode/Usage,event} MetricName="Count" event="zoom_commit"', 'Sum', 86400)
+m3 = SEARCH('{AreaCode/Usage,event} MetricName="Count" event="checkin_completed"', 'Sum', 86400)
+zoom_rate  = m2 / m1 * 100
+checkin_rate = m3 / m2 * 100
+gate_rate  = m3 / m1 * 100
+```
+
+Swap the `event="..."` values for the other funnels. Signup: `auth_gate_shown`, `signup_started`, `signup_completed` with `signup_completed / auth_gate_shown * 100` as the overall conversion. Check-in: `venue_selected`, `checkin_cta_shown`, `checkin_completed`. First-Get: `firstget_token_entered`, `firstget_token_redeemed` with `firstget_token_redeemed / firstget_token_entered * 100`.
+
+### Option B: CloudWatch Logs Insights (copy-pasteable)
+
+Run against the API Lambda log group `/aws/lambda/area-code-prod-api`. This parses the EMF lines directly and returns one row per event with its total count for the selected time range:
+
+```
+fields event, Count
+| filter ispresent(event) and ispresent(Count)
+| stats sum(Count) as total by event
+| sort event asc
+```
+
+To read a single funnel, filter to its events (Constellation shown):
+
+```
+fields event, Count
+| filter event in ["beam_tap", "zoom_commit", "checkin_completed"]
+| stats sum(Count) as total by event
+```
+
+Conversion is one step's total divided by the previous step's total (e.g. `signup_completed / auth_gate_shown` for signup, `checkin_completed / beam_tap` for the Constellation gate). Read the totals from the query above and divide.
+
 ## Key CloudWatch Log Groups
 
 | Log group                                             | What's in it                                |
@@ -119,7 +178,7 @@ Tables are `PAY_PER_REQUEST`, so throttling implies a hot partition. Check `Node
 Cold start on a function with many dependencies, or a DynamoDB slow path. Confirm with X-Ray (tracing is Active on the API Lambda). If cold-start driven, consider provisioned concurrency on the `live` alias.
 
 **SQS DLQ has messages.**
-The consumer has failed `maxReceiveCount` times. Read the first message, reproduce locally, fix the code, redeploy, then re-drive:
+The consumer has failed `maxReceiveCount` times. Read the first message, reproduce locally, fix the code, redeploy via the Release Ritual in `docs/DEPLOY.md` (the single ordered command list for any prod deploy), then re-drive:
 
 ```bash
 # Peek at a DLQ message
@@ -139,6 +198,175 @@ Usually the CUSTOM_AUTH Lambda trigger is erroring. Tail `/aws/lambda/area-code-
 
 **Image upload returns 403.**
 Presigned URL was generated with the wrong bucket or `ContentType` does not match. Check `AREA_CODE_S3_MEDIA_BUCKET` on the API Lambda env vars; the code now reads `AREA_CODE_S3_MEDIA_BUCKET` first and falls back to `MEDIA_BUCKET`.
+
+## PITR Restore Rehearsal
+
+Point-in-time recovery is enabled in Terraform on every DynamoDB table in both dev and prod (`point_in_time_recovery { enabled = true }` in `infra/environments/{dev,prod}/main.tf`). This rehearsal proves a restore works end to end against a dev table before we ever need it in prod. Run it in the dev account, `us-east-1`.
+
+The rehearsal restores `area-code-dev-users` to a point 15 minutes ago into a new table, verifies one row survived, then deletes the restored table. It never touches the source table and never restores over it.
+
+### 1. Precondition: confirm PITR is enabled on the source table
+
+```bash
+aws dynamodb describe-continuous-backups \
+  --table-name area-code-dev-users \
+  --region us-east-1 \
+  --query 'ContinuousBackupsDescription.PointInTimeRecoveryDescription.PointInTimeRecoveryStatus'
+# Expected: "ENABLED"
+```
+
+If this returns `DISABLED`, stop. A restore is impossible without PITR. It is defined in `infra/environments/dev/main.tf` on the `users` table, so re-run `terraform plan` / `terraform apply` for the dev environment to reconcile before rehearsing.
+
+### 2. Note a known row to verify later
+
+Grab one existing `userId` from the source table so step 4 can confirm it came back. The users table key is `userId` (string), no sort key.
+
+```bash
+aws dynamodb scan \
+  --table-name area-code-dev-users \
+  --region us-east-1 \
+  --max-items 1 \
+  --projection-expression userId \
+  --query 'Items[0].userId.S' --output text
+# Copy the printed userId for step 4.
+```
+
+### 3. Restore to a point in time (T-15min) into a new table
+
+Never reuse the source name. The target is a throwaway `-pitr-rehearsal` table.
+
+bash (GNU date):
+
+```bash
+RESTORE_TIME=$(date -u -d '-15 minutes' +%Y-%m-%dT%H:%M:%SZ)
+
+aws dynamodb restore-table-to-point-in-time \
+  --source-table-name area-code-dev-users \
+  --target-table-name area-code-dev-users-pitr-rehearsal \
+  --restore-date-time "$RESTORE_TIME" \
+  --region us-east-1
+```
+
+PowerShell:
+
+```powershell
+$RestoreTime = (Get-Date).ToUniversalTime().AddMinutes(-15).ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+aws dynamodb restore-table-to-point-in-time `
+  --source-table-name area-code-dev-users `
+  --target-table-name area-code-dev-users-pitr-rehearsal `
+  --restore-date-time $RestoreTime `
+  --region us-east-1
+```
+
+### 4. Wait for ACTIVE, then verify row-level recovery
+
+The restored table starts in `CREATING`. Wait for it, then read the row from step 2.
+
+```bash
+aws dynamodb wait table-exists \
+  --table-name area-code-dev-users-pitr-rehearsal \
+  --region us-east-1
+
+aws dynamodb get-item \
+  --table-name area-code-dev-users-pitr-rehearsal \
+  --region us-east-1 \
+  --key '{"userId":{"S":"<userId-from-step-2>"}}'
+# Expected: the same item that exists in the source table. Recovery verified.
+```
+
+PowerShell mangles inline JSON for the AWS CLI (see Common gotchas in `tech.md`), so pass the key from a file instead of inline:
+
+```powershell
+'{"userId":{"S":"<userId-from-step-2>"}}' | Out-File -Encoding ascii key.json
+
+aws dynamodb wait table-exists `
+  --table-name area-code-dev-users-pitr-rehearsal `
+  --region us-east-1
+
+aws dynamodb get-item `
+  --table-name area-code-dev-users-pitr-rehearsal `
+  --region us-east-1 `
+  --key file://key.json
+```
+
+### 5. Tear down the restored table
+
+Delete the rehearsal table so it does not linger or cost anything (serverless-only budget). Delete the rehearsal table only, never the source.
+
+```bash
+aws dynamodb delete-table \
+  --table-name area-code-dev-users-pitr-rehearsal \
+  --region us-east-1
+```
+
+Confirm it is gone (and that the source is untouched):
+
+```bash
+aws dynamodb list-tables --region us-east-1 \
+  --query "TableNames[?contains(@, 'area-code-dev-users')]"
+# Expected: ["area-code-dev-users"] only. No -pitr-rehearsal entry.
+```
+
+### Rehearsal record
+
+Founder fills this in after a live run. Status: pending.
+
+| Field                  | Value                              |
+| ---------------------- | ---------------------------------- |
+| Date rehearsed         | pending                            |
+| Restore point (UTC)    | pending                            |
+| Source table           | area-code-dev-users                |
+| Restored table         | area-code-dev-users-pitr-rehearsal |
+| Row verified (userId)  | pending                            |
+| Restored table deleted | pending                            |
+
+## Ops_Log
+
+Record of every one-time script and backfill: what it does, which environment,
+when it ran, who ran it, and the outcome (or PENDING). A one-time script is any
+migration, backfill, seed, or config bump that runs by hand rather than on a
+schedule or in a deploy.
+
+Rule (definition of done): any new one-time script or backfill MUST add a row to
+this table as part of its own change. A script that has run but is not recorded
+here is treated as not run, because "did we ever run it?" then has no answer.
+
+| Script                                                                                  | Purpose                                                                                                                                            | Environment | Date run                          | Run by  | Outcome                                                                                                                                                                 |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/seed-demo-venues.ps1`                                                          | Seed Area Code demo venues so Johannesburg clears the 5-node launch floor with margin                                                              | prod        | 2026-07-05                        | founder | Done. Braamfontein Beans and Maboneng Social created; Johannesburg at 7 active paid-tier nodes. See GO_LIVE_CHECK_RESULT.                                               |
+| `scripts/claim-demo-venues.ps1`                                                         | Rename the three placeholder demo venues and publish one live get each so every venue reads honestly                                               | prod        | 2026-07-05                        | founder | Done. Plato coffe to Plato Coffee Co., Hi to Hive Kitchen, RuleRev to Revolver Eatery; one `nth_checkin` get on each of the five demo venues. See GO_LIVE_CHECK_RESULT. |
+| Consent version bump (`AREA_CODE_CONSENT_VERSION` in `infra/environments/dev/main.tf`)  | Raise the consent version so new consents record it and the admin re-consent list captures pre-bump users                                          | dev         | staged 2026-07-05, deploy pending | pending | v1.0 to v1.1 staged in dev `main.tf`; the dev deploy that applies it is founder-run and not yet executed. See the "Task 7.1 verification" note in GO_LIVE_CHECK_RESULT. |
+| Consent version bump (`AREA_CODE_CONSENT_VERSION` in `infra/environments/prod/main.tf`) | Same, for prod                                                                                                                                     | prod        | PENDING                           | pending | Not run. Tracked as `release-quality-and-ops-hygiene` task 7.2, in its own window.                                                                                      |
+| `backend/src/scripts/backfill-user-locks.ts`                                            | Write `EMAIL#`/`SUB#` uniqueness locks for users created before transactional locks existed, so duplicate emails/subs are impossible table-wide    | prod        | PENDING                           | pending | Not run in prod. Founder-run task (deployment-parity 6.5). Commands below.                                                                                              |
+| `backend/src/scripts/backfill-user-search.ts`                                           | Write people-search index attributes (`usernameLower` etc.) for users created before the search GSIs existed, so they appear in `/v1/users/search` | prod        | PENDING                           | pending | Not run in prod. Founder-run task (deployment-parity 6.5). Commands below.                                                                                              |
+
+### PENDING prod backfills (founder-run)
+
+Both scripts are idempotent and non-destructive (locks are written with
+`attribute_not_exists`; the search backfill only sets or clears derived
+attributes), so a dry run then an apply is safe to repeat. They need the same
+AWS credentials and `USERS_TABLE` the prod API Lambda uses. Run from the repo
+root, then record the outcome in the table above.
+
+```powershell
+$env:AWS_PROFILE = "areacode-prod"        # prod credentials, account 562691664641
+$env:AWS_REGION  = "us-east-1"
+$env:USERS_TABLE = "area-code-prod-users"
+
+# 1) user locks: dry run first (no writes), then apply
+pnpm --filter backend backfill:user-locks --dry-run
+pnpm --filter backend backfill:user-locks
+
+# 2) search index: dry run first (no writes), then apply
+pnpm --filter backend backfill:user-search --dry-run
+pnpm --filter backend backfill:user-search
+```
+
+The lock backfill logs any duplicate email/sub it finds (the second writer is
+refused) so an operator can merge those accounts by hand; capture that output in
+the Outcome cell. Both scripts print a summary (rows scanned, locks or index
+attributes written) that is the outcome to record.
 
 ## Escalation
 

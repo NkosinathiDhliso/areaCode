@@ -1,7 +1,24 @@
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import js from '@eslint/js'
 import tseslint from 'typescript-eslint'
 import reactHooks from 'eslint-plugin-react-hooks'
 import importPlugin from 'eslint-plugin-import'
+
+// Lines_Baseline (Audit Gap Closure R5.1/R5.2): the frozen set of files that
+// were already over the code-style.md 400-line limit when the rule was turned
+// on. `max-lines` is switched OFF for exactly these files so the rule ratchets
+// (new files must stay under 400) instead of failing big-bang. Growth of a
+// baselined file is caught by scripts/lines-ratchet.mjs (`pnpm lint:lines`),
+// which reads this same JSON. Regenerate with `pnpm lint:lines:update`.
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const linesBaseline = JSON.parse(readFileSync(join(__dirname, 'eslint-lines-baseline.json'), 'utf8'))
+const linesBaselineOverrides = Object.keys(linesBaseline.files ?? {}).map((file) => ({
+  files: [file],
+  rules: { 'max-lines': 'off' },
+}))
 
 export default tseslint.config(
   js.configs.recommended,
@@ -205,9 +222,40 @@ export default tseslint.config(
         fetch: 'readonly',
         module: 'readonly',
         require: 'readonly',
+        AbortController: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
       },
     },
   },
+  // k6 load-test script (scripts/load-smoke.js) runs under the k6 runtime, not
+  // Node. It uses k6's injected globals (`__ENV`, etc.) and k6/* module imports
+  // resolved by the k6 binary, so those imports cannot be resolved by the lint
+  // resolver. Give it the k6 globals and relax import resolution here only.
+  {
+    files: ['scripts/load-smoke.js'],
+    languageOptions: {
+      globals: {
+        __ENV: 'readonly',
+        __VU: 'readonly',
+        __ITER: 'readonly',
+      },
+    },
+  },
+  // ─── Code-size hard limit (code-style.md; Audit Gap Closure R5.1) ─────────
+  // Enforce the 400-line file limit on source files only. Tests, specs, and
+  // declaration files are excluded (the requirement targets "source files").
+  // Current violators are frozen in eslint-lines-baseline.json and switched off
+  // just below, so this rule ratchets rather than firing big-bang.
+  {
+    files: ['apps/**/*.{ts,tsx}', 'packages/**/*.{ts,tsx}', 'backend/**/*.{ts,tsx}'],
+    ignores: ['**/__tests__/**', '**/*.test.{ts,tsx}', '**/*.spec.{ts,tsx}', '**/*.d.ts'],
+    rules: {
+      'max-lines': ['error', { max: 400, skipBlankLines: false, skipComments: false }],
+    },
+  },
+  // Exempt the frozen violators (must come AFTER the block above so `off` wins).
+  ...linesBaselineOverrides,
   {
     ignores: [
       '**/node_modules/**',

@@ -24,3 +24,4 @@ export {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreferenceKey,
 } from './notification-preferences'
+export { USAGE_EVENT_NAMES, isUsageEventName, type UsageEventName } from './usage-events'

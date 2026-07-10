@@ -25,7 +25,14 @@ vi.mock('../../../shared/db/dynamodb.js', () => ({
   TableNames: { appData: 'app-data' },
 }))
 
-import { putDigestRow, getLatestDigest, queryDigestHistory, persistDigest, scanDigestForPii } from '../repository.js'
+import {
+  putDigestRow,
+  getLatestDigest,
+  queryDigestHistory,
+  persistDigest,
+  scanDigestForPii,
+  markDigestEmailSent,
+} from '../repository.js'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -167,6 +174,37 @@ describe('persistDigest (R1.6 + R3.1)', () => {
     await expect(persistDigest(leaked)).rejects.toThrow(/PII/)
     // Persistence must not be attempted once PII is detected.
     expect(mocks.send).not.toHaveBeenCalled()
+  })
+})
+
+describe('markDigestEmailSent (R7.3)', () => {
+  it('updates emailSent to true on the existing row, conditional on it existing', async () => {
+    mocks.send.mockResolvedValueOnce({})
+
+    await markDigestEmailSent('biz-1', '2026-07-06')
+
+    expect(mocks.send).toHaveBeenCalledTimes(1)
+    const input = mocks.send.mock.calls[0]![0].input as {
+      TableName: string
+      Key: Record<string, unknown>
+      UpdateExpression: string
+      ConditionExpression: string
+      ExpressionAttributeValues: Record<string, unknown>
+    }
+    expect(input.TableName).toBe('app-data')
+    expect(input.Key).toEqual({ pk: 'DIGEST#biz-1', sk: 'WEEK#2026-07-06' })
+    expect(input.UpdateExpression).toBe('SET emailSent = :true')
+    // Only ever updates a row the conditional put already created; never inserts.
+    expect(input.ConditionExpression).toBe('attribute_exists(pk)')
+    expect(input.ExpressionAttributeValues[':true']).toBe(true)
+  })
+
+  it('propagates a failure so the caller can log it (best-effort handling lives in the generator)', async () => {
+    mocks.send.mockRejectedValueOnce({ name: 'ProvisionedThroughputExceededException' })
+
+    await expect(markDigestEmailSent('biz-1', '2026-07-06')).rejects.toMatchObject({
+      name: 'ProvisionedThroughputExceededException',
+    })
   })
 })
 

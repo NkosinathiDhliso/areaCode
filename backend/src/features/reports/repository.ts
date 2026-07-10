@@ -1,4 +1,4 @@
-import { GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
+import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 
 import { documentClient, TableNames, isConditionalCheckFailedError, queryFirstMatch } from '../../shared/db/dynamodb.js'
 
@@ -156,7 +156,11 @@ export async function getReport(businessId: string, reportId: string): Promise<R
 
   try {
     return JSON.parse(item['data'] as string) as Report
-  } catch {
+  } catch (err) {
+    console.error(
+      `[reports/repository] Corrupt report JSON, skipping row pk=${item['pk']} sk=${item['sk']} reportId=${reportId}:`,
+      err,
+    )
     return null
   }
 }
@@ -262,7 +266,8 @@ export async function getPreviousReport(
   let report: Report
   try {
     report = JSON.parse(item['data'] as string) as Report
-  } catch {
+  } catch (err) {
+    console.error(`[reports/repository] Corrupt report JSON, skipping row pk=${item['pk']} sk=${item['sk']}:`, err)
     return null
   }
 
@@ -476,4 +481,30 @@ export async function queryDigestHistory(
     : undefined
 
   return { items, nextCursor }
+}
+
+/**
+ * Flip `emailSent` to true on an existing Digest_Row after a successful
+ * Digest_Email dispatch (R7.3, decision `docs/decisions/digest-email-sent-field.md`).
+ *
+ * This is a SEPARATE, best-effort write from the idempotence-guarding
+ * conditional put in `persistDigest`. That put stays the single gate for
+ * Property 4 (one Digest_Row write per business-week); this update is additive
+ * and only changes the status flag, so the idempotence invariant is untouched.
+ *
+ * Conditional on `attribute_exists(pk)`: it only ever updates a row that the
+ * conditional put already created, never inserts one. The caller (the generator)
+ * runs this best-effort and swallows failures — the row is already persisted and
+ * the email already sent, so a failed flip must not throw, roll back, or resend.
+ */
+export async function markDigestEmailSent(businessId: string, weekStart: string): Promise<void> {
+  await documentClient.send(
+    new UpdateCommand({
+      TableName: TableNames.appData,
+      Key: { pk: digestPk(businessId), sk: digestSk(weekStart) },
+      UpdateExpression: 'SET emailSent = :true',
+      ConditionExpression: 'attribute_exists(pk)',
+      ExpressionAttributeValues: { ':true': true },
+    }),
+  )
 }

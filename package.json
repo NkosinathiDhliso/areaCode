@@ -8,6 +8,8 @@
   ],
   "scripts": {
     "lint": "eslint .",
+    "lint:lines": "node scripts/lines-ratchet.mjs",
+    "lint:lines:update": "node scripts/lines-ratchet.mjs --generate",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",

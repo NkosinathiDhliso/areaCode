@@ -9,6 +9,7 @@ import { businessRoutes } from './features/business/handler.js'
 import { campaignRoutes, campaignConsumerRoutes } from './features/campaigns/handler.js'
 import { checkInRoutes } from './features/check-in/handler.js'
 import { checkOutRoutes } from './features/check-out/handler.js'
+import { eventRoutes } from './features/events/handler.js'
 import { musicRoutes } from './features/music/handler.js'
 import { nodeRoutes } from './features/nodes/handler.js'
 import { nodeImageRoutes } from './features/nodes/image-routes.js'
@@ -167,6 +168,10 @@ export async function buildApp() {
       status: 'ok',
       env: process.env['AREA_CODE_ENV'] ?? 'unknown',
       version: '0.0.1',
+      // Baked into the bundle by build.mts (esbuild define). Dot access is
+      // required for the define substitution; unbuilt (local dev / tests) the
+      // token is undefined and we report 'dev'.
+      commit: process.env.AREA_CODE_BUILD_SHA ?? 'dev',
       timestamp: new Date().toISOString(),
     })
   })
@@ -179,6 +184,7 @@ export async function buildApp() {
   await app.register(instagramRoutes)
   await app.register(checkInRoutes)
   await app.register(checkOutRoutes)
+  await app.register(eventRoutes)
   await app.register(rewardRoutes)
   await app.register(businessRoutes)
   await app.register(socialRoutes)
