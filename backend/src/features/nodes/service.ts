@@ -6,7 +6,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 import { APP_ENV, AWS_REGION, DEV_MODE, requireEnv } from '../../shared/config/env.js'
 import { AppError } from '../../shared/errors/AppError.js'
-import { kvGet } from '../../shared/kv/dynamodb-kv.js'
+import { kvBatchGet, kvGet, kvSet } from '../../shared/kv/dynamodb-kv.js'
 import { emitNodeCreated } from '../../shared/socket/events.js'
 import { findBusinessById } from '../business/repository.js'
 import { getLivePresenceCount, getMomentum } from '../presence/repository.js'
@@ -49,6 +49,42 @@ function getNodeState(score: number): string {
 
 // ─── Node Queries ───────────────────────────────────────────────────────────
 
+// Assembled city payload cache: concurrent map loads share one assembly instead
+// of each racing the GSI query + pulse batch (R2.3). 45s sits inside the 30-60s
+// tolerance the spec accepts; business-tier membership changes take effect
+// within the TTL. Live pulse/presence counts keep flowing over the WebSocket,
+// so caching the REST seed does not make any live count stale beyond the socket
+// path — honest-presence is unaffected (R2.4).
+const CITY_PAYLOAD_CACHE_TTL_SECONDS = 45
+
+async function assembleCityPayload(citySlug: string) {
+  const nodes = await repo.getNodesByCitySlug(citySlug)
+  if (nodes.length === 0) return nodes
+
+  // Best-effort pulse seed for Constellation beams on first paint. This must
+  // NEVER break the map: any KV failure falls back to a base node (pulseScore
+  // 0) and the beam lights up once the live socket pulse arrives. We only read
+  // the cheap pulse KV here - live presence counts come over the WebSocket, so
+  // we deliberately avoid a per-node GSI fan-out on this hot read path.
+  //
+  // One batched KV read (BatchGetItem, chunked at 100, UnprocessedKeys retried)
+  // instead of a kvGet per node — one round trip regardless of venue count
+  // (R2.2). Key shape `pulse:{cityId}:{nodeId}` and the per-node pulseScore
+  // output are unchanged. A missing key means genuinely no pulse yet (score 0),
+  // not a swallowed error (honest-presence).
+  try {
+    const city = await repo.getCityBySlug(citySlug)
+    if (!city) return nodes
+    const pulseByKey = await kvBatchGet(nodes.map((node) => `pulse:${city.id}:${node.id}`))
+    return nodes.map((node) => {
+      const scoreStr = pulseByKey.get(`pulse:${city.id}:${node.id}`)
+      return { ...node, pulseScore: scoreStr ? parseFloat(scoreStr) : 0 }
+    })
+  } catch {
+    return nodes
+  }
+}
+
 export async function getNodesByCitySlug(citySlug: string) {
   if (DEV_MODE) {
     // In dev, surface every mock venue regardless of the requested city slug so
@@ -72,30 +108,23 @@ export async function getNodesByCitySlug(citySlug: string) {
     }))
   }
 
-  const nodes = await repo.getNodesByCitySlug(citySlug)
-  if (nodes.length === 0) return nodes
-
-  // Best-effort pulse seed for Constellation beams on first paint. This must
-  // NEVER break the map: any KV failure falls back to a base node (pulseScore
-  // 0) and the beam lights up once the live socket pulse arrives. We only read
-  // the cheap pulse KV here - live presence counts come over the WebSocket, so
-  // we deliberately avoid a per-node GSI fan-out on this hot read path.
-  try {
-    const city = await repo.getCityBySlug(citySlug)
-    if (!city) return nodes
-    return await Promise.all(
-      nodes.map(async (node) => {
-        try {
-          const scoreStr = await kvGet(`pulse:${city.id}:${node.id}`)
-          return { ...node, pulseScore: scoreStr ? parseFloat(scoreStr) : 0 }
-        } catch {
-          return { ...node, pulseScore: 0 }
-        }
-      }),
-    )
-  } catch {
-    return nodes
+  // Serve the shared assembled payload if it is still warm (R2.3).
+  const cacheKey = `nodes:city:${citySlug}`
+  const cached = await kvGet(cacheKey)
+  if (cached) {
+    try {
+      return JSON.parse(cached) as Awaited<ReturnType<typeof assembleCityPayload>>
+    } catch (err) {
+      // A corrupt cache entry must not serve wrong data: treat it as a miss and
+      // reassemble from source, logging loudly so the corruption is visible
+      // rather than silently masked (no-fallbacks-no-legacy).
+      console.error(`[getNodesByCitySlug] corrupt cache entry for ${cacheKey}, reassembling`, err)
+    }
   }
+
+  const payload = await assembleCityPayload(citySlug)
+  await kvSet(cacheKey, JSON.stringify(payload), CITY_PAYLOAD_CACHE_TTL_SECONDS)
+  return payload
 }
 
 export async function getNodeDetail(nodeId: string) {

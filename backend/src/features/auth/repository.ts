@@ -1,7 +1,7 @@
 // DynamoDB Repository for Auth (Replaces Prisma)
 import { QueryCommand, PutCommand, GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
 
-import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
+import { documentClient, TableNames, scanFirstMatch } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
 import { AppError } from '../../shared/errors/AppError.js'
 
@@ -130,15 +130,15 @@ export { findStaffByEmail, reactivateStaff } from './dynamodb-repository.js'
 
 export async function findUserByUsername(username: string): Promise<unknown | null> {
   if (!username) return null
-  const result = await documentClient.send(
-    new ScanCommand({
-      TableName: TableNames.users,
-      FilterExpression: 'username = :username',
-      ExpressionAttributeValues: { ':username': username },
-      Limit: 1,
-    }),
-  )
-  return result.Items?.[0] || null
+  // Must scan the whole users table (paginated), never with Limit: 1. DynamoDB
+  // applies Limit before the FilterExpression, so `Limit: 1` examines exactly
+  // one arbitrary row — the signup uniqueness check backed by this then lets
+  // duplicate usernames through. scanFirstMatch walks every page until a match.
+  return scanFirstMatch({
+    TableName: TableNames.users,
+    FilterExpression: 'username = :username',
+    ExpressionAttributeValues: { ':username': username },
+  })
 }
 
 export async function findBusinessByPhone(phone: string) {

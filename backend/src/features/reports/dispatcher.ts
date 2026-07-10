@@ -174,21 +174,33 @@ async function getNodesForBusiness(businessId: string): Promise<BusinessNode[]> 
 
 /**
  * Check if any node for a business has check-in activity in the given period.
- * Uses the NodeIndex GSI on the checkins table with a timestamp filter.
- * Returns true as soon as any check-in is found (short-circuits).
+ * Uses the NodeIndex GSI on the checkins table, constraining the window on the
+ * numeric `timestamp` sort key. Returns true as soon as any check-in is found
+ * (short-circuits). Exported for unit testing of the sort-key window query.
  */
-async function hasActivityInPeriod(nodeIds: string[], periodStart: string, periodEnd: string): Promise<boolean> {
+export async function hasActivityInPeriod(nodeIds: string[], periodStart: string, periodEnd: string): Promise<boolean> {
+  // The NodeIndex range key is the numeric `timestamp` (epoch ms), so constrain
+  // the window on the SORT KEY, not a FilterExpression. DynamoDB applies Limit
+  // before a filter, so the old `Limit: 1` + `checkedInAt BETWEEN` filter read
+  // only the oldest check-in and reported "no activity" for any venue older
+  // than the window — silently stopping monthly reports after month one. A
+  // sort-key BETWEEN makes Limit: 1 correct: it returns a row iff the venue has
+  // any check-in inside the window. `timestamp` is a DynamoDB reserved word, so
+  // it is aliased.
+  const startMs = new Date(periodStart).getTime()
+  const endMs = new Date(periodEnd).getTime()
+
   for (const nodeId of nodeIds) {
     const result = await documentClient.send(
       new QueryCommand({
         TableName: TableNames.checkins,
         IndexName: 'NodeIndex',
-        KeyConditionExpression: 'nodeId = :nodeId',
-        FilterExpression: 'checkedInAt BETWEEN :start AND :end',
+        KeyConditionExpression: 'nodeId = :nodeId AND #ts BETWEEN :start AND :end',
+        ExpressionAttributeNames: { '#ts': 'timestamp' },
         ExpressionAttributeValues: {
           ':nodeId': nodeId,
-          ':start': periodStart,
-          ':end': periodEnd,
+          ':start': startMs,
+          ':end': endMs,
         },
         Limit: 1,
       }),

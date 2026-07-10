@@ -14,7 +14,10 @@ export default defineConfig({
     /** Property tests with 200–500 async iterations need more than the default 5 s. */
     testTimeout: 60_000,
     include: ['**/*.test.ts', '**/*.test.tsx'],
-    exclude: ['node_modules', 'dist', '**/node_modules/**'],
+    // `.claude/worktrees/**` are ephemeral git worktrees (full repo copies an
+    // agent checks out per session). Without excluding them the suite runs once
+    // per worktree — tripling test count and timing out. They are not source.
+    exclude: ['node_modules', 'dist', '**/node_modules/**', '**/.claude/**'],
     env: {
       AREA_CODE_ENV: 'dev',
       USERS_TABLE: 'area-code-dev-users',

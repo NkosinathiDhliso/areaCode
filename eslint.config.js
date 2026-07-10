@@ -214,6 +214,9 @@ export default tseslint.config(
       '**/dist/**',
       '**/.turbo/**',
       '**/coverage/**',
+      // Ephemeral git worktrees (full repo copies an agent checks out per
+      // session). They are not source and must not pollute the lint gate.
+      '**/.claude/**',
       'infra/**',
       '**/*.config.js',
       '**/*.config.ts',

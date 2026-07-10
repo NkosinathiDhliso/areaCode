@@ -5,7 +5,7 @@
 // written, or required anywhere in this module (Constraint C1).
 import { BatchGetCommand, DeleteCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 
-import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
+import { documentClient, TableNames, queryFirstMatch } from '../../shared/db/dynamodb.js'
 
 import type { Campaign, CampaignCounts, CampaignSendRecord, ChannelOutcome } from './types.js'
 
@@ -393,21 +393,21 @@ export async function putCampaign(campaign: Campaign): Promise<void> {
  * the campaign belongs to a different business).
  */
 export async function getCampaignById(businessId: string, campaignId: string): Promise<Campaign | null> {
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.appData,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'gsi1pk = :gsi1pk',
-      FilterExpression: 'campaignId = :campaignId',
-      ExpressionAttributeValues: {
-        ':gsi1pk': `CAMPAIGNS#${businessId}`,
-        ':campaignId': campaignId,
-      },
-      Limit: 1,
-    }),
-  )
+  // Filter across the whole business partition (paginated), never with Limit: 1.
+  // DynamoDB applies Limit before the FilterExpression, so Limit: 1 examines
+  // only the first-indexed campaign — win-back sends and the campaigns detail
+  // view break the moment a business has 2+ campaigns.
+  const item = await queryFirstMatch({
+    TableName: TableNames.appData,
+    IndexName: 'GSI1',
+    KeyConditionExpression: 'gsi1pk = :gsi1pk',
+    FilterExpression: 'campaignId = :campaignId',
+    ExpressionAttributeValues: {
+      ':gsi1pk': `CAMPAIGNS#${businessId}`,
+      ':campaignId': campaignId,
+    },
+  })
 
-  const item = result.Items?.[0]
   if (!item) return null
 
   try {

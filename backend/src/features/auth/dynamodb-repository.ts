@@ -13,7 +13,7 @@ import {
   TransactWriteCommand,
 } from '@aws-sdk/lib-dynamodb'
 
-import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
+import { documentClient, TableNames, isConditionalCheckFailedError } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
 import { AppError } from '../../shared/errors/AppError.js'
 
@@ -471,18 +471,31 @@ export async function updateBusiness(
     expressionAttributeValues[`:${key}`] = data[key as keyof typeof data]
   })
 
-  const result = await documentClient.send(
-    new UpdateCommand({
-      TableName: TableNames.businesses,
-      Key: { businessId },
-      UpdateExpression: `SET ${keys.map((k) => `#${k} = :${k}`).join(', ')}, #updatedAt = :updatedAt`,
-      ExpressionAttributeNames: expressionAttributeNames,
-      ExpressionAttributeValues: expressionAttributeValues,
-      ReturnValues: 'ALL_NEW',
-    }),
-  )
+  try {
+    const result = await documentClient.send(
+      new UpdateCommand({
+        TableName: TableNames.businesses,
+        Key: { businessId },
+        // Guard against an upsert: an UpdateItem with no ConditionExpression
+        // creates the row when the key is absent. Without this, updating a
+        // non-existent businessId silently writes a phantom business row and
+        // reports success. attribute_exists makes a missing business fail the
+        // write, which we surface as null so callers keep their 404 contract.
+        ConditionExpression: 'attribute_exists(businessId)',
+        UpdateExpression: `SET ${keys.map((k) => `#${k} = :${k}`).join(', ')}, #updatedAt = :updatedAt`,
+        ExpressionAttributeNames: expressionAttributeNames,
+        ExpressionAttributeValues: expressionAttributeValues,
+        ReturnValues: 'ALL_NEW',
+      }),
+    )
 
-  return result.Attributes ? mapBiz(result.Attributes) : null
+    return result.Attributes ? mapBiz(result.Attributes) : null
+  } catch (err) {
+    // A failed condition means the business does not exist — return null so the
+    // service layer maps it to a 404 rather than treating it as a write error.
+    if (isConditionalCheckFailedError(err)) return null
+    throw err
+  }
 }
 
 function mapBiz(item: Record<string, unknown>): BusinessAccount {

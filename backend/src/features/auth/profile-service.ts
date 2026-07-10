@@ -1,20 +1,23 @@
-import { LEGAL_CLAUSES_VERSION } from '@area-code/shared/constants/legal'
-
-import { DEV_MODE } from '../../shared/config/env.js'
+import { DEV_MODE, requireEnv } from '../../shared/config/env.js'
 import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet, kvSet, kvDel } from '../../shared/kv/dynamodb-kv.js'
 
 import * as repo from './repository.js'
 
 /**
- * Canonical consent version. Falls back to `LEGAL_CLAUSES_VERSION` from the
- * shared constants module if the env var isn't set, so a misconfigured deploy
- * still records consent under the version that matches the clauses the user was
- * actually shown. Single home for this value: the signup paths in `service.ts`
- * import it from here (`no-fallbacks-no-legacy.md`, one source of truth).
+ * Canonical consent version and the single source of truth for it: the signup
+ * paths in `service.ts` and the admin re-consent list in `admin/service.ts`
+ * both read it from here (`no-fallbacks-no-legacy.md`, one source of truth).
+ *
+ * Obtained via `requireEnv`, so a missing `AREA_CODE_CONSENT_VERSION` in
+ * production crashes rather than falling back. There is deliberately no fallback
+ * to `LEGAL_CLAUSES_VERSION`: that constant is the clause-content identifier
+ * (`2026.05.1`), whose format is incomparable with recorded consent versions
+ * (`v1.0`); using it here would flag every user for re-consent (R1.5). DEV_MODE
+ * keeps a `v1.0` dev default so local runs and tests behave as before.
  */
 export function currentConsentVersion(): string {
-  return process.env['AREA_CODE_CONSENT_VERSION'] ?? LEGAL_CLAUSES_VERSION
+  return requireEnv('AREA_CODE_CONSENT_VERSION', 'v1.0')
 }
 
 // ─── User Profile ───────────────────────────────────────────────────────────

@@ -1,4 +1,7 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import { createHmac } from 'node:crypto'
+
+import { qrHmacSecret, requireEnv } from '../../shared/config/env'
+import { digestsEqual } from '../../shared/security/hmac'
 
 // ============================================================================
 // Win-Back Campaigns — Signed Unsubscribe Tokens
@@ -35,12 +38,17 @@ export const UNSUB_SECRET_ENV = 'AREA_CODE_CAMPAIGN_UNSUB_SECRET'
 const SIG_LENGTH = 32
 
 /**
- * Resolve the signing secret. Prefers the dedicated campaign-unsubscribe
- * secret, falling back to the shared QR HMAC secret (set in all environments),
- * and finally a non-empty dev default so local runs and tests are functional.
+ * Resolve the signing secret (audit-gap-closure R1.3, R1.7).
+ *
+ * Prefers the dedicated campaign-unsubscribe secret, falling back to the shared
+ * QR HMAC secret via `qrHmacSecret()`. There is no hardcoded in-repo secret
+ * literal: `qrHmacSecret()` is obtained through `requireEnv`, so in production a
+ * missing `AREA_CODE_QR_HMAC_SECRET` (with no dedicated unsubscribe secret set)
+ * fails fast at signing/verify time instead of degrading to a known constant.
+ * DEV_MODE keeps working — `qrHmacSecret()` supplies its dev default there.
  */
 function signingSecret(): string {
-  return process.env[UNSUB_SECRET_ENV] ?? process.env['AREA_CODE_QR_HMAC_SECRET'] ?? 'dev-campaign-unsubscribe-secret'
+  return process.env[UNSUB_SECRET_ENV] ?? qrHmacSecret()
 }
 
 /** Canonical signing input for a (userId, businessId) pair. */
@@ -81,11 +89,7 @@ export function verifyUnsubscribeToken(token: string): { userId: string; busines
     const { u, b, s } = decoded
     if (typeof u !== 'string' || typeof b !== 'string' || typeof s !== 'string') return null
 
-    const expected = sign(u, b)
-    const provided = Buffer.from(s)
-    const expectedBuf = Buffer.from(expected)
-    if (provided.length !== expectedBuf.length) return null
-    if (!timingSafeEqual(provided, expectedBuf)) return null
+    if (!digestsEqual(s, sign(u, b))) return null
 
     return { userId: u, businessId: b }
   } catch {
@@ -97,10 +101,15 @@ export function verifyUnsubscribeToken(token: string): { userId: string; busines
  * Build the full one-click unsubscribe URL embedded in a campaign email.
  *
  * The base URL comes from `AREA_CODE_API_BASE_URL` (set by Terraform on the
- * sender Lambda; task 10.2). The route itself is implemented by task 8.3.
+ * sender Lambda). Obtained via `requireEnv` (audit-gap-closure R1.6,
+ * `docs/decisions/prod-default-env-vars.md`): a missing base URL in production
+ * fails fast rather than silently building broken one-click unsubscribe links,
+ * which POPIA and anti-spam rules require to work. DEV_MODE keeps the local
+ * default so dev runs and tests behave as before. The route itself is
+ * implemented by the `GET /v1/campaigns/unsubscribe` handler.
  */
 export function buildUnsubscribeUrl(userId: string, businessId: string): string {
-  const base = (process.env[API_BASE_URL_ENV] ?? 'https://api.areacode.co.za').replace(/\/+$/, '')
+  const base = requireEnv(API_BASE_URL_ENV, 'https://api.areacode.co.za').replace(/\/+$/, '')
   const token = signUnsubscribeToken(userId, businessId)
   return `${base}/v1/campaigns/unsubscribe?token=${token}`
 }

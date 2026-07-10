@@ -1,8 +1,16 @@
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
+import { createHmac, randomUUID } from 'node:crypto'
 
-import { APP_ENV, AWS_REGION, DEV_MODE, assertPaymentConfig, requireEnv } from '../../shared/config/env.js'
+import {
+  APP_ENV,
+  AWS_REGION,
+  DEV_MODE,
+  assertPaymentConfig,
+  qrHmacSecret,
+  requireEnv,
+} from '../../shared/config/env.js'
 import { sendRenewalReminderEmail, sendRenewalUpcomingEmail } from '../../shared/email/ses.js'
 import { AppError } from '../../shared/errors/AppError.js'
+import { digestsEqual } from '../../shared/security/hmac.js'
 import { deactivateNodesForBusiness } from '../nodes/dynamodb-repository.js'
 import { buildDigestCopy, type DigestData } from '../reports/digest.js'
 import { getLatestDigest, queryDigestHistory } from '../reports/repository.js'
@@ -475,9 +483,7 @@ export async function processYocoWebhook(
   }
 
   // Use timing-safe comparison to prevent timing attacks
-  const sigBuffer = Buffer.from(signature, 'utf-8')
-  const expectedBuffer = Buffer.from(expected, 'utf-8')
-  if (sigBuffer.length !== expectedBuffer.length || !timingSafeEqual(sigBuffer, expectedBuffer)) {
+  if (!digestsEqual(signature, expected)) {
     throw AppError.unauthorized('Invalid webhook signature')
   }
 
@@ -993,18 +999,18 @@ export async function removeStaff(staffId: string, businessId: string) {
 // ─── QR Code ────────────────────────────────────────────────────────────────
 
 export function generateQrToken(nodeId: string): string {
-  const secret = process.env['AREA_CODE_QR_HMAC_SECRET'] ?? ''
+  const secret = qrHmacSecret()
   const flooredTs = Math.floor(Date.now() / (15 * 60 * 1000))
   return createHmac('sha256', secret).update(`${nodeId}${flooredTs}`).digest('hex').slice(0, 32)
 }
 
 export function validateQrToken(nodeId: string, token: string): boolean {
-  const secret = process.env['AREA_CODE_QR_HMAC_SECRET'] ?? ''
+  const secret = qrHmacSecret()
   // Check current and previous window (handles edge cases)
   for (let offset = 0; offset <= 1; offset++) {
     const ts = Math.floor(Date.now() / (15 * 60 * 1000)) - offset
     const expected = createHmac('sha256', secret).update(`${nodeId}${ts}`).digest('hex').slice(0, 32)
-    if (token === expected) return true
+    if (digestsEqual(token, expected)) return true
   }
   return false
 }

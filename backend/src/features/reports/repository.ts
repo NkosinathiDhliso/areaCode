@@ -1,6 +1,6 @@
 import { GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 
-import { documentClient, TableNames, isConditionalCheckFailedError } from '../../shared/db/dynamodb.js'
+import { documentClient, TableNames, isConditionalCheckFailedError, queryFirstMatch } from '../../shared/db/dynamodb.js'
 
 import { scanForPii } from './pii-scanner.js'
 import { digestRowSchema, reportTokensSchema, type DigestRow, type Report, type ReportMetrics } from './types.js'
@@ -136,22 +136,22 @@ export async function storeBusinessMetrics(businessId: string, metrics: ReportMe
  * Queries GSI1 to find the report by reportId, then parses the stored JSON.
  */
 export async function getReport(businessId: string, reportId: string): Promise<Report | null> {
-  // Query GSI1 to find the report — reportId is stored as a denormalized field
-  const result = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.appData,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'gsi1pk = :gsi1pk',
-      FilterExpression: 'reportId = :reportId',
-      ExpressionAttributeValues: {
-        ':gsi1pk': `REPORTS#${businessId}`,
-        ':reportId': reportId,
-      },
-      Limit: 1,
-    }),
-  )
+  // Query GSI1 to find the report — reportId is stored as a denormalized field.
+  // The filter must be applied across the whole business partition (paginated),
+  // never with Limit: 1: DynamoDB applies Limit before the FilterExpression, so
+  // Limit: 1 examines only the first-indexed report and 404s every other one
+  // once a business has 2+ reports.
+  const item = await queryFirstMatch({
+    TableName: TableNames.appData,
+    IndexName: 'GSI1',
+    KeyConditionExpression: 'gsi1pk = :gsi1pk',
+    FilterExpression: 'reportId = :reportId',
+    ExpressionAttributeValues: {
+      ':gsi1pk': `REPORTS#${businessId}`,
+      ':reportId': reportId,
+    },
+  })
 
-  const item = result.Items?.[0]
   if (!item) return null
 
   try {

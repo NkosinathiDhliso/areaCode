@@ -16,15 +16,25 @@ export async function getNodesByCitySlug(citySlug: string) {
   // Look up city first
   const city = await getCityBySlug(citySlug)
   if (!city) return []
-  // Scan nodes with cityId filter (no CityIndex GSI)
-  const result = await documentClient.send(
-    new ScanCommand({
-      TableName: TableNames.nodes,
-      FilterExpression: 'cityId = :cityId AND isActive = :active',
-      ExpressionAttributeValues: { ':cityId': city.id, ':active': true },
-    }),
-  )
-  const items = result.Items || []
+  // Anchored read via the CityIndex GSI (hash key cityId), paginated over
+  // LastEvaluatedKey so every matching row is read — no unanchored full-table
+  // Scan (R2.1). isActive stays a FilterExpression on the GSI query.
+  const items: Record<string, unknown>[] = []
+  let lastKey: Record<string, unknown> | undefined
+  do {
+    const result = await documentClient.send(
+      new QueryCommand({
+        TableName: TableNames.nodes,
+        IndexName: 'CityIndex',
+        KeyConditionExpression: 'cityId = :cityId',
+        FilterExpression: 'isActive = :active',
+        ExpressionAttributeValues: { ':cityId': city.id, ':active': true },
+        ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
+      }),
+    )
+    items.push(...((result.Items ?? []) as Record<string, unknown>[]))
+    lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (lastKey)
 
   // Map membership is a deliberate split from feature gating (billing R4.3).
   // Feature gating (staff caps, rewards, campaigns, reports) uses Tier_Resolver

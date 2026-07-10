@@ -1,4 +1,5 @@
-import { DEV_MODE } from '../../shared/config/env.js'
+import { DEV_MODE, qrHmacSecret } from '../../shared/config/env.js'
+import { digestsEqual } from '../../shared/security/hmac.js'
 
 import * as repo from './repository.js'
 import type { DimensionScoreVector, CrowdVibeSnapshot, BusinessMusicAudience } from './shared-types.js'
@@ -167,7 +168,7 @@ export async function connectStreaming(
 
     // Generate a signed state token that encodes the userId for the callback
     const { createHmac } = await import('node:crypto')
-    const stateSecret = process.env['AREA_CODE_QR_HMAC_SECRET'] ?? ''
+    const stateSecret = qrHmacSecret()
     const payload = JSON.stringify({ userId, ts: Date.now() })
     const sig = createHmac('sha256', stateSecret).update(payload).digest('hex').slice(0, 16)
     const state = Buffer.from(JSON.stringify({ userId, ts: Date.now(), sig, origin: frontendOrigin })).toString(
@@ -235,10 +236,10 @@ export async function handleSpotifyCallback(code: string, state: string): Promis
     // Verify HMAC signature to prevent userId injection
     if (decoded.sig) {
       const { createHmac } = await import('node:crypto')
-      const stateSecret = process.env['AREA_CODE_QR_HMAC_SECRET'] ?? ''
+      const stateSecret = qrHmacSecret()
       const payload = JSON.stringify({ userId: decoded.userId, ts: decoded.ts })
       const expectedSig = createHmac('sha256', stateSecret).update(payload).digest('hex').slice(0, 16)
-      if (decoded.sig !== expectedSig) {
+      if (!digestsEqual(decoded.sig, expectedSig)) {
         return `${frontendBase}/profile?streaming=error&reason=invalid_state`
       }
     }

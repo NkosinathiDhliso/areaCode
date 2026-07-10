@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { getVerifiedEmailBySub } from '../../shared/cognito/client.js'
 import { AppError } from '../../shared/errors/AppError.js'
 import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
-import { requireBusinessPermission } from '../../shared/middleware/business-role.js'
+import { requireBusinessPermission, getBusinessRole } from '../../shared/middleware/business-role.js'
 import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
 import { validate } from '../../shared/middleware/validation.js'
 import { getRedemptionsByStaffId } from '../rewards/repository.js'
@@ -571,9 +571,13 @@ export async function businessRoutes(app: FastifyInstance) {
       ],
     },
     async (request) => {
-      const auth = getAuth(request)
+      // Use the businessId resolved by requireBusinessPermission, not
+      // auth.userId. For a manager (staff pool) auth.userId is the staffId; the
+      // real businessId sits on request.businessRole. Passing auth.userId would
+      // target the wrong id and (with the old upsert) write a phantom row.
+      const { businessId } = getBusinessRole(request)
       const body = request.body as z.infer<typeof businessSettingsBodySchema>
-      return service.updateDigestOptOut(auth.userId, body.digestEmailOptOut)
+      return service.updateDigestOptOut(businessId, body.digestEmailOptOut)
     },
   )
 

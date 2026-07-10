@@ -21,10 +21,15 @@ import { isBlocked } from './features/social/block-repository.js'
 import { socialRoutes } from './features/social/handler.js'
 import { isFollowing } from './features/social/repository.js'
 import { staffRoutes } from './features/staff/handler.js'
+import { assertStartupConfig } from './shared/config/env.js'
 import { AppError } from './shared/errors/AppError.js'
 import { initPrivacyGuard } from './shared/privacy/privacy-guard.js'
 
 export async function buildApp() {
+  // Fail fast at cold start on missing security-critical config (QR HMAC secret,
+  // consent version) so a misdeploy crashes at init, not on first request.
+  assertStartupConfig()
+
   // Initialize PrivacyGuard with repository dependencies
   initPrivacyGuard({
     getUserById,

@@ -483,6 +483,11 @@ resource "aws_dynamodb_table" "nodes" {
     type = "S"
   }
 
+  attribute {
+    name = "cityId"
+    type = "S"
+  }
+
   global_secondary_index {
     name            = "BusinessIndex"
     hash_key        = "businessId"
@@ -492,6 +497,12 @@ resource "aws_dynamodb_table" "nodes" {
   global_secondary_index {
     name            = "LocationIndex"
     hash_key        = "location"
+    projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "CityIndex"
+    hash_key        = "cityId"
     projection_type = "ALL"
   }
 

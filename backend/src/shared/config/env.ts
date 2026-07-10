@@ -50,6 +50,42 @@ export function requireEnv(name: string, devDefault?: string): string {
 }
 
 /**
+ * QR_Secret accessor (audit-gap-closure R1.1, R1.2).
+ *
+ * Single home for the `AREA_CODE_QR_HMAC_SECRET` HMAC key behind check-in QR
+ * validation, business QR minting, and the music OAuth state signing. Obtained
+ * via `requireEnv`, so a missing secret in production crashes rather than
+ * signing/verifying over an empty string (the `?? ''` masking default this
+ * replaces). DEV_MODE keeps a dev default so local runs and tests work.
+ */
+export function qrHmacSecret(): string {
+  return requireEnv('AREA_CODE_QR_HMAC_SECRET', 'dev-qr-hmac-secret')
+}
+
+/**
+ * Startup config validation (audit-gap-closure R1.5).
+ *
+ * Validates the security-critical secrets that would otherwise only fail on the
+ * first request that needs them. Called once at cold start from `buildApp()`, so
+ * a misdeploy crashes the Lambda at init — a visible deploy failure — instead of
+ * signing/verifying over a missing key or recording consent under a bad version.
+ *
+ * - `AREA_CODE_QR_HMAC_SECRET`: HMAC key behind check-in QR validation, business
+ *   QR minting, and music OAuth state (via `qrHmacSecret()`).
+ * - `AREA_CODE_CONSENT_VERSION`: the single Consent_Version_Source
+ *   (`currentConsentVersion()`); absent in prod it must fail loudly, never fall
+ *   back to the clause-content identifier.
+ *
+ * Dev/test are unaffected: `requireEnv` returns early below since the throw path
+ * is prod-only.
+ */
+export function assertStartupConfig(): void {
+  if (!IS_PROD) return
+  requireEnv('AREA_CODE_QR_HMAC_SECRET')
+  requireEnv('AREA_CODE_CONSENT_VERSION')
+}
+
+/**
  * Payment_Config_Guard (billing-revenue-integrity R1.2).
  *
  * Fail-loud validation of the Yoco webhook signing secret. Called at module

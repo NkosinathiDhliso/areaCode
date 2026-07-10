@@ -1,5 +1,6 @@
 import { AWS_REGION, requireEnv } from '../../shared/config/env.js'
 import { AppError } from '../../shared/errors/AppError.js'
+import { currentConsentVersion } from '../auth/profile-service.js'
 
 import * as repo from './repository.js'
 import type { AdminRole } from './types.js'
@@ -179,7 +180,9 @@ export async function getConsentHistory(adminRole: AdminRole, userId: string) {
 
 export async function getReconsentList(adminRole: AdminRole) {
   checkPermission(adminRole, 'view_consent')
-  const version = requireEnv('AREA_CODE_CONSENT_VERSION', 'v1.0')
+  // One source of truth for the consent version (R1.5): reuse the canonical
+  // accessor rather than re-reading the env var here.
+  const version = currentConsentVersion()
   return repo.getUsersNeedingReconsent(version)
 }
 

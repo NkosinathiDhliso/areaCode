@@ -1,5 +1,6 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
+import { DynamoDBDocumentClient, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
+import type { QueryCommandInput, ScanCommandInput } from '@aws-sdk/lib-dynamodb'
 
 import { AWS_REGION, requireEnv } from '../config/env.js'
 
@@ -54,6 +55,48 @@ export const TableNames = {
  */
 export function isConditionalCheckFailedError(err: unknown): boolean {
   return (err as { name?: string } | null)?.name === 'ConditionalCheckFailedException'
+}
+
+/**
+ * Return the first item matching a filtered Query, following pagination.
+ *
+ * DynamoDB applies `Limit` and the 1MB page cap BEFORE `FilterExpression`, so a
+ * `Limit: 1` on a filtered query reads a single item and returns nothing when
+ * that item fails the filter — a false miss for data that provably exists. This
+ * helper never caps the page at 1: it walks `LastEvaluatedKey` until a filtered
+ * match is found or the partition is exhausted. Pass params WITHOUT `Limit: 1`
+ * (leave `Limit` unset to use the 1MB page default, or set a page-size `Limit`
+ * to bound per-page reads). Returns null when nothing matches.
+ */
+export async function queryFirstMatch(params: QueryCommandInput): Promise<Record<string, unknown> | null> {
+  let exclusiveStartKey = params.ExclusiveStartKey
+  do {
+    const result = await documentClient.send(new QueryCommand({ ...params, ExclusiveStartKey: exclusiveStartKey }))
+    const item = result.Items?.[0]
+    if (item) return item
+    exclusiveStartKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (exclusiveStartKey)
+  return null
+}
+
+/**
+ * Return the first item matching a filtered Scan, following pagination.
+ *
+ * Same DynamoDB Limit-before-Filter hazard as `queryFirstMatch`: a `Limit: 1`
+ * Scan examines one arbitrary row of the table, so a filtered lookup false-
+ * misses existing data. This helper walks `LastEvaluatedKey` until a filtered
+ * match is found or the whole table is scanned. Returns null when nothing
+ * matches.
+ */
+export async function scanFirstMatch(params: ScanCommandInput): Promise<Record<string, unknown> | null> {
+  let exclusiveStartKey = params.ExclusiveStartKey
+  do {
+    const result = await documentClient.send(new ScanCommand({ ...params, ExclusiveStartKey: exclusiveStartKey }))
+    const item = result.Items?.[0]
+    if (item) return item
+    exclusiveStartKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (exclusiveStartKey)
+  return null
 }
 
 export { client }

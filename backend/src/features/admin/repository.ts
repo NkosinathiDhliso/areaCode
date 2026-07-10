@@ -21,12 +21,14 @@ export async function getUserById(userId: string) {
   const user = await getDynamoUser(userId)
   if (!user) return null
 
-  // Fetch consent records
+  // Fetch consent records. Consent is written at pk: USER#{id}, sk: CONSENT#{id}
+  // (auth/repository.ts insertConsentRecord). Querying pk: CONSENT#{id} reads a
+  // partition nothing writes and always returns empty.
   const consentResult = await documentClient.send(
     new QueryCommand({
       TableName: TableNames.appData,
-      KeyConditionExpression: 'pk = :pk',
-      ExpressionAttributeValues: { ':pk': `CONSENT#${userId}` },
+      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :skPrefix)',
+      ExpressionAttributeValues: { ':pk': `USER#${userId}`, ':skPrefix': 'CONSENT#' },
       ScanIndexForward: false,
       Limit: 5,
     }),
@@ -237,11 +239,12 @@ export async function sendAdminMessage(adminId: string, targetUserId: string, me
 // ─── Consent Audit ──────────────────────────────────────────────────────────
 
 export async function getUserConsentHistory(userId: string) {
+  // Consent rows live at pk: USER#{id}, sk: CONSENT#{id} — see insertConsentRecord.
   const result = await documentClient.send(
     new QueryCommand({
       TableName: TableNames.appData,
-      KeyConditionExpression: 'pk = :pk',
-      ExpressionAttributeValues: { ':pk': `CONSENT#${userId}` },
+      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :skPrefix)',
+      ExpressionAttributeValues: { ':pk': `USER#${userId}`, ':skPrefix': 'CONSENT#' },
       ScanIndexForward: false,
     }),
   )
@@ -254,13 +257,17 @@ export async function getUsersNeedingReconsent(currentVersion: string) {
   const needReconsent = []
   for (const u of (usersResult.Items || []).slice(0, 200)) {
     const uid = u['userId'] as string
+    // Consent rows live at pk: USER#{id}, sk: CONSENT#{id}. Query that partition
+    // and filter for the current version WITHOUT Limit: 1 — Limit is applied
+    // before the filter, so `Limit: 1` here would flag every user as needing
+    // re-consent (100% false positives). A user's consent partition is small
+    // (a handful of rows), so the unbounded filtered read stays cheap.
     const consent = await documentClient.send(
       new QueryCommand({
         TableName: TableNames.appData,
-        KeyConditionExpression: 'pk = :pk',
+        KeyConditionExpression: 'pk = :pk AND begins_with(sk, :skPrefix)',
         FilterExpression: 'consentVersion = :ver',
-        ExpressionAttributeValues: { ':pk': `CONSENT#${uid}`, ':ver': currentVersion },
-        Limit: 1,
+        ExpressionAttributeValues: { ':pk': `USER#${uid}`, ':skPrefix': 'CONSENT#', ':ver': currentVersion },
       }),
     )
     if (!consent.Items?.length) {
@@ -381,17 +388,20 @@ export async function searchBusinesses(query: string) {
 // ─── Consent List ───────────────────────────────────────────────────────────
 
 export async function listConsents() {
+  // Consent rows are pk: USER#{id}, sk: CONSENT#{id} — identify them by the SORT
+  // key prefix, not the pk. The old `begins_with(pk, 'CONSENT#')` matched no row
+  // (nothing writes a CONSENT# partition), so the audit list was always empty.
   const result = await documentClient.send(
     new ScanCommand({
       TableName: TableNames.appData,
-      FilterExpression: 'begins_with(pk, :prefix)',
+      FilterExpression: 'begins_with(sk, :prefix)',
       ExpressionAttributeValues: { ':prefix': 'CONSENT#' },
     }),
   )
   return (result.Items || []).slice(0, 100).map((item) => {
     const pk = (item['pk'] as string) ?? ''
-    // Extract userId from pk format CONSENT#{userId}
-    const userId = pk.startsWith('CONSENT#') ? pk.slice('CONSENT#'.length) : pk
+    // Extract userId from pk format USER#{userId}
+    const userId = pk.startsWith('USER#') ? pk.slice('USER#'.length) : pk
     // Use consentId or sk as the unique id, falling back to pk+sk combo
     const id = (item['consentId'] as string) ?? `${pk}:${item['sk'] ?? ''}`
     return {
