@@ -233,11 +233,38 @@ export const NodeDetailContent = memo(function NodeDetailContent({
     <>
       {/* Header */}
       <div className="flex flex-row items-start justify-between mb-4">
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <h2 className="text-[var(--text-primary)] font-bold text-xl font-[Syne]">{node.name}</h2>
           <p className="text-[var(--text-secondary)] text-sm mt-1">
             {node.category} · {state}
           </p>
+          {node.instagramHandle && (
+            <a
+              href={`https://instagram.com/${node.instagramHandle}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`Instagram @${node.instagramHandle}`}
+              className="inline-flex items-center gap-1 text-[var(--accent)] text-xs mt-1 transition-transform duration-150 active:scale-95"
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+              </svg>
+              @{node.instagramHandle}
+            </a>
+          )}
         </div>
         <div className="relative">
           <button
