@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Stay on master",
+  "description": "Before any shell command runs, blocks git commands that create or switch branches or add worktrees, so all task and spec work stays on the master branch.",
+  "version": "1",
+  "when": {
+    "type": "preToolUse",
+    "toolTypes": [
+      "shell"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "This repository works exclusively on the master branch. Inspect the shell command that is about to run. If it creates or switches to a branch, or adds a git worktree, you MUST NOT run it. Deny and skip any command matching: \"git checkout -b\", \"git switch -c\", \"git switch -C\", \"git branch <new-name>\", \"git checkout <other-branch>\", or \"git worktree add\". All work, including task and spec work, stays on master: stage, commit, and push directly to master. If a task seems to require a branch, remain on master and continue there instead. If the command does not create or switch branches (for example git add, git commit, git push origin master, git status, or any non-git command), allow it to proceed unchanged."
+  }
+}
