@@ -972,7 +972,13 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
         "dynamodb:UpdateItem",
         "dynamodb:DeleteItem",
         "dynamodb:Query",
-        "dynamodb:Scan"
+        "dynamodb:Scan",
+        # Batch variants of the single-item grants above (same tables, no wider
+        # blast radius). Missing BatchGetItem broke the business audience read
+        # (api BatchGets users) and missing BatchWriteItem breaks the cleanup
+        # retention sweeps (observed AccessDenied in prod 2026-07-10/11).
+        "dynamodb:BatchGetItem",
+        "dynamodb:BatchWriteItem"
       ]
       Resource = [
         aws_dynamodb_table.users.arn,
@@ -1052,7 +1058,9 @@ resource "aws_iam_role_policy" "report_generator_dynamodb" {
         "dynamodb:UpdateItem",
         "dynamodb:DeleteItem",
         "dynamodb:Query",
-        "dynamodb:Scan"
+        "dynamodb:Scan",
+        # generator.ts BatchGets user rows for crowd composition.
+        "dynamodb:BatchGetItem"
       ]
       Resource = [
         aws_dynamodb_table.users.arn,
@@ -1134,7 +1142,10 @@ resource "aws_iam_role_policy" "campaign_dispatcher_dynamodb" {
         "dynamodb:PutItem",
         "dynamodb:UpdateItem",
         "dynamodb:Query",
-        "dynamodb:Scan"
+        "dynamodb:Scan",
+        # campaigns/repository.ts BatchGets recipient user rows during segment
+        # resolution (campaign_sender already grants this on the same path).
+        "dynamodb:BatchGetItem"
       ]
       Resource = [
         aws_dynamodb_table.users.arn,
