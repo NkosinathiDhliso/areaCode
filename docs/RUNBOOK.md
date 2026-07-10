@@ -106,8 +106,11 @@ Conversion is one step's total divided by the previous step's total (e.g. `signu
 | `/aws/lambda/area-code-prod-partition-manager`        | Daily partition housekeeping                |
 | `/aws/lambda/area-code-prod-cleanup`                  | Daily cleanup cron                          |
 | `/aws/lambda/area-code-prod-schedule-transition-tick` | Live-vibe music schedule tick (minute cron) |
-| `/aws/lambda/area-code-prod-yoco-webhook`             | Yoco payment webhooks                       |
 | `/aws/apigateway/area-code-prod`                      | API Gateway access logs                     |
+
+Yoco payment webhooks log inside the API Lambda group: `POST /v1/webhooks/yoco`
+is served by the monolith (the dedicated yoco-webhook Lambda was deleted
+2026-07-10; it only ever ran the infra placeholder).
 
 ## Key DynamoDB Tables
 
