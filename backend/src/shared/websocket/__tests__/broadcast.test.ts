@@ -288,3 +288,30 @@ describe('fan-out reached-count property (R3.2, R3.5)', () => {
     )
   })
 })
+
+describe('push-only Lambda no-op (no WEBSOCKET_ENDPOINT)', () => {
+  // Push-only workers (streak-reminder, pulse-decay) get no WEBSOCKET_ENDPOINT
+  // and no connections-table IAM by design. The broadcast must skip BEFORE the
+  // connections Query (a query would AccessDeny and error-log a non-defect;
+  // observed 2026-07-10 go-live FAIL) and return 0 so callers go to push.
+  it('returns 0 without querying connections when the endpoint is unset', async () => {
+    const saved = process.env['WEBSOCKET_ENDPOINT']
+    delete process.env['WEBSOCKET_ENDPOINT']
+    vi.resetModules()
+    try {
+      const fresh = await import('../broadcast.js')
+      mocks.state.pages = [{ items: [{ connectionId: 'x' }], last: true }]
+
+      const roomReached = await fresh.broadcastToRoom('city:pushonly', { type: 't', payload: {} })
+      const userReached = await fresh.broadcastToUser('user-pushonly', { type: 't', payload: {} })
+
+      expect(roomReached).toBe(0)
+      expect(userReached).toBe(0)
+      expect(mocks.state.queryCalls).toHaveLength(0)
+      expect(mocks.state.posted).toEqual([])
+    } finally {
+      process.env['WEBSOCKET_ENDPOINT'] = saved
+      vi.resetModules()
+    }
+  })
+})

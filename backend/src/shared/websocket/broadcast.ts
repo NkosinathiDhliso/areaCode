@@ -164,12 +164,31 @@ async function queryAllConnections(
   return connections
 }
 
+// Push-only Lambdas (streak-reminder, pulse-decay style) deliberately get no
+// WEBSOCKET_ENDPOINT and no connections-table/execute-api IAM; their Terraform
+// blocks document "falls back to push, by design". Skipping BEFORE the
+// connections Query keeps that designed no-op from surfacing as an
+// AccessDeniedException error log (2026-07-10 go-live FAIL). Logged once per
+// container at info level; Lambdas that DO hold an endpoint still fail loudly.
+let loggedNoEndpoint = false
+function socketDeliveryUnavailable(label: string): boolean {
+  if (WEBSOCKET_ENDPOINT) return false
+  if (!loggedNoEndpoint) {
+    loggedNoEndpoint = true
+    console.log(`[broadcast] no WEBSOCKET_ENDPOINT; socket delivery skipped, push fallback owns delivery (${label})`)
+  }
+  return true
+}
+
 /**
  * Broadcast a message to all connections in a room (e.g., city:capetown).
  * Returns the number of connections that were posted to successfully (stale and
  * failed sockets are excluded), which callers use to decide push fallback.
+ * On a push-only Lambda (no WEBSOCKET_ENDPOINT) this is a designed no-op that
+ * returns 0 so callers go straight to push.
  */
 export async function broadcastToRoom(roomId: string, message: BroadcastMessage): Promise<number> {
+  if (socketDeliveryUnavailable(`room=${roomId}`)) return 0
   const connections = await queryAllConnections('RoomIndex', 'roomId = :roomId', { ':roomId': roomId })
 
   return fanOut(connections, message, `room=${roomId}`)
@@ -180,8 +199,11 @@ export async function broadcastToRoom(roomId: string, message: BroadcastMessage)
  * Returns the count of connections posted to successfully (stale and failed
  * sockets excluded), so callers can fall back to push delivery when the user has
  * no live socket that received the message.
+ * On a push-only Lambda (no WEBSOCKET_ENDPOINT) this is a designed no-op that
+ * returns 0 so callers go straight to push.
  */
 export async function broadcastToUser(userId: string, message: BroadcastMessage): Promise<number> {
+  if (socketDeliveryUnavailable(`user=${userId}`)) return 0
   const connections = await queryAllConnections('UserIndex', 'userId = :userId', { ':userId': userId })
 
   return fanOut(connections, message, `user=${userId}`)

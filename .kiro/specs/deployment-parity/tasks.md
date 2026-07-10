@@ -97,15 +97,24 @@ log, docs sync. Founder-run steps are marked; they need prod AWS access.
   - [~] 7.1 Re-test all reported failures in prod and record before/after in GO_LIVE_CHECK_RESULT: WS connect, digest card, settings toggle, payments list, music schedule (with and without schedule), photo preview, Instagram save
     - 2026-07-10: before/after recorded in GO_LIVE_CHECK_RESULT. All five
       formerly-404 routes now 401 (live, fail closed); CDN photo fetch 200.
-      Remaining: WS connect re-test after the gated infra apply lands, and the
-      founder's in-portal UI checks (digest card, settings toggle, music
-      schedule with/without, photo preview, Instagram save).
+    - 2026-07-10 ~18:50 UTC, after the founder tf apply: WS connect re-tested
+      live. Anonymous handshake OPEN, garbage token rejected fail-closed,
+      module-load crash gone from the log group. Remaining: the founder's
+      in-portal UI checks (digest card, settings toggle, music schedule
+      with/without, photo preview, Instagram save).
     - _Requirements: 2.2, 3.2, 4.2, 5.4, 10.1_
   - [~] 7.2 `go-live-check.ps1 -Environment prod -WsToken <fresh token>` passes with the new gates
     - 2026-07-10 run: FAIL (6). Root causes fixed in-tree (websocket env,
       api_websocket IAM, yoco placeholder deletion, Sha_Parity "HEAD" false
-      negative in the check itself); staff-build FAIL was transient. To close:
-      approve the gated prod terraform apply, redrive the reward-eval DLQ (3
-      poisoned messages from 2026-07-09, command in Ops_Log), re-run with a
-      fresh `-WsToken`. Full record in GO_LIVE_CHECK_RESULT.
+      negative in the check itself); staff-build FAIL was transient.
+    - 2026-07-10 ~18:55 UTC re-run after the tf apply: FAIL (4), all
+      accounted for (see GO_LIVE_CHECK_RESULT verification-pass section):
+      Sha_Parity (backend bundle at 1d70007; docs-only commits missing),
+      DLQ=3 (redrive founder-gated), a pre-apply API broadcast error inside
+      the blind 24h window, and streak-reminder error-logging its designed
+      push-only no-op. The last is fixed in-tree
+      (`shared/websocket/broadcast.ts` endpoint-unset no-op + unit test).
+      To close: run the deploy script with `-SkipTerraform` (also restores
+      the script-managed WEBSOCKET_ENDPOINT the tf apply dropped), redrive
+      the DLQ, re-run with a fresh `-WsToken`.
     - _Requirements: 10.2_

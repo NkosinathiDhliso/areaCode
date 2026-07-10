@@ -1097,3 +1097,45 @@ which:
 To close 7.2: approve the gated prod terraform apply (or run
 `./scripts/deploy-serverless.ps1 -Environment prod`), redrive the DLQ, then
 re-run the check with a fresh `-WsToken`.
+
+## Verification pass after the founder terraform apply (2026-07-10 ~18:50 UTC)
+
+The founder applied the reviewed plan `tfplan-parity` (1 add, 16 change, 9
+destroy; the 9 destroys are the yoco-webhook placeholder and its plumbing, the
+1 add is the `api_websocket` IAM). Verified live afterwards:
+
+- WebSocket Lambda env now carries the eight Cognito vars plus
+  `AREA_CODE_ANONYMIZATION_SALT` and USERS/BUSINESSES/APP_DATA tables
+  (LastModified 18:44:38Z). The module-load crash is gone from the log group.
+- Anonymous `$connect` handshake: OPEN. Garbage-token handshake: rejected
+  (fail closed). The socket outage is over.
+- All five formerly-404 business routes return 401 fail-closed, including
+  `PATCH /v1/business/settings` probed with the correct method.
+- Table_Closure and Amplify_Env_Closure checks: PASS.
+- `go-live-check.ps1 -Environment prod`: FAIL (4), each accounted for:
+  1. Sha_Parity: API commit `1d70007` vs Amplify `b1012a6`. The two missing
+     commits carry no backend runtime code; cleared by the deploy-script run
+     below.
+  2. Reward-eval DLQ still 3 (redrive is founder-gated on this machine;
+     command above).
+  3. API error log: single 08:33Z broadcast AccessDeniedException, from BEFORE
+     the apply that created `api_websocket`; ages out of the blind 24h window.
+  4. `streak-reminder`: broadcast AccessDeniedException at 16:00Z. Root cause:
+     the worker is push-only by design (no `WEBSOCKET_ENDPOINT`, no
+     connections IAM) but `broadcastToUser` queried the connections table
+     before checking the endpoint. Fixed in `shared/websocket/broadcast.ts`:
+     endpoint-unset is now a designed no-op (return 0, one info log, no I/O)
+     so push-only workers stop error-logging their own design. Unit test
+     added; delivery was never lost (push fallback owned it).
+- Side effect found and handled: the terraform apply replaced the websocket
+  Lambda env map, dropping the script-managed `WEBSOCKET_ENDPOINT`. `$connect`
+  works without it, but `room:joined`/`room:left` acks throw until the deploy
+  script merges it back (its step 4 does this).
+
+Remaining to a green run (founder, two commands):
+
+1. `./scripts/deploy-serverless.ps1 -Environment prod -SkipTerraform`
+   (rebuilds at the pushed sha -> Sha_Parity green; redeploys bundles incl.
+   the streak-reminder/broadcast fix; merges `WEBSOCKET_ENDPOINT` back).
+2. `aws sqs start-message-move-task --source-arn arn:aws:sqs:us-east-1:562691664641:area-code-prod-reward-eval-dlq`
+   then re-run `./scripts/go-live-check.ps1 -Environment prod -WsToken <fresh jwt>`.
