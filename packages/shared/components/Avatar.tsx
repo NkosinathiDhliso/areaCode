@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 import type { Tier } from '../types'
 
 import { Box } from './primitives'
@@ -23,10 +25,23 @@ function getInitials(name: string): string {
 export function Avatar({ url, displayName, tier, size = 'md' }: AvatarProps) {
   const sizeClass = SIZE_MAP[size]
 
+  // A broken/unreachable avatar URL must degrade to the initials placeholder,
+  // never the browser's broken-image glyph. Reset on url change so a new
+  // picture gets a fresh load attempt.
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    setFailed(false)
+  }, [url])
+
   return (
     <Box className={`relative inline-flex items-center justify-center rounded-full ${sizeClass}`}>
-      {url ? (
-        <img src={url} alt={displayName} className={`rounded-full object-cover ${sizeClass}`} />
+      {url && !failed ? (
+        <img
+          src={url}
+          alt={displayName}
+          className={`rounded-full object-cover ${sizeClass}`}
+          onError={() => setFailed(true)}
+        />
       ) : (
         <Box
           className={`flex items-center justify-center rounded-full bg-[var(--bg-raised)] text-[var(--text-secondary)] font-medium ${sizeClass}`}

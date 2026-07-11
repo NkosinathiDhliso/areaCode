@@ -7,13 +7,29 @@
 # distribution's ARN (AWS:SourceArn), so no other principal and no public
 # access is possible. Pay-per-use, no WAF, no always-on cost (serverless-only).
 #
-# The default *.cloudfront.net domain name is output as media_cdn_url and used
-# as VITE_CDN_URL. A media.areacode.co.za alias can be added later without any
-# code change (add aliases + viewer_certificate).
+# When no custom_domain is set, the default *.cloudfront.net domain (and its
+# managed certificate) serves HTTPS, and media_cdn_url is that domain. When a
+# custom_domain + us-east-1 acm_certificate_arn are supplied (prod uses
+# cdn.areacode.co.za), the distribution is aliased to that domain, media_cdn_url
+# becomes https://<custom_domain>, and the caller owns the DNS alias record.
+# CloudFront requires the ACM certificate in us-east-1; the whole prod stack is
+# already us-east-1, so no separate provider alias is needed.
 # =============================================================================
 
 variable "env" {
   type = string
+}
+
+variable "custom_domain" {
+  type        = string
+  default     = ""
+  description = "Optional CNAME/alias for the distribution, e.g. cdn.areacode.co.za. Empty means serve only the default *.cloudfront.net domain."
+}
+
+variable "acm_certificate_arn" {
+  type        = string
+  default     = ""
+  description = "ARN of a us-east-1 ACM certificate covering custom_domain. Required (and only used) when custom_domain is set."
 }
 
 variable "bucket_id" {
@@ -32,7 +48,8 @@ variable "bucket_regional_domain_name" {
 }
 
 locals {
-  origin_id = "s3-media-${var.env}"
+  origin_id         = "s3-media-${var.env}"
+  has_custom_domain = var.custom_domain != ""
 }
 
 # AWS managed cache policy. It honours the origin's Cache-Control header
@@ -54,6 +71,7 @@ resource "aws_cloudfront_distribution" "media" {
   enabled     = true
   comment     = "area-code-${var.env} media CDN"
   price_class = "PriceClass_100"
+  aliases     = local.has_custom_domain ? [var.custom_domain] : null
 
   origin {
     domain_name              = var.bucket_regional_domain_name
@@ -76,9 +94,12 @@ resource "aws_cloudfront_distribution" "media" {
     }
   }
 
-  # No custom domain yet; the default *.cloudfront.net cert serves HTTPS.
+  # Default *.cloudfront.net cert unless a custom domain + ACM cert are supplied.
   viewer_certificate {
-    cloudfront_default_certificate = true
+    cloudfront_default_certificate = local.has_custom_domain ? null : true
+    acm_certificate_arn            = local.has_custom_domain ? var.acm_certificate_arn : null
+    ssl_support_method             = local.has_custom_domain ? "sni-only" : null
+    minimum_protocol_version       = local.has_custom_domain ? "TLSv1.2_2021" : null
   }
 }
 
@@ -116,6 +137,13 @@ output "distribution_domain_name" {
   value = aws_cloudfront_distribution.media.domain_name
 }
 
+output "distribution_hosted_zone_id" {
+  description = "CloudFront's fixed hosted zone id, for a Route53 alias record to the distribution."
+  value       = aws_cloudfront_distribution.media.hosted_zone_id
+}
+
+# The public base URL to use as VITE_CDN_URL: the custom domain when aliased,
+# otherwise the default *.cloudfront.net domain.
 output "media_cdn_url" {
-  value = "https://${aws_cloudfront_distribution.media.domain_name}"
+  value = local.has_custom_domain ? "https://${var.custom_domain}" : "https://${aws_cloudfront_distribution.media.domain_name}"
 }

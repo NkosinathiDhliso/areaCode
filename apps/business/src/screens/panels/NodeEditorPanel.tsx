@@ -1,3 +1,4 @@
+import { MediaImage } from '@area-code/shared/components/MediaImage'
 import { PhotoUnavailable } from '@area-code/shared/components/PhotoUnavailable'
 import { api } from '@area-code/shared/lib/api'
 import { mediaUrl } from '@area-code/shared/lib/mediaUrl'
@@ -369,7 +370,12 @@ export function NodeEditorPanel() {
                   className="relative w-full aspect-square overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-raised)] disabled:opacity-50"
                 >
                   {headerImageUrl ? (
-                    <img src={headerImageUrl} alt="Header preview" className="w-full h-full object-cover" />
+                    <MediaImage
+                      src={headerImageUrl}
+                      alt="Header preview"
+                      className="w-full h-full object-cover"
+                      fallbackClassName="absolute inset-0"
+                    />
                   ) : hasHeaderKey ? (
                     // Photo exists but the CDN base is unset, so it cannot be
                     // previewed. Show the honest unavailable state rather than

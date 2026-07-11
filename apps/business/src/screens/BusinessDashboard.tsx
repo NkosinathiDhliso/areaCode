@@ -1,3 +1,4 @@
+import { MediaImage } from '@area-code/shared/components/MediaImage'
 import { PhotoUnavailable } from '@area-code/shared/components/PhotoUnavailable'
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { api } from '@area-code/shared/lib/api'
@@ -232,10 +233,12 @@ export function BusinessDashboard() {
       >
         <div className="flex flex-row items-center gap-2">
           {headerImageUrl ? (
-            <img
+            <MediaImage
               src={headerImageUrl}
               alt={primaryNode?.name ?? 'Business'}
               className="w-9 h-9 rounded-xl object-cover border border-[var(--border)]"
+              fallbackClassName="w-9 h-9"
+              fallbackVariant="compact"
             />
           ) : hasHeaderKey ? (
             <PhotoUnavailable variant="compact" className="w-9 h-9" />

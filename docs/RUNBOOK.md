@@ -202,6 +202,14 @@ Usually the CUSTOM_AUTH Lambda trigger is erroring. Tail `/aws/lambda/area-code-
 **Image upload returns 403.**
 Presigned URL was generated with the wrong bucket or `ContentType` does not match. Check `AREA_CODE_S3_MEDIA_BUCKET` on the API Lambda env vars; the code now reads `AREA_CODE_S3_MEDIA_BUCKET` first and falls back to `MEDIA_BUCKET`.
 
+**Venue photos upload fine but never render (broken image / "Photos unavailable" everywhere).**
+The apps serve photos from `VITE_CDN_URL`, which must be `https://cdn.areacode.co.za` and must resolve to the media CloudFront distribution. This is load-bearing: if the hostname does not match the distribution's alias + certificate, every photo fails (CloudFront 403 on host mismatch, or DNS failure).
+
+- The distribution, its `cdn.areacode.co.za` alias, the us-east-1 ACM cert, and the Route53 A/AAAA alias records all live in `infra/modules/cdn` + `infra/environments/prod/main.tf` (gated on `enable_media_custom_domain`). The correct URL is the Terraform output `media_cdn_url`.
+- Confirm serving directly: `curl -I https://cdn.areacode.co.za/<a-known-headerImageKey>` should return `200` (a `403`/SSL error means the alias or cert is missing; `AccessDenied` means the OAC bucket policy is off).
+- The frontend value is provisioned by `scripts/update-all-amplify-apps.ps1` from `$env:VITE_CDN_URL` for the Web and Business apps only. After changing it, re-run that script and redeploy Amplify (builds are from git, so the value bakes in at build time).
+- The UI degrades a failed image to the "Photos unavailable" state (`packages/shared/components/MediaImage.tsx`), so seeing that state app-wide points at this CDN wiring, not a per-venue problem.
+
 ## PITR Restore Rehearsal
 
 Point-in-time recovery is enabled in Terraform on every DynamoDB table in both dev and prod (`point_in_time_recovery { enabled = true }` in `infra/environments/{dev,prod}/main.tf`). This rehearsal proves a restore works end to end against a dev table before we ever need it in prod. Run it in the dev account, `us-east-1`.

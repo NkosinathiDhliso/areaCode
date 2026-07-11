@@ -115,6 +115,19 @@ variable "enable_api_custom_domain" {
   default     = true
 }
 
+variable "enable_media_custom_domain" {
+  description = "Set to true to alias cdn.areacode.co.za onto the media CloudFront distribution (ACM cert + Route53 records). Reuses the areacode.co.za zone, so it requires enable_api_custom_domain."
+  type        = bool
+  default     = true
+}
+
+locals {
+  # Media CDN custom domain. Gated on the API-domain flag because both share the
+  # single areacode.co.za Route53 zone data source below.
+  media_cdn_domain     = "cdn.areacode.co.za"
+  media_domain_enabled = var.enable_api_custom_domain && var.enable_media_custom_domain
+}
+
 variable "alerts_email" {
   description = "Email address that receives CloudWatch alarm notifications via the alerts SNS topic and budget alerts."
   type        = string
@@ -381,6 +394,12 @@ module "media_cdn" {
   bucket_id                   = module.s3_media.bucket_id
   bucket_arn                  = module.s3_media.bucket_arn
   bucket_regional_domain_name = module.s3_media.bucket_regional_domain_name
+
+  # Serve venue photos from cdn.areacode.co.za (matches VITE_CDN_URL) instead of
+  # the raw *.cloudfront.net domain. Cert + DNS records defined in the custom
+  # domain section below.
+  custom_domain       = local.media_domain_enabled ? local.media_cdn_domain : ""
+  acm_certificate_arn = local.media_domain_enabled ? aws_acm_certificate_validation.media_cdn[0].certificate_arn : ""
 }
 
 # =============================================================================
@@ -1881,6 +1900,75 @@ resource "aws_route53_record" "api" {
   alias {
     name                   = aws_apigatewayv2_domain_name.api[0].domain_name_configuration[0].target_domain_name
     zone_id                = aws_apigatewayv2_domain_name.api[0].domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# =============================================================================
+# Custom domain (cdn.areacode.co.za) for the media CDN — gated on
+# enable_media_custom_domain (which also requires enable_api_custom_domain, as
+# both share the areacode.co.za zone above). CloudFront requires its ACM
+# certificate in us-east-1; this stack's provider is already us-east-1.
+# =============================================================================
+
+resource "aws_acm_certificate" "media_cdn" {
+  count             = local.media_domain_enabled ? 1 : 0
+  domain_name       = local.media_cdn_domain
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "media_cdn_cert_validation" {
+  for_each = local.media_domain_enabled ? {
+    for dvo in aws_acm_certificate.media_cdn[0].domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  } : {}
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = data.aws_route53_zone.root[0].zone_id
+}
+
+resource "aws_acm_certificate_validation" "media_cdn" {
+  count                   = local.media_domain_enabled ? 1 : 0
+  certificate_arn         = aws_acm_certificate.media_cdn[0].arn
+  validation_record_fqdns = [for r in aws_route53_record.media_cdn_cert_validation : r.fqdn]
+}
+
+# Alias cdn.areacode.co.za at the CloudFront distribution. Both A and AAAA so
+# IPv6 clients resolve too. Z2FDTNDATAQYW2 is CloudFront's fixed hosted zone id,
+# surfaced via the module output.
+resource "aws_route53_record" "media_cdn_a" {
+  count   = local.media_domain_enabled ? 1 : 0
+  zone_id = data.aws_route53_zone.root[0].zone_id
+  name    = local.media_cdn_domain
+  type    = "A"
+
+  alias {
+    name                   = module.media_cdn.distribution_domain_name
+    zone_id                = module.media_cdn.distribution_hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "media_cdn_aaaa" {
+  count   = local.media_domain_enabled ? 1 : 0
+  zone_id = data.aws_route53_zone.root[0].zone_id
+  name    = local.media_cdn_domain
+  type    = "AAAA"
+
+  alias {
+    name                   = module.media_cdn.distribution_domain_name
+    zone_id                = module.media_cdn.distribution_hosted_zone_id
     evaluate_target_health = false
   }
 }

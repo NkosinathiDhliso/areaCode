@@ -1,3 +1,4 @@
+import { MediaImage } from '@area-code/shared/components/MediaImage'
 import { PhotoUnavailable } from '@area-code/shared/components/PhotoUnavailable'
 import { api } from '@area-code/shared/lib/api'
 import { mediaUrl } from '@area-code/shared/lib/mediaUrl'
@@ -305,12 +306,13 @@ export const NodeDetailContent = memo(function NodeDetailContent({
       </div>
 
       {headerImageUrl ? (
-        <img
+        <MediaImage
           src={headerImageUrl}
           alt={node.name}
           loading="lazy"
           decoding="async"
           className="w-full h-40 object-cover rounded-2xl border border-[var(--border)] mb-4 bg-[var(--bg-raised)]"
+          fallbackClassName="w-full h-40 mb-4"
         />
       ) : hasHeaderKey ? (
         <PhotoUnavailable className="w-full h-40 mb-4" />
