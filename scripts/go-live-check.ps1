@@ -1151,6 +1151,13 @@ function Assert-LambdaSecrets {
         if ([string]::IsNullOrEmpty($value)) {
             Write-Check -Status "FAIL" -Name "$FunctionName $key" -Detail "not set or empty (expected a non-empty secret)"
         }
+        elseif ($value -match '^(REPLACE_WITH|CHANGEME|PLACEHOLDER|TODO)') {
+            # A template placeholder passes the non-empty test but can never
+            # verify a real signature: real Yoco webhooks would be rejected and
+            # paid upgrades never activate (found live 2026-07-11, the deployed
+            # YOCO_WEBHOOK_SECRET was the tfvars template literal).
+            Write-Check -Status "FAIL" -Name "$FunctionName $key" -Detail "set to a template placeholder, not a real secret"
+        }
         else {
             Write-Check -Status "PASS" -Name "$FunctionName $key" -Detail "set (non-empty)"
         }
