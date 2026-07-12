@@ -292,10 +292,259 @@ locals {
   consumer_client_id = aws_cognito_user_pool_client.consumer_v2.id
 }
 
+# ── Canonical business + staff pools (v2) ──
+#
+# The original module pools (us-east-1_ToRjJQAGY business, us-east-1_IgGAzUdON
+# staff) were created with phone_number usernames, so the live email signup
+# path (createEmailPasswordUser -> AdminCreateUser with the email as Username)
+# fails with "Username should be a phone number" (2026-07-12 go-live blocker).
+# username_attributes cannot change on an existing pool, so these v2 pools
+# follow the consumer-v2 pattern. Unlike consumer-v2 they are fully
+# Terraform-owned from birth: schema, OAuth client config, Hosted UI domain,
+# and Google IdP are all declared here.
+#
+# Old-pool users need no export: Google-federated business users re-link on
+# first sign-in (businessOAuthSync falls back to an email lookup and rewrites
+# cognitoSub + custom:businessId), and phone-username users have had no login
+# path since phone OTP went 410. The one linked staff Google user is recovered
+# by a re-invite (invite acceptance matches the existing staff row by email and
+# reuses the staffId). The old pools stay, unwired, like the consumer v1 pool.
+#
+# Post-apply cutover (ordered so Google sign-in never breaks):
+#   1. Google Cloud console: add both new Hosted UI redirect URIs
+#      https://<domain>.auth.us-east-1.amazoncognito.com/oauth2/idpresponse
+#      (domains in the cognito_*_hosted_ui_domain outputs) to the shared OAuth
+#      client BEFORE the Amplify cutover.
+#   2. scripts/update-all-amplify-apps.ps1 with the new
+#      VITE_COGNITO_HOSTED_UI_DOMAIN_BUSINESS/STAFF and
+#      VITE_COGNITO_CLIENT_ID_BUSINESS/STAFF values (outputs below).
+resource "aws_cognito_user_pool" "business_v2" {
+  name = "area-code-prod-business-v2"
+
+  username_attributes      = ["email"]
+  auto_verified_attributes = ["email"]
+  mfa_configuration        = "OFF"
+
+  password_policy {
+    minimum_length    = 8
+    require_lowercase = false
+    require_numbers   = false
+    require_symbols   = false
+    require_uppercase = false
+  }
+
+  account_recovery_setting {
+    recovery_mechanism {
+      name     = "verified_email"
+      priority = 1
+    }
+  }
+
+  # custom:businessId carries the JWT claim the auth middleware reads.
+  schema {
+    name                = "businessId"
+    attribute_data_type = "String"
+    mutable             = true
+  }
+
+  # Adding schema attributes later happens live (Cognito allows additive
+  # changes); diffing them here would force pool replacement.
+  lifecycle {
+    ignore_changes = [schema]
+  }
+}
+
+resource "aws_cognito_user_pool_client" "business_v2" {
+  name         = "area-code-prod-business-v2-client"
+  user_pool_id = aws_cognito_user_pool.business_v2.id
+
+  explicit_auth_flows = local.email_password_auth_flows
+
+  access_token_validity  = 1
+  id_token_validity      = 1
+  refresh_token_validity = 30
+
+  token_validity_units {
+    access_token  = "hours"
+    id_token      = "hours"
+    refresh_token = "days"
+  }
+
+  prevent_user_existence_errors = "ENABLED"
+
+  # Hosted UI (PKCE code flow, scopes must cover what
+  # buildHostedUiAuthorizeUrl requests: openid email profile).
+  callback_urls = ["https://business.areacode.co.za/auth/callback"]
+  logout_urls   = ["https://business.areacode.co.za/"]
+
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_scopes                 = ["openid", "email", "profile"]
+  supported_identity_providers = [
+    "COGNITO",
+    aws_cognito_identity_provider.business_v2_google.provider_name,
+  ]
+}
+
+resource "aws_cognito_user_pool_domain" "business_v2" {
+  domain       = "area-code-prod-business-v2"
+  user_pool_id = aws_cognito_user_pool.business_v2.id
+}
+
+resource "aws_cognito_identity_provider" "business_v2_google" {
+  user_pool_id  = aws_cognito_user_pool.business_v2.id
+  provider_name = "Google"
+  provider_type = "Google"
+
+  provider_details = {
+    client_id        = local.google_oauth.client_id
+    client_secret    = local.google_oauth.client_secret
+    authorize_scopes = "openid email profile"
+  }
+
+  attribute_mapping = {
+    email       = "email"
+    family_name = "family_name"
+    given_name  = "given_name"
+    name        = "name"
+    username    = "sub"
+  }
+
+  # Cognito auto-populates the Google endpoint URLs; never diff provider_details.
+  lifecycle {
+    ignore_changes = [provider_details]
+  }
+}
+
+resource "aws_cognito_user_pool" "staff_v2" {
+  name = "area-code-prod-staff-v2"
+
+  username_attributes      = ["email"]
+  auto_verified_attributes = ["email"]
+  mfa_configuration        = "OFF"
+
+  password_policy {
+    minimum_length    = 8
+    require_lowercase = false
+    require_numbers   = false
+    require_symbols   = false
+    require_uppercase = false
+  }
+
+  account_recovery_setting {
+    recovery_mechanism {
+      name     = "verified_email"
+      priority = 1
+    }
+  }
+
+  # custom:staffId + custom:businessId carry the JWT claims the auth
+  # middleware reads for staff sessions.
+  schema {
+    name                = "staffId"
+    attribute_data_type = "String"
+    mutable             = true
+  }
+
+  schema {
+    name                = "businessId"
+    attribute_data_type = "String"
+    mutable             = true
+  }
+
+  lifecycle {
+    ignore_changes = [schema]
+  }
+}
+
+resource "aws_cognito_user_pool_client" "staff_v2" {
+  name         = "area-code-prod-staff-v2-client"
+  user_pool_id = aws_cognito_user_pool.staff_v2.id
+
+  explicit_auth_flows = local.email_password_auth_flows
+
+  # Staff validators keep an 8h token so a shift never forces a re-login
+  # (parity with the old staff pool's access_token_ttl_hours = 8).
+  access_token_validity  = 8
+  id_token_validity      = 8
+  refresh_token_validity = 30
+
+  token_validity_units {
+    access_token  = "hours"
+    id_token      = "hours"
+    refresh_token = "days"
+  }
+
+  prevent_user_existence_errors = "ENABLED"
+
+  # Managers sign in against the staff pool FROM the business dashboard
+  # (startManagerGoogleOAuthWeb), so the business origin is a valid callback
+  # alongside the staff app's own.
+  callback_urls = [
+    "https://staff.areacode.co.za/auth/callback",
+    "https://business.areacode.co.za/auth/callback",
+  ]
+  logout_urls = [
+    "https://staff.areacode.co.za/",
+    "https://business.areacode.co.za/",
+  ]
+
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_scopes                 = ["openid", "email", "profile"]
+  supported_identity_providers = [
+    "COGNITO",
+    aws_cognito_identity_provider.staff_v2_google.provider_name,
+  ]
+}
+
+resource "aws_cognito_user_pool_domain" "staff_v2" {
+  domain       = "area-code-prod-staff-v2"
+  user_pool_id = aws_cognito_user_pool.staff_v2.id
+}
+
+resource "aws_cognito_identity_provider" "staff_v2_google" {
+  user_pool_id  = aws_cognito_user_pool.staff_v2.id
+  provider_name = "Google"
+  provider_type = "Google"
+
+  provider_details = {
+    client_id        = local.google_oauth.client_id
+    client_secret    = local.google_oauth.client_secret
+    authorize_scopes = "openid email profile"
+  }
+
+  attribute_mapping = {
+    email       = "email"
+    family_name = "family_name"
+    given_name  = "given_name"
+    name        = "name"
+    username    = "sub"
+  }
+
+  lifecycle {
+    ignore_changes = [provider_details]
+  }
+}
+
+# Business/staff pool + client the API Lambda verifies against, sourced from
+# the v2 resources above (mirrors the consumer locals).
+locals {
+  business_pool_id   = aws_cognito_user_pool.business_v2.id
+  business_client_id = aws_cognito_user_pool_client.business_v2.id
+  staff_pool_id      = aws_cognito_user_pool.staff_v2.id
+  staff_client_id    = aws_cognito_user_pool_client.staff_v2.id
+}
+
+# Frozen legacy SMS-era pools below. phone_number is stated explicitly (the
+# module default is gone) because changing it would REPLACE the pools and
+# delete their users. They no longer serve any login; the v2 pools above are
+# the live path. See rules/no-sms-no-phone-auth.md.
 module "cognito_consumer" {
   source                    = "../../modules/cognito"
   env                       = local.env
   pool_name                 = "consumer"
+  username_attributes       = ["phone_number"]
   explicit_auth_flows       = local.email_password_auth_flows
   define_auth_challenge_arn = module.cognito_triggers_consumer.define_auth_arn
   create_auth_challenge_arn = module.cognito_triggers_consumer.create_auth_arn
@@ -306,6 +555,7 @@ module "cognito_business" {
   source                    = "../../modules/cognito"
   env                       = local.env
   pool_name                 = "business"
+  username_attributes       = ["phone_number"]
   explicit_auth_flows       = local.email_password_auth_flows
   define_auth_challenge_arn = module.cognito_triggers_business.define_auth_arn
   create_auth_challenge_arn = module.cognito_triggers_business.create_auth_arn
@@ -316,6 +566,7 @@ module "cognito_staff" {
   source                    = "../../modules/cognito"
   env                       = local.env
   pool_name                 = "staff"
+  username_attributes       = ["phone_number"]
   access_token_ttl_hours    = 8
   explicit_auth_flows       = local.email_password_auth_flows
   define_auth_challenge_arn = module.cognito_triggers_staff.define_auth_arn
@@ -852,10 +1103,10 @@ module "lambda_api" {
     # Pinned to the v2 pool that owns the live Hosted UI domain (see locals above).
     AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID = local.consumer_pool_id
     AREA_CODE_COGNITO_CONSUMER_CLIENT_ID    = local.consumer_client_id
-    AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID = module.cognito_business.user_pool_id
-    AREA_CODE_COGNITO_BUSINESS_CLIENT_ID    = module.cognito_business.client_id
-    AREA_CODE_COGNITO_STAFF_USER_POOL_ID    = module.cognito_staff.user_pool_id
-    AREA_CODE_COGNITO_STAFF_CLIENT_ID       = module.cognito_staff.client_id
+    AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID = local.business_pool_id
+    AREA_CODE_COGNITO_BUSINESS_CLIENT_ID    = local.business_client_id
+    AREA_CODE_COGNITO_STAFF_USER_POOL_ID    = local.staff_pool_id
+    AREA_CODE_COGNITO_STAFF_CLIENT_ID       = local.staff_client_id
     AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
     AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
     AREA_CODE_S3_MEDIA_BUCKET               = module.s3_media.bucket_name
@@ -1365,10 +1616,12 @@ resource "aws_iam_role_policy" "api_cognito" {
         "cognito-idp:GlobalSignOut"
       ]
       Resource = [
-        # v2 is the live consumer pool the API operates on (ListUsers,
-        # AdminUpdateUserAttributes during oauth-sync). The original
-        # module.cognito_consumer pool is kept for its legacy users.
+        # v2 pools are the live pools the API operates on (ListUsers,
+        # AdminUpdateUserAttributes during oauth-sync). The original module
+        # pools are kept, unwired, for their legacy users.
         aws_cognito_user_pool.consumer_v2.arn,
+        aws_cognito_user_pool.business_v2.arn,
+        aws_cognito_user_pool.staff_v2.arn,
         module.cognito_consumer.user_pool_arn,
         module.cognito_business.user_pool_arn,
         module.cognito_staff.user_pool_arn,
@@ -2308,11 +2561,29 @@ output "cognito_consumer_pool_id" {
 }
 
 output "cognito_business_pool_id" {
-  value = module.cognito_business.user_pool_id
+  value = local.business_pool_id
 }
 
 output "cognito_staff_pool_id" {
-  value = module.cognito_staff.user_pool_id
+  value = local.staff_pool_id
+}
+
+# Client IDs + Hosted UI domains the Amplify cutover needs
+# (VITE_COGNITO_CLIENT_ID_BUSINESS/STAFF, VITE_COGNITO_HOSTED_UI_DOMAIN_BUSINESS/STAFF).
+output "cognito_business_client_id" {
+  value = local.business_client_id
+}
+
+output "cognito_staff_client_id" {
+  value = local.staff_client_id
+}
+
+output "cognito_business_hosted_ui_domain" {
+  value = "${aws_cognito_user_pool_domain.business_v2.domain}.auth.us-east-1.amazoncognito.com"
+}
+
+output "cognito_staff_hosted_ui_domain" {
+  value = "${aws_cognito_user_pool_domain.staff_v2.domain}.auth.us-east-1.amazoncognito.com"
 }
 
 output "cognito_admin_pool_id" {
@@ -2362,10 +2633,10 @@ module "lambda_websocket" {
     # Consumer is pinned to the v2 pool via locals, matching the API block.
     AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID = local.consumer_pool_id
     AREA_CODE_COGNITO_CONSUMER_CLIENT_ID    = local.consumer_client_id
-    AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID = module.cognito_business.user_pool_id
-    AREA_CODE_COGNITO_BUSINESS_CLIENT_ID    = module.cognito_business.client_id
-    AREA_CODE_COGNITO_STAFF_USER_POOL_ID    = module.cognito_staff.user_pool_id
-    AREA_CODE_COGNITO_STAFF_CLIENT_ID       = module.cognito_staff.client_id
+    AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID = local.business_pool_id
+    AREA_CODE_COGNITO_BUSINESS_CLIENT_ID    = local.business_client_id
+    AREA_CODE_COGNITO_STAFF_USER_POOL_ID    = local.staff_pool_id
+    AREA_CODE_COGNITO_STAFF_CLIENT_ID       = local.staff_client_id
     AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
     AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
     # verifyBearerToken resolves identities from DynamoDB when the JWT lacks

@@ -29,9 +29,17 @@ variable "custom_attributes" {
   default = []
 }
 
+# Required, no default. The old ["phone_number"] default silently produced
+# SMS-era pools (see rules/no-sms-no-phone-auth.md). New pools must be ["email"];
+# only the frozen legacy pool instantiations may pass ["phone_number"], because
+# username_attributes cannot change on an existing pool without replacing it.
 variable "username_attributes" {
-  type    = list(string)
-  default = ["phone_number"]
+  type = list(string)
+
+  validation {
+    condition     = var.username_attributes == tolist(["email"]) || var.username_attributes == tolist(["phone_number"])
+    error_message = "username_attributes must be [\"email\"] (new pools) or [\"phone_number\"] (frozen legacy pools only)."
+  }
 }
 
 # MFA mode for the pool. "OFF" (default), "ON" (required), or "OPTIONAL".

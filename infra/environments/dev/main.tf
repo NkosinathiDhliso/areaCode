@@ -55,10 +55,16 @@ locals {
   ]
 }
 
+# Consumer/business/staff are email-username pools. Setting username_attributes
+# on the previously phone-username dev pools REPLACES them (Cognito cannot change
+# it in place); dev users are disposable test accounts and DEV_MODE tests never
+# touch real Cognito, so replacement is the correct fix here (prod instead adds
+# v2 pools to preserve live users).
 module "cognito_consumer" {
   source                    = "../../modules/cognito"
   env                       = local.env
   pool_name                 = "consumer"
+  username_attributes       = ["email"]
   explicit_auth_flows       = local.email_password_auth_flows
   define_auth_challenge_arn = module.cognito_triggers_consumer.define_auth_arn
   create_auth_challenge_arn = module.cognito_triggers_consumer.create_auth_arn
@@ -69,6 +75,7 @@ module "cognito_business" {
   source                    = "../../modules/cognito"
   env                       = local.env
   pool_name                 = "business"
+  username_attributes       = ["email"]
   explicit_auth_flows       = local.email_password_auth_flows
   define_auth_challenge_arn = module.cognito_triggers_business.define_auth_arn
   create_auth_challenge_arn = module.cognito_triggers_business.create_auth_arn
@@ -79,6 +86,7 @@ module "cognito_staff" {
   source                    = "../../modules/cognito"
   env                       = local.env
   pool_name                 = "staff"
+  username_attributes       = ["email"]
   access_token_ttl_hours    = 8
   explicit_auth_flows       = local.email_password_auth_flows
   define_auth_challenge_arn = module.cognito_triggers_staff.define_auth_arn
