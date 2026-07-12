@@ -22,7 +22,8 @@ export async function nodeImageRoutes(app: FastifyInstance) {
   /**
    * POST /v1/business/nodes/:nodeId/image/upload-url
    * Generates a presigned S3 PUT URL scoped to the nodeId.
-   * JPEG/PNG only, max 2MB.
+   * JPEG/PNG only. Raw size is capped client-side (MAX_HEADER_IMAGE_BYTES);
+   * the upload is transient and downsized to WebP by the process step.
    */
   app.post(
     '/v1/business/nodes/:nodeId/image/upload-url',

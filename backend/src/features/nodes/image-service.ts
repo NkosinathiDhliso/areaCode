@@ -96,9 +96,10 @@ export async function generateUploadUrl(
   const objectKey = `nodes/${nodeId}/header-${Date.now()}.${ext}`
 
   // NOTE: Do not set ContentLength here. Signing it forces `content-length` into
-  // X-Amz-SignedHeaders, and the browser sends the file's actual size (not 2MB),
-  // which fails signature verification with a 403. The 2MB cap is enforced
-  // client-side and by downstream processing.
+  // X-Amz-SignedHeaders, and the browser sends the file's actual size, which
+  // would fail signature verification with a 403. The raw-size cap
+  // (MAX_HEADER_IMAGE_BYTES) is enforced client-side; downstream processing
+  // resizes and re-encodes regardless of the raw upload size.
   const command = new PutObjectCommand({
     Bucket: BUCKET,
     Key: objectKey,

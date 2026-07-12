@@ -1,6 +1,11 @@
 import { MediaImage } from '@area-code/shared/components/MediaImage'
 import { PhotoUnavailable } from '@area-code/shared/components/PhotoUnavailable'
 import { api } from '@area-code/shared/lib/api'
+import {
+  compressImageFile,
+  MAX_HEADER_IMAGE_BYTES,
+  MAX_HEADER_IMAGE_LABEL,
+} from '@area-code/shared/lib/imageCompression'
 import { mediaUrl } from '@area-code/shared/lib/mediaUrl'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 import type { Node } from '@area-code/shared/types'
@@ -185,22 +190,26 @@ export function NodeEditorPanel() {
       setPhotoMessage({ type: 'error', text: 'Only JPG or PNG allowed.' })
       return
     }
-    if (file.size > 2 * 1024 * 1024) {
-      setPhotoMessage({ type: 'error', text: 'Image must be under 2MB.' })
+    if (file.size > MAX_HEADER_IMAGE_BYTES) {
+      setPhotoMessage({ type: 'error', text: `Image must be under ${MAX_HEADER_IMAGE_LABEL}.` })
       return
     }
 
     setPhotoUploading(true)
     setPhotoMessage(null)
     try {
+      // Downscale and re-encode in the browser: the server has no image
+      // processing (sharp is not in the API Lambda), so this is what keeps
+      // served bytes small and strips EXIF/GPS. Upload the compressed result.
+      const upload = await compressImageFile(file)
       const presigned = await api.post<{ uploadUrl: string; objectKey: string }>(
         `/v1/business/nodes/${selected.id}/image/upload-url`,
-        { contentType: file.type },
+        { contentType: upload.type },
       )
       const putRes = await fetch(presigned.uploadUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': file.type },
-        body: file,
+        headers: { 'Content-Type': upload.type },
+        body: upload,
       })
       if (!putRes.ok) throw new Error(`S3 upload failed (${putRes.status})`)
       // Sanitise the upload server-side (strip EXIF/GPS, resize, WebP) and use

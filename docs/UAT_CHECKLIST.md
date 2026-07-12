@@ -149,9 +149,9 @@ These prove the platform is alive end-to-end.
 - [ ] **Venue list** — owner sees all their venues
 - [ ] **Edit name/category** — saves and reflects on the public map
 - [ ] **Edit address** — re-geocodes and updates the map pin
-- [ ] **Photo upload** — JPG/PNG up to 2MB succeeds; preview updates immediately
+- [ ] **Photo upload** — JPG/PNG (HD phone photos) succeeds; browser compresses before upload; preview updates immediately
 - [ ] **Photo rejected** — non-JPG/PNG file shows "Only JPG or PNG allowed."
-- [ ] **Photo too large** — over 2MB shows "Image must be under 2MB."
+- [ ] **Photo too large** — over 25MB shows "Image must be under 25MB."
 - [ ] **Photo removed** — Remove button deletes the image from S3 and clears the preview
 - [ ] **Instagram handle** — saving `@venue` strips the `@` and persists; clearing it removes the field
 

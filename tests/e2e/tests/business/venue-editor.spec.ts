@@ -50,7 +50,7 @@ test.describe('Business — venue editor', () => {
     await expect(page.getByText(/jpg or png|invalid|only image/i)).toBeVisible({ timeout: 10_000 })
   })
 
-  test('over-2MB image is rejected', async ({ page, loginAs }) => {
+  test('over-cap image is rejected', async ({ page, loginAs }) => {
     await loginAs('businessOwner', 'business')
     await business
       .settingsLink(page)
@@ -61,9 +61,9 @@ test.describe('Business — venue editor', () => {
     await fileInput.setInputFiles({
       name: 'huge.png',
       mimeType: 'image/png',
-      buffer: Buffer.alloc(2_500_000, 0xff),
+      buffer: Buffer.alloc(26 * 1024 * 1024, 0xff),
     })
-    await expect(page.getByText(/under 2 ?mb|too large/i)).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText(/under 25 ?mb|too large/i)).toBeVisible({ timeout: 10_000 })
   })
 
   test('valid PNG uploads and shows preview', async ({ page, loginAs }) => {

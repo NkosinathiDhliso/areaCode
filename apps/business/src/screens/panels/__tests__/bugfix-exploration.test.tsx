@@ -45,6 +45,13 @@ vi.mock('@area-code/shared/lib/socket', () => ({
   }),
 }))
 
+// Canvas-based compression can't run under jsdom; return the file unchanged so
+// the upload flow is exercised. Real constants are preserved.
+vi.mock('@area-code/shared/lib/imageCompression', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@area-code/shared/lib/imageCompression')>()),
+  compressImageFile: (file: File) => Promise.resolve(file),
+}))
+
 vi.mock('@area-code/shared/hooks/useSocketRoom', () => ({
   useSocketRoom: vi.fn(),
 }))

@@ -8,6 +8,7 @@
  * **Validates: Requirements 3.5, 3.7, 3.8, 3.9**
  */
 // @vitest-environment jsdom
+import { MAX_HEADER_IMAGE_BYTES, MAX_HEADER_IMAGE_LABEL } from '@area-code/shared/lib/imageCompression'
 import { render, act } from '@testing-library/react'
 import * as fc from 'fast-check'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -147,11 +148,11 @@ const invalidFileTypeArb = fc.constantFrom(
 /** File types that should be accepted */
 const validFileTypeArb = fc.constantFrom('image/jpeg', 'image/png')
 
-/** File sizes over 2MB (in bytes) */
-const oversizedFileSizeArb = fc.integer({ min: 2 * 1024 * 1024 + 1, max: 50 * 1024 * 1024 })
+/** File sizes over the cap (in bytes) */
+const oversizedFileSizeArb = fc.integer({ min: MAX_HEADER_IMAGE_BYTES + 1, max: 50 * 1024 * 1024 })
 
-/** File sizes under 2MB (in bytes) */
-const validFileSizeArb = fc.integer({ min: 1, max: 2 * 1024 * 1024 })
+/** File sizes under the cap (in bytes) */
+const validFileSizeArb = fc.integer({ min: 1, max: MAX_HEADER_IMAGE_BYTES })
 
 /** CDN URL arbitrary */
 const cdnUrlArb = fc.constantFrom('https://cdn.areacode.co.za', 'https://d1234.cloudfront.net')
@@ -267,12 +268,12 @@ describe('Preservation Property: Photo validation rejects invalid files', () => 
   })
 
   /**
-   * For all files over 2MB, the error message "Image must be under 2MB." is shown
-   * and no upload occurs.
+   * For all files over the cap, the error message "Image must be under 10MB." is
+   * shown and no upload occurs.
    *
    * **Validates: Requirements 3.8**
    */
-  it('should reject files over 2MB with correct error message', async () => {
+  it('should reject files over the cap with correct error message', async () => {
     await fc.assert(
       fc.asyncProperty(validFileTypeArb, oversizedFileSizeArb, async (fileType, fileSize) => {
         mockApiPost.mockReset()
@@ -304,7 +305,7 @@ describe('Preservation Property: Photo validation rejects invalid files', () => 
         })
 
         // Error message should be shown
-        expect(container.textContent).toContain('Image must be under 2MB.')
+        expect(container.textContent).toContain(`Image must be under ${MAX_HEADER_IMAGE_LABEL}.`)
 
         // No API call should have been made for presigned URL
         expect(mockApiPost).not.toHaveBeenCalledWith(expect.stringContaining('/image/upload-url'), expect.anything())
