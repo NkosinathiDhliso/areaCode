@@ -950,6 +950,112 @@ foreach ($poolSpec in $cognitoPools) {
     Test-CognitoPool -Pool $poolSpec.Pool -AssertMfaNotRequired $poolSpec.AssertMfaNotRequired
 }
 
+# 9.2b Pool_Parity gate (cognito-email-pool-cutover R6.1/R6.2). Read the four
+# Cognito pool IDs from the DEPLOYED prod API Lambda env, then describe each
+# pool and FAIL unless UsernameAttributes = ["email"] on all four.
+#
+# Authority: the pool ids come from the running API Lambda's environment (the
+# same source the 2026-07-12 audit used), NOT from a local env var or a
+# terraform output. That is deliberate and is the whole point of the gate: it
+# catches drift between what the deployed backend actually verifies tokens
+# against and the email/Google-only auth architecture (the phone-username relic
+# that blocked business/staff email signup). Resolving from local state instead
+# would only re-check the source of truth against itself and miss the drift.
+# This is why it does not reuse the §9.2 Resolve-PoolId helper: same describe
+# call, deliberately different (deployed-Lambda) authority.
+#
+# Configuration only, never user data (R6.2): this reads the pool-id env keys
+# from the Lambda config and each pool's UsernameAttributes from
+# describe-user-pool. It never calls list-users, never counts users, and never
+# reads anything about an individual.
+Write-Host "Pool parity (auth architecture drift gate)" -ForegroundColor Yellow
+
+$apiFunctionName = "area-code-prod-api"
+# The four API Lambda env keys that carry the pool ids (tech.md). Each maps to
+# one auth context; this is the report order.
+$poolParityKeys = @(
+    [pscustomobject]@{ Context = "consumer"; EnvKey = "AREA_CODE_COGNITO_CONSUMER_USER_POOL_ID" },
+    [pscustomobject]@{ Context = "business"; EnvKey = "AREA_CODE_COGNITO_BUSINESS_USER_POOL_ID" },
+    [pscustomobject]@{ Context = "staff"; EnvKey = "AREA_CODE_COGNITO_STAFF_USER_POOL_ID" },
+    [pscustomobject]@{ Context = "admin"; EnvKey = "AREA_CODE_COGNITO_ADMIN_USER_POOL_ID" }
+)
+
+if (-not $script:awsAvailable) {
+    Write-Check -Status "WARN" -Name "Pool_Parity" -Detail "AWS CLI unavailable; not checked"
+}
+else {
+    # Read the deployed API Lambda env once. A read failure (missing function,
+    # permission, or credentials) is a WARN (cannot verify), matching the other
+    # AWS state checks; it never silently passes.
+    $apiCfg = Invoke-AwsJson -AwsArgs @(
+        "lambda", "get-function-configuration",
+        "--function-name", $apiFunctionName,
+        "--region", $Region
+    )
+    if ($null -eq $apiCfg) {
+        $detail = "could not read $apiFunctionName configuration (missing function, permission, or credentials); not checked"
+        Write-Check -Status "WARN" -Name "Pool_Parity" -Detail $detail
+    }
+    else {
+        # Environment / Environment.Variables are absent when the function has no
+        # env vars at all; treat that as every pool binding missing (FAIL below),
+        # not a read failure.
+        $apiVars = $null
+        if ($null -ne $apiCfg.Environment -and $null -ne $apiCfg.Environment.Variables) {
+            $apiVars = $apiCfg.Environment.Variables
+        }
+
+        foreach ($poolEnv in $poolParityKeys) {
+            $poolContext = $poolEnv.Context
+            $envKey = $poolEnv.EnvKey
+            $label = "Pool_Parity $poolContext"
+
+            # Pool id from the deployed Lambda env. Absent/empty is a FAIL: the
+            # running backend has no pool binding for this context, itself a
+            # deploy defect (no masking default, per no-fallbacks-no-legacy.md).
+            $poolId = $null
+            if ($null -ne $apiVars -and $apiVars.PSObject.Properties.Name -contains $envKey) {
+                $poolId = $apiVars.$envKey
+            }
+            if ([string]::IsNullOrEmpty($poolId)) {
+                $detail = "$envKey not set on $apiFunctionName (deployed backend has no $poolContext pool binding)"
+                Write-Check -Status "FAIL" -Name $label -Detail $detail
+                continue
+            }
+
+            # describe-user-pool: read UsernameAttributes only. A read failure
+            # (permission/credentials) is a WARN; a resolved pool whose
+            # UsernameAttributes is not exactly ["email"] is a FAIL.
+            $poolResult = Invoke-AwsJson -AwsArgs @("cognito-idp", "describe-user-pool", "--user-pool-id", $poolId, "--region", $Region)
+            if ($null -eq $poolResult -or $null -eq $poolResult.UserPool) {
+                Write-Check -Status "WARN" -Name $label -Detail "could not describe pool $poolId (missing permission or credentials); not checked"
+                continue
+            }
+
+            # Guard the null case explicitly: @($null) is a 1-element array in
+            # PowerShell, so an absent UsernameAttributes must read as empty, not
+            # as a single null entry.
+            $usernameAttrs = @()
+            if ($null -ne $poolResult.UserPool.UsernameAttributes) {
+                $usernameAttrs = @($poolResult.UserPool.UsernameAttributes)
+            }
+            $attrText = ($usernameAttrs -join ", ")
+            if ([string]::IsNullOrEmpty($attrText)) { $attrText = "(none)" }
+
+            $isEmailOnly = ($usernameAttrs.Count -eq 1) -and ($usernameAttrs[0] -eq "email")
+            if ($isEmailOnly) {
+                Write-Check -Status "PASS" -Name $label -Detail "UsernameAttributes=[email] (pool $poolId)"
+            }
+            else {
+                $detail = "UsernameAttributes=[$attrText] (expected [email]); pool $poolId contradicts the email/Google-only auth architecture"
+                Write-Check -Status "FAIL" -Name $label -Detail $detail
+            }
+        }
+    }
+}
+
+Write-Host ""
+
 # Get-FunctionLastModifiedMs returns the Lambda's last-deploy time as epoch ms,
 # or $null when unresolved (CLI absent, no permission, missing function, or an
 # unparseable timestamp). Used to scope the worker error scan to "since the last

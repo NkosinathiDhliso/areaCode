@@ -2,6 +2,41 @@
 
 Playwright suite that automates the browser-driven portions of [`docs/UAT_CHECKLIST.md`](../../docs/UAT_CHECKLIST.md).
 
+## Environments and prod safety (current reality)
+
+Read this before running anything that authenticates or seeds.
+
+- **No staging frontend exists.** All four Amplify apps (web, business, staff,
+  admin) point at the prod API. There is no separate staging environment to
+  target, so the parts of this README that assume a dedicated staging env
+  (`.env.staging`, seeded pool IDs, the nightly full-suite run) describe an
+  intended setup that is not currently wired.
+- **Cognito seeding must never target prod pools.** `support/global-setup.ts`
+  creates email-username users. Pointing it at the prod Cognito pools would
+  write test accounts into real pools. Never do this.
+- **The Read_Only_Sweep is the sanctioned prod layer.** The only e2e run that is
+  safe against prod is the read-only sweep, which authenticates nothing and
+  seeds nothing:
+
+  ```bash
+  cd tests/e2e
+  pnpm exec playwright test --project=smoke --project=cross-cutting --project=mobile-sweep
+  ```
+
+  This is layer 2 of the go-live coverage model in
+  `docs/GO_LIVE_CHECK_RESULT.md`: structural UI checks across the four portals
+  (no overlay leaks, primary CTA reachable, no horizontal scroll, axe
+  criticals), not authenticated flows.
+
+- **Enabling the authenticated suite is an open decision, not something that
+  works today.** The seeded/authenticated projects have never been runnable in
+  any environment: seeding needs email-username business and staff pools, and
+  before the `cognito-email-pool-cutover` spec no environment offered them, and
+  no staging frontend exists to run them against. Turning the authenticated
+  suite on requires a deliberate choice: stand up a staging environment, or
+  authorize an explicitly scoped seeded prod run. Until that decision is made
+  and recorded, treat the authenticated projects as not runnable.
+
 ## Coverage matrix
 
 | Section                               | Coverage                     | Spec(s)                                                                |

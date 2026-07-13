@@ -72,6 +72,29 @@ and will differ from a future run:
   future run will show the billing secret-presence and webhook-signature lines
   and omit the push-sender DLQ line.
 
+## Coverage changes since this run (cognito-email-pool-cutover)
+
+Recorded after this 2026-07-05 run, so the verbatim output below predates them
+and will differ from a future run:
+
+- The go-live check now covers Cognito pool username-attribute drift. A new
+  Pool_Parity gate reads the four pool IDs from the deployed prod API Lambda env,
+  calls `describe-user-pool` for each, and FAILs unless every pool has
+  `UsernameAttributes = ["email"]`. This catches the drift class where a deployed
+  pool contradicts the email-only auth architecture (the latent blocker the
+  2026-07-12 run found: the prod business and staff pools still carried
+  `UsernameAttributes = phone_number`, relics of the removed SMS-OTP era). The
+  gate reads configuration only, never user data. A future run will show a
+  Pool_Parity line per pool.
+- Live-result status: pending the cutover. The Pool_Parity gate will only read
+  green once the `cognito-email-pool-cutover` cutover has replaced the
+  phone-username business/staff pools with the email-username V2 pools and
+  switched the Lambda env at them. Until that founder-run cutover lands, the gate
+  is expected to FAIL for the business and staff pools. The cutover date, V2 pool
+  IDs, and the live signup/invite verification outcome (Requirement 4) are
+  recorded in the RUNBOOK Ops_Log "Cognito email pool cutover record", pending
+  that run.
+
 ## Full output
 
 ```
