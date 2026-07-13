@@ -42,6 +42,14 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
 
+    // ── Cross-cutting sweeps (no auth): a11y §9, perf §6, security §7 ────
+    {
+      name: 'cross-cutting',
+      testMatch: /(accessibility|performance|security)\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['smoke'],
+    },
+
     // ── Consumer web ─────────────────────────────────────────────────────
     {
       name: 'consumer-desktop',

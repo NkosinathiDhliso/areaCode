@@ -596,6 +596,24 @@ module "lambda_api" {
     AREA_CODE_CONSENT_VERSION = "v1.1"
     # Win-back campaigns: the API async-invokes this dispatcher on send-now.
     AREA_CODE_CAMPAIGN_DISPATCHER_FUNCTION = module.lambda_campaign_dispatcher.function_name
+    # WebSocket broadcast support — the API Lambda emits realtime events
+    # (node:created, node:pulse_update, check-in fan-out) via broadcastToRoom.
+    # The api_websocket IAM policy already grants ManageConnections, but without
+    # these two the API had permission with nowhere to send: CONNECTIONS_TABLE is
+    # read at module load by the broadcast helper and WEBSOCKET_ENDPOINT is the
+    # management endpoint fan-out posts to. Mirrors the prod API block so a dev
+    # can test realtime the same way prod runs it.
+    CONNECTIONS_TABLE  = module.websocket.connections_table_name
+    WEBSOCKET_ENDPOINT = replace(module.websocket.websocket_api_endpoint, "wss://", "https://")
+    # HMAC secret behind check-in QR validation, business QR minting, and music
+    # OAuth state signing. DEV_MODE supplies an in-code default, but a dev run
+    # with AREA_CODE_FORCE_LIVE set exercises requireEnv, so pin a dev literal
+    # here (non-sensitive, dev only) to keep force-live parity with prod.
+    AREA_CODE_QR_HMAC_SECRET = "dev-qr-hmac-secret"
+    # Report/audience anonymisation salt. Same force-live rationale; matches the
+    # literal the dev websocket Lambda already sets so the hash is stable across
+    # both Lambdas in dev.
+    AREA_CODE_ANONYMIZATION_SALT = "report-anonymization-salt-dev"
   }
 }
 
@@ -675,6 +693,30 @@ resource "aws_iam_role_policy" "api_websocket" {
         ]
       }
     ]
+  })
+}
+
+# --- Lambda IAM: API -> S3 media bucket (node header images) ---
+# The API Lambda mints presigned PUT URLs for venue header-image uploads and
+# post-processes/deletes those objects. A presigned URL only carries the
+# permissions of the signing principal, so without this the browser PUT is
+# denied with 403 (AccessDenied) even though the signature is valid. Mirrors the
+# prod api_s3_media policy so photo upload can be tested in dev.
+resource "aws_iam_role_policy" "api_s3_media" {
+  name = "s3-media-access"
+  role = module.lambda_api.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject"
+      ]
+      Resource = "${module.s3_media.bucket_arn}/*"
+    }]
   })
 }
 

@@ -13,6 +13,7 @@ dist/
 .terraform.lock.hcl
 infra/modules/lambda/placeholder.zip
 tfplan
+tfplan-*
 
 # Markdown files — internal docs, specs, prompts
 *.md
@@ -40,4 +41,6 @@ nul.txt
 # Local deploy/scan artifacts (not for the repo)
 emdash-report.txt
 infra/environments/**/apply-resume.log
+infra/environments/**/*.log
+infra/environments/**/plan-*.txt
 

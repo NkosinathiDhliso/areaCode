@@ -19,9 +19,10 @@ test.describe('@smoke cross-cutting', () => {
   test('Public node list returns nodes for Johannesburg', async ({ request }) => {
     const res = await request.get(`${URLS.api()}/v1/nodes/johannesburg`)
     expect(res.ok()).toBe(true)
-    const body = (await res.json()) as { nodes?: unknown[] }
-    expect(Array.isArray(body.nodes)).toBe(true)
-    expect((body.nodes ?? []).length).toBeGreaterThan(0)
+    // Contract: GET /v1/nodes/:citySlug returns a top-level array of nodes.
+    const body = (await res.json()) as unknown[]
+    expect(Array.isArray(body)).toBe(true)
+    expect(body.length).toBeGreaterThan(0)
   })
 
   test('Consumer web loads without console errors', async ({ page }) => {

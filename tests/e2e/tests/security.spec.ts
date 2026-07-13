@@ -31,7 +31,7 @@ test.describe('@smoke security spot checks', () => {
 
   test('cross-pool token rejected (consumer token on business endpoint)', async ({ request }) => {
     const fake = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.invalid'
-    const res = await request.get(`${URLS.api()}/v1/business/nodes`, {
+    const res = await request.get(`${URLS.api()}/v1/business/me/nodes`, {
       headers: { Authorization: `Bearer ${fake}` },
     })
     expect([401, 403]).toContain(res.status())
