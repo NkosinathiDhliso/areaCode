@@ -28,8 +28,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     // and guard so non-Vite contexts (RN, Node tests) don't throw.
     let isDev = false
     try {
-      const meta = (import.meta as unknown as { env?: { DEV?: boolean } })?.env
-      isDev = meta?.DEV === true
+      // Plain member access so Vite replaces `import.meta.env` at build time.
+      // The `(import.meta)?.env` form is not replaced and reads undefined.
+      const env = (import.meta as unknown as { env?: { DEV?: boolean } }).env
+      isDev = env?.DEV === true
     } catch {
       // import.meta unavailable - assume prod.
     }

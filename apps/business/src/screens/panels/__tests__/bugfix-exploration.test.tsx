@@ -52,6 +52,17 @@ vi.mock('@area-code/shared/lib/imageCompression', async (importOriginal) => ({
   compressImageFile: (file: File) => Promise.resolve(file),
 }))
 
+// CDN base is a build-time inlined env var (not stubbable). Route mediaUrl
+// through the real join logic with a test-controlled base.
+const mediaMock = vi.hoisted(() => ({ cdnBase: null as string | null }))
+vi.mock('@area-code/shared/lib/mediaUrl', async (importActual) => {
+  const actual = await importActual<typeof import('@area-code/shared/lib/mediaUrl')>()
+  return {
+    ...actual,
+    mediaUrl: (key: string | null | undefined) => actual.buildMediaUrl(mediaMock.cdnBase, key),
+  }
+})
+
 vi.mock('@area-code/shared/hooks/useSocketRoom', () => ({
   useSocketRoom: vi.fn(),
 }))
@@ -151,8 +162,8 @@ describe('Bug Condition Exploration - NodeEditorPanel in LivePanel (Test 1c)', (
 
 describe('Bug Condition Exploration - Photo Preview Not Updating (Test 1d)', () => {
   beforeEach(() => {
-    // Set VITE_CDN_URL environment variable
-    vi.stubEnv('VITE_CDN_URL', 'https://cdn.example.com')
+    // Drive the mediaUrl base via the hoisted mock (VITE_CDN_URL is inlined).
+    mediaMock.cdnBase = 'https://cdn.example.com'
 
     // Mock fetch for S3 PUT
     ;(globalThis as any).fetch = vi.fn().mockResolvedValue({

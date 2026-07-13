@@ -15,8 +15,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // ─── Mocks ──────────────────────────────────────────────────────────────────
 
-// Real mediaUrl + real PhotoUnavailable: the whole point is the true branch.
-// Mock only the surrounding infrastructure.
+// The CDN base comes from `import.meta.env.VITE_CDN_URL`, which Vite/Vitest
+// inline statically (vi.stubEnv can't drive it). Route mediaUrl through the
+// real join logic (buildMediaUrl) with a test-controlled base instead.
+const mediaMock = vi.hoisted(() => ({ cdnBase: null as string | null }))
+vi.mock('@area-code/shared/lib/mediaUrl', async (importActual) => {
+  const actual = await importActual<typeof import('@area-code/shared/lib/mediaUrl')>()
+  return {
+    ...actual,
+    mediaUrl: (key: string | null | undefined) => actual.buildMediaUrl(mediaMock.cdnBase, key),
+  }
+})
+
+// Real PhotoUnavailable: the whole point is the true branch. Mock only the
+// surrounding infrastructure.
 
 vi.mock('@area-code/shared/lib/api', () => ({
   api: {
@@ -85,18 +97,20 @@ async function renderPanel() {
 beforeEach(() => {
   vi.unstubAllEnvs()
   vi.stubEnv('VITE_MAPBOX_TOKEN', '')
+  mediaMock.cdnBase = null
 })
 
 afterEach(() => {
   vi.unstubAllEnvs()
   mockStoreNodes = []
+  mediaMock.cdnBase = null
 })
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe('NodeEditorPanel photo surface (R5.3)', () => {
   it('renders the image preview when a key is set and the CDN base is set', async () => {
-    vi.stubEnv('VITE_CDN_URL', 'https://cdn.example.com')
+    mediaMock.cdnBase = 'https://cdn.example.com'
     mockStoreNodes = [makeNode({ headerImageKey: 'images/node-1/header.jpg' })]
 
     const { container } = await renderPanel()
@@ -120,7 +134,7 @@ describe('NodeEditorPanel photo surface (R5.3)', () => {
   })
 
   it('renders the "Add business photo" placeholder when there is no key', async () => {
-    vi.stubEnv('VITE_CDN_URL', 'https://cdn.example.com')
+    mediaMock.cdnBase = 'https://cdn.example.com'
     mockStoreNodes = [makeNode({ headerImageKey: null })]
 
     const { container } = await renderPanel()

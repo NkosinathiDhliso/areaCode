@@ -64,13 +64,15 @@ function readFromEnv(name: FeatureFlagName): boolean | undefined {
     // process is not available in this runtime - ignore.
   }
 
-  // Web / business: import.meta.env (Vite). Read defensively so this module
-  // can also be imported from non-Vite contexts (Node tests, SSR shims)
-  // without throwing on `import.meta`.
+  // Web / business: import.meta.env (Vite). Access as a plain member
+  // expression (no optional chaining on `import.meta`) so Vite statically
+  // replaces it at build time; the `(import.meta)?.env` form is NOT replaced
+  // and reads the browser's native, env-less import.meta. The try/catch keeps
+  // non-Vite contexts (Node tests, SSR shims) safe.
   try {
-    const meta = (import.meta as unknown as { env?: Record<string, string | undefined> })?.env
-    if (meta) {
-      const raw = meta[flagViteEnvKey(name)]
+    const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+    if (env) {
+      const raw = env[flagViteEnvKey(name)]
       if (raw === 'true') return true
       if (raw === 'false') return false
     }

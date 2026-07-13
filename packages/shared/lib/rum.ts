@@ -43,11 +43,13 @@ interface RumEnv {
 }
 
 function readEnv(): RumEnv {
-  // Vite exposes env vars on import.meta.env. Grab them defensively so this
-  // file can also be imported from a non-Vite context (tests, SSR shims)
-  // without blowing up.
+  // Vite exposes env vars on import.meta.env. Access it as a plain member
+  // expression (no optional chaining on `import.meta`) so Vite statically
+  // replaces it at build time; `(import.meta)?.env` is NOT replaced and reads
+  // the browser's native, env-less import.meta. `.env ?? {}` keeps non-Vite
+  // contexts (tests, SSR shims) safe.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const meta = (import.meta as any)?.env ?? {}
+  const meta = (import.meta as any).env ?? {}
   return {
     appMonitorId: meta.VITE_RUM_APP_MONITOR_ID,
     identityPoolId: meta.VITE_RUM_IDENTITY_POOL_ID,
