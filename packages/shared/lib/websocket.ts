@@ -56,15 +56,34 @@ class WebSocketManager {
     this._url = newUrl
     this.reconnectAttempts = 0
     this.stopHeartbeat()
-    // Close existing connection - onclose will NOT auto-reconnect because
-    // we call connect() explicitly below.
+    // Replace the existing connection. onclose is cleared so this teardown does
+    // NOT auto-reconnect - we call connect() explicitly below with the new URL.
     if (this.ws) {
-      this.ws.onclose = null // prevent double-reconnect
-      this.ws.close()
+      this.teardownSocket(this.ws)
       this.ws = null
     }
     this.isConnecting = false
     this.connect()
+  }
+
+  /**
+   * Detach a socket from the manager and close it without noise. Closing a
+   * socket that is still in CONNECTING state makes the browser log
+   * "WebSocket is closed before the connection is established" and aborts the
+   * handshake mid-flight. Instead we neutralise its handlers so it can't leak
+   * events or trigger a reconnect, then let it finish opening before closing it
+   * cleanly. An already-open socket is closed immediately.
+   */
+  private teardownSocket(socket: WebSocket): void {
+    socket.onclose = null
+    socket.onmessage = null
+    socket.onerror = null
+    if (socket.readyState === WebSocket.CONNECTING) {
+      socket.onopen = () => socket.close()
+    } else {
+      socket.onopen = null
+      socket.close()
+    }
   }
 
   connect(): void {
@@ -236,8 +255,7 @@ class WebSocketManager {
     this.unsubTokenRefresh?.()
     this.unsubTokenRefresh = null
     if (this.ws) {
-      this.ws.onclose = null // prevent auto-reconnect on intentional close
-      this.ws.close()
+      this.teardownSocket(this.ws) // prevent auto-reconnect on intentional close
       this.ws = null
     }
     this.listeners.clear()
