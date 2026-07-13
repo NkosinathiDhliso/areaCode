@@ -1,13 +1,6 @@
 import { createHmac, randomUUID } from 'node:crypto'
 
-import {
-  APP_ENV,
-  AWS_REGION,
-  DEV_MODE,
-  assertPaymentConfig,
-  qrHmacSecret,
-  requireEnv,
-} from '../../shared/config/env.js'
+import { APP_ENV, AWS_REGION, DEV_MODE, qrHmacSecret, requireEnv } from '../../shared/config/env.js'
 import { sendRenewalReminderEmail, sendRenewalUpcomingEmail } from '../../shared/email/ses.js'
 import { AppError } from '../../shared/errors/AppError.js'
 import { digestsEqual } from '../../shared/security/hmac.js'
@@ -49,13 +42,13 @@ import {
 
 // ─── Payment_Config_Guard (billing-revenue-integrity R1.2) ──────────────────
 //
-// Fail loud at cold-start. This module is the one that reads
-// `YOCO_WEBHOOK_SECRET` (in `processYocoWebhook`) and it is loaded by both the
-// API Lambda and the webhook route it serves. Validating the secret here at
-// module load means a prod deploy with the secret unset crashes the Lambda at
-// init — a visible deploy failure — instead of degrading into a runtime 401
-// stream that rejects every payment webhook. Dev/test is unaffected.
-assertPaymentConfig()
+// The Yoco webhook secret is validated at API Lambda cold start in
+// `assertStartupConfig()` (shared/config/env.ts), called from `buildApp()`.
+// It is NOT validated here at module load: this file also exports the pure
+// `getEffectiveTier` helper, imported by workers (reports, campaigns, rewards)
+// that never serve the webhook. A module-load guard here crashed those workers
+// on a secret they do not use. `processYocoWebhook` still fails closed at
+// runtime on a missing/empty secret.
 
 // ─── Booster structured logging ─────────────────────────────────────────────
 //

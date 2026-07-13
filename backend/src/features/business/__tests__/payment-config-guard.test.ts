@@ -3,11 +3,13 @@
  *
  * Validates: Requirements 1.2, 1.3
  *
- * R1.2 (Payment_Config_Guard): the Billing_Service module runs a fail-loud
- * config check at load. In any non-dev environment an unset/empty
- * `YOCO_WEBHOOK_SECRET` must crash the module at import (a visible deploy
- * failure) instead of degrading into a runtime 401 stream on every webhook.
- * The `dev` environment requires no secret and is unaffected.
+ * R1.2 (Payment_Config_Guard): the Yoco webhook secret is validated at API
+ * Lambda cold start in `assertStartupConfig()` (shared/config/env.ts), covered
+ * by shared/config/__tests__/env.test.ts. It is NOT validated at module load of
+ * the Billing_Service, because that module also exports the pure
+ * `getEffectiveTier` helper imported by workers (reports, campaigns, rewards)
+ * that never serve the webhook. These cases therefore assert the module loads
+ * cleanly without the secret; the fail-loud deploy guard lives in env.test.ts.
  *
  * R1.3 (createYocoCheckout): prod reads ONLY `YOCO_PROD_SECRET_KEY`. The old
  * `?? YOCO_DEV_SECRET_KEY ?? ''` fallback chain is gone, so a missing prod key
@@ -57,26 +59,17 @@ afterEach(() => {
   process.env = { ...ORIGINAL_ENV }
 })
 
-describe('Payment_Config_Guard at Billing_Service startup (R1.2)', () => {
-  it('throws at module load in a non-dev env when YOCO_WEBHOOK_SECRET is unset', async () => {
-    process.env['AREA_CODE_ENV'] = 'staging'
-    delete process.env['YOCO_WEBHOOK_SECRET']
-
-    await expect(import('../service.js')).rejects.toThrow(/YOCO_WEBHOOK_SECRET is not set/)
-  })
-
-  it('throws at module load in a non-dev env when YOCO_WEBHOOK_SECRET is empty', async () => {
-    process.env['AREA_CODE_ENV'] = 'staging'
-    process.env['YOCO_WEBHOOK_SECRET'] = ''
-
-    await expect(import('../service.js')).rejects.toThrow(/YOCO_WEBHOOK_SECRET is not set/)
-  })
-
-  it('loads cleanly on a correctly configured prod cold-start', async () => {
+describe('Billing_Service module load does not require the webhook secret (R1.2)', () => {
+  // The guard moved from this module's load to the API Lambda bootstrap
+  // (assertStartupConfig), so the Billing_Service must import cleanly even in a
+  // prod-like env with no YOCO_WEBHOOK_SECRET. Workers (reports/campaigns/
+  // rewards) import getEffectiveTier from here and must not crash on a payment
+  // secret they never use.
+  it('loads cleanly in a prod-like env when YOCO_WEBHOOK_SECRET is unset', async () => {
     process.env['AREA_CODE_ENV'] = 'prod'
-    process.env['YOCO_WEBHOOK_SECRET'] = 'whsec_prod_secret'
+    delete process.env['YOCO_WEBHOOK_SECRET']
     // Transitive prod-only requireEnv (anonymization salt) must be present so
-    // the only thing under test is that the guard does NOT throw here.
+    // the only variable under test is the (now absent) webhook secret.
     process.env['AREA_CODE_ANONYMIZATION_SALT'] = 'prod-salt'
 
     const mod = await import('../service.js')

@@ -20,6 +20,7 @@ function resetEnv(): void {
   delete process.env['AREA_CODE_FORCE_LIVE']
   delete process.env['AREA_CODE_QR_HMAC_SECRET']
   delete process.env['AREA_CODE_CONSENT_VERSION']
+  delete process.env['YOCO_WEBHOOK_SECRET']
 }
 
 beforeEach(() => {
@@ -67,15 +68,24 @@ describe('assertStartupConfig() (R1.2, R1.5)', () => {
     expect(() => assertStartupConfig()).toThrow(/AREA_CODE_CONSENT_VERSION is not set/)
   })
 
-  it('passes in prod when both required keys are set', async () => {
+  it('throws in prod when YOCO_WEBHOOK_SECRET is missing (webhook path fails loud)', async () => {
     process.env['AREA_CODE_ENV'] = 'prod'
     process.env['AREA_CODE_QR_HMAC_SECRET'] = 'prod-qr-secret'
     process.env['AREA_CODE_CONSENT_VERSION'] = 'v1.0'
     const { assertStartupConfig } = await import('../env.js')
+    expect(() => assertStartupConfig()).toThrow(/YOCO_WEBHOOK_SECRET is not set/)
+  })
+
+  it('passes in prod when all required keys are set', async () => {
+    process.env['AREA_CODE_ENV'] = 'prod'
+    process.env['AREA_CODE_QR_HMAC_SECRET'] = 'prod-qr-secret'
+    process.env['AREA_CODE_CONSENT_VERSION'] = 'v1.0'
+    process.env['YOCO_WEBHOOK_SECRET'] = 'whsec_prod_secret'
+    const { assertStartupConfig } = await import('../env.js')
     expect(() => assertStartupConfig()).not.toThrow()
   })
 
-  it('is a no-op in dev even when both keys are missing', async () => {
+  it('is a no-op in dev even when all keys are missing', async () => {
     process.env['AREA_CODE_ENV'] = 'dev'
     const { assertStartupConfig } = await import('../env.js')
     expect(() => assertStartupConfig()).not.toThrow()

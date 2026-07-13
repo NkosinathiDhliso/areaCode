@@ -83,30 +83,16 @@ export function assertStartupConfig(): void {
   if (!IS_PROD) return
   requireEnv('AREA_CODE_QR_HMAC_SECRET')
   requireEnv('AREA_CODE_CONSENT_VERSION')
+  // Yoco webhook signing secret (billing-revenue-integrity R1.2). The API
+  // Lambda serves POST /v1/webhooks/yoco, so it must fail loud at cold start
+  // when the secret is missing rather than rejecting every real payment webhook
+  // with a 401. This lives here (API bootstrap) rather than at module load of
+  // the Billing_Service, because that service also exports the pure
+  // `getEffectiveTier` helper imported by workers (reports, campaigns, rewards)
+  // that never serve the webhook and must not require a payment secret.
+  requireEnv('YOCO_WEBHOOK_SECRET')
 }
 
-/**
- * Payment_Config_Guard (billing-revenue-integrity R1.2).
- *
- * Fail-loud validation of the Yoco webhook signing secret. Called at module
- * load of the Billing_Service, which is loaded by both the API Lambda and the
- * webhook route it serves, so a prod cold-start with an unset or empty
- * `YOCO_WEBHOOK_SECRET` crashes at init. That surfaces the misconfiguration as
- * a visible deploy failure instead of a silent runtime 401 stream on every
- * payment webhook (the fail-closed signature gate would otherwise reject every
- * delivery and no payment would ever land).
- *
- * The environment is read from `process.env` directly (not the cached
- * `APP_ENV` const) so the check reflects the value present at the moment the
- * module loads. Dev/test (`AREA_CODE_ENV === 'dev'`) requires no secret and is
- * unaffected: the webhook path returns early in DEV_MODE and the signature
- * gate is exercised only via fail-closed unit tests.
- */
-export function assertPaymentConfig(): void {
-  const env = process.env['AREA_CODE_ENV'] ?? 'dev'
-  if (env === 'dev') return
-  const secret = process.env['YOCO_WEBHOOK_SECRET']
-  if (!secret || secret.length === 0) {
-    throw new Error('[config] Required environment variable YOCO_WEBHOOK_SECRET is not set')
-  }
-}
+// The Yoco webhook signing secret is validated in `assertStartupConfig()` above
+// (the API Lambda bootstrap that serves the webhook), not at module load of the
+// Billing_Service. See billing-revenue-integrity R1.2 and the note there.
