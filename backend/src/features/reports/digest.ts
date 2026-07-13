@@ -97,6 +97,7 @@ export type DigestMetricName =
   | 'redemptions'
   | 'firstGetIssued'
   | 'firstGetConversions'
+  | 'shares'
 
 /**
  * The Attribution_Metrics for a Digest_Week. Numeric metrics are non-negative
@@ -111,6 +112,12 @@ export interface DigestMetrics {
   redemptions: number
   firstGetIssued: number
   firstGetConversions: number
+  /**
+   * Times a consumer shared this business's venues from Area Code during the
+   * Digest_Week (share-button completions, recorded per node). A reach signal
+   * the owner can see; never a ranking input (discovery-dna rule).
+   */
+  shares: number
   busiestDay: string | null
   busiestHour: number | null
 }
@@ -241,6 +248,11 @@ export function buildDigestCopy(digest: DigestData, tier: string): string[] {
       `${metrics.firstGetConversions} converted into signups captured by Area Code.`,
   )
 
+  lines.push(
+    `${metrics.shares} ${plural(metrics.shares, 'share')} of your venue recorded through Area Code this week` +
+      `${deltaFor('shares')}.`,
+  )
+
   if (metrics.busiestDay !== null && metrics.busiestHour !== null) {
     const hour = String(metrics.busiestHour).padStart(2, '0')
     lines.push(`Busiest recorded window was ${metrics.busiestDay} around ${hour}:00.`)
@@ -277,6 +289,7 @@ export const DIGEST_METRIC_NAMES: readonly DigestMetricName[] = [
   'redemptions',
   'firstGetIssued',
   'firstGetConversions',
+  'shares',
 ] as const
 
 /**
@@ -303,6 +316,12 @@ export interface DigestSources {
    * regardless of when the token was issued (R1.4).
    */
   firstGetConversions: number
+  /**
+   * Total share-button completions recorded across the business's nodes during
+   * the Digest_Week. Summed by the caller from the per-node weekly share
+   * counters. A recorded reach fact, never a causal or ranking signal.
+   */
+  shares: number
 }
 
 /**
@@ -354,7 +373,7 @@ export function computeDigest(
   salt: string,
   priorMetrics?: DigestMetrics | null,
 ): DigestData {
-  const { windowCheckIns, earliestCheckInByUser, redemptions, firstGetIssued, firstGetConversions } = sources
+  const { windowCheckIns, earliestCheckInByUser, redemptions, firstGetIssued, firstGetConversions, shares } = sources
 
   const windowStartMs = new Date(week.windowStartUtc).getTime()
 
@@ -386,6 +405,7 @@ export function computeDigest(
     redemptions,
     firstGetIssued,
     firstGetConversions,
+    shares,
     busiestDay: peakHours.peakDay,
     busiestHour: busiestHourFrom(peakHours.hourlyDistribution, visits),
   }

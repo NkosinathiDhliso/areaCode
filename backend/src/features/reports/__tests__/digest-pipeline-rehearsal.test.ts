@@ -228,7 +228,8 @@ const BUSINESS_ID = h.BUSINESS_ID
 const NODE_ID = h.NODE_ID
 
 // The REAL modules under rehearsal are loaded after the env is set so their
-// module-load config guards (assertPaymentConfig, requireEnv) take the dev path.
+// module-load requireEnv accessors take the dev path. (The Yoco webhook guard
+// now lives in assertStartupConfig, not at Billing_Service module load.)
 let generator: typeof import('../generator.js')
 let businessService: typeof import('../../business/service.js')
 

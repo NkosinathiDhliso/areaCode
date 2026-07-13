@@ -66,7 +66,7 @@ function makeNode(overrides: Record<string, unknown>) {
     isVerified: true,
     isActive: true,
     headerImageKey: null,
-    instagramHandle: null,
+    socialLinks: {},
     createdAt: '2024-01-01T00:00:00Z',
     ...overrides,
   }

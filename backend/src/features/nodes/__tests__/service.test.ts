@@ -69,6 +69,7 @@ function repoNode(id: string) {
     nodeIcon: null,
     isVerified: true,
     headerImageKey: null,
+    socialLinks: {},
     businessTier: 'growth',
     boostUntil: null,
     boostActive: false,

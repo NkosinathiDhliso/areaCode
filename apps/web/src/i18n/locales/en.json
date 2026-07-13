@@ -164,6 +164,8 @@
   "search.nearby": "Nearby",
   "search.trending": "Trending in {{city}}",
   "share.text": "Check this out on Area Code",
+  "share.venue": "Check out {{name}} on Area Code",
+  "share.venueTagged": "Check out {{name}} ({{handle}}) on Area Code",
   "share.copied": "Link copied",
   "auth.landing.subtitle": "Discover what's happening around you",
   "auth.landing.hasAccount": "Already have an account? Sign in",

@@ -1,4 +1,5 @@
 // DynamoDB Repository for Nodes Feature
+import { normaliseSocialLinks } from '@area-code/shared/constants/social-platforms'
 import { GetCommand, QueryCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
 
 import { documentClient, TableNames, isConditionalCheckFailedError } from '../../shared/db/dynamodb.js'
@@ -230,6 +231,7 @@ function mapNode(item: Record<string, unknown>): Node {
     isVerified: (item['isVerified'] as boolean) ?? false,
     isActive: (item['isActive'] as boolean) ?? true,
     headerImageKey: (item['headerImageKey'] as string | null | undefined) ?? null,
+    socialLinks: normaliseSocialLinks(item['socialLinks']),
     defaultArchetypeId: (item['defaultArchetypeId'] as string | null | undefined) ?? null,
     currentArchetypeId: (item['currentArchetypeId'] as string | null | undefined) ?? null,
     boostUntil: (item['boostUntil'] as string | null | undefined) ?? null,

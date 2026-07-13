@@ -1,5 +1,6 @@
 import { MediaImage } from '@area-code/shared/components/MediaImage'
 import { PhotoUnavailable } from '@area-code/shared/components/PhotoUnavailable'
+import { SOCIAL_PLATFORMS, socialProfileUrl } from '@area-code/shared/constants/social-platforms'
 import { api } from '@area-code/shared/lib/api'
 import { mediaUrl } from '@area-code/shared/lib/mediaUrl'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
@@ -166,11 +167,27 @@ export const NodeDetailContent = memo(function NodeDetailContent({
 
   function handleShare() {
     const url = `https://areacode.co.za/node/${node!.slug}`
+    // Tag the venue's own social handle in the share text so a customer's post
+    // credits the venue (word-of-mouth that points back, not just a link out).
+    const links = node!.socialLinks ?? {}
+    const primaryHandle = links.instagram ?? links.tiktok ?? links.x ?? links.facebook ?? links.youtube
+    const shareText = primaryHandle
+      ? t('share.venueTagged', { name: node!.name, handle: `@${primaryHandle}` })
+      : t('share.venue', { name: node!.name })
+    // Record a completed share so the venue's weekly digest can show an honest
+    // "shares recorded" count. Fire-and-forget beacon, never blocks the share
+    // and never surfaces an error to the user.
+    const recordShare = () => {
+      void api.post(`/v1/nodes/${node!.id}/share`, {}).catch(() => {})
+    }
     if (navigator.share) {
-      void navigator.share({ title: node!.name, text: t('share.text'), url }).catch(() => {})
+      void navigator.share({ title: node!.name, text: shareText, url }).then(recordShare, () => {})
     } else {
       void navigator.clipboard.writeText(url).then(
-        () => useErrorStore.getState().showError(t('share.copied', 'Link copied to clipboard')),
+        () => {
+          recordShare()
+          useErrorStore.getState().showError(t('share.copied', 'Link copied to clipboard'))
+        },
         () => useErrorStore.getState().showError(t('share.copyFailed', "Couldn't copy link")),
       )
     }
@@ -239,32 +256,25 @@ export const NodeDetailContent = memo(function NodeDetailContent({
           <p className="text-[var(--text-secondary)] text-sm mt-1">
             {node.category} · {state}
           </p>
-          {node.instagramHandle && (
-            <a
-              href={`https://instagram.com/${node.instagramHandle}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              aria-label={`Instagram @${node.instagramHandle}`}
-              className="inline-flex items-center gap-1 text-[var(--accent)] text-xs mt-1 transition-transform duration-150 active:scale-95"
-            >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
-                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
-              </svg>
-              @{node.instagramHandle}
-            </a>
+          {node.socialLinks && Object.keys(node.socialLinks).length > 0 && (
+            <div className="flex flex-row flex-wrap gap-x-3 gap-y-1 mt-1">
+              {SOCIAL_PLATFORMS.filter((p) => node.socialLinks?.[p.platform]).map((p) => {
+                const handle = node.socialLinks![p.platform]!
+                return (
+                  <a
+                    key={p.platform}
+                    href={socialProfileUrl(p.platform, handle)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`${p.label} @${handle}`}
+                    className="inline-flex items-center text-[var(--accent)] text-xs transition-transform duration-150 active:scale-95"
+                  >
+                    {p.label}
+                  </a>
+                )
+              })}
+            </div>
           )}
         </div>
         <div className="relative">

@@ -91,6 +91,7 @@ function sourcesArbFor(week: DigestWeek): fc.Arbitrary<DigestSources> {
       redemptions: fc.nat({ max: 1000 }),
       firstGetIssued: fc.nat({ max: 1000 }),
       firstGetConversions: fc.nat({ max: 1000 }),
+      shares: fc.nat({ max: 1000 }),
     })
   })
 }
@@ -106,6 +107,7 @@ const priorMetricsArb: fc.Arbitrary<DigestMetrics | null> = fc.option(
     redemptions: fc.nat({ max: 1000 }),
     firstGetIssued: fc.nat({ max: 1000 }),
     firstGetConversions: fc.nat({ max: 1000 }),
+    shares: fc.nat({ max: 1000 }),
     busiestDay: fc.constantFrom('Monday', 'Friday', 'Sunday', null),
     busiestHour: fc.option(fc.integer({ min: 0, max: 23 }), { nil: null }),
   }),

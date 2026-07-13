@@ -415,6 +415,7 @@ export const digestMetricNameSchema = z.enum([
   'redemptions',
   'firstGetIssued',
   'firstGetConversions',
+  'shares',
 ])
 
 const digestMetricsSchema = z.object({
@@ -425,6 +426,7 @@ const digestMetricsSchema = z.object({
   redemptions: z.number().int().min(0),
   firstGetIssued: z.number().int().min(0),
   firstGetConversions: z.number().int().min(0),
+  shares: z.number().int().min(0),
   busiestDay: z.string().nullable(),
   busiestHour: z.number().int().min(0).max(23).nullable(),
 })
@@ -440,6 +442,7 @@ const digestDeltasSchema = z.object({
   redemptions: z.number().int().optional(),
   firstGetIssued: z.number().int().optional(),
   firstGetConversions: z.number().int().optional(),
+  shares: z.number().int().optional(),
 })
 
 export const digestRowSchema = z.object({

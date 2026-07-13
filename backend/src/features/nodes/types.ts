@@ -1,3 +1,4 @@
+import type { SocialLinks } from '@area-code/shared/constants/social-platforms'
 import { z } from 'zod'
 
 export const citySlugParamsSchema = z.object({
@@ -87,6 +88,8 @@ export interface Node {
   isActive: boolean
   /** S3 object key of the venue header image, served to clients via VITE_CDN_URL. */
   headerImageKey?: string | null
+  /** Venue social handles, one per platform, stored without a leading @. */
+  socialLinks?: SocialLinks
   /**
    * Fallback Archetype id used by taste-match ranking (and the Live_Archetype
    * resolver) when no live archetype is currently emitted. Absent/unknown ids

@@ -31,6 +31,7 @@ import {
   getLatestDigest,
   markDigestEmailSent,
 } from './repository.js'
+import { getNodeShareCountsForWeek } from './share-repository.js'
 import type { GenerateReportMessage, Report, ReportMetrics, MusicPrefs, DigestRow } from './types.js'
 
 // ============================================================================
@@ -530,6 +531,7 @@ async function runDigestPath(
     windowStartMs,
     windowEndMs,
   )
+  const shares = await getNodeShareCountsForWeek(nodeIds, week.weekStartIso)
 
   const sources: DigestSources = {
     windowCheckIns,
@@ -537,6 +539,7 @@ async function runDigestPath(
     redemptions,
     firstGetIssued,
     firstGetConversions,
+    shares,
   }
 
   // Prior-week metrics for deltas are read BEFORE the conditional put, so

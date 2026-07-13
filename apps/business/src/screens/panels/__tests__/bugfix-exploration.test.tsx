@@ -75,7 +75,7 @@ vi.mock('@area-code/shared/stores/businessStore', () => ({
           lng: 28.0473,
           headerImageKey: null,
           claimStatus: 'claimed',
-          instagramHandle: null,
+          socialLinks: {},
         },
       ],
       setNodes: vi.fn(),
@@ -214,7 +214,7 @@ describe('Bug Condition Exploration - Photo Preview Not Updating (Test 1d)', () 
           lng: 28.0473,
           headerImageKey: null,
           claimStatus: 'claimed',
-          instagramHandle: null,
+          socialLinks: {},
         },
       ],
     })

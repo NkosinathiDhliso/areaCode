@@ -1,5 +1,6 @@
 import { MediaImage } from '@area-code/shared/components/MediaImage'
 import { PhotoUnavailable } from '@area-code/shared/components/PhotoUnavailable'
+import { SOCIAL_PLATFORMS, type SocialLinks } from '@area-code/shared/constants/social-platforms'
 import { api } from '@area-code/shared/lib/api'
 import {
   compressImageFile,
@@ -53,9 +54,9 @@ export function NodeEditorPanel() {
   // Header image state
   const [headerImageUrl, setHeaderImageUrl] = useState<string | null>(null)
 
-  // Instagram handle state
-  const [instagramHandle, setInstagramHandle] = useState('')
-  const [instagramSaving, setInstagramSaving] = useState(false)
+  // Social handles state (one per platform, without a leading @)
+  const [socialLinks, setSocialLinks] = useState<SocialLinks>({})
+  const [socialSaving, setSocialSaving] = useState(false)
 
   useEffect(() => {
     async function fetchNodes() {
@@ -109,9 +110,29 @@ export function NodeEditorPanel() {
     // Seed header image preview
     setHeaderImageUrl(mediaUrl(selected.headerImageKey))
 
-    // Seed Instagram handle
-    setInstagramHandle(selected.instagramHandle ?? '')
+    // Seed social handles
+    setSocialLinks(selected.socialLinks ?? {})
   }, [selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleSaveSocial() {
+    if (!selected) return
+    setSocialSaving(true)
+    try {
+      const res = await api.put<{ socialLinks: SocialLinks }>(`/v1/business/nodes/${selected.id}/social`, {
+        socialLinks,
+      })
+      const updated = { ...selected, socialLinks: res.socialLinks }
+      setSelected(updated)
+      setNodes(nodes.map((n) => (n.id === selected.id ? updated : n)))
+      setSocialLinks(res.socialLinks)
+      setPhotoMessage({ type: 'success', text: 'Social links saved.' })
+    } catch {
+      setPhotoMessage({ type: 'error', text: 'Failed to save social links.' })
+    } finally {
+      setSocialSaving(false)
+      setTimeout(() => setPhotoMessage(null), 3000)
+    }
+  }
 
   async function handleAddVenue() {
     const currentAddress = (addressInputRef.current?.value || addVenueAddress).trim()
@@ -431,48 +452,41 @@ export function NodeEditorPanel() {
                 </p>
               )}
 
-              {/* Instagram Handle */}
-              <div className="flex flex-col gap-2">
-                <label className="text-[var(--text-secondary)] text-xs font-medium">Instagram Handle</label>
-                <div className="flex flex-row gap-2">
-                  <input
-                    type="text"
-                    value={instagramHandle}
-                    onChange={(e) => setInstagramHandle(e.target.value.replace(/^@/, ''))}
-                    placeholder="e.g. yourhandle"
-                    className="flex-1 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-                  />
-                  <button
-                    onClick={() => {
-                      if (!selected) return
-                      setInstagramSaving(true)
-                      api
-                        .put(`/v1/business/nodes/${selected.id}/instagram`, {
-                          handle: instagramHandle || null,
+              {/* Social links (one handle per platform) */}
+              <div className="flex flex-col gap-3">
+                <label className="text-[var(--text-secondary)] text-xs font-medium">Social links</label>
+                <p className="text-[var(--text-muted)] text-xs -mt-1">
+                  Add the handles your crowd follows. They show on your venue page, and check-ins can tag them when fans
+                  share your spot.
+                </p>
+                {SOCIAL_PLATFORMS.map((p) => (
+                  <div key={p.platform} className="flex flex-col gap-1">
+                    <span className="text-[var(--text-muted)] text-xs">{p.label}</span>
+                    <input
+                      type="text"
+                      aria-label={`${p.label} handle`}
+                      value={socialLinks[p.platform] ?? ''}
+                      onChange={(e) =>
+                        setSocialLinks((prev) => {
+                          const next = { ...prev }
+                          const v = e.target.value.replace(/^@/, '')
+                          if (v) next[p.platform] = v
+                          else delete next[p.platform]
+                          return next
                         })
-                        .then(() => setPhotoMessage({ type: 'success', text: 'Instagram saved.' }))
-                        .catch(() => setPhotoMessage({ type: 'error', text: 'Failed to save Instagram.' }))
-                        .finally(() => {
-                          setInstagramSaving(false)
-                          setTimeout(() => setPhotoMessage(null), 3000)
-                        })
-                    }}
-                    disabled={instagramSaving}
-                    className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-4 py-2.5 text-sm disabled:opacity-50"
-                  >
-                    {instagramSaving ? '...' : 'Save'}
-                  </button>
-                </div>
-                {instagramHandle && (
-                  <a
-                    href={`https://instagram.com/${instagramHandle}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[var(--accent)] text-xs"
-                  >
-                    @{instagramHandle}
-                  </a>
-                )}
+                      }
+                      placeholder={`e.g. ${p.placeholder}`}
+                      className="bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+                    />
+                  </div>
+                ))}
+                <button
+                  onClick={() => void handleSaveSocial()}
+                  disabled={socialSaving}
+                  className="self-start border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl px-4 py-2.5 text-sm disabled:opacity-50"
+                >
+                  {socialSaving ? 'Saving...' : 'Save social links'}
+                </button>
               </div>
               <button
                 onClick={() => void handleSave()}

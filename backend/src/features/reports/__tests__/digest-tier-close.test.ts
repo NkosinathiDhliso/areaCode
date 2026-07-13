@@ -42,6 +42,7 @@ const METRICS: DigestMetrics = {
   redemptions: 5,
   firstGetIssued: 8,
   firstGetConversions: 3,
+  shares: 15,
   busiestDay: 'Friday',
   busiestHour: 20,
 }
@@ -57,6 +58,7 @@ const ZERO_DIGEST: DigestData = {
     redemptions: 0,
     firstGetIssued: 0,
     firstGetConversions: 0,
+    shares: 0,
     busiestDay: null,
     busiestHour: null,
   },

@@ -32,6 +32,7 @@ const METRIC_NAMES: DigestMetricName[] = [
   'redemptions',
   'firstGetIssued',
   'firstGetConversions',
+  'shares',
 ]
 
 // A non-negative integer count, biased so zero appears often enough to
@@ -46,6 +47,7 @@ const metricsArb: fc.Arbitrary<DigestMetrics> = fc.record({
   redemptions: countArb,
   firstGetIssued: countArb,
   firstGetConversions: countArb,
+  shares: countArb,
   busiestDay: fc.option(fc.constantFrom('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'), {
     nil: null,
   }),

@@ -1,3 +1,10 @@
+import type { SocialLinks } from '../constants/social-platforms'
+
+// Social handles are re-exported here so callers can import venue-related
+// types from one place (`@area-code/shared/types`). The single source of truth
+// for the platform list and validation lives in `constants/social-platforms`.
+export type { SocialLinks, SocialPlatform } from '../constants/social-platforms'
+
 // Node states
 export type NodeState = 'dormant' | 'quiet' | 'active' | 'buzzing' | 'popping'
 
@@ -234,7 +241,8 @@ export interface Node {
   isVerified: boolean
   isActive: boolean
   headerImageKey?: string | null
-  instagramHandle?: string | null
+  /** Venue social handles, one per platform, stored without a leading @. */
+  socialLinks?: SocialLinks
   createdAt: string
   /**
    * The owning business's subscription tier, passed through from the

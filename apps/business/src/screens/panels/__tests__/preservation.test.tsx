@@ -88,7 +88,7 @@ const mockNodes = [
     isVerified: true,
     isActive: true,
     headerImageKey: 'images/node-1/header.jpg',
-    instagramHandle: 'testvenue',
+    socialLinks: { instagram: 'testvenue' },
     createdAt: '2024-01-01T00:00:00Z',
   },
   {
@@ -109,7 +109,7 @@ const mockNodes = [
     isVerified: true,
     isActive: true,
     headerImageKey: null,
-    instagramHandle: null,
+    socialLinks: {},
     createdAt: '2024-02-01T00:00:00Z',
   },
 ]

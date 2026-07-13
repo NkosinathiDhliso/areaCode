@@ -1,4 +1,5 @@
 // DynamoDB-backed Nodes Repository (replaces Prisma)
+import { normaliseSocialLinks } from '@area-code/shared/constants/social-platforms'
 import { GetCommand, PutCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
 
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
@@ -82,6 +83,7 @@ export async function getNodesByCitySlug(citySlug: string) {
       nodeIcon: n['nodeIcon'],
       isVerified: n['isVerified'],
       headerImageKey: n['headerImageKey'] ?? null,
+      socialLinks: normaliseSocialLinks(n['socialLinks']),
       businessTier: paidBusinessTiers.get(n['businessId'] as string) ?? 'starter',
       // Paid Boost_Window, computed at read time (billing R5.2, R5.5). `boostActive`
       // reverts to false on the next read once the window passes — no expiry worker.

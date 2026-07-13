@@ -49,6 +49,7 @@ const row: DigestRow = {
     redemptions: 4,
     firstGetIssued: 9,
     firstGetConversions: 3,
+    shares: 6,
     busiestDay: 'Friday',
     busiestHour: 21,
   },
