@@ -1,15 +1,14 @@
 import { normaliseSocialLinks } from '@area-code/shared/constants/social-platforms'
-import { GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 
-import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
-import { AppError } from '../../shared/errors/AppError.js'
 import { requireAuth } from '../../shared/middleware/auth.js'
 import { requireBusinessPermission, getBusinessRole } from '../../shared/middleware/business-role.js'
 import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
 import { validate } from '../../shared/middleware/validation.js'
 import { recordNodeShare } from '../reports/share-repository.js'
+
+import * as nodeService from './service.js'
 
 // Accept a loose map of platform -> handle (or null to clear). The values are
 // normalised server-side by `normaliseSocialLinks`, which drops unknown
@@ -28,7 +27,7 @@ export async function nodeSocialRoutes(app: FastifyInstance) {
   /**
    * PUT /v1/business/nodes/:nodeId/social
    * Replaces the venue's social handles with the supplied (normalised) map.
-   * Handles are stored without a leading @. An empty result removes the field.
+   * Handles are stored without a leading @.
    */
   app.put(
     '/v1/business/nodes/:nodeId/social',
@@ -44,33 +43,8 @@ export async function nodeSocialRoutes(app: FastifyInstance) {
       const { nodeId } = request.params as z.infer<typeof nodeIdParamsSchema>
       const body = request.body as z.infer<typeof socialBodySchema>
 
-      // Verify node ownership
-      const nodeResult = await documentClient.send(new GetCommand({ TableName: TableNames.nodes, Key: { nodeId } }))
-      const node = nodeResult.Item
-      if (!node || node['businessId'] !== businessId) {
-        throw new AppError(403, 'forbidden', 'You do not own this node')
-      }
-
       const socialLinks = normaliseSocialLinks(body.socialLinks)
-
-      if (Object.keys(socialLinks).length > 0) {
-        await documentClient.send(
-          new UpdateCommand({
-            TableName: TableNames.nodes,
-            Key: { nodeId },
-            UpdateExpression: 'SET socialLinks = :links',
-            ExpressionAttributeValues: { ':links': socialLinks },
-          }),
-        )
-      } else {
-        await documentClient.send(
-          new UpdateCommand({
-            TableName: TableNames.nodes,
-            Key: { nodeId },
-            UpdateExpression: 'REMOVE socialLinks',
-          }),
-        )
-      }
+      await nodeService.updateNodeSocialLinks(nodeId, businessId, socialLinks)
 
       return reply.send({ success: true, socialLinks })
     },

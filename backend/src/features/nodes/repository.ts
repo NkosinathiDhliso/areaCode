@@ -212,6 +212,28 @@ export async function updateNode(
   return { count: 1 }
 }
 
+export async function replaceNodeSocialLinks(
+  nodeId: string,
+  businessId: string,
+  socialLinks: ReturnType<typeof normaliseSocialLinks>,
+) {
+  const node = await dynamo.getNodeById(nodeId)
+  if (!node || node.businessId !== businessId) return { count: 0, citySlug: null }
+
+  await dynamo.updateNode(nodeId, { socialLinks })
+
+  if (!node.cityId) return { count: 1, citySlug: null }
+  const cityResult = await documentClient.send(
+    new GetCommand({
+      TableName: TableNames.appData,
+      Key: { pk: `CITY#${node.cityId}`, sk: `CITY#${node.cityId}` },
+      ProjectionExpression: 'slug',
+    }),
+  )
+  const citySlug = cityResult.Item?.['slug']
+  return { count: 1, citySlug: typeof citySlug === 'string' ? citySlug : null }
+}
+
 export async function claimNode(nodeId: string, businessId: string, cipcStatus: string) {
   const claimStatus = cipcStatus === 'validated' ? 'claimed' : 'pending'
   return dynamo.updateNode(nodeId, { businessId, claimStatus, claimCipcStatus: cipcStatus })

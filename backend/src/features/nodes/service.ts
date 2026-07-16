@@ -6,7 +6,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 import { APP_ENV, AWS_REGION, DEV_MODE, requireEnv } from '../../shared/config/env.js'
 import { AppError } from '../../shared/errors/AppError.js'
-import { kvBatchGet, kvGet, kvSet } from '../../shared/kv/dynamodb-kv.js'
+import { kvBatchGet, kvDel, kvGet, kvSet } from '../../shared/kv/dynamodb-kv.js'
 import { emitNodeCreated } from '../../shared/socket/events.js'
 import { findBusinessById } from '../business/repository.js'
 import { getLivePresenceCount, getMomentum } from '../presence/repository.js'
@@ -56,6 +56,10 @@ function getNodeState(score: number): string {
 // so caching the REST seed does not make any live count stale beyond the socket
 // path — honest-presence is unaffected (R2.4).
 const CITY_PAYLOAD_CACHE_TTL_SECONDS = 45
+
+function cityPayloadCacheKey(citySlug: string): string {
+  return `nodes:city:${citySlug}`
+}
 
 async function assembleCityPayload(citySlug: string) {
   const nodes = await repo.getNodesByCitySlug(citySlug)
@@ -109,7 +113,7 @@ export async function getNodesByCitySlug(citySlug: string) {
   }
 
   // Serve the shared assembled payload if it is still warm (R2.3).
-  const cacheKey = `nodes:city:${citySlug}`
+  const cacheKey = cityPayloadCacheKey(citySlug)
   const cached = await kvGet(cacheKey)
   if (cached) {
     try {
@@ -476,6 +480,19 @@ export async function updateNode(
 
   const result = await repo.updateNode(nodeId, businessId, patch as Parameters<typeof repo.updateNode>[2])
   if (result.count === 0) throw AppError.forbidden('You do not own this node')
+}
+
+export async function updateNodeSocialLinks(
+  nodeId: string,
+  businessId: string,
+  socialLinks: Parameters<typeof repo.replaceNodeSocialLinks>[2],
+) {
+  const result = await repo.replaceNodeSocialLinks(nodeId, businessId, socialLinks)
+  if (result.count === 0) throw AppError.forbidden('You do not own this node')
+
+  if (result.citySlug) {
+    await kvDel(cityPayloadCacheKey(result.citySlug))
+  }
 }
 
 // ─── Node Claiming ──────────────────────────────────────────────────────────
