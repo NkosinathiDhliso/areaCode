@@ -1,14 +1,19 @@
 // DynamoDB Repository for Rewards Feature
-import { GetCommand, QueryCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
+import {
+  DeleteCommand,
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+  ScanCommand,
+  TransactWriteCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb'
 
 import { documentClient, TableNames, isConditionalCheckFailedError } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
 
+import { getRedemptionIdByCode, redemptionCodeAliasItem } from './redemption-alias.js'
 import type { Reward, RewardRedemption } from './types.js'
-
-// ============================================================================
-// REWARD OPERATIONS
-// ============================================================================
 
 export async function getRewardById(rewardId: string): Promise<Reward | null> {
   const result = await documentClient.send(
@@ -125,10 +130,6 @@ export async function deleteReward(rewardId: string): Promise<void> {
   await documentClient.send(new DeleteCommand({ TableName: TableNames.rewards, Key: { rewardId } }))
 }
 
-// ============================================================================
-// REWARD REDEMPTIONS
-// ============================================================================
-
 export async function getRedemptionById(redemptionId: string): Promise<RewardRedemption | null> {
   const result = await documentClient.send(
     new GetCommand({
@@ -137,6 +138,11 @@ export async function getRedemptionById(redemptionId: string): Promise<RewardRed
     }),
   )
   return result.Item ? (result.Item as RewardRedemption) : null
+}
+
+export async function getRedemptionByCode(code: string): Promise<RewardRedemption | null> {
+  const redemptionId = await getRedemptionIdByCode(code)
+  return redemptionId ? getRedemptionById(redemptionId) : null
 }
 
 export async function getRedemptionsByRewardId(rewardId: string): Promise<RewardRedemption[]> {
@@ -181,16 +187,31 @@ export async function createRedemption(
     createdAt: now,
   }
 
+  const redemptionKey = `REDEMPTION#${redemptionId}`
   await documentClient.send(
-    new PutCommand({
-      TableName: TableNames.appData,
-      Item: {
-        pk: `REDEMPTION#${redemptionId}`,
-        sk: `REDEMPTION#${redemptionId}`,
-        gsi1pk: `USER_REDEMPTIONS#${data.userId}`,
-        gsi1sk: now,
-        ...redemption,
-      },
+    new TransactWriteCommand({
+      TransactItems: [
+        {
+          Put: {
+            TableName: TableNames.appData,
+            Item: {
+              pk: redemptionKey,
+              sk: redemptionKey,
+              gsi1pk: `USER_REDEMPTIONS#${data.userId}`,
+              gsi1sk: now,
+              ...redemption,
+            },
+            ConditionExpression: 'attribute_not_exists(pk)',
+          },
+        },
+        {
+          Put: {
+            TableName: TableNames.appData,
+            Item: redemptionCodeAliasItem(data.redemptionCode, redemptionId, now),
+            ConditionExpression: 'attribute_not_exists(pk)',
+          },
+        },
+      ],
     }),
   )
 

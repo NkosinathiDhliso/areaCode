@@ -234,9 +234,13 @@ export async function replaceNodeSocialLinks(
   return { count: 1, citySlug: typeof citySlug === 'string' ? citySlug : null }
 }
 
-export async function claimNode(nodeId: string, businessId: string, cipcStatus: string) {
-  const claimStatus = cipcStatus === 'validated' ? 'claimed' : 'pending'
-  return dynamo.updateNode(nodeId, { businessId, claimStatus, claimCipcStatus: cipcStatus })
+export async function claimNode(nodeId: string, businessId: string, registrationNumber: string) {
+  return dynamo.updateNode(nodeId, {
+    businessId,
+    claimStatus: 'pending',
+    claimCipcStatus: 'manual_review',
+    claimRegistrationNumber: registrationNumber,
+  })
 }
 
 export async function createReport(reporterId: string, nodeId: string, type: string, detail?: string) {

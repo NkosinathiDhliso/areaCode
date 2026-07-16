@@ -212,6 +212,19 @@ export function getEffectiveTier(
 
 // ─── Business Profile ───────────────────────────────────────────────────────
 
+function withoutPhoneFields<T extends object>(record: T): Omit<T, 'phone' | 'invitedPhone'> {
+  const safe = { ...record } as T & { phone?: unknown; invitedPhone?: unknown }
+  delete safe.phone
+  delete safe.invitedPhone
+  return safe
+}
+
+export async function getBusinessProfileById(businessId: string) {
+  const biz = await repo.findBusinessById(businessId)
+  if (!biz) throw AppError.notFound('Business account not found')
+  return withoutPhoneFields(biz)
+}
+
 export async function getBusinessProfile(cognitoSub: string) {
   if (DEV_MODE) {
     // Representative paid window so the dev portal can render billing state
@@ -229,12 +242,11 @@ export async function getBusinessProfile(cognitoSub: string) {
       digestEmailOptOut: false,
     }
   }
-  // findBusinessByCognitoSub -> auth repo mapBiz spreads the whole stored item,
-  // so paidUntil / paidInterval / paymentGraceUntil already reach the response
-  // (R2.6). No explicit field projection to keep in sync.
+  // Strip phone fields from the live business response while preserving the
+  // complete account shape used by billing and settings.
   const biz = await repo.findBusinessByCognitoSub(cognitoSub)
   if (!biz) throw AppError.notFound('Business account not found')
-  return biz
+  return withoutPhoneFields(biz)
 }
 
 export function getPlans() {
@@ -480,9 +492,8 @@ export async function processYocoWebhook(
     throw AppError.unauthorized('Invalid webhook signature')
   }
 
-  // Idempotency check
-  const existing = await repo.findWebhookEvent(eventId)
-  if (existing) {
+  const claimResult = await repo.claimWebhookEvent(eventId, eventType)
+  if (claimResult === 'processed') {
     // R2.5: log the duplicate-event-id branch when the inbound event is a
     // boost-typed payload, so an operator can answer "did this booster
     // payment get audited" by grepping the structured log alone.
@@ -498,13 +509,21 @@ export async function processYocoWebhook(
     }
     return { duplicate: true }
   }
+  if (claimResult === 'processing') {
+    throw AppError.conflict('Webhook event is already being processed')
+  }
 
-  await repo.createWebhookEvent(eventId, eventType)
-
-  if (eventType === 'payment.succeeded') {
-    await handlePaymentSucceeded(payload)
-  } else if (eventType === 'payment.failed') {
-    await handlePaymentFailed(payload)
+  try {
+    if (eventType === 'payment.succeeded') {
+      await handlePaymentSucceeded(payload)
+    } else if (eventType === 'payment.failed') {
+      await handlePaymentFailed(payload)
+    }
+    await repo.markWebhookEventProcessed(eventId)
+  } catch (err) {
+    const failureMessage = err instanceof Error ? err.message.slice(0, 500) : 'Webhook processing failed'
+    await repo.markWebhookEventFailed(eventId, failureMessage)
+    throw err
   }
 
   return { duplicate: false }
@@ -603,11 +622,24 @@ async function persistSubscriptionPayment(payload: Record<string, unknown>): Pro
   const validPlan = plan as 'growth' | 'pro' | 'payg'
   const validInterval = interval as PaidInterval
 
-  const amountCents = subscriptionAmountCents(validPlan, validInterval)
-  if (amountCents === null) {
+  const expectedAmountCents = subscriptionAmountCents(validPlan, validInterval)
+  if (expectedAmountCents === null) {
     // A plan/interval pair with no price is malformed (e.g. growth + daily).
     throw AppError.badRequest(`Unsupported plan/interval combination: ${validPlan}/${validInterval}`)
   }
+
+  const webhookAmount = payload['amount']
+  const webhookCurrency = payload['currency']
+  if (
+    typeof webhookAmount !== 'number' ||
+    !Number.isInteger(webhookAmount) ||
+    webhookAmount <= 0 ||
+    webhookAmount !== expectedAmountCents ||
+    webhookCurrency !== 'ZAR'
+  ) {
+    throw AppError.badRequest('Subscription webhook amount or currency did not match the selected plan')
+  }
+  const amountCents = webhookAmount
 
   // Yoco quotes the checkout id back inside `metadata` or at the top level
   // (same extraction order as `persistBoosterPurchase`).
@@ -938,23 +970,26 @@ export async function assertStaffCapacity(businessId: string): Promise<void> {
   }
 }
 
-export async function inviteStaff(
-  businessId: string,
-  phone?: string,
-  email?: string,
-  role: 'manager' | 'staff' = 'staff',
-) {
+export async function inviteStaff(businessId: string, email: string, role: 'manager' | 'staff' = 'staff') {
   if (DEV_MODE) {
-    return { id: `dev-invite-${Date.now()}`, businessId, phone, email, role, inviteToken: 'dev-token', accepted: false }
+    return {
+      id: `dev-invite-${Date.now()}`,
+      businessId,
+      invitedEmail: email,
+      role,
+      inviteToken: 'dev-token',
+      accepted: false,
+    }
   }
   await assertStaffCapacity(businessId)
 
-  return repo.createStaffInvite(businessId, phone, email, role)
+  return repo.createStaffInvite(businessId, email, role)
 }
 
 export async function listStaffInvites(businessId: string) {
   if (DEV_MODE) return []
-  return repo.listStaffInvites(businessId)
+  const invites = await repo.listStaffInvites(businessId)
+  return invites.map(withoutPhoneFields)
 }
 
 export async function revokeStaffInvite(businessId: string, token: string) {
@@ -966,7 +1001,8 @@ export async function revokeStaffInvite(businessId: string, token: string) {
 
 export async function listStaff(businessId: string) {
   if (DEV_MODE) return []
-  return repo.listStaffAccounts(businessId)
+  const staff = await repo.listStaffAccounts(businessId)
+  return staff.map(withoutPhoneFields)
 }
 
 export async function removeStaff(staffId: string, businessId: string) {

@@ -92,6 +92,77 @@ vi.mock('../../../shared/db/dynamodb.js', () => {
         return { Items: [], Count: 0 }
       }
 
+      if (name === 'TransactWriteCommand') {
+        const operations = input.TransactItems as Array<{
+          Update?: Record<string, any>
+          Put?: Record<string, any>
+        }>
+
+        const rejectAt = (index: number): never => {
+          const err = new Error('transaction cancelled') as Error & {
+            name: string
+            CancellationReasons: Array<{ Code: string }>
+          }
+          err.name = 'TransactionCanceledException'
+          err.CancellationReasons = operations.map((_, i) => ({
+            Code: i === index ? 'ConditionalCheckFailed' : 'None',
+          }))
+          throw err
+        }
+
+        operations.forEach((operation, index) => {
+          const put = operation.Put
+          if (put?.ConditionExpression) {
+            const key = appDataKey(put.Item.pk, put.Item.sk)
+            if (store.appData.has(key)) rejectAt(index)
+          }
+
+          const update = operation.Update
+          if (update?.ConditionExpression) {
+            const key = appDataKey(update.Key.pk, update.Key.sk)
+            const existing = store.appData.get(key)
+            const txValues = update.ExpressionAttributeValues as Record<string, unknown>
+            if (existing) {
+              const now = txValues[':now'] as string
+              const cutoff = txValues[':cutoff'] as string | undefined
+              const redeemedAt = existing['redeemedAt'] as string | undefined
+              const codeExpiresAt = existing['codeExpiresAt'] as string | undefined
+              const unredeemedExpired = redeemedAt === undefined && codeExpiresAt !== undefined && codeExpiresAt < now
+              const redeemedAged = redeemedAt !== undefined && cutoff !== undefined && redeemedAt <= cutoff
+              if (!unredeemedExpired && !redeemedAged) rejectAt(index)
+            }
+          }
+        })
+
+        for (const operation of operations) {
+          if (operation.Update) {
+            const update = operation.Update
+            const key = appDataKey(update.Key.pk, update.Key.sk)
+            const existing = store.appData.get(key) ?? {}
+            const txValues = update.ExpressionAttributeValues as Record<string, unknown>
+            const updated: Record<string, unknown> = {
+              ...existing,
+              pk: update.Key.pk,
+              sk: update.Key.sk,
+              rewardId: txValues[':rewardId'],
+              userId: txValues[':userId'],
+              redemptionId: txValues[':rid'],
+              codeExpiresAt: txValues[':exp'],
+              createdAt: txValues[':now'],
+              lastRedeemedAt: existing['redeemedAt'] ?? existing['lastRedeemedAt'] ?? txValues[':epoch'],
+              redemptionCount: ((existing['redemptionCount'] as number | undefined) ?? 0) + 1,
+            }
+            delete updated['redeemedAt']
+            store.appData.set(key, updated)
+          }
+          if (operation.Put) {
+            const item = operation.Put.Item as Record<string, unknown>
+            store.appData.set(appDataKey(item['pk'], item['sk']), item)
+          }
+        }
+        return {}
+      }
+
       if (name === 'PutCommand') {
         const item = input.Item as Record<string, unknown>
         if (table === T.appData) {

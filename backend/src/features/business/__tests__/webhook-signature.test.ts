@@ -45,11 +45,12 @@ vi.mock('node:crypto', async (importOriginal) => {
 })
 
 // ─── Repository stub: control the idempotency branch ────────────────────────
-const findWebhookEvent = vi.fn()
-const createWebhookEvent = vi.fn()
+const claimWebhookEvent = vi.fn()
+const markWebhookEventProcessed = vi.fn()
+const markWebhookEventFailed = vi.fn()
 vi.mock('../repository.js', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
-  return { ...actual, findWebhookEvent, createWebhookEvent }
+  return { ...actual, claimWebhookEvent, markWebhookEventProcessed, markWebhookEventFailed }
 })
 
 const SECRET = 'whsec_test_secret'
@@ -81,8 +82,9 @@ beforeAll(async () => {
 
 beforeEach(() => {
   createHmacSpy.mockClear()
-  findWebhookEvent.mockReset()
-  createWebhookEvent.mockReset()
+  claimWebhookEvent.mockReset()
+  markWebhookEventProcessed.mockReset()
+  markWebhookEventFailed.mockReset()
   delete process.env['YOCO_WEBHOOK_SECRET']
 })
 
@@ -96,7 +98,7 @@ describe('processYocoWebhook signature verification (fail-closed)', () => {
 
     // Must reject BEFORE hashing: never HMAC over an absent secret.
     expect(createHmacSpy).not.toHaveBeenCalled()
-    expect(findWebhookEvent).not.toHaveBeenCalled()
+    expect(claimWebhookEvent).not.toHaveBeenCalled()
   })
 
   it('rejects and computes no HMAC when the secret is an empty string', async () => {
@@ -110,19 +112,19 @@ describe('processYocoWebhook signature verification (fail-closed)', () => {
     // An empty secret still yields a non-empty digest, so it must be rejected
     // before any HMAC is computed rather than compared against.
     expect(createHmacSpy).not.toHaveBeenCalled()
-    expect(findWebhookEvent).not.toHaveBeenCalled()
+    expect(claimWebhookEvent).not.toHaveBeenCalled()
   })
 
   it('passes for a valid signature when the secret is set', async () => {
     process.env['YOCO_WEBHOOK_SECRET'] = SECRET
-    // Existing event → idempotency short-circuit proves the signature passed.
-    findWebhookEvent.mockResolvedValue({ eventId: EVENT_ID })
+    // A processed event proves the signature passed without entering payment handling.
+    claimWebhookEvent.mockResolvedValue('processed')
 
     const result = await processYocoWebhook(EVENT_ID, EVENT_TYPE, PAYLOAD, await validSignature(), RAW_BODY)
 
     expect(result).toEqual({ duplicate: true })
     expect(createHmacSpy).toHaveBeenCalledTimes(1)
-    expect(findWebhookEvent).toHaveBeenCalledWith(EVENT_ID)
+    expect(claimWebhookEvent).toHaveBeenCalledWith(EVENT_ID, EVENT_TYPE)
   })
 
   it('rejects for an invalid signature when the secret is set', async () => {
@@ -133,7 +135,7 @@ describe('processYocoWebhook signature verification (fail-closed)', () => {
       message: 'Invalid webhook signature',
     })
 
-    // Signature was wrong → verification never reached the idempotency check.
-    expect(findWebhookEvent).not.toHaveBeenCalled()
+    // Signature was wrong, verification never reached the idempotency check.
+    expect(claimWebhookEvent).not.toHaveBeenCalled()
   })
 })

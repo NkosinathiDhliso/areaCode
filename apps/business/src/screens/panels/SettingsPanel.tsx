@@ -10,8 +10,7 @@ import { NodeEditorPanel } from './NodeEditorPanel'
 interface StaffInvite {
   id: string
   inviteToken: string
-  invitedPhone: string | null
-  invitedEmail: string | null
+  invitedEmail: string
   accepted: boolean
   expiresAt: string
   createdAt: string
@@ -267,7 +266,7 @@ export function SettingsPanel() {
             <button
               onClick={handleInviteStaff}
               disabled={inviteLoading || !inviteEmail.trim()}
-              className="bg-[var(--accent)] text-white font-medium rounded-xl px-4 py-2.5 text-sm transition-all active:scale-95 disabled:opacity-50 whitespace-nowrap"
+              className="bg-[var(--accent)] text-white font-medium rounded-xl px-4 min-h-11 text-sm transition-all active:scale-95 disabled:opacity-50 whitespace-nowrap"
             >
               {inviteLoading ? '...' : 'Invite'}
             </button>
@@ -276,7 +275,7 @@ export function SettingsPanel() {
           <div className="flex flex-row gap-2">
             <button
               onClick={() => setInviteRole('staff')}
-              className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all ${
+              className={`flex-1 min-h-11 rounded-xl text-xs font-medium transition-all active:scale-95 ${
                 inviteRole === 'staff'
                   ? 'bg-[var(--accent)] text-white'
                   : 'bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-secondary)]'
@@ -286,7 +285,7 @@ export function SettingsPanel() {
             </button>
             <button
               onClick={() => setInviteRole('manager')}
-              className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all ${
+              className={`flex-1 min-h-11 rounded-xl text-xs font-medium transition-all active:scale-95 ${
                 inviteRole === 'manager'
                   ? 'bg-[var(--accent)] text-white'
                   : 'bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-secondary)]'
@@ -309,13 +308,13 @@ export function SettingsPanel() {
             <div className="flex flex-row gap-2">
               <button
                 onClick={() => handleCopyLink(inviteResult.token)}
-                className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-lg px-3 py-1.5 text-xs"
+                className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-lg px-3 min-h-11 text-xs active:scale-95"
               >
                 {copied ? 'Copied' : 'Copy Link'}
               </button>
               <button
                 onClick={() => handleShareLink(inviteResult.token)}
-                className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-lg px-3 py-1.5 text-xs"
+                className="border border-[var(--border-strong)] text-[var(--text-primary)] rounded-lg px-3 min-h-11 text-xs active:scale-95"
               >
                 Share via WhatsApp
               </button>
@@ -339,13 +338,16 @@ export function SettingsPanel() {
                       Expires {new Date(inv.expiresAt).toLocaleDateString()}
                     </span>
                   </div>
-                  <div className="flex flex-row items-center gap-3">
-                    <button onClick={() => handleCopyLink(inv.inviteToken)} className="text-[var(--accent)] text-xs">
+                  <div className="flex flex-row items-center gap-1">
+                    <button
+                      onClick={() => handleCopyLink(inv.inviteToken)}
+                      className="text-[var(--accent)] text-xs min-h-11 px-2 active:scale-95"
+                    >
                       Copy Link
                     </button>
                     <button
                       onClick={() => void handleRevokeInvite(inv.inviteToken)}
-                      className="text-[var(--danger)] text-xs"
+                      className="text-[var(--danger)] text-xs min-h-11 px-2 active:scale-95"
                     >
                       Revoke
                     </button>
@@ -368,13 +370,15 @@ export function SettingsPanel() {
               >
                 <div className="flex flex-col">
                   <span className="text-[var(--text-primary)] text-sm">
-                    {s.name?.trim() || s.email || s.phone || 'Pending invite'}
+                    {s.name?.trim() || s.email || 'Pending invite'}
                   </span>
                   {s.email && s.name?.trim() && <span className="text-[var(--text-muted)] text-xs">{s.email}</span>}
-                  {s.phone && <span className="text-[var(--text-muted)] text-xs">{s.phone}</span>}
                   {!s.cognitoSub && <span className="text-[var(--warning)] text-xs">Invite pending acceptance</span>}
                 </div>
-                <button onClick={() => handleRemoveStaff(s.id)} className="text-[var(--danger)] text-xs">
+                <button
+                  onClick={() => handleRemoveStaff(s.id)}
+                  className="text-[var(--danger)] text-xs min-h-11 px-2 active:scale-95"
+                >
                   Remove
                 </button>
               </div>
@@ -426,13 +430,13 @@ export function SettingsPanel() {
             <div className="flex flex-row gap-3">
               <button
                 onClick={() => setConfirmRemoveStaffId(null)}
-                className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+                className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl min-h-11 text-sm active:scale-95"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmRemoveStaff}
-                className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium"
+                className="flex-1 bg-[var(--danger)] text-white rounded-xl min-h-11 text-sm font-medium active:scale-95"
               >
                 Remove
               </button>

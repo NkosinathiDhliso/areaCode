@@ -78,12 +78,17 @@ function periodWindow(period: LeaderboardPeriod, now = Date.now()) {
   }
 }
 
-interface RedemptionRow {
+export interface RedemptionRow {
+  redemptionId?: string
+  redemptionCode?: string
+  rewardTitle?: string
+  nodeName?: string
   staffId?: string
   staffName?: string
   userId?: string
   businessId?: string
   redeemedAt?: string
+  createdAt?: string
 }
 
 /**
@@ -95,7 +100,11 @@ interface RedemptionRow {
  * same-day `rewardsClaimed` count (`getLiveStats`) rather than re-scanning
  * REDEMPTION# rows a second way (dry-reuse-no-duplication).
  */
-export async function listRedemptionsForBusiness(businessId: string, sinceIso: string): Promise<RedemptionRow[]> {
+export async function listRedemptionsForBusiness(
+  businessId: string,
+  sinceIso: string,
+  limit?: number,
+): Promise<RedemptionRow[]> {
   const out: RedemptionRow[] = []
   let exclusiveStartKey: Record<string, unknown> | undefined
   do {
@@ -108,22 +117,31 @@ export async function listRedemptionsForBusiness(businessId: string, sinceIso: s
           ':biz': businessId,
           ':since': sinceIso,
         },
-        ProjectionExpression: 'staffId, staffName, userId, businessId, redeemedAt',
+        ProjectionExpression:
+          'redemptionId, redemptionCode, rewardTitle, nodeName, staffId, staffName, userId, businessId, ' +
+          'redeemedAt, createdAt',
         ...(exclusiveStartKey ? { ExclusiveStartKey: exclusiveStartKey } : {}),
       }),
     )
     for (const item of result.Items ?? []) {
       out.push({
+        redemptionId: item['redemptionId'] as string | undefined,
+        redemptionCode: item['redemptionCode'] as string | undefined,
+        rewardTitle: item['rewardTitle'] as string | undefined,
+        nodeName: item['nodeName'] as string | undefined,
         staffId: item['staffId'] as string | undefined,
         staffName: item['staffName'] as string | undefined,
         userId: item['userId'] as string | undefined,
         businessId: item['businessId'] as string | undefined,
         redeemedAt: item['redeemedAt'] as string | undefined,
+        createdAt: item['createdAt'] as string | undefined,
       })
     }
     exclusiveStartKey = result.LastEvaluatedKey
   } while (exclusiveStartKey)
-  return out
+
+  out.sort((a, b) => (b.redeemedAt ?? '').localeCompare(a.redeemedAt ?? ''))
+  return limit === undefined ? out : out.slice(0, limit)
 }
 
 /**

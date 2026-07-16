@@ -149,10 +149,15 @@ export async function getNodeDetail(nodeId: string) {
     pulseScore = score ? parseFloat(score) : 0
   }
 
+  // Registration evidence is admin-only. The public detail route must never
+  // expose it, even though the repository read model carries it for review.
+  const publicNode = { ...node }
+  delete publicNode.claimRegistrationNumber
+
   // Expose the paid Boost_Window read model (billing R5.2, R5.5). `boostUntil`
   // flows through the spread; `boostActive` is computed at read time and
-  // reverts to false once the window passes — no expiry worker, no residue.
-  return { ...node, pulseScore, boostActive: isBoostActive(node.boostUntil) }
+  // reverts to false once the window passes, with no expiry worker or residue.
+  return { ...publicNode, pulseScore, boostActive: isBoostActive(node.boostUntil) }
 }
 
 export async function getNodePublic(nodeSlug: string) {
@@ -498,10 +503,6 @@ export async function updateNodeSocialLinks(
 // ─── Node Claiming ──────────────────────────────────────────────────────────
 
 export async function claimNode(nodeId: string, businessId: string, registrationNumber: string) {
-  void registrationNumber
-  if (DEV_MODE) {
-    return { nodeId, businessId, claimStatus: 'validated' }
-  }
   const node = await repo.getNodeById(nodeId)
   if (!node) throw AppError.notFound('Node not found')
   if (node.claimStatus === 'claimed') {
@@ -511,19 +512,7 @@ export async function claimNode(nodeId: string, businessId: string, registration
     throw AppError.conflict('Claim in progress')
   }
 
-  // CIPC verification , in production, call CIPC API
-  // For now, simulate validation
-  let cipcStatus: string
-  const cipcAvailable = true // Would be actual API call
-
-  if (cipcAvailable) {
-    // Simulate name match check
-    cipcStatus = 'validated'
-  } else {
-    cipcStatus = 'cipc_unavailable'
-  }
-
-  return repo.claimNode(nodeId, businessId, cipcStatus)
+  return repo.claimNode(nodeId, businessId, registrationNumber)
 }
 
 // ─── Reporting ──────────────────────────────────────────────────────────────

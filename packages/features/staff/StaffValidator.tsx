@@ -5,6 +5,7 @@ import { Box, Text } from '../../shared/components/primitives'
 import { api, type ApiError } from '../../shared/lib/api'
 
 type FlowState = 'idle' | 'preview' | 'confirming' | 'result'
+type FailurePhase = 'preview' | 'confirm'
 
 interface PreviewData {
   rewardTitle: string
@@ -19,6 +20,8 @@ interface ResultData {
   rewardTitle?: string
   redeemedAt?: string
   error?: string
+  statusCode?: number
+  transientPhase?: FailurePhase
 }
 
 export function StaffValidator() {
@@ -41,9 +44,9 @@ export function StaffValidator() {
     }
   }, [flowState])
 
-  // Auto-return to idle after result
+  // Auto-return to idle after terminal result
   useEffect(() => {
-    if (flowState !== 'result') return
+    if (flowState !== 'result' || result?.transientPhase) return
     const timer = setTimeout(() => {
       setFlowState('idle')
       setResult(null)
@@ -51,7 +54,7 @@ export function StaffValidator() {
       setPreview(null)
     }, 3000)
     return () => clearTimeout(timer)
-  }, [flowState])
+  }, [flowState, result?.transientPhase])
 
   // Cleanup camera on unmount
   useEffect(() => {
@@ -131,7 +134,13 @@ export function StaffValidator() {
 
   function startScanning() {
     // Use BarcodeDetector API if available (Chrome/Edge)
-    const BarcodeDetectorAPI = (window as any).BarcodeDetector
+    const BarcodeDetectorAPI = (
+      window as Window & {
+        BarcodeDetector?: new (options: { formats: string[] }) => {
+          detect(source: HTMLVideoElement): Promise<Array<{ rawValue?: string }>>
+        }
+      }
+    ).BarcodeDetector
     if (BarcodeDetectorAPI) {
       const detector = new BarcodeDetectorAPI({ formats: ['qr_code'] })
       scanIntervalRef.current = setInterval(async () => {
@@ -139,7 +148,7 @@ export function StaffValidator() {
         try {
           const barcodes = await detector.detect(videoRef.current)
           if (barcodes.length > 0) {
-            const value = barcodes[0].rawValue
+            const value = barcodes[0]?.rawValue
             if (value) {
               stopCamera()
               handleCodeScanned(value)
@@ -177,6 +186,19 @@ export function StaffValidator() {
     handlePreview(extractedCode)
   }
 
+  function showApiFailure(err: unknown, failedPhase: FailurePhase) {
+    const apiErr = err as ApiError
+    const error = apiErr.error ?? apiErr.message ?? 'invalid_code'
+    const transient = apiErr.statusCode === 0 || apiErr.statusCode >= 500
+    setResult({
+      success: false,
+      error,
+      statusCode: apiErr.statusCode,
+      transientPhase: transient ? failedPhase : undefined,
+    })
+    setFlowState('result')
+  }
+
   async function handlePreview(previewCode?: string) {
     const targetCode = previewCode ?? code
     if (!targetCode || loading) return
@@ -186,10 +208,7 @@ export function StaffValidator() {
       setPreview(res)
       setFlowState('preview')
     } catch (err) {
-      const apiErr = err as ApiError
-      const errorType = apiErr.error ?? apiErr.message ?? 'invalid_code'
-      setResult({ success: false, error: errorType })
-      setFlowState('result')
+      showApiFailure(err, 'preview')
     } finally {
       setLoading(false)
     }
@@ -206,13 +225,15 @@ export function StaffValidator() {
       setResult({ success: true, rewardTitle: res.rewardTitle, redeemedAt: res.redeemedAt })
       setFlowState('result')
     } catch (err) {
-      const apiErr = err as ApiError
-      const errorType = apiErr.error ?? apiErr.message ?? 'invalid_code'
-      setResult({ success: false, error: errorType })
-      setFlowState('result')
+      showApiFailure(err, 'confirm')
     } finally {
       setLoading(false)
     }
+  }
+
+  function handleRetry() {
+    if (result?.transientPhase === 'preview') void handlePreview()
+    if (result?.transientPhase === 'confirm') void handleConfirm()
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -230,15 +251,28 @@ export function StaffValidator() {
     }
   }
 
+  function getTransientErrorMessage(statusCode?: number): string {
+    return statusCode === 0
+      ? 'We could not connect. Check your connection and try again.'
+      : 'The redemption service is unavailable right now. Try again.'
+  }
+
   // ─── Result Screen ──────────────────────────────────────────────────────
   if (flowState === 'result' && result) {
+    const transientFailure = Boolean(result.transientPhase)
+    const resultTextClass = transientFailure ? 'text-[var(--text-primary)]' : 'text-[var(--on-accent)]'
+
     return (
       <Box
         className={`flex flex-col items-center justify-center px-5 py-12 gap-4 min-h-[300px] rounded-2xl mx-5 mt-4 ${
-          result.success ? 'bg-[var(--success)]' : 'bg-[var(--danger)]'
+          result.success
+            ? 'bg-[var(--success)]'
+            : transientFailure
+              ? 'bg-[var(--warning-soft)] border border-[var(--warning)]'
+              : 'bg-[var(--danger)]'
         }`}
       >
-        <Text className="text-white text-5xl">
+        <Text className={`${transientFailure ? 'text-[var(--warning)]' : resultTextClass} text-5xl`}>
           {result.success ? (
             <svg
               width="48"
@@ -268,19 +302,39 @@ export function StaffValidator() {
             </svg>
           )}
         </Text>
-        <Text className="text-white font-bold text-xl font-[Syne] text-center">
-          {result.success ? 'Redeemed!' : 'Failed'}
+        <Text className={`${resultTextClass} font-bold text-xl font-[Syne] text-center`}>
+          {result.success
+            ? 'Redeemed!'
+            : transientFailure
+              ? result.statusCode === 0
+                ? 'Connection issue'
+                : 'Service unavailable'
+              : 'Failed'}
         </Text>
         {result.success && result.rewardTitle && (
-          <Text className="text-white text-sm opacity-90">{result.rewardTitle}</Text>
+          <Text className={`${resultTextClass} text-sm opacity-90`}>{result.rewardTitle}</Text>
         )}
         {result.success && result.redeemedAt && (
-          <Text className="text-white text-xs opacity-75">{new Date(result.redeemedAt).toLocaleString()}</Text>
+          <Text className={`${resultTextClass} text-xs opacity-75`}>
+            {new Date(result.redeemedAt).toLocaleString()}
+          </Text>
         )}
         {!result.success && result.error && (
-          <Text className="text-white text-sm opacity-90">{getErrorMessage(result.error)}</Text>
+          <Text className={`${resultTextClass} text-sm opacity-90 text-center`}>
+            {transientFailure ? getTransientErrorMessage(result.statusCode) : getErrorMessage(result.error)}
+          </Text>
         )}
-        <Text className="text-white text-xs opacity-60 mt-2">Returning to scanner...</Text>
+        {transientFailure ? (
+          <button
+            onClick={handleRetry}
+            disabled={loading}
+            className="min-h-11 min-w-11 px-6 bg-[var(--accent-cta)] text-[var(--on-accent)] font-semibold rounded-xl text-base transition-all duration-150 active:scale-95 disabled:opacity-50"
+          >
+            {loading ? 'Retrying...' : 'Retry'}
+          </button>
+        ) : (
+          <Text className={`${resultTextClass} text-xs opacity-60 mt-2`}>Returning to scanner...</Text>
+        )}
       </Box>
     )
   }
@@ -321,7 +375,7 @@ export function StaffValidator() {
             setPreview(null)
             setCode('')
           }}
-          className="text-[var(--text-muted)] text-sm"
+          className="min-h-11 min-w-11 px-4 text-[var(--text-muted)] text-sm transition-all duration-150 active:scale-95"
         >
           Cancel
         </button>
@@ -352,7 +406,7 @@ export function StaffValidator() {
           <canvas ref={canvasRef} className="hidden" />
           <button
             onClick={stopCamera}
-            className="absolute top-2 right-2 bg-black bg-opacity-50 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm"
+            className="absolute top-2 right-2 bg-[var(--bg-overlay)] text-[var(--on-accent)] rounded-full w-11 h-11 flex items-center justify-center text-sm transition-all duration-150 active:scale-95"
             aria-label="Close scanner"
           >
             <svg

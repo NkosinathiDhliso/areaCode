@@ -618,11 +618,11 @@ export async function getStaffRecentRedemptions(staffId: string) {
     }
   }
   const rawItems = await repo.getStaffRecentRedemptions(staffId)
-  const items = rawItems.map((r: Record<string, unknown>) => ({
-    code: (r['redemptionCode'] ?? r['code'] ?? '') as string,
-    rewardTitle: (r['rewardTitle'] ?? '') as string,
-    displayName: (r['displayName'] ?? '') as string,
-    redeemedAt: (r['redeemedAt'] ?? '') as string,
+  const items = rawItems.map((r) => ({
+    code: r.redemptionCode ?? '',
+    rewardTitle: r.rewardTitle ?? '',
+    displayName: '',
+    redeemedAt: r.redeemedAt ?? '',
   }))
   return { items }
 }

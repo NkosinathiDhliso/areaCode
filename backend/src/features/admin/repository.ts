@@ -121,6 +121,8 @@ export async function getBusinessById(businessId: string) {
     name: n['name'],
     slug: n['slug'],
     claimStatus: n['claimStatus'],
+    claimCipcStatus: n['claimCipcStatus'],
+    claimRegistrationNumber: n['claimRegistrationNumber'],
   }))
 
   const staffAccounts = await getStaffByBusinessId(businessId)

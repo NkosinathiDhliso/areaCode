@@ -28,7 +28,7 @@ log, docs sync. Founder-run steps are marked; they need prod AWS access.
     - _Requirements: 5.3_
   - [x] 2.2 Explicit "Photos unavailable" state when the helper returns null in prod builds
     - _Requirements: 5.3_
-  - [x]\* 2.3 Unit tests: helper set/unset, panel renders preview vs unavailable state
+  - [x] 2.3 Unit tests: helper set/unset, panel renders preview vs unavailable state
     - _Requirements: 5.3_
 
 - [x] 3. Amplify env closure (R6)
@@ -48,7 +48,7 @@ log, docs sync. Founder-run steps are marked; they need prod AWS access.
     - _Requirements: 7.2, 7.3, 7.4_
   - [x] 4.4 Wire both closure scripts into the CI quality gate
     - _Requirements: 4.4, 6.4_
-  - [x]\* 4.5 Unit tests: closure scripts against fixtures with a known gap; health commit field
+  - [x] 4.5 Unit tests: closure scripts against fixtures with a known gap; health commit field
     - _Requirements: 4.4, 6.4, 7.1_
 
 - [x] 5. Docs and ops log (R7.5, R8, R9)

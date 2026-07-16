@@ -81,6 +81,7 @@ export interface Node {
   submittedBy?: string
   claimStatus: string
   claimCipcStatus?: string
+  claimRegistrationNumber?: string
   nodeColour: string
   nodeIcon?: string
   qrCheckinEnabled: boolean

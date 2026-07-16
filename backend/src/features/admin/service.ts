@@ -952,18 +952,17 @@ export async function overrideCipc(adminId: string, adminRole: AdminRole, busine
   const biz = await repo.getBusinessById(businessId)
   if (!biz) throw AppError.notFound('Business not found')
 
-  // Manually validate the business's node claims, overriding CIPC
-  // verification (used when CIPC is unavailable or a registration was verified
-  // out of band). Marks each of the business's nodes as claimed.
+  // Manually approve only claims explicitly waiting for review. Unclaimed,
+  // rejected, and already claimed nodes remain unchanged.
   const { getNodesByBusinessId, updateNode } = await import('../nodes/dynamodb-repository.js')
   const nodes = await getNodesByBusinessId(businessId)
   let nodesValidated = 0
   for (const node of nodes) {
-    if (node.claimStatus === 'claimed' && node.claimCipcStatus === 'admin_override') continue
+    if (node.claimStatus !== 'pending' || node.claimCipcStatus !== 'manual_review') continue
     await updateNode(node.nodeId, {
       claimStatus: 'claimed',
       claimCipcStatus: 'admin_override',
-    } as any)
+    })
     nodesValidated++
   }
 

@@ -1,5 +1,5 @@
 import { api } from '@area-code/shared/lib/api'
-import type { BusinessAccount } from '@area-code/shared/types'
+import type { BusinessAccount, ClaimCipcStatus, ClaimStatus } from '@area-code/shared/types'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -7,7 +7,9 @@ interface BusinessNode {
   id: string
   name: string
   slug: string
-  claimStatus?: string
+  claimStatus?: ClaimStatus
+  claimCipcStatus?: ClaimCipcStatus
+  claimRegistrationNumber?: string
 }
 
 interface BusinessStaff {
@@ -112,10 +114,18 @@ function Nodes({ nodes }: { nodes: BusinessNode[] }) {
               key={n.id}
               className="flex flex-row items-center justify-between bg-[var(--bg-raised)] rounded-xl px-3 py-2"
             >
-              <span className="text-[var(--text-primary)] text-xs truncate mr-3">{n.name}</span>
-              {n.claimStatus && (
-                <span className="text-[var(--text-muted)] text-xs flex-shrink-0 capitalize">{n.claimStatus}</span>
-              )}
+              <div className="flex flex-col min-w-0 mr-3">
+                <span className="text-[var(--text-primary)] text-xs truncate">{n.name}</span>
+                {n.claimRegistrationNumber && (
+                  <span className="text-[var(--text-muted)] text-xs truncate">CIPC: {n.claimRegistrationNumber}</span>
+                )}
+              </div>
+              <div className="flex flex-col items-end flex-shrink-0">
+                {n.claimStatus && <span className="text-[var(--text-muted)] text-xs capitalize">{n.claimStatus}</span>}
+                {n.claimCipcStatus && (
+                  <span className="text-[var(--text-muted)] text-xs">{n.claimCipcStatus.replaceAll('_', ' ')}</span>
+                )}
+              </div>
             </div>
           ))}
         </div>

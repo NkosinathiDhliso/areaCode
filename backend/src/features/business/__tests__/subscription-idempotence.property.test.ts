@@ -49,7 +49,7 @@ import { createHmac } from 'node:crypto'
 import * as fc from 'fast-check'
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
 
-import { addPaidInterval } from '../types.js'
+import { addPaidInterval, BUSINESS_PLANS } from '../types.js'
 
 const SECRET = 'whsec_test_secret'
 const BUSINESS_ID = 'biz-idem'
@@ -89,8 +89,9 @@ const h = vi.hoisted(() => {
     return e
   }
 
-  const findWebhookEvent = vi.fn(async (_eventId: string) => null)
-  const createWebhookEvent = vi.fn(async () => {})
+  const claimWebhookEvent = vi.fn(async () => 'claimed' as const)
+  const markWebhookEventProcessed = vi.fn(async () => {})
+  const markWebhookEventFailed = vi.fn(async () => {})
   const findBusinessById = vi.fn(async (_id: string) => (state.business ? { ...state.business } : null))
 
   const putSubscriptionPaymentWithMarker = vi.fn(
@@ -136,8 +137,9 @@ const h = vi.hoisted(() => {
 
   return {
     state,
-    findWebhookEvent,
-    createWebhookEvent,
+    claimWebhookEvent,
+    markWebhookEventProcessed,
+    markWebhookEventFailed,
     findBusinessById,
     putSubscriptionPaymentWithMarker,
     getSubCheckoutMarker,
@@ -150,8 +152,9 @@ vi.mock('../repository.js', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
-    findWebhookEvent: h.findWebhookEvent,
-    createWebhookEvent: h.createWebhookEvent,
+    claimWebhookEvent: h.claimWebhookEvent,
+    markWebhookEventProcessed: h.markWebhookEventProcessed,
+    markWebhookEventFailed: h.markWebhookEventFailed,
     findBusinessById: h.findBusinessById,
     putSubscriptionPaymentWithMarker: h.putSubscriptionPaymentWithMarker,
     getSubCheckoutMarker: h.getSubCheckoutMarker,
@@ -190,7 +193,18 @@ interface Combo {
 }
 
 function subPayload(combo: Combo, yocoCheckoutId: string): Record<string, unknown> {
+  const amount =
+    combo.plan === 'payg'
+      ? combo.interval === 'daily'
+        ? BUSINESS_PLANS.payg.dailyPrice
+        : BUSINESS_PLANS.payg.weeklyPrice
+      : combo.interval === 'monthly'
+        ? BUSINESS_PLANS[combo.plan].monthlyPrice
+        : BUSINESS_PLANS[combo.plan].yearlyPrice
+
   return {
+    amount,
+    currency: 'ZAR',
     metadata: {
       type: 'subscription',
       businessId: BUSINESS_ID,

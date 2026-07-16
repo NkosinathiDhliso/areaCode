@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Plain Bullet Replies",
+  "description": "After each agent response, asks Kiro to present the answer in simple, concise bullet points.",
+  "version": "1",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Restate the completed response in plain layman's terms. Use short bullet points, put the result first, avoid jargon, and keep only the details the user needs."
+  }
+}

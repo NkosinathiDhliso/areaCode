@@ -220,10 +220,10 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
 
   // Tracks whether this check-in newly opened presence (count changed) so we
   // only broadcast node:presence_update when the honest count actually moved
-  // (Requirement 7.2); presenceNowSeconds is the timestamp used to recompute the
-  // authoritative count for the event payload (Requirement 7.6).
+  // (Requirement 7.2). The same timestamp is used for the refresh and the one
+  // authoritative count read that drives pulse and presence updates.
   let presenceOpened = false
-  let presenceNowSeconds = 0
+  const presenceNowSeconds = Math.floor(replayPresenceStartMs(Date.now(), input.capturedAt ?? null) / 1000)
 
   // 4c. Open or refresh the consumer's Presence_Record for this venue so the
   // honest live-presence count reflects that they are here now (Requirement 4).
@@ -237,17 +237,26 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
     // Presence starts at DELIVERY time, never at a replay's capturedAt
     // (honest-presence, R5.3). `replayPresenceStartMs` is the seam that enforces
     // this: it returns `now` and ignores capturedAt (Property 3).
-    const presenceNow = Math.floor(replayPresenceStartMs(Date.now(), input.capturedAt ?? null) / 1000)
     const { opened } = await createOrRefreshPresence({
       userId,
       nodeId: input.nodeId,
-      now: presenceNow,
-      windowSeconds: expiryWindowSeconds(presenceNow),
+      now: presenceNowSeconds,
+      windowSeconds: expiryWindowSeconds(presenceNowSeconds),
     })
     presenceOpened = opened
-    presenceNowSeconds = presenceNow
   } catch (err) {
     console.warn(`[check-in] presence open/refresh failed: ${String(err)}`)
+  }
+
+  let livePresenceCount: number | undefined
+  try {
+    livePresenceCount = await getLivePresenceCount(input.nodeId, presenceNowSeconds)
+  } catch (err) {
+    console.error(
+      `[check-in] authoritative presence read failed for node ${input.nodeId}; ` +
+        'skipping pulse refresh and pulse/presence emission:',
+      err,
+    )
   }
 
   // Detect tier change and notify
@@ -327,13 +336,13 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
   const citySlug = node.city?.slug ?? ''
 
   const dailyCount = await kvIncr(`checkin:today:${input.nodeId}`, 86400)
-  // Approximate unique users via a simple counter (DynamoDB has no SADD)
-  const uniqueUsers = dailyCount // simplified approximation
-  const pulseScore = dailyCount * 5 + uniqueUsers * 2
+  const pulseScore = livePresenceCount === undefined ? undefined : dailyCount * 5 + livePresenceCount * 2
 
   if (cityId) {
-    // Store pulse score in KV for quick lookup
-    await kvSet(`pulse:${cityId}:${input.nodeId}`, String(pulseScore), 86400)
+    // Refresh pulse only when the authoritative live-presence read succeeded.
+    if (pulseScore !== undefined) {
+      await kvSet(`pulse:${cityId}:${input.nodeId}`, String(pulseScore), 86400)
+    }
 
     // Increment the canonical current-period Leaderboard_Entry
     // (LEADERBOARD#{cityId} / USER#{userId}) that the Ranks read serves
@@ -351,21 +360,19 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
   // 7. Emit socket events (best-effort; never fail the check-in over fan-out)
   try {
     if (citySlug) {
-      await emitPulseUpdate(citySlug, {
-        nodeId: input.nodeId,
-        pulseScore,
-        checkInCount: dailyCount,
-        state: getNodeState(pulseScore),
-      })
+      if (pulseScore !== undefined) {
+        await emitPulseUpdate(citySlug, {
+          nodeId: input.nodeId,
+          pulseScore,
+          checkInCount: dailyCount,
+          state: getNodeState(pulseScore),
+        })
+      }
 
       // Best-effort honest live-count broadcast (Requirements 7.2, 7.5, 7.6).
-      // Only emit when this check-in NEWLY opened presence (count changed) — a
-      // refresh of an already-live record leaves the count unchanged. Recompute
-      // the AUTHORITATIVE read-model count so the payload carries the honest
-      // value rather than the cumulative `checkInCount`. A failure here is
-      // caught by the surrounding best-effort block and never fails the check-in.
-      if (presenceOpened) {
-        const livePresenceCount = await getLivePresenceCount(input.nodeId, presenceNowSeconds)
+      // Only emit when this check-in newly opened presence and the shared
+      // authoritative read succeeded. The same count drives the pulse formula.
+      if (presenceOpened && livePresenceCount !== undefined) {
         // Record the observation and derive honest momentum from the trailing
         // count series (filling up / winding down). Rising here reflects a real
         // arrival; the label only claims a trend once the series supports it.

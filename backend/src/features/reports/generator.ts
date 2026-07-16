@@ -659,8 +659,8 @@ export async function handler(event: SQSEvent): Promise<void> {
     try {
       await processRecord(record.body)
     } catch (error) {
-      // Don't throw to SQS — log and skip
       console.error(`[generator] Error processing record ${record.messageId}:`, error)
+      throw error
     }
   }
 }

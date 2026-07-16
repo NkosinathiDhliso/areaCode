@@ -443,13 +443,10 @@ export const boostBodySchema = z.object({
   duration: z.enum(['2hr', '6hr', '24hr']),
 })
 
-export const staffInviteBodySchema = z
-  .object({
-    phone: z.string().optional(),
-    email: z.string().email().optional(),
-    role: z.enum(['manager', 'staff']).default('staff'),
-  })
-  .refine((d) => d.phone || d.email, { message: 'Phone or email required' })
+export const staffInviteBodySchema = z.object({
+  email: z.string().email(),
+  role: z.enum(['manager', 'staff']).default('staff'),
+})
 
 // Business settings PATCH body (weekly-attribution-digest R4.5). Only the
 // Digest_Optout preference is settable today; the field is required so a PATCH

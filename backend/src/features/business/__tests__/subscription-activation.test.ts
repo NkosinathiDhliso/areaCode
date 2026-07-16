@@ -53,8 +53,11 @@ const FIXED_NOW_ISO = '2026-03-15T10:00:00.000Z'
 // inside the hoisted `vi.mock(...)` factory below.
 
 const h = vi.hoisted(() => {
+  type WebhookStatus = 'processing' | 'processed' | 'failed'
+
   interface State {
     business: Record<string, unknown> | null
+    webhookEvents: Map<string, WebhookStatus>
     markers: Map<string, unknown>
     rows: Map<string, Record<string, unknown>>
     activateCalls: Array<{ businessId: string; args: Record<string, unknown> }>
@@ -69,6 +72,7 @@ const h = vi.hoisted(() => {
 
   const state: State = {
     business: null,
+    webhookEvents: new Map(),
     markers: new Map(),
     rows: new Map(),
     activateCalls: [],
@@ -82,8 +86,21 @@ const h = vi.hoisted(() => {
     return e
   }
 
-  const findWebhookEvent = vi.fn(async (_eventId: string) => null)
-  const createWebhookEvent = vi.fn(async () => {})
+  const claimWebhookEvent = vi.fn(async (eventId: string) => {
+    const status = state.webhookEvents.get(eventId)
+    if (status === 'processed') return 'processed' as const
+    if (status === 'processing') return 'processing' as const
+    state.webhookEvents.set(eventId, 'processing')
+    return 'claimed' as const
+  })
+  const markWebhookEventProcessed = vi.fn(async (eventId: string) => {
+    if (state.webhookEvents.get(eventId) !== 'processing') throw new Error('Webhook event is not processing')
+    state.webhookEvents.set(eventId, 'processed')
+  })
+  const markWebhookEventFailed = vi.fn(async (eventId: string) => {
+    if (state.webhookEvents.get(eventId) !== 'processing') throw new Error('Webhook event is not processing')
+    state.webhookEvents.set(eventId, 'failed')
+  })
   const findBusinessById = vi.fn(async (_id: string) => (state.business ? { ...state.business } : null))
 
   const putSubscriptionPaymentWithMarker = vi.fn(
@@ -123,8 +140,9 @@ const h = vi.hoisted(() => {
 
   return {
     state,
-    findWebhookEvent,
-    createWebhookEvent,
+    claimWebhookEvent,
+    markWebhookEventProcessed,
+    markWebhookEventFailed,
     findBusinessById,
     putSubscriptionPaymentWithMarker,
     getSubCheckoutMarker,
@@ -137,8 +155,9 @@ vi.mock('../repository.js', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
-    findWebhookEvent: h.findWebhookEvent,
-    createWebhookEvent: h.createWebhookEvent,
+    claimWebhookEvent: h.claimWebhookEvent,
+    markWebhookEventProcessed: h.markWebhookEventProcessed,
+    markWebhookEventFailed: h.markWebhookEventFailed,
     findBusinessById: h.findBusinessById,
     putSubscriptionPaymentWithMarker: h.putSubscriptionPaymentWithMarker,
     getSubCheckoutMarker: h.getSubCheckoutMarker,
@@ -168,14 +187,16 @@ beforeEach(() => {
     paidUntil: null,
     trialEndsAt: '2026-01-01T00:00:00.000Z',
   }
+  h.state.webhookEvents.clear()
   h.state.markers.clear()
   h.state.rows.clear()
   h.state.activateCalls.length = 0
   h.state.failRowWrite = false
   h.state.failActivate = false
 
-  h.findWebhookEvent.mockClear()
-  h.createWebhookEvent.mockClear()
+  h.claimWebhookEvent.mockClear()
+  h.markWebhookEventProcessed.mockClear()
+  h.markWebhookEventFailed.mockClear()
   h.findBusinessById.mockClear()
   h.putSubscriptionPaymentWithMarker.mockClear()
   h.getSubCheckoutMarker.mockClear()
@@ -199,17 +220,34 @@ interface SubOverrides {
   paidAt?: string
 }
 
+function subscriptionAmount(plan: unknown, interval: unknown): number {
+  if (plan === 'payg') {
+    return interval === 'weekly' ? BUSINESS_PLANS.payg.weeklyPrice : BUSINESS_PLANS.payg.dailyPrice
+  }
+  if (plan === 'pro') {
+    return interval === 'yearly' ? BUSINESS_PLANS.pro.yearlyPrice : BUSINESS_PLANS.pro.monthlyPrice
+  }
+  return interval === 'yearly' ? BUSINESS_PLANS.growth.yearlyPrice : BUSINESS_PLANS.growth.monthlyPrice
+}
+
 function subPayload(overrides: SubOverrides = {}): Record<string, unknown> {
+  const plan = 'plan' in overrides ? overrides.plan : 'growth'
+  const interval = 'interval' in overrides ? overrides.interval : 'monthly'
   const metadata: Record<string, unknown> = {
     type: 'subscription',
     businessId: 'businessId' in overrides ? overrides.businessId : BUSINESS_ID,
-    plan: 'plan' in overrides ? overrides.plan : 'growth',
-    interval: 'interval' in overrides ? overrides.interval : 'monthly',
+    plan,
+    interval,
   }
   if (overrides.checkoutId !== null) {
     metadata['checkoutId'] = overrides.checkoutId ?? 'chk_default'
   }
-  return { metadata, paidAt: overrides.paidAt ?? FIXED_NOW_ISO }
+  return {
+    metadata,
+    amount: subscriptionAmount(plan, interval),
+    currency: 'ZAR',
+    paidAt: overrides.paidAt ?? FIXED_NOW_ISO,
+  }
 }
 
 async function deliver(eventId: string, payload: Record<string, unknown>): Promise<unknown> {
@@ -349,18 +387,20 @@ describe('subscription activation: crash injection idempotence (R2.4)', () => {
     h.state.failRowWrite = true
     await expect(deliver('evt-c1', payload)).rejects.toBeInstanceOf(Error)
 
-    // Nothing persisted, nothing activated.
+    // Nothing persisted, nothing activated, and the failed event is reclaimable.
     expect(h.state.rows.size).toBe(0)
     expect(h.state.markers.size).toBe(0)
     expect(h.state.activateCalls).toHaveLength(0)
+    expect(h.state.webhookEvents.get('evt-c1')).toBe('failed')
 
-    // Yoco retry under a fresh eventId lands cleanly.
-    await deliver('evt-c1-retry', payload)
+    // Yoco retry of the same failed event reclaims it and lands cleanly.
+    await deliver('evt-c1', payload)
 
     expect(h.state.rows.size).toBe(1)
     expect(h.state.markers.size).toBe(1)
     expect(h.state.activateCalls).toHaveLength(1)
     expect(h.state.activateCalls[0]!.args['paidUntil']).toBe(addPaidInterval(FIXED_NOW_ISO, 'monthly'))
+    expect(h.state.webhookEvents.get('evt-c1')).toBe('processed')
   })
 
   it('crash between row write and business update: retry reconciles to one row and one window', async () => {
@@ -370,15 +410,16 @@ describe('subscription activation: crash injection idempotence (R2.4)', () => {
     h.state.failActivate = true
     await expect(deliver('evt-c2', payload)).rejects.toBeInstanceOf(Error)
 
-    // Row + marker landed, but the business was never activated.
+    // Row + marker landed, but the business was never activated. The event is failed and reclaimable.
     expect(h.state.rows.size).toBe(1)
     expect(h.state.markers.size).toBe(1)
     expect(h.state.activateCalls).toHaveLength(0)
+    expect(h.state.webhookEvents.get('evt-c2')).toBe('failed')
 
     const producedPaidUntil = persistedRows()[0]!['paidUntilProduced']
 
-    // Yoco retry under a fresh eventId: duplicate marker → reconciliation.
-    await deliver('evt-c2-retry', payload)
+    // Retry the same event: failed claim → duplicate marker → reconciliation.
+    await deliver('evt-c2', payload)
 
     // Still exactly one row; activation now re-asserted from the stored window.
     expect(h.state.rows.size).toBe(1)
@@ -386,5 +427,6 @@ describe('subscription activation: crash injection idempotence (R2.4)', () => {
     expect(h.state.activateCalls).toHaveLength(1)
     expect(h.state.activateCalls[0]!.args['paidUntil']).toBe(producedPaidUntil)
     expect(producedPaidUntil).toBe(addPaidInterval(FIXED_NOW_ISO, 'monthly'))
+    expect(h.state.webhookEvents.get('evt-c2')).toBe('processed')
   })
 })

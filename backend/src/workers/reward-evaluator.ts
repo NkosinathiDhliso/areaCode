@@ -153,7 +153,7 @@ async function evaluateRewards(userId: string, nodeId: string, fingerprintHash?:
       await repo.incrementClaimedCount(reward.id, slots)
     } catch (err) {
       if (isConditionalCheckFailedError(err)) {
-        await repo.deleteRedemption(redemptionId, reward.id, userId)
+        await repo.deleteRedemption(redemptionId, reward.id, userId, code)
         console.log(`[reward-evaluator] Slot full, rolled back: user=${userId} reward=${reward.id}`)
         continue
       }
@@ -161,7 +161,7 @@ async function evaluateRewards(userId: string, nodeId: string, fingerprintHash?:
       // advance. Roll back the mint (best-effort) and rethrow so SQS retries,
       // rather than leaving an over-cap code live.
       await repo
-        .deleteRedemption(redemptionId, reward.id, userId)
+        .deleteRedemption(redemptionId, reward.id, userId, code)
         .catch((rollbackErr) =>
           console.error(
             `[reward-evaluator] redemption rollback failed: user=${userId} reward=${reward.id}`,

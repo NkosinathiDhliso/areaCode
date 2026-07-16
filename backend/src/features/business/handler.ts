@@ -79,10 +79,7 @@ export async function businessRoutes(app: FastifyInstance) {
       const staff = await getStaffById(auth.userId)
       if (!staff || staff.role !== 'manager')
         throw (await import('../../shared/errors/AppError.js')).AppError.forbidden('Access denied')
-      const { findBusinessById } = await import('./repository.js')
-      const biz = await findBusinessById(staff.businessId)
-      if (!biz) throw (await import('../../shared/errors/AppError.js')).AppError.notFound('Business not found')
-      return biz
+      return service.getBusinessProfileById(staff.businessId)
     }
     return service.getBusinessProfile(auth.cognitoSub)
   })
@@ -340,8 +337,8 @@ export async function businessRoutes(app: FastifyInstance) {
     },
     async (request) => {
       const auth = getAuth(request)
-      const body = request.body as { phone?: string; email?: string; role?: 'manager' | 'staff' }
-      const inviteRole = body.role ?? 'staff'
+      const body = request.body as z.infer<typeof staffInviteBodySchema>
+      const inviteRole = body.role
       // Only owners can invite managers
       if (inviteRole === 'manager') {
         const { getBusinessRole } = await import('../../shared/middleware/business-role.js')
@@ -352,7 +349,7 @@ export async function businessRoutes(app: FastifyInstance) {
           )
         }
       }
-      return service.inviteStaff(auth.userId, body.phone, body.email, inviteRole)
+      return service.inviteStaff(auth.userId, body.email, inviteRole)
     },
   )
 

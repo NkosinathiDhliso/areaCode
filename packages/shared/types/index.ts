@@ -54,7 +54,13 @@ export type ToastType =
 
 // Claim statuses
 export type ClaimStatus = 'unclaimed' | 'pending' | 'claimed'
-export type ClaimCipcStatus = 'validated' | 'pending_manual' | 'cipc_unavailable' | 'rejected'
+export type ClaimCipcStatus =
+  | 'validated'
+  | 'pending_manual'
+  | 'cipc_unavailable'
+  | 'manual_review'
+  | 'admin_override'
+  | 'rejected'
 
 // Report types
 export type ReportType = 'wrong_location' | 'permanently_closed' | 'fake_rewards' | 'offensive_content' | 'other'
@@ -235,6 +241,7 @@ export interface Node {
   submittedBy: string | null
   claimStatus: ClaimStatus
   claimCipcStatus: ClaimCipcStatus | null
+  claimRegistrationNumber?: string | null
   nodeColour: string
   nodeIcon: string | null
   qrCheckinEnabled: boolean

@@ -225,6 +225,7 @@ function mapNode(item: Record<string, unknown>): Node {
     submittedBy: item['submittedBy'] as string | undefined,
     claimStatus: (item['claimStatus'] as string) ?? 'unclaimed',
     claimCipcStatus: item['claimCipcStatus'] as string | undefined,
+    claimRegistrationNumber: item['claimRegistrationNumber'] as string | undefined,
     nodeColour: (item['nodeColour'] as string) ?? '#000000',
     nodeIcon: item['nodeIcon'] as string | undefined,
     qrCheckinEnabled: (item['qrCheckinEnabled'] as boolean) ?? false,

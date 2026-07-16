@@ -269,6 +269,12 @@ export interface RewardRedemption {
   userId: string
   redemptionCode: string
   codeExpiresAt: string
-  redeemedAt?: string
+  redeemedAt?: string | null
+  businessId?: string
+  nodeId?: string
+  nodeName?: string
+  rewardTitle?: string
+  staffId?: string
+  staffName?: string
   createdAt: string
 }

@@ -6,6 +6,7 @@ import { kvGet } from '../../shared/kv/dynamodb-kv.js'
 import { getStaffById, getUserById } from '../auth/dynamodb-repository.js'
 import { findBusinessById } from '../business/repository.js'
 import { getEffectiveTier } from '../business/service.js'
+import { listRedemptionsForBusiness } from '../business/staff-leaderboard.js'
 import { getNodeById } from '../nodes/dynamodb-repository.js'
 import { getLivePresenceCount } from '../presence/repository.js'
 import { getFollowingIds, getMutualFollowIds, getFriendsPresence } from '../social/repository.js'
@@ -343,24 +344,16 @@ export async function getUnclaimedRewards(userId: string) {
 }
 
 export async function findRedemptionByCode(code: string) {
-  // Scan redemptions for code match
-  const result = await documentClient.send(
-    new ScanCommand({
-      TableName: TableNames.appData,
-      FilterExpression: 'redemptionCode = :code',
-      ExpressionAttributeValues: { ':code': code },
-    }),
-  )
-  if (!result.Items?.[0]) return null
-  const rdm = result.Items[0] as Record<string, unknown>
-  const reward = rdm['rewardId'] ? await dynamo.getRewardById(rdm['rewardId'] as string) : null
+  const rdm = await dynamo.getRedemptionByCode(code)
+  if (!rdm) return null
+  const reward = rdm.rewardId ? await dynamo.getRewardById(rdm.rewardId) : null
   return {
-    id: (rdm['redemptionId'] ?? rdm['pk']) as string,
-    rewardId: rdm['rewardId'] as string,
-    redemptionCode: rdm['redemptionCode'] as string,
-    codeExpiresAt: rdm['codeExpiresAt'] as string | undefined,
-    redeemedAt: rdm['redeemedAt'] as string | null,
-    userId: rdm['userId'] as string,
+    id: rdm.redemptionId,
+    rewardId: rdm.rewardId,
+    redemptionCode: rdm.redemptionCode,
+    codeExpiresAt: rdm.codeExpiresAt,
+    redeemedAt: rdm.redeemedAt,
+    userId: rdm.userId,
     reward: reward ? { title: reward.title } : null,
   }
 }
@@ -369,39 +362,16 @@ export async function markRedeemed(redemptionId: string, staffId?: string, staff
   return dynamo.markRedemptionAsRedeemed(redemptionId, undefined, staffId, staffName)
 }
 
+const REDEMPTION_HISTORY_START = '1970-01-01T00:00:00.000Z'
+
 export async function getRecentRedemptions(businessId: string, limit = 20) {
-  // Get all nodes for business → get redemptions from appData
-  const nodesResult = await documentClient.send(
-    new QueryCommand({
-      TableName: TableNames.nodes,
-      IndexName: 'BusinessIndex',
-      KeyConditionExpression: 'businessId = :bid',
-      ExpressionAttributeValues: { ':bid': businessId },
-    }),
-  )
-  const _nodeIds = new Set((nodesResult.Items || []).map((n) => n['nodeId'] as string))
-  // Scan redemptions and filter
-  const result = await documentClient.send(
-    new ScanCommand({
-      TableName: TableNames.appData,
-      FilterExpression: 'begins_with(pk, :prefix) AND attribute_exists(redeemedAt)',
-      ExpressionAttributeValues: { ':prefix': 'REDEMPTION#' },
-    }),
-  )
-  const items = (result.Items || [])
-    .filter((i) => {
-      const rewardId = i['rewardId'] as string
-      return !!rewardId // we'd need to check node ownership - simplified
-    })
-    .slice(0, limit)
-    .map((i) => ({ redemptionCode: i['redemptionCode'], redeemedAt: i['redeemedAt'] }))
-  return items
+  return listRedemptionsForBusiness(businessId, REDEMPTION_HISTORY_START, limit)
 }
 
 export async function getStaffRecentRedemptions(staffId: string, limit = 20) {
   const staff = await getStaffById(staffId)
-  if (!staff) return []
-  return getRecentRedemptions(staff.businessId, limit)
+  if (!staff || staff.isActive === false) return []
+  return listRedemptionsForBusiness(staff.businessId, REDEMPTION_HISTORY_START, limit)
 }
 
 export async function getRedemptionsByStaffId(staffId: string, businessId: string, limit = 50) {

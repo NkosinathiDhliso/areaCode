@@ -179,12 +179,7 @@ export async function countStaffForBusiness(businessId: string) {
   return staff.filter((s: any) => s.isActive !== false).length
 }
 
-export async function createStaffInvite(
-  businessId: string,
-  phone?: string,
-  email?: string,
-  role: 'manager' | 'staff' = 'staff',
-) {
+export async function createStaffInvite(businessId: string, email: string, role: 'manager' | 'staff' = 'staff') {
   const inviteToken = randomBytes(32).toString('hex')
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
   const inviteId = generateId()
@@ -197,8 +192,7 @@ export async function createStaffInvite(
     id: inviteId,
     businessId,
     inviteToken,
-    invitedPhone: phone ?? null,
-    invitedEmail: email ?? null,
+    invitedEmail: email,
     role,
     accepted: false,
     expiresAt,
@@ -289,27 +283,111 @@ export async function removeStaffAccount(id: string, businessId: string) {
 }
 
 // Webhook events (Yoco idempotency)
-export async function findWebhookEvent(eventId: string) {
+type WebhookEventStatus = 'processing' | 'processed' | 'failed'
+export type WebhookClaimResult = 'claimed' | 'processed' | 'processing'
+
+const WEBHOOK_TTL_SECONDS = 30 * 24 * 60 * 60
+
+function webhookKey(eventId: string) {
+  const key = `WEBHOOK#${eventId}`
+  return { pk: key, sk: key }
+}
+
+async function getWebhookEventStatus(eventId: string): Promise<WebhookEventStatus | 'legacy_processed' | null> {
   const result = await documentClient.send(
     new GetCommand({
       TableName: TableNames.appData,
-      Key: { pk: `WEBHOOK#${eventId}`, sk: `WEBHOOK#${eventId}` },
+      Key: webhookKey(eventId),
+      ConsistentRead: true,
+      ProjectionExpression: 'pk, #status',
+      ExpressionAttributeNames: { '#status': 'status' },
     }),
   )
-  return result.Item ?? null
+  if (!result.Item) return null
+  const status = result.Item['status']
+  if (status === 'processing' || status === 'processed' || status === 'failed') return status
+
+  // Rows written by the former write-once idempotency path have no status.
+  // Their presence proves the event already completed, so never process it again.
+  return 'legacy_processed'
 }
 
-export async function createWebhookEvent(eventId: string, eventType: string) {
-  const item = {
-    pk: `WEBHOOK#${eventId}`,
-    sk: `WEBHOOK#${eventId}`,
-    eventId,
-    eventType,
-    createdAt: new Date().toISOString(),
-    ttl: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60, // 30 days
+export async function claimWebhookEvent(eventId: string, eventType: string): Promise<WebhookClaimResult> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const now = new Date().toISOString()
+    try {
+      await documentClient.send(
+        new UpdateCommand({
+          TableName: TableNames.appData,
+          Key: webhookKey(eventId),
+          UpdateExpression:
+            'SET eventId = :eventId, eventType = :eventType, #status = :processing, ' +
+            'createdAt = if_not_exists(createdAt, :now), updatedAt = :now, #ttl = :ttl ' +
+            'REMOVE processedAt, failedAt, failureMessage',
+          ConditionExpression: 'attribute_not_exists(pk) OR #status = :failed',
+          ExpressionAttributeNames: { '#status': 'status', '#ttl': 'ttl' },
+          ExpressionAttributeValues: {
+            ':eventId': eventId,
+            ':eventType': eventType,
+            ':processing': 'processing',
+            ':failed': 'failed',
+            ':now': now,
+            ':ttl': Math.floor(Date.now() / 1000) + WEBHOOK_TTL_SECONDS,
+          },
+        }),
+      )
+      return 'claimed'
+    } catch (err) {
+      if (!isConditionalCheckFailedError(err)) throw err
+    }
+
+    const status = await getWebhookEventStatus(eventId)
+    if (status === 'processed' || status === 'legacy_processed') return 'processed'
+    if (status !== 'failed') return 'processing'
   }
-  await documentClient.send(new PutCommand({ TableName: TableNames.appData, Item: item }))
-  return item
+  return 'processing'
+}
+
+export async function markWebhookEventProcessed(eventId: string): Promise<void> {
+  const now = new Date().toISOString()
+  await documentClient.send(
+    new UpdateCommand({
+      TableName: TableNames.appData,
+      Key: webhookKey(eventId),
+      UpdateExpression:
+        'SET #status = :processed, processedAt = :now, updatedAt = :now, #ttl = :ttl ' +
+        'REMOVE failedAt, failureMessage',
+      ConditionExpression: '#status = :processing',
+      ExpressionAttributeNames: { '#status': 'status', '#ttl': 'ttl' },
+      ExpressionAttributeValues: {
+        ':processing': 'processing',
+        ':processed': 'processed',
+        ':now': now,
+        ':ttl': Math.floor(Date.now() / 1000) + WEBHOOK_TTL_SECONDS,
+      },
+    }),
+  )
+}
+
+export async function markWebhookEventFailed(eventId: string, failureMessage: string): Promise<void> {
+  const now = new Date().toISOString()
+  await documentClient.send(
+    new UpdateCommand({
+      TableName: TableNames.appData,
+      Key: webhookKey(eventId),
+      UpdateExpression:
+        'SET #status = :failed, failedAt = :now, updatedAt = :now, failureMessage = :failureMessage, #ttl = :ttl',
+      ConditionExpression: '#status = :processing',
+      ExpressionAttributeNames: { '#status': 'status', '#ttl': 'ttl' },
+      ExpressionAttributeValues: {
+        ':processing': 'processing',
+        ':failed': 'failed',
+        ':now': now,
+        ':failureMessage': failureMessage,
+        ':ttl': Math.floor(Date.now() / 1000) + WEBHOOK_TTL_SECONDS,
+      },
+    }),
+  )
 }
 
 // QR token helpers
@@ -699,19 +777,8 @@ export async function getMusicAudience(businessId: string): Promise<BusinessMusi
 
 // ─── Recent Redemptions ─────────────────────────────────────────────────────
 
-export async function getRecentRedemptions(_businessId: string) {
-  // Simplified , scan redemptions from appData
-  const result = await documentClient.send(
-    new ScanCommand({
-      TableName: TableNames.appData,
-      FilterExpression: 'begins_with(pk, :prefix) AND attribute_exists(redeemedAt)',
-      ExpressionAttributeValues: { ':prefix': 'REDEMPTION#' },
-    }),
-  )
-  // Scan has no inherent order; sort by redeemedAt desc so the 20 most recent are returned.
-  return (result.Items || [])
-    .sort((a, b) => String(b['redeemedAt']).localeCompare(String(a['redeemedAt'])))
-    .slice(0, 20)
+export async function getRecentRedemptions(businessId: string) {
+  return listRedemptionsForBusiness(businessId, '1970-01-01T00:00:00.000Z', 20)
 }
 
 // ─── Check-In Details ────────────────────────────────────────────────────────
