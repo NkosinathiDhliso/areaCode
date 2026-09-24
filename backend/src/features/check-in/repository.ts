@@ -1,4 +1,5 @@
 // DynamoDB-backed Check-In Repository (replaces Prisma)
+import type { FoundVia } from '@area-code/shared/constants/attribution'
 import { getTier } from '@area-code/shared/constants/tier-levels'
 import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 
@@ -28,6 +29,8 @@ export async function getNodeWithCity(nodeId: string) {
     lat: node['lat'] as number,
     lng: node['lng'] as number,
     name: node['name'] as string,
+    // Needed for the friend-check-in push deep link (`/map?venue={slug}&src=push`).
+    slug: node['slug'] as string | undefined,
     cityId: node['cityId'] as string | null,
     qrCheckinEnabled: node['qrCheckinEnabled'] as boolean,
     businessId: node['businessId'] as string | null,
@@ -51,11 +54,19 @@ export async function checkProximity(nodeId: string, lat: number, lng: number, r
   return distance <= radiusMetres
 }
 
-export async function insertCheckIn(data: { userId: string; nodeId: string; type: string; neighbourhoodId?: string }) {
+export async function insertCheckIn(data: {
+  userId: string
+  nodeId: string
+  type: string
+  /** Server-derived Found_Via, resolved by the Away_Gate (proof-of-demand R3.1). */
+  foundVia: FoundVia
+  neighbourhoodId?: string
+}) {
   return dynamo.createCheckIn({
     userId: data.userId,
     nodeId: data.nodeId,
     type: data.type,
+    foundVia: data.foundVia,
     neighbourhoodId: data.neighbourhoodId,
   })
 }
@@ -90,6 +101,28 @@ export async function claimReplayCheckIn(userId: string, nodeId: string, capture
 // Tier computation lives in exactly one place: the shared `getTier`
 // (`@area-code/shared/constants/tier-levels`). The never-demote guard below
 // only ever moves a tier up, never down.
+
+/**
+ * Atomically add 1 to a venue's lifetime check-in total on the node row.
+ *
+ * The node-row mirror of `incrementTotalCheckIns` below: the owner's "all time"
+ * number is a maintained counter, so the live panel never pays a full-history
+ * scan per venue and is never capped at a page size (proof-of-demand R15.1).
+ * Nodes that predate the counter are seeded by
+ * `scripts/backfill-node-checkin-totals.mjs`.
+ */
+export async function incrementNodeCheckInTotal(nodeId: string): Promise<number> {
+  const result = await documentClient.send(
+    new UpdateCommand({
+      TableName: TableNames.nodes,
+      Key: { nodeId },
+      UpdateExpression: 'SET totalCheckIns = if_not_exists(totalCheckIns, :zero) + :one',
+      ExpressionAttributeValues: { ':zero': 0, ':one': 1 },
+      ReturnValues: 'ALL_NEW',
+    }),
+  )
+  return (result.Attributes?.['totalCheckIns'] as number) ?? 1
+}
 
 export async function incrementTotalCheckIns(userId: string) {
   const result = await documentClient.send(

@@ -1,5 +1,6 @@
 import { getTierLabel } from '@area-code/shared/constants/tier-levels'
 import { api } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
 import type { User, Tier } from '@area-code/shared/types'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -52,8 +53,7 @@ export function ConsumerManagement() {
       setConfirmErasure(null)
       void handleSearch()
     } catch (err: unknown) {
-      const e = err as { message?: string }
-      setActionError(e.message ?? 'Action failed. Please try again.')
+      setActionError(describeApiError(err, 'Action failed. Please try again.'))
     }
   }
 

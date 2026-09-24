@@ -14,7 +14,7 @@ export {
 } from './platform'
 export { haversineDistance, isWithinRadius } from './geoUtils'
 export { mediaUrl } from './mediaUrl'
-export { formatZAR, formatRelativeTime, formatLocalTime, formatLocalDate, formatCountdown, toE164 } from './formatters'
+export { formatZAR, formatRelativeTime, formatCountdown, toE164 } from './formatters'
 export * from './featureGating'
 export { computeDimensionScores, resolveArchetype, matchesArchetype } from './archetypeResolver'
 export {
@@ -23,9 +23,15 @@ export {
   MusicScheduleSchema,
   ScheduleValidationError,
   validateMusicSchedule,
+  parseCalendarDate,
+  dayOfWeekForCalendarDate,
+  DATED_SLOT_MAX_DAYS_AHEAD,
+  HEADLINE_MAX_LENGTH,
   type ScheduleValidationCode,
+  type ScheduleValidationOptions,
   type ValidationResult,
 } from './schedule-validator'
+export { featuredGetHasEnded, isFeaturableGet, type FeaturableGet } from './featuredGet'
 export {
   genresToArchetype,
   GenreToArchetypeValidationError,
@@ -52,6 +58,42 @@ export {
   type RapidTapOptions,
   type RapidTapDetector,
 } from './rapidTap'
+export { recordVenueOpen, computeAwayFlag, type AwayFlagInput, type OpenSource } from './venueOpen'
+export {
+  SAST_OFFSET_MS,
+  SAST_TIME_ZONE,
+  instantMs,
+  sastDateString,
+  startOfSastDayIso,
+  secondsUntilNextSastMidnight,
+  formatSastDate,
+  formatSastLongDate,
+  formatSastDayMonth,
+  formatSastTime,
+  formatSastDateTime,
+  toSastDateTimeLocal,
+  sastDateTimeLocalToIso,
+  type Instant,
+} from './sast'
+export { describeApiError, describeOAuthError, classifyApiError, API_ERROR_COPY, type ApiErrorKind } from './apiError'
+export {
+  hasClipboard,
+  copyToClipboard,
+  clipboardFailureCopy,
+  CLIPBOARD_UNAVAILABLE_COPY,
+  CLIPBOARD_FAILED_COPY,
+  type ClipboardOutcome,
+} from './clipboard'
+export {
+  isStorageAvailable,
+  readStored,
+  writeStored,
+  removeStored,
+  readStoredJson,
+  writeStoredJson,
+  SIGN_IN_STORAGE_REQUIRED_COPY,
+  type StorageArea,
+} from './safeStorage'
 export {
   trackEvent,
   flushEvents,

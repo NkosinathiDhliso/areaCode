@@ -81,59 +81,75 @@ export function RewardMetricsPanel() {
         <div className="text-[var(--text-muted)] text-sm text-center py-8">No active rewards to show metrics for</div>
       )}
 
-      {/* Summary comparison table */}
+      {/* Summary comparison table.
+
+          Four columns cannot fit a 375px phone without squeezing the numbers
+          into two lines each, so the table keeps a readable minimum width and
+          the wrapper scrolls horizontally instead (R15.14). The wrapper contains
+          the overflow, so the page itself never scrolls sideways. Reward titles
+          truncate rather than reflow the row. */}
       {summary.length > 0 && (
-        <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl overflow-hidden">
-          <div className="grid grid-cols-4 gap-2 px-4 py-3 border-b border-[var(--border)] text-[var(--text-muted)] text-xs font-medium">
-            <span>Reward</span>
-            <span className="text-center">Claim Rate</span>
-            <span className="text-center">Time to Claim</span>
-            <span className="text-center">Redemption</span>
+        <div
+          className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl overflow-x-auto"
+          data-testid="reward-metrics-scroll"
+        >
+          <div className="min-w-[30rem]">
+            <div className="grid grid-cols-4 gap-2 px-4 py-3 border-b border-[var(--border)] text-[var(--text-muted)] text-xs font-medium">
+              <span>Reward</span>
+              <span className="text-center">Claim Rate</span>
+              <span className="text-center">Time to Claim</span>
+              <span className="text-center">Redemption</span>
+            </div>
+            {summary.map((item) => (
+              <button
+                key={item.rewardId}
+                onClick={() => fetchMetrics(item.rewardId)}
+                className={`grid grid-cols-4 gap-2 px-4 py-3 w-full text-left border-b border-[var(--border)] last:border-b-0 transition-colors ${
+                  selectedReward === item.rewardId ? 'bg-[var(--bg-raised)]' : ''
+                }`}
+              >
+                <span className="text-[var(--text-primary)] text-sm font-medium flex items-center gap-1 min-w-0">
+                  {item.isLowPerformance && (
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="var(--warning)"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-label="Low performance"
+                      className="shrink-0"
+                    >
+                      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                  )}
+                  <span className="truncate" title={item.title}>
+                    {item.title}
+                  </span>
+                </span>
+                <span className="text-[var(--text-secondary)] text-sm text-center">
+                  {formatPercent(item.claimRate)}
+                </span>
+                <span className="text-[var(--text-secondary)] text-sm text-center">
+                  {item.timeToClaimMinutes > 0 ? formatTime(item.timeToClaimMinutes) : '-'}
+                </span>
+                <span className="text-[var(--text-secondary)] text-sm text-center">
+                  {formatPercent(item.redemptionRate)}
+                </span>
+              </button>
+            ))}
           </div>
-          {summary.map((item) => (
-            <button
-              key={item.rewardId}
-              onClick={() => fetchMetrics(item.rewardId)}
-              className={`grid grid-cols-4 gap-2 px-4 py-3 w-full text-left border-b border-[var(--border)] last:border-b-0 transition-colors ${
-                selectedReward === item.rewardId ? 'bg-[var(--bg-raised)]' : ''
-              }`}
-            >
-              <span className="text-[var(--text-primary)] text-sm font-medium flex items-center gap-1">
-                {item.isLowPerformance && (
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="var(--warning)"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-label="Low performance"
-                  >
-                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
-                    <line x1="12" y1="9" x2="12" y2="13" />
-                    <line x1="12" y1="17" x2="12.01" y2="17" />
-                  </svg>
-                )}
-                {item.title}
-              </span>
-              <span className="text-[var(--text-secondary)] text-sm text-center">{formatPercent(item.claimRate)}</span>
-              <span className="text-[var(--text-secondary)] text-sm text-center">
-                {item.timeToClaimMinutes > 0 ? formatTime(item.timeToClaimMinutes) : '-'}
-              </span>
-              <span className="text-[var(--text-secondary)] text-sm text-center">
-                {formatPercent(item.redemptionRate)}
-              </span>
-            </button>
-          ))}
         </div>
       )}
 
       {/* Per-reward detail card */}
       {selectedReward && metrics && (
         <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-5">
-          <h3 className="text-[var(--text-primary)] font-semibold text-sm mb-4">
+          <h3 className="text-[var(--text-primary)] font-semibold text-sm mb-4 truncate">
             {summary.find((s) => s.rewardId === selectedReward)?.title ?? 'Reward'} - Details
           </h3>
           <div className="grid grid-cols-3 gap-4">

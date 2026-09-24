@@ -1,4 +1,5 @@
 import { resolveEffectiveTier, resolveWindowSource } from '@area-code/shared/lib/businessLifecycle'
+import { formatSastDate } from '@area-code/shared/lib/sast'
 import type { BusinessTier } from '@area-code/shared/types'
 
 interface BusinessStateBadgeProps {
@@ -9,11 +10,11 @@ interface BusinessStateBadgeProps {
   paymentGraceUntil?: string | null
 }
 
+// Billing window boundaries render in SAST through the one shared formatter, so
+// an admin never reads a lapse date a day out from the venue's (R15.15).
 function formatDate(iso?: string | null): string {
-  if (!iso) return '-'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '-'
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+  if (!iso || Number.isNaN(Date.parse(iso))) return '-'
+  return formatSastDate(iso)
 }
 
 const WINDOW_LABEL: Record<string, string> = {

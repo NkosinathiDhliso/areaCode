@@ -47,7 +47,7 @@ const h = vi.hoisted(() => {
     checkedInAt: string
   }
   const state = {
-    nodes: [] as Array<{ nodeId: string; cityId?: string }>,
+    nodes: [] as Array<{ nodeId: string; cityId?: string; totalCheckIns?: number }>,
     checkInsByNode: new Map<string, RepoCheckIn[]>(),
     pulseByKey: new Map<string, string>(),
     userRecords: new Map<string, Record<string, unknown>>(),
@@ -64,7 +64,9 @@ const h = vi.hoisted(() => {
     const input = cmd.input ?? {}
     if (name === 'QueryCommand') {
       if (input['IndexName'] === 'BusinessIndex') {
-        return { Items: state.nodes.map((n) => ({ nodeId: n.nodeId, cityId: n.cityId })) }
+        return {
+          Items: state.nodes.map((n) => ({ nodeId: n.nodeId, cityId: n.cityId, totalCheckIns: n.totalCheckIns })),
+        }
       }
       return { Items: [] }
     }
@@ -82,9 +84,20 @@ const h = vi.hoisted(() => {
   const getCheckInsByNodeMock = vi.fn(async (nodeId: string) => ({
     checkIns: state.checkInsByNode.get(nodeId) ?? [],
   }))
+  // The day-scoped read the live panel uses. The fixture rows stand in for
+  // "today"; the SAST window itself is proven in live-stats-sast-day.test.ts.
+  const getCheckInsByNodeSinceMock = vi.fn(async (nodeId: string) => state.checkInsByNode.get(nodeId) ?? [])
   const listRedemptionsMock = vi.fn(async () => state.redemptions)
 
-  return { state, USERS_TABLE, sendMock, kvGetMock, getCheckInsByNodeMock, listRedemptionsMock }
+  return {
+    state,
+    USERS_TABLE,
+    sendMock,
+    kvGetMock,
+    getCheckInsByNodeMock,
+    getCheckInsByNodeSinceMock,
+    listRedemptionsMock,
+  }
 })
 
 vi.mock('../../../shared/db/dynamodb.js', () => ({
@@ -103,7 +116,10 @@ vi.mock('../../../shared/db/dynamodb.js', () => ({
 
 vi.mock('../../../shared/kv/dynamodb-kv.js', () => ({ kvGet: h.kvGetMock }))
 
-vi.mock('../../check-in/dynamodb-repository.js', () => ({ getCheckInsByNode: h.getCheckInsByNodeMock }))
+vi.mock('../../check-in/dynamodb-repository.js', () => ({
+  getCheckInsByNode: h.getCheckInsByNodeMock,
+  getCheckInsByNodeSince: h.getCheckInsByNodeSinceMock,
+}))
 
 vi.mock('../staff-leaderboard.js', () => ({ listRedemptionsForBusiness: h.listRedemptionsMock }))
 
@@ -118,9 +134,11 @@ import { getLiveStats, getAudienceAnalytics, getMusicAudience } from '../reposit
 const BUSINESS_ID = 'biz-1'
 
 function loadRichDataset(): void {
+  // `totalCheckIns` is the maintained per-node counter the live panel reads, so
+  // the lifetime total is never a capped page of history (R15.1).
   h.state.nodes = [
-    { nodeId: 'node-a', cityId: 'city-1' },
-    { nodeId: 'node-b', cityId: 'city-1' },
+    { nodeId: 'node-a', cityId: 'city-1', totalCheckIns: 5 },
+    { nodeId: 'node-b', cityId: 'city-1', totalCheckIns: 3 },
   ]
   h.state.checkInsByNode = new Map([
     [
@@ -175,6 +193,7 @@ beforeEach(() => {
   h.sendMock.mockClear()
   h.kvGetMock.mockClear()
   h.getCheckInsByNodeMock.mockClear()
+  h.getCheckInsByNodeSinceMock.mockClear()
   h.listRedemptionsMock.mockClear()
   loadRichDataset()
 })
@@ -188,7 +207,7 @@ describe('getLiveStats derives production metrics (not the DEV_MODE constants)',
     // Derived from the dataset.
     expect(stats.pulseScore).toBe(62) // max(62, 30), never a sum, never 45
     expect(stats.rewardsClaimed).toBe(7) // count of same-day redemption rows
-    expect(stats.totalCheckIns).toBe(8) // 5 on node-a + 3 on node-b
+    expect(stats.totalCheckIns).toBe(8) // node counters: 5 on node-a + 3 on node-b
     expect(stats.checkInsToday).toBe(8)
 
     // NOT the DEV_MODE constants — the whole point of the guardrail.

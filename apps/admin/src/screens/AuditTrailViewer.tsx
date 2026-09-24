@@ -1,4 +1,5 @@
 import { api } from '@area-code/shared/lib/api'
+import { formatSastDateTime } from '@area-code/shared/lib/sast'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -161,7 +162,7 @@ export function AuditTrailViewer() {
                   by {log.adminId.slice(0, 8)}... ({log.adminRole})
                 </span>
               </div>
-              <span className="text-[var(--text-muted)] text-xs">{new Date(log.createdAt).toLocaleString()}</span>
+              <span className="text-[var(--text-muted)] text-xs shrink-0">{formatSastDateTime(log.createdAt)}</span>
             </div>
 
             {expandedId === log.id && (

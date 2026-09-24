@@ -26,22 +26,9 @@ export function formatRelativeTime(dateString: string): string {
   }).format(new Date(dateString))
 }
 
-export function formatLocalTime(dateString: string): string {
-  return new Intl.DateTimeFormat('en-ZA', {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Africa/Johannesburg',
-  }).format(new Date(dateString))
-}
-
-export function formatLocalDate(dateString: string): string {
-  return new Intl.DateTimeFormat('en-ZA', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'Africa/Johannesburg',
-  }).format(new Date(dateString))
-}
+// Date and time display lives in `./sast.ts`, the one home for SAST arithmetic
+// and SAST-pinned formatting (`formatSastDate`, `formatSastTime`,
+// `formatSastDateTime`). Do not add a second date formatter here.
 
 export function formatCountdown(seconds: number): string {
   const min = Math.floor(seconds / 60)

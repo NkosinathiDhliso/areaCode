@@ -1,4 +1,5 @@
 import { api } from '@area-code/shared/lib/api'
+import { formatSastTime } from '@area-code/shared/lib/sast'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -159,7 +160,7 @@ export function StaffLeaderboardPanel() {
           )}
 
           <p className="text-[var(--text-muted)] text-xs text-center">
-            Updated {new Date(data.generatedAt).toLocaleTimeString()} · Refreshes every 5 min
+            Updated {formatSastTime(data.generatedAt)} · Refreshes every 5 min
           </p>
         </>
       )}

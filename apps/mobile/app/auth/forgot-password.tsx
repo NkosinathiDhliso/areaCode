@@ -1,4 +1,5 @@
-import { api, type ApiError } from '@area-code/shared/lib/api'
+import { api } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -45,8 +46,7 @@ export default function ForgotPassword() {
       await api.post('/v1/auth/reset-password', { email: email.trim(), code: code.trim(), newPassword })
       setPhase('success')
     } catch (err) {
-      const apiErr = err as ApiError
-      setError(apiErr.message ?? t('auth.resetInvalid', 'Invalid or expired code. Try again.'))
+      setError(describeApiError(err, t('auth.resetInvalid', 'Invalid or expired code. Try again.')))
     } finally {
       setLoading(false)
     }

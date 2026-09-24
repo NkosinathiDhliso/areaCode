@@ -37,10 +37,12 @@ import { useMapMarkers } from '../hooks/useMapMarkers'
 import { useMapSockets } from '../hooks/useMapSockets'
 import { useOverlayCoordinator } from '../hooks/useOverlayCoordinator'
 import { usePresenceSeeding } from '../hooks/usePresenceSeeding'
+import { useVenueArrival } from '../hooks/useVenueArrival'
 import { USER_VIEW_ZOOM } from '../lib/cameraControl'
 import { cameraMotion } from '../lib/cameraEasing'
 import { MIN_MARKER_ZOOM, SPOTLIGHT_EXIT_ZOOM_DELTA, shouldExitSpotlight } from '../lib/carouselConstants'
 import { getNodeState } from '../lib/mapHelpers'
+import { hasPendingVenueArrival } from '../lib/venueArrival'
 import type { AppRoute } from '../types'
 
 interface MapScreenProps {
@@ -310,6 +312,12 @@ export function MapScreen({ onNavigate, active }: MapScreenProps) {
   // never delays the map render.
   usePresenceSeeding(nodeList ?? EMPTY_NODES)
 
+  // Share / push deep-link arrival (R1.1, R1.5, R1.7): resolves the stashed
+  // slug and lands the venue as the Active_Venue in Browse_Mode through the
+  // Focus_Signal path. Declared above the cold-open effect so the arrival wins
+  // the first paint; Commit_Mode is never auto-opened.
+  useVenueArrival(mapReady)
+
   // Geolocation acquisition via the GPS state machine hook. We acquire the
   // position (for check-in proximity and to enable the Recenter button) but
   // deliberately do NOT move the camera - the map opens on the full-country
@@ -485,6 +493,11 @@ export function MapScreen({ onNavigate, active }: MapScreenProps) {
       return
     }
     if (focusNodeId) return
+    // A share or push deep link owns the first open (R1.1): stand down until
+    // `useVenueArrival` has resolved the stashed slug, so the cold open never
+    // flies to the recommended venue and then away again. The stash is always
+    // released (consumed or dropped), so this can never block the open for good.
+    if (hasPendingVenueArrival()) return
 
     const target = useSelectionStore.getState().lastVenueId ?? carouselOrder[0]
     if (!target) return

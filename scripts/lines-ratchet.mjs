@@ -39,15 +39,7 @@ export const BASELINE_PATH = join(REPO_ROOT, 'eslint-lines-baseline.json')
 const SOURCE_ROOTS = ['apps', 'packages', 'backend']
 
 /** Directory names never walked (mirror the ESLint flat-config ignores). */
-const IGNORED_DIRS = new Set([
-  'node_modules',
-  'dist',
-  '.turbo',
-  'coverage',
-  '.claude',
-  '.expo',
-  'build',
-])
+const IGNORED_DIRS = new Set(['node_modules', 'dist', '.turbo', 'coverage', '.claude', '.expo', 'build'])
 
 /**
  * True when a repo-relative path is a source file the limit applies to: a
@@ -238,8 +230,7 @@ function check() {
 
 // CLI entry only when invoked directly, so the unit test can import the pure
 // functions without triggering a filesystem walk or process.exit.
-const invokedDirectly =
-  process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]
+const invokedDirectly = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]
 if (invokedDirectly) {
   if (process.argv.includes('--generate') || process.argv.includes('--update')) {
     generate()

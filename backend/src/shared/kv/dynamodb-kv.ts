@@ -1,8 +1,15 @@
 // DynamoDB-backed key-value store replacing Redis
 // Uses app-data table with TTL for automatic expiration
-import { GetCommand, PutCommand, DeleteCommand, UpdateCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb'
+import {
+  GetCommand,
+  PutCommand,
+  DeleteCommand,
+  UpdateCommand,
+  BatchGetCommand,
+  type UpdateCommandInput,
+} from '@aws-sdk/lib-dynamodb'
 
-import { documentClient, TableNames } from '../db/dynamodb.js'
+import { documentClient, TableNames, isConditionalCheckFailedError } from '../db/dynamodb.js'
 
 /**
  * Get a value by key. Returns null if expired or not found.
@@ -27,6 +34,25 @@ const BATCH_GET_LIMIT = 100
 // Bound the UnprocessedKeys retry loop so a persistently throttled batch fails
 // loudly rather than spinning forever (no-fallbacks-no-legacy: surface, don't hang).
 const BATCH_GET_MAX_RETRIES = 5
+
+/**
+ * Collect the live `KV#` rows of one BatchGet response into `values`. Rows whose
+ * TTL has passed but that the sweeper has not removed yet are skipped, exactly as
+ * `kvGet` filters them, so a batch read and a single read agree.
+ */
+function collectKvRows(
+  items: readonly Record<string, unknown>[],
+  nowSeconds: number,
+  values: Map<string, string>,
+): void {
+  for (const item of items) {
+    const ttl = item['ttl'] as number | undefined
+    if (ttl && ttl < nowSeconds) continue // expired but not yet swept
+    const value = item['value'] as string | undefined
+    if (value == null) continue
+    values.set((item['pk'] as string).slice('KV#'.length), value)
+  }
+}
 
 /**
  * Get many values by key in one pass. Returns a Map of key -> value containing
@@ -59,14 +85,7 @@ export async function kvBatchGet(keys: string[]): Promise<Map<string, string>> {
         new BatchGetCommand({ RequestItems: { [TableNames.appData]: { Keys: requestKeys } } }),
       )
 
-      for (const item of result.Responses?.[TableNames.appData] ?? []) {
-        const ttl = item['ttl'] as number | undefined
-        if (ttl && ttl < nowSeconds) continue // expired but not yet swept
-        const value = item['value'] as string | undefined
-        if (value == null) continue
-        const key = (item['pk'] as string).slice('KV#'.length)
-        values.set(key, value)
-      }
+      collectKvRows(result.Responses?.[TableNames.appData] ?? [], nowSeconds, values)
 
       const unprocessed = (result.UnprocessedKeys?.[TableNames.appData]?.Keys ?? []) as Record<string, unknown>[]
       requestKeys = unprocessed
@@ -108,11 +127,29 @@ export async function kvDel(key: string): Promise<void> {
   )
 }
 
+export interface KvIncrOptions {
+  /**
+   * Treat `ttlSeconds` as an absolute deadline the counter may not outlive.
+   *
+   * The TTL is seeded on creation only, so a counter given "seconds until
+   * midnight" expires at midnight. DynamoDB's TTL sweep, however, is
+   * best-effort and can leave a lapsed row in place for hours. Without this
+   * option the next increment would continue yesterday's count. With it, an
+   * increment against a row whose deadline has passed restarts the count at 1
+   * on the new deadline, so a day counter is never able to cite a day that is
+   * over.
+   */
+  resetWhenExpired?: boolean
+}
+
 /**
  * Increment a numeric value atomically. Creates with value 1 if not exists.
  * Returns the new value.
+ *
+ * `ttlSeconds` is seeded on creation and never extended, so the row's lifetime
+ * is measured from the first increment, not the last.
  */
-export async function kvIncr(key: string, ttlSeconds?: number): Promise<number> {
+export async function kvIncr(key: string, ttlSeconds?: number, options?: KvIncrOptions): Promise<number> {
   const params: Record<string, unknown> = {
     TableName: TableNames.appData,
     Key: { pk: `KV#${key}`, sk: 'VALUE' },
@@ -122,15 +159,39 @@ export async function kvIncr(key: string, ttlSeconds?: number): Promise<number> 
     ReturnValues: 'ALL_NEW',
   }
 
-  if (ttlSeconds) {
+  const nowSeconds = Math.floor(Date.now() / 1000)
+  const expiresAt = ttlSeconds ? nowSeconds + ttlSeconds : undefined
+
+  if (expiresAt !== undefined) {
     params['UpdateExpression'] = 'SET #val = if_not_exists(#val, :zero) + :inc, #ttl = if_not_exists(#ttl, :ttl)'
     ;(params['ExpressionAttributeNames'] as Record<string, string>)['#ttl'] = 'ttl'
-    ;(params['ExpressionAttributeValues'] as Record<string, unknown>)[':ttl'] =
-      Math.floor(Date.now() / 1000) + ttlSeconds
+    ;(params['ExpressionAttributeValues'] as Record<string, unknown>)[':ttl'] = expiresAt
+
+    if (options?.resetWhenExpired) {
+      params['ConditionExpression'] = 'attribute_not_exists(#ttl) OR #ttl > :now'
+      ;(params['ExpressionAttributeValues'] as Record<string, unknown>)[':now'] = nowSeconds
+    }
   }
 
-  const result = await documentClient.send(new UpdateCommand(params as any))
-  return (result.Attributes?.['value'] as number) ?? 1
+  try {
+    const result = await documentClient.send(new UpdateCommand(params as UpdateCommandInput))
+    return (result.Attributes?.['value'] as number) ?? 1
+  } catch (err) {
+    if (expiresAt === undefined || !options?.resetWhenExpired || !isConditionalCheckFailedError(err)) throw err
+    // The stored row's deadline has passed and the TTL sweep has not caught up.
+    // Start the new period's count at 1 on the new deadline.
+    const result = await documentClient.send(
+      new UpdateCommand({
+        TableName: TableNames.appData,
+        Key: { pk: `KV#${key}`, sk: 'VALUE' },
+        UpdateExpression: 'SET #val = :one, #ttl = :ttl',
+        ExpressionAttributeNames: { '#val': 'value', '#ttl': 'ttl' },
+        ExpressionAttributeValues: { ':one': 1, ':ttl': expiresAt },
+        ReturnValues: 'ALL_NEW',
+      }),
+    )
+    return (result.Attributes?.['value'] as number) ?? 1
+  }
 }
 
 /**
@@ -160,7 +221,7 @@ export async function kvIncrBy(key: string, amount: number, ttlSeconds?: number)
       Math.floor(Date.now() / 1000) + ttlSeconds
   }
 
-  const result = await documentClient.send(new UpdateCommand(params as any))
+  const result = await documentClient.send(new UpdateCommand(params as UpdateCommandInput))
   return (result.Attributes?.['value'] as number) ?? amount
 }
 

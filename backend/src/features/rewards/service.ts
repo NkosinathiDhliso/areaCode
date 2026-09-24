@@ -3,7 +3,8 @@ import { isConditionalCheckFailedError } from '../../shared/db/dynamodb.js'
 import { AppError } from '../../shared/errors/AppError.js'
 import { findBusinessById } from '../business/repository.js'
 import { getEffectiveTier } from '../business/service.js'
-import { notifyNewRewardConsumers } from '../notifications/service.js'
+import { invalidateCityPayloadForNode } from '../nodes/cache.js'
+import { notifyNewRewardConsumers } from '../notifications/reward-fanout.js'
 
 import { validateWindow, classifyLifecycle, isVisibleInFeed } from './lifecycle.js'
 import { pulseStateFromScore, rankGetsByVibe } from './ranking.js'
@@ -260,6 +261,11 @@ export async function createReward(
 
   const reward = await repo.createReward(createData)
 
+  // A published get changes what the venue shows on the map (the Tonight block
+  // reads featured rewards), so the cached city assembly is dropped here
+  // (proof-of-demand R15.5).
+  await invalidateCityPayloadForNode(data.nodeId)
+
   // R8.1: structured info-level audit log for event/offer get creation.
   if (isEventOrOffer) {
     console.info(
@@ -279,7 +285,8 @@ export async function createReward(
   // Fire-and-forget: notify consumers who checked in at this node recently
   // This runs asynchronously so it doesn't slow down the reward creation response
   const nodeName = node.name ?? ''
-  notifyNewRewardConsumers(data.nodeId, nodeName, reward.rewardId, data.title).catch(() => {
+  // The slug carries the push click-through deep link (`?src=push`, R2.1).
+  notifyNewRewardConsumers(data.nodeId, nodeName, reward.rewardId, data.title, node.slug).catch(() => {
     // Silently ignore — fire-and-forget
   })
 
@@ -394,7 +401,11 @@ export async function updateReward(
   // Persist Repeat_Policy when supplied (R1.1); absent leaves the row untouched.
   if (data.repeatPolicy !== undefined) updateData.repeatPolicy = data.repeatPolicy
 
-  return repo.updateReward(rewardId, updateData)
+  const updated = await repo.updateReward(rewardId, updateData)
+  // Deactivating or editing a get changes the venue's map read the same way
+  // publishing one does (R15.5).
+  await invalidateCityPayloadForNode(reward.nodeId)
+  return updated
 }
 
 /**

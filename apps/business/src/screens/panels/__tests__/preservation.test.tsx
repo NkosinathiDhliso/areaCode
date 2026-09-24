@@ -8,7 +8,11 @@
  * **Validates: Requirements 3.5, 3.7, 3.8, 3.9**
  */
 // @vitest-environment jsdom
-import { MAX_HEADER_IMAGE_BYTES, MAX_HEADER_IMAGE_LABEL } from '@area-code/shared/lib/imageCompression'
+import {
+  MAX_HEADER_IMAGE_BYTES,
+  MAX_HEADER_IMAGE_LABEL,
+  UPLOAD_ERROR_COPY,
+} from '@area-code/shared/lib/imageCompression'
 import { render, act } from '@testing-library/react'
 import * as fc from 'fast-check'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -25,8 +29,19 @@ vi.mock('react-i18next', () => ({
 // Mock @tanstack/react-query
 vi.mock('@tanstack/react-query', () => ({
   useQuery: () => ({
-    data: { checkInsToday: 5, pulseScore: 72, totalCheckIns: 3 },
+    data: {
+      checkInsToday: 5,
+      pulseScore: 72,
+      totalCheckIns: 3,
+      foundYouToday: 1,
+      walkInsToday: 4,
+      receiptToday: {
+        headline: '1 person found you on Area Code and checked in today.',
+        walkIn: '4 people who were already in the room also checked in.',
+      },
+    },
     isLoading: false,
+    refetch: vi.fn(),
   }),
 }))
 
@@ -133,8 +148,21 @@ vi.mock('@area-code/shared/stores/businessStore', () => ({
 
 // ─── Arbitraries ──────────────────────────────────────────────────────────────
 
-/** File types that should be rejected */
-const invalidFileTypeArb = fc.constantFrom(
+/**
+ * Leading bytes of real formats we do not accept, plus plain text. The gate now
+ * reads bytes, not `file.type` (R14.1), so the rejection must be driven by these.
+ */
+const nonPhotoBytesArb = fc.constantFrom(
+  [0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00], // GIF89a
+  [0x42, 0x4d, 0x36, 0x00, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x36, 0x00], // BMP
+  [0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x01], // TIFF
+  [0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0x0a, 0x25, 0xc7, 0xec], // %PDF-1.7
+  [0x3c, 0x73, 0x76, 0x67, 0x20, 0x78, 0x6d, 0x6c, 0x6e, 0x73, 0x3d, 0x22], // <svg xmlns="
+  [0x6a, 0x75, 0x73, 0x74, 0x20, 0x70, 0x72, 0x6f, 0x73, 0x65, 0x2c, 0x20], // "just prose, "
+)
+
+/** MIME labels a picker may claim. The gate must ignore all of them. */
+const claimedFileTypeArb = fc.constantFrom(
   'image/gif',
   'image/bmp',
   'image/tiff',
@@ -143,6 +171,9 @@ const invalidFileTypeArb = fc.constantFrom(
   'text/plain',
   'video/mp4',
   'image/svg+xml',
+  'image/jpeg',
+  '',
+  'application/octet-stream',
 )
 
 /** File types that should be accepted */
@@ -219,14 +250,16 @@ describe('Preservation Property: Photo validation rejects invalid files', () => 
   })
 
   /**
-   * For all invalid photo file types (not JPG/PNG), the error message
-   * "Only JPG or PNG allowed." is shown and no upload occurs.
+   * For any file whose leading bytes are not a photo we accept, the format
+   * message is shown and no upload occurs, whatever MIME label the picker
+   * claimed. Preserved from the old `file.type` gate; the reason is now the
+   * bytes, which is what a phone gets right (R14.1).
    *
-   * **Validates: Requirements 3.8**
+   * **Validates: Requirements 3.8, 14.1**
    */
-  it('should reject non-JPG/PNG files with correct error message', async () => {
+  it('should reject files whose bytes are not an accepted photo, whatever the claimed type', async () => {
     await fc.assert(
-      fc.asyncProperty(invalidFileTypeArb, validFileSizeArb, async (fileType, fileSize) => {
+      fc.asyncProperty(nonPhotoBytesArb, claimedFileTypeArb, validFileSizeArb, async (bytes, fileType, fileSize) => {
         mockApiPost.mockReset()
 
         const { NodeEditorPanel } = await import('../NodeEditorPanel')
@@ -244,8 +277,8 @@ describe('Preservation Property: Photo validation rejects invalid files', () => 
           return // Component may still be loading
         }
 
-        // Create a mock file with invalid type
-        const file = new File(['x'.repeat(Math.min(fileSize, 100))], 'test.gif', { type: fileType })
+        // Name it .jpg on purpose: neither the extension nor the type may decide.
+        const file = new File([new Uint8Array(bytes)], 'test.jpg', { type: fileType })
         Object.defineProperty(file, 'size', { value: fileSize })
 
         // Trigger file selection
@@ -256,7 +289,7 @@ describe('Preservation Property: Photo validation rejects invalid files', () => 
         })
 
         // Error message should be shown
-        expect(container.textContent).toContain('Only JPG or PNG allowed.')
+        expect(container.textContent).toContain(UPLOAD_ERROR_COPY.format)
 
         // No API call should have been made for presigned URL
         expect(mockApiPost).not.toHaveBeenCalledWith(expect.stringContaining('/image/upload-url'), expect.anything())

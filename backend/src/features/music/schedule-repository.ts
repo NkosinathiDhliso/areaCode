@@ -11,17 +11,23 @@
 //
 // Every write goes through `validateMusicSchedule` from the shared package so
 // an unvalidated schedule can never be persisted (R3.5, R3.7, R3.9). Every
-// upsert also recomputes `nextTransitionAt` from the slot list and the
-// schedule's IANA timezone (R3.10, R11.4) — slot starts and slot ends are the
-// only points where the active-slot resolution can change for a weekly
-// recurring schedule, so the GSI sort key is always one of those boundary
-// timestamps in UTC.
+// upsert also recomputes `nextTransitionAt` (R3.10, R11.4) through
+// `schedule-transitions.ts`, which owns that arithmetic for both weekly and
+// dated slots. The GSI sort key is always one of those boundary timestamps in
+// UTC.
+//
+// `validateMusicSchedule` is deliberately called here WITHOUT
+// `todayLocalDate`: the Dated_Slot 14-day horizon is a write-time rule owned by
+// the handler, and applying it to a stored schedule would make a slot that was
+// legal when published block every later write once it aged.
 
 import { ScheduleValidationError, validateMusicSchedule } from '@area-code/shared/lib/schedule-validator'
-import type { MusicSchedule, ScheduleDayOfWeek, ScheduleSlot } from '@area-code/shared/types'
+import type { MusicSchedule, ScheduleSlot } from '@area-code/shared/types'
 import { DeleteCommand, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
+
+import { computeNextTransitionAt } from './schedule-transitions.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -34,21 +40,13 @@ const NEXT_TRANSITION_GSI_PK = 'NEXT_TRANSITION'
 
 const NEXT_TRANSITION_GSI_NAME = 'ByNextTransition'
 
-/** Map a `ScheduleDayOfWeek` to its 0..6 weekday number where MON = 0,
- *  matching the natural week ordering used by `nextTransitionAt`. (We pick
- *  Monday-first because the data model already uses MON..SUN ordering.) */
-const DAY_TO_INDEX: Readonly<Record<ScheduleDayOfWeek, number>> = Object.freeze({
-  MON: 0,
-  TUE: 1,
-  WED: 2,
-  THU: 3,
-  FRI: 4,
-  SAT: 5,
-  SUN: 6,
-})
-
-const MINUTES_PER_DAY = 24 * 60
-const MINUTES_PER_WEEK = 7 * MINUTES_PER_DAY
+/**
+ * The one schedule id every route and read uses. The on-disk model supports
+ * several schedules per business, but the public API and every reader keep a 1:1
+ * business-to-schedule convention, so the id lives here rather than being
+ * retyped by each caller (the schedule handler and the Tonight reader).
+ */
+export const DEFAULT_SCHEDULE_ID = 'default'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public types
@@ -74,128 +72,6 @@ function sk(scheduleId: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// nextTransitionAt computation
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Compute the soonest upcoming slot-boundary transition (slot start or slot
- * end) for the given schedule, expressed as an ISO-8601 timestamp in UTC.
- *
- * The algorithm walks the slot list and, for each `(slotStart, slotEnd)`
- * pair, finds the next time after `now` (in the schedule's timezone) at
- * which that boundary fires given the weekly recurrence. The minimum across
- * all boundaries is the schedule's `nextTransitionAt`.
- *
- * Returns `undefined` when the schedule has no slots — the caller MUST then
- * also omit the GSI partition key so the row stays out of the sparse GSI
- * (R3.10, design "MusicSchedules table").
- *
- * Pure: no I/O, no globals, no `Date.now()` — the caller passes `nowIso`.
- */
-export function computeNextTransitionAt(schedule: MusicSchedule, nowIso: string): string | undefined {
-  if (schedule.slots.length === 0) return undefined
-
-  const now = new Date(nowIso)
-  if (Number.isNaN(now.getTime())) {
-    throw new RangeError(`computeNextTransitionAt: nowIso is not a valid ISO-8601 timestamp (${nowIso})`)
-  }
-
-  // Determine the schedule-local week-minute of `now` (0..MINUTES_PER_WEEK-1)
-  // and the offset between local time and UTC at that instant. We need the
-  // offset to translate week-minute back into a UTC timestamp.
-  const local = formatLocalWeekParts(now, schedule.timezone)
-
-  let bestDeltaMin = Number.POSITIVE_INFINITY
-  for (const slot of schedule.slots) {
-    const slotDay = DAY_TO_INDEX[slot.dayOfWeek]
-    const startWeekMin = slotDay * MINUTES_PER_DAY + slot.startTimeMin
-    const endWeekMin = slotDay * MINUTES_PER_DAY + slot.endTimeMin
-
-    const deltaToStart = forwardDelta(local.weekMinute, startWeekMin)
-    const deltaToEnd = forwardDelta(local.weekMinute, endWeekMin)
-
-    if (deltaToStart < bestDeltaMin) bestDeltaMin = deltaToStart
-    if (deltaToEnd < bestDeltaMin) bestDeltaMin = deltaToEnd
-  }
-
-  // Build a UTC timestamp `bestDeltaMin` minutes after `now`.
-  // `now.getTime()` is UTC ms; we add an integer number of minutes. DST
-  // shifts in the schedule's local timezone are absorbed by the next tick
-  // (the schedule-transition-tick re-queries `nextTransitionAt` every 60s
-  // anyway, so a one-tick error during a DST jump is the worst case).
-  const transitionMs = now.getTime() + bestDeltaMin * 60 * 1000
-  return new Date(transitionMs).toISOString()
-}
-
-/** Return how many minutes from `fromWeekMin` to the next occurrence of
- *  `toWeekMin`, modulo a week. Always returns a value in `[1, MINUTES_PER_WEEK]`
- *  — equality maps to a full week ahead so we never return `0` (a transition
- *  exactly at `now` has already fired and the next one is a week away). */
-function forwardDelta(fromWeekMin: number, toWeekMin: number): number {
-  const raw = toWeekMin - fromWeekMin
-  if (raw <= 0) return raw + MINUTES_PER_WEEK
-  return raw
-}
-
-interface LocalWeekParts {
-  weekMinute: number // 0..MINUTES_PER_WEEK-1, MON 00:00 = 0
-}
-
-const WEEKDAY_TO_INDEX: Readonly<Record<string, number>> = Object.freeze({
-  Mon: 0,
-  Tue: 1,
-  Wed: 2,
-  Thu: 3,
-  Fri: 4,
-  Sat: 5,
-  Sun: 6,
-})
-
-/** Convert a UTC `Date` to its `(weekday, hour, minute)` parts in the given
- *  IANA timezone via `Intl.DateTimeFormat`, then collapse into a single
- *  minute-of-week value (MON 00:00 = 0). The schedule's timezone has been
- *  validated upstream, so this never throws for unknown ids. */
-function formatLocalWeekParts(date: Date, timezone: string): LocalWeekParts {
-  const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    hour12: false,
-    weekday: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-  const parts = fmt.formatToParts(date)
-
-  let weekdayRaw: string | undefined
-  let hourRaw: string | undefined
-  let minuteRaw: string | undefined
-  for (const part of parts) {
-    if (part.type === 'weekday') weekdayRaw = part.value
-    else if (part.type === 'hour') hourRaw = part.value
-    else if (part.type === 'minute') minuteRaw = part.value
-  }
-
-  if (
-    weekdayRaw === undefined ||
-    hourRaw === undefined ||
-    minuteRaw === undefined ||
-    WEEKDAY_TO_INDEX[weekdayRaw] === undefined
-  ) {
-    throw new Error(
-      `computeNextTransitionAt: Intl.DateTimeFormat returned unexpected parts (weekday=${String(
-        weekdayRaw,
-      )}, hour=${String(hourRaw)}, minute=${String(minuteRaw)})`,
-    )
-  }
-
-  let hour = Number.parseInt(hourRaw, 10)
-  const minute = Number.parseInt(minuteRaw, 10)
-  if (hour === 24) hour = 0
-
-  const dayIdx = WEEKDAY_TO_INDEX[weekdayRaw]!
-  return { weekMinute: dayIdx * MINUTES_PER_DAY + hour * 60 + minute }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Item shape on disk
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -208,8 +84,9 @@ interface ScheduleItem {
   slots: ScheduleSlot[]
   updatedAt: string
   schemaVersion: 1
-  // GSI fields. Both omitted when `slots` is empty so the row stays out of
-  // the sparse `ByNextTransition` GSI (R3.10).
+  // GSI fields. Both omitted when the schedule has no future transition (no
+  // slots, or only dated slots whose boundaries have all passed) so the row
+  // stays out of the sparse `ByNextTransition` GSI (R3.10).
   gsi1pk?: string
   nextTransitionAt?: string
 }

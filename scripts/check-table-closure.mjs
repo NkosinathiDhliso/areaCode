@@ -68,7 +68,10 @@ export const BROAD_IAM_ALLOWLIST = new Map([
   ['pulse_decay', 'Shared policy grants all tables; pulse sweep sets USERS/APP_DATA/NODES only.'],
   ['reward_evaluator', 'Shared policy grants all tables; evaluator sets REWARDS/APP_DATA/NODES/CHECKINS.'],
   ['leaderboard_reset', 'Shared policy grants all tables; reset only touches APP_DATA (leaderboard KV).'],
-  ['cleanup', 'Shared policy grants all tables; POPIA/billing sweep sets USERS/CHECKINS/APP_DATA/BUSINESSES/NODES/REWARDS.'],
+  [
+    'cleanup',
+    'Shared policy grants all tables; POPIA/billing sweep sets USERS/CHECKINS/APP_DATA/BUSINESSES/NODES/REWARDS.',
+  ],
   ['websocket', 'Shared policy grants all tables; $connect identity resolution sets USERS/BUSINESSES/APP_DATA only.'],
   ['presence_expiry', 'Shared policy grants all tables; sweep sets USERS/NODES/APP_DATA/PRESENCE.'],
   ['streak_reminder', 'Shared policy grants all tables; reminder sets USERS/CHECKINS/APP_DATA.'],
@@ -360,14 +363,7 @@ function main() {
   const envByLambda = parseLambdaTableEnv(tf)
   const iamByLambda = parseDynamodbIam(tf)
 
-  const {
-    rows,
-    missingIam,
-    missingIndex,
-    unknownTable,
-    acceptedAsymmetries,
-    unexpectedAsymmetries,
-  } = computeClosure({
+  const { rows, missingIam, missingIndex, unknownTable, acceptedAsymmetries, unexpectedAsymmetries } = computeClosure({
     tableEnvVars,
     envByLambda,
     iamByLambda,
@@ -393,7 +389,9 @@ function main() {
   }
 
   if (unexpectedAsymmetries.length > 0) {
-    console.log('[table-closure] NOTE: broad-IAM / narrow-env asymmetry with no allowlist entry (drift, not a failure):')
+    console.log(
+      '[table-closure] NOTE: broad-IAM / narrow-env asymmetry with no allowlist entry (drift, not a failure):',
+    )
     for (const a of unexpectedAsymmetries) {
       console.log(`  ~ ${a.lambda}: IAM grants [${a.extraTables.join(', ')}] beyond the table env vars it sets`)
     }
@@ -402,7 +400,9 @@ function main() {
 
   const gaps = missingIam.length + missingIndex.length + unknownTable.length
   if (gaps > 0) {
-    console.error(`[table-closure] FAIL: ${gaps} Table_Closure gap(s): a Lambda sets a table env var its IAM does not cover:`)
+    console.error(
+      `[table-closure] FAIL: ${gaps} Table_Closure gap(s): a Lambda sets a table env var its IAM does not cover:`,
+    )
     for (const g of unknownTable) {
       console.error(`  x ${g.lambda}: env ${g.envVar} -> no aws_dynamodb_table.${g.table} resource declared`)
     }
@@ -410,13 +410,17 @@ function main() {
       console.error(`  x ${g.lambda}: sets ${g.envVar} but IAM does not grant aws_dynamodb_table.${g.table}.arn`)
     }
     for (const g of missingIndex) {
-      console.error(`  x ${g.lambda}: sets ${g.envVar} but IAM does not grant aws_dynamodb_table.${g.table}.arn/index/*`)
+      console.error(
+        `  x ${g.lambda}: sets ${g.envVar} but IAM does not grant aws_dynamodb_table.${g.table}.arn/index/*`,
+      )
     }
-    console.error('[table-closure] Add the table (and its /index/*) to that Lambda\'s DynamoDB IAM policy.')
+    console.error("[table-closure] Add the table (and its /index/*) to that Lambda's DynamoDB IAM policy.")
     process.exit(1)
   }
 
-  console.log('[table-closure] PASS: every table env var a Lambda sets is covered by its DynamoDB IAM (table + indexes).')
+  console.log(
+    '[table-closure] PASS: every table env var a Lambda sets is covered by its DynamoDB IAM (table + indexes).',
+  )
 }
 
 // CLI entry only when invoked directly, so the unit test can import the pure

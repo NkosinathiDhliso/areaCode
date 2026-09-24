@@ -16,6 +16,9 @@ type DashboardPanel =
   | 'staff-leaderboard'
   | 'reports'
   | 'campaigns'
+  // One night at a time (proof-of-demand R8.3). `music-schedule` stays for the
+  // weekly grid; this is the dated Tonight form.
+  | 'tonight'
   | 'music-schedule'
 
 /**

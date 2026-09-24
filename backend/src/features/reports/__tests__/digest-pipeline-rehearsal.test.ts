@@ -246,6 +246,22 @@ const EXPECTED_WEEK_START = '2026-01-05'
 // is comfortably above the Suppression_Floor of 5 and renders derived shares.
 const VISITORS = ['u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8']
 
+// Found_Via stamps on the seeded week (proof-of-demand R4.5). Five of the eight
+// visitors found the venue through Area Code, the other three carry no stamp and
+// read as Walk_In. Five clears the Suppression_Floor, so the per-source clause
+// renders too. Stamped in the shared seed so EVERY checkpoint below runs through
+// the same stamped rows: the generator's check-in loader must carry `foundVia`
+// from the row to `computeReceipt`, or the whole digest reports zero Found_You.
+const FOUND_VIA_BY_VISITOR: Record<string, string> = {
+  u1: 'map',
+  u2: 'map',
+  u3: 'share',
+  u4: 'search',
+  u5: 'push',
+}
+const EXPECTED_FOUND_YOU = Object.keys(FOUND_VIA_BY_VISITOR).length
+const EXPECTED_WALK_IN = VISITORS.length - EXPECTED_FOUND_YOU
+
 function seedBusinessWeek(): void {
   h.state.business = {
     businessId: BUSINESS_ID,
@@ -261,8 +277,9 @@ function seedBusinessWeek(): void {
         userId,
         nodeId: NODE_ID,
         tier: 'local',
-        // Spread across Mon–Wed of the seeded week, valid ISO in-window instants.
+        // Spread across Mon-Wed of the seeded week, valid ISO in-window instants.
         checkedInAt: `2026-01-0${5 + (i % 3)}T1${i % 10}:30:00.000Z`,
+        ...(FOUND_VIA_BY_VISITOR[userId] === undefined ? {} : { foundVia: FOUND_VIA_BY_VISITOR[userId] }),
       })),
     ],
   ])
@@ -348,6 +365,37 @@ describe('Weekly Attribution Digest — dev rehearsal end to end (R3.1, R4.2, R6
     expect(rowsAfterReplay).toHaveLength(1)
     // No second Digest_Email dispatched across the replay (retry suppression).
     expect(h.sendDigestEmailMock).toHaveBeenCalledTimes(1)
+  })
+
+  // Regression: the generator's check-in loader once mapped rows without
+  // `foundVia`, so every check-in reached `computeReceipt` as a Walk_In and the
+  // Monday digest reported zero Found_You for a week that measured five. This
+  // asserts the stamp survives the whole generator path: DynamoDB row →
+  // loadCheckInsForNode → computeDigest/computeReceipt → persisted Digest_Row →
+  // Digest_Email copy → dashboard card.
+  it('carries foundVia from the check-in rows into a non-zero Found_You digest (R4.5)', async () => {
+    await generator.generateReportNow(BUSINESS_ID, 'weekly', PERIOD_START, PERIOD_END)
+
+    const row = [...h.appData.values()].find((item) => String(item['pk']).startsWith('DIGEST#'))!
+    const metrics = row['metrics'] as Record<string, unknown>
+    expect(metrics['foundYouVisitors']).toBe(EXPECTED_FOUND_YOU)
+    expect(metrics['walkInVisitors']).toBe(EXPECTED_WALK_IN)
+    // Each Found_You consumer counted once, under their earliest source.
+    expect(metrics['bySource']).toEqual({ map: 2, share: 1, search: 1, push: 1 })
+    // Conservation holds on the persisted row, not only in the pure core.
+    expect((metrics['foundYouVisitors'] as number) + (metrics['walkInVisitors'] as number)).toBe(
+      metrics['uniqueVisitors'],
+    )
+
+    // The owner-facing sentence the email leads with names the same count.
+    const [, , , copyLines] = h.sendDigestEmailMock.mock.calls[0]!
+    expect(copyLines[0]).toContain(`${EXPECTED_FOUND_YOU} people found you on Area Code and checked in this week`)
+    expect(copyLines.some((line) => line.includes('Recorded sources:'))).toBe(true)
+
+    // And the dashboard card reads the same row back with the same split.
+    const view = await businessService.getLatestDigestView(BUSINESS_ID)
+    expect(view.digest?.metrics.foundYouVisitors).toBe(EXPECTED_FOUND_YOU)
+    expect(view.digest?.metrics.walkInVisitors).toBe(EXPECTED_WALK_IN)
   })
 
   it('checkpoint 4: opt-out suppresses the email but the row is still written and readable', async () => {

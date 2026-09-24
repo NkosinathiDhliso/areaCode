@@ -181,6 +181,61 @@ of the Release Ritual) triggers a build. Env-var provisioning and rebuilds are
 step 4 of the ritual, via `./scripts/update-all-amplify-apps.ps1`. This section
 is background, not a separate sequence.
 
+## Amplify Custom Rules (rewrites)
+
+`scripts/apply-amplify-spa-rewrites.ps1` is the only place Amplify custom rules
+are defined. It writes the complete rule set for all four apps in one call per
+app, so a run replaces whatever is in the console. Re-running it is safe and
+idempotent, and rules take effect immediately with no rebuild.
+
+```powershell
+./scripts/apply-amplify-spa-rewrites.ps1            # apply to all four apps
+./scripts/apply-amplify-spa-rewrites.ps1 -DryRun    # print the rule set, no AWS calls
+```
+
+Run it when a rule changes, after an app is recreated, or if a deep link starts
+404ing. It is not part of the Release Ritual because the rules do not change per
+release.
+
+Rules are order sensitive: Amplify stops at the first match, so every specific
+rewrite sits ahead of the SPA fallback, which matches nearly every
+extensionless path.
+
+| App      | Rules, in order                                           |
+| -------- | --------------------------------------------------------- |
+| web      | `/api/<*>` proxy, `/node/<*>` share preview, SPA fallback |
+| business | `/api/<*>` proxy, SPA fallback                            |
+| staff    | `/api/<*>` proxy, SPA fallback                            |
+| admin    | `/api/<*>` proxy, SPA fallback                            |
+
+- **SPA fallback** (all four): any path without a known static-asset extension
+  serves `/index.html` with a 200, so deep links, QR codes and refreshes reach
+  the client router instead of a 404.
+- **`/api/<*>` proxy**: forwards to the HTTP API so the Spotify OAuth callback
+  resolves on the app origin (`SPOTIFY_REDIRECT_URI` is
+  `https://areacode.co.za/api/v1/streaming/spotify/callback`).
+- **`/node/<*>` share preview, consumer web only**: rewrites to
+  `https://api.areacode.co.za/v1/share/node/<*>` with a 200 so a shared venue
+  link unfurls with real OpenGraph tags (venue name, live snapshot, image).
+  The route then redirects the visitor to `/map?venue={slug}&src=share`. It is
+  consumer-only because only that app serves the map arrival. Without this rule
+  the SPA fallback swallows `/node/{slug}` and every share unfurls as the
+  generic app shell (proof-of-demand R12.2).
+
+Verify the share rule after applying, on the consumer origin:
+
+```powershell
+curl -fsS https://areacode.co.za/node/<slug> | Select-String 'og:title'
+```
+
+Two notes on scope. The API proxy stays on all four apps, as it was before the
+rule set was consolidated into one script; only the consumer origin is
+referenced by `SPOTIFY_REDIRECT_URI`, so narrowing it is a separate change.
+Each app's `amplify.yml` also carries a stale `customRules` block listing only
+the SPA fallback; the app-level rules this script writes are what production
+serves, so treat the script as the source of truth and the yml blocks as rot to
+remove in their own change.
+
 ## Post-deploy Verification
 
 The Release Ritual ends with the go-live check (step 6), which is the gate. These

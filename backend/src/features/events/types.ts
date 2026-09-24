@@ -1,3 +1,4 @@
+import { OPEN_SOURCES } from '@area-code/shared/constants/attribution'
 import { SA_CITIES, type CitySlug } from '@area-code/shared/constants/sa-cities'
 import { USAGE_EVENT_NAMES } from '@area-code/shared/constants/usage-events'
 import { z } from 'zod'
@@ -16,13 +17,18 @@ const CITY_SLUGS = SA_CITIES.map((c) => c.slug) as [CitySlug, ...CitySlug[]]
  * Coarse, non-identifying event properties (R4.3, POPIA). A closed, `.strict()`
  * object so a client can never smuggle free-text, coordinates, a userId, or any
  * key that could reconstruct a movement trail. Mirrors the client
- * `UsageEventProps` (`packages/shared/lib/usageEvents.ts`): city-level context
- * only and the signup method, nothing else.
+ * `UsageEventProps` (`packages/shared/lib/usageEvents.ts`): city-level context,
+ * the signup method, and the Venue_Open source, nothing else.
+ *
+ * `source` carries where a `venue_open` came from (proof-of-demand R2.6). It is
+ * a closed enum of Open_Sources with no venue id alongside it, so the aggregate
+ * says "an open arrived from a share" without joining a user to a venue.
  */
 export const usageEventPropsSchema = z
   .object({
     city: z.enum(CITY_SLUGS).optional(),
     method: z.enum(['email', 'google']).optional(),
+    source: z.enum(OPEN_SOURCES).optional(),
   })
   .strict()
 

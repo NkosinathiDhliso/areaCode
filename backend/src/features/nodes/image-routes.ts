@@ -8,6 +8,7 @@ import { requireAuth } from '../../shared/middleware/auth.js'
 import { requireBusinessPermission, getBusinessRole } from '../../shared/middleware/business-role.js'
 import { validate } from '../../shared/middleware/validation.js'
 
+import { invalidateCityPayloadForNode } from './cache.js'
 import { generateUploadUrl, deleteImage, processUploadedImage } from './image-service.js'
 
 const uploadUrlBodySchema = z.object({
@@ -70,6 +71,10 @@ export async function nodeImageRoutes(app: FastifyInstance) {
         }
       }
 
+      // `headerImageKey` is part of the city payload, so the pending key change
+      // has to drop the cached assembly (R15.5).
+      await invalidateCityPayloadForNode(nodeId)
+
       return reply.send({ uploadUrl, objectKey })
     },
   )
@@ -124,6 +129,7 @@ export async function nodeImageRoutes(app: FastifyInstance) {
               ExpressionAttributeValues: { ':key': processedKey },
             }),
           )
+          await invalidateCityPayloadForNode(nodeId)
         }
         return reply.send({ headerImageKey: processedKey, processed: true })
       } catch (err) {
@@ -170,6 +176,7 @@ export async function nodeImageRoutes(app: FastifyInstance) {
             UpdateExpression: 'REMOVE headerImageKey',
           }),
         )
+        await invalidateCityPayloadForNode(nodeId)
       }
 
       return reply.send({ success: true })

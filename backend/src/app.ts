@@ -13,6 +13,7 @@ import { eventRoutes } from './features/events/handler.js'
 import { musicRoutes } from './features/music/handler.js'
 import { nodeRoutes } from './features/nodes/handler.js'
 import { nodeImageRoutes } from './features/nodes/image-routes.js'
+import { nodeShareRoutes } from './features/nodes/share-routes.js'
 import { nodeSocialRoutes } from './features/nodes/social-routes.js'
 import { notificationRoutes } from './features/notifications/handler.js'
 import { privacyRoutes } from './features/privacy/handler.js'
@@ -77,7 +78,12 @@ export async function buildApp() {
     // any accidental HTML response. Frontend (document) CSP is configured at
     // the Amplify hosting layer, not here.
     void reply.header('X-Frame-Options', 'DENY')
-    void reply.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'")
+    // The one document route (the venue Share_Preview) sets its own, stricter
+    // per-response policy with a script nonce; never overwrite it with the JSON
+    // lockdown, which would block its redirect.
+    if (!reply.getHeader('content-security-policy')) {
+      void reply.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'")
+    }
   })
 
   // CORS
@@ -182,6 +188,7 @@ export async function buildApp() {
   await app.register(nodeRoutes)
   await app.register(nodeImageRoutes)
   await app.register(nodeSocialRoutes)
+  await app.register(nodeShareRoutes)
   await app.register(checkInRoutes)
   await app.register(checkOutRoutes)
   await app.register(eventRoutes)

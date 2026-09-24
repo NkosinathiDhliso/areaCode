@@ -15,6 +15,7 @@
 import { BottomSheet } from '@area-code/shared/components/BottomSheet'
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { api, type ApiError } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
 import { setAnalyticsOptIn } from '@area-code/shared/lib/usageEvents'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import type { ConsentStatus } from '@area-code/shared/types'
@@ -86,11 +87,13 @@ export function ReconsentGate({ onNavigate }: ReconsentGateProps) {
       setStatus({ ...status, recordedVersion: status.currentVersion, needsReconsent: false })
       setOpen(false)
     } catch (err) {
-      const apiErr = err as ApiError
       const message =
-        apiErr.statusCode === 0
+        (err as ApiError).statusCode === 0
           ? t('consent.reconsent.errorNetwork', 'We could not reach the server. Check your connection and try again.')
-          : (apiErr.message ?? t('consent.reconsent.errorGeneric', 'We could not save your consent. Please try again.'))
+          : describeApiError(
+              err,
+              t('consent.reconsent.errorGeneric', 'We could not save your consent. Please try again.'),
+            )
       setError(message)
     } finally {
       setSaving(false)

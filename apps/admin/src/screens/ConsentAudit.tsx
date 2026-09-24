@@ -1,5 +1,5 @@
 import { api } from '@area-code/shared/lib/api'
-import { formatLocalDate } from '@area-code/shared/lib/formatters'
+import { formatSastDate } from '@area-code/shared/lib/sast'
 import type { ConsentRecord } from '@area-code/shared/types'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -134,7 +134,7 @@ export function ConsentAudit() {
                   Analytics: {c.analyticsOptIn ? 'ON' : 'OFF'}
                 </span>
                 <span className="text-[var(--text-muted)]">
-                  v{c.consentVersion} · {formatLocalDate(c.consentedAt)}
+                  v{c.consentVersion} · {formatSastDate(c.consentedAt)}
                 </span>
               </div>
             </div>
@@ -149,11 +149,9 @@ export function ConsentAudit() {
             >
               <div>
                 <span className="text-[var(--text-primary)] text-sm">{e.username}</span>
-                <span className="text-[var(--text-muted)] text-xs ml-2">
-                  Requested {formatLocalDate(e.requestedAt)}
-                </span>
+                <span className="text-[var(--text-muted)] text-xs ml-2">Requested {formatSastDate(e.requestedAt)}</span>
               </div>
-              <span className="text-[var(--danger)] text-xs">Deletes {formatLocalDate(e.deletesAt)}</span>
+              <span className="text-[var(--danger)] text-xs">Deletes {formatSastDate(e.deletesAt)}</span>
             </div>
           ))}
         </div>

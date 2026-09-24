@@ -1,5 +1,5 @@
 import { api } from '@area-code/shared/lib/api'
-import type { ApiError } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -88,16 +88,6 @@ function formatTimestamp(iso: string): string {
 function truncateSub(sub: string | null): string {
   if (!sub) return '-'
   return sub.length > 8 ? `${sub.slice(0, 8)}…` : sub
-}
-
-function isApiError(e: unknown): e is ApiError {
-  return (
-    typeof e === 'object' &&
-    e !== null &&
-    'message' in e &&
-    'statusCode' in e &&
-    typeof (e as { statusCode: unknown }).statusCode === 'number'
-  )
 }
 
 export function BoostFloorEditor() {
@@ -219,11 +209,7 @@ function FloorCard({ floor, onUpdated }: FloorCardProps) {
     } catch (err) {
       // Surface inline 400 errors from the server. 5xx is already toasted by
       // the shared API client.
-      if (isApiError(err)) {
-        setSaveError(err.message || 'Failed to update floor')
-      } else {
-        setSaveError('Failed to update floor')
-      }
+      setSaveError(describeApiError(err, 'Failed to update floor'))
     } finally {
       setSaving(false)
     }

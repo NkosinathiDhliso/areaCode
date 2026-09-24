@@ -1,14 +1,18 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 
-import { requireAuth, getAuth, optionalAuth } from '../../shared/middleware/auth.js'
+import { requireAuth, getAuth, getOptionalAuth, optionalAuth } from '../../shared/middleware/auth.js'
 import { requireBusinessPermission, getBusinessRole } from '../../shared/middleware/business-role.js'
 import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
 import { validate } from '../../shared/middleware/validation.js'
 
+import * as goingService from './going-service.js'
+import { GOING_RATE_LIMIT, PUBLIC_NODE_RATE_LIMIT, WHO_IS_HERE_RATE_LIMIT } from './rate-limits.js'
 import * as service from './service.js'
 import {
   citySlugParamsSchema,
+  goingBodySchema,
+  goingQuerySchema,
   nodeIdParamsSchema,
   nodeSlugParamsSchema,
   searchQuerySchema,
@@ -55,14 +59,61 @@ export async function nodeRoutes(app: FastifyInstance) {
     },
     async (request) => {
       const params = request.params as z.infer<typeof nodeIdParamsSchema>
-      return service.getNodeDetail(params.nodeId)
+      // The viewer's own Going state is only reported when a token identified
+      // them (proof-of-demand R9.2); the route itself stays public.
+      const viewer = getOptionalAuth(request)
+      return service.getNodeDetail(params.nodeId, viewer?.role === 'consumer' ? viewer.userId : null)
     },
   )
 
-  // GET /v1/nodes/:nodeSlug/public
+  // POST /v1/nodes/:nodeId/going — mark going tonight (proof-of-demand R9.1).
+  //
+  // Intent, never presence: the row this writes is excluded from every aliveness
+  // input by type and by test (`honest-presence.md`, R9.4). Marking twice is one
+  // row, so a double tap reports the same count.
+  app.post(
+    '/v1/nodes/:nodeId/going',
+    {
+      preHandler: [
+        requireAuth('consumer'),
+        validate({ params: nodeIdParamsSchema, body: goingBodySchema }),
+        rateLimitMiddleware(GOING_RATE_LIMIT),
+      ],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      const params = request.params as z.infer<typeof nodeIdParamsSchema>
+      const body = request.body as z.infer<typeof goingBodySchema>
+      return goingService.markGoing(auth.userId, params.nodeId, body.date, body.remind)
+    },
+  )
+
+  // DELETE /v1/nodes/:nodeId/going — withdraw the mark. Idempotent: removing a
+  // mark that is not there is success, so a retry leaves the same honest count.
+  app.delete(
+    '/v1/nodes/:nodeId/going',
+    {
+      preHandler: [
+        requireAuth('consumer'),
+        validate({ params: nodeIdParamsSchema, query: goingQuerySchema }),
+        rateLimitMiddleware(GOING_RATE_LIMIT),
+      ],
+    },
+    async (request) => {
+      const auth = getAuth(request)
+      const params = request.params as z.infer<typeof nodeIdParamsSchema>
+      const query = request.query as z.infer<typeof goingQuerySchema>
+      return goingService.unmarkGoing(auth.userId, params.nodeId, query.date)
+    },
+  )
+
+  // GET /v1/nodes/:nodeSlug/public — unauthenticated venue read, sharing one
+  // per-IP budget with the Share_Preview route (proof-of-demand R12.2).
   app.get(
     '/v1/nodes/:nodeSlug/public',
-    { preHandler: [validate({ params: nodeSlugParamsSchema })] },
+    {
+      preHandler: [validate({ params: nodeSlugParamsSchema }), rateLimitMiddleware(PUBLIC_NODE_RATE_LIMIT)],
+    },
     async (request) => {
       const params = request.params as z.infer<typeof nodeSlugParamsSchema>
       return service.getNodePublic(params.nodeSlug)
@@ -76,7 +127,7 @@ export async function nodeRoutes(app: FastifyInstance) {
       preHandler: [
         requireAuth('consumer'),
         validate({ params: nodeIdParamsSchema, query: whoIsHereQuerySchema }),
-        rateLimitMiddleware({ key: 'who-is-here', max: 20, windowSeconds: 600 }),
+        rateLimitMiddleware(WHO_IS_HERE_RATE_LIMIT),
       ],
     },
     async (request) => {

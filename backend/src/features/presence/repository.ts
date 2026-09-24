@@ -28,6 +28,7 @@ import { UpdateCommand, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb'
 
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { kvGet, kvSet } from '../../shared/kv/dynamodb-kv.js'
+import type { EpochSeconds } from '../../shared/time/epoch.js'
 import type { PresenceRecord, PresenceState } from '../check-out/types.js'
 
 import { deriveMomentum, pruneSamples, MOMENTUM_WINDOW_SECONDS, type PresenceSample } from './momentum.js'
@@ -58,9 +59,39 @@ function isConditionalCheckFailed(err: unknown): boolean {
   return (err as { name?: string } | null)?.name === 'ConditionalCheckFailedException'
 }
 
+/**
+ * KV key NAME for a venue's cached Live_Presence_Count counter (no `KV#` prefix,
+ * the form `kvGet`/`kvBatchGet` take).
+ *
+ * Exported because the city payload assembly reads these counters in the same
+ * batched KV call as the pulse keys, so the map's first paint shows a real live
+ * count instead of "Be the first in" on a busy venue until the socket arrives
+ * (proof-of-demand R15.6). That is the same cached value the realtime
+ * `node:presence_update` event carries, so the REST seed and the socket can
+ * never disagree; the authoritative record-derived count still backs every
+ * per-venue read (`getLivePresenceCount`, Requirement 6.4).
+ */
+export function presenceCounterKvKey(nodeId: string): string {
+  return `presence:count:${nodeId}`
+}
+
 /** Full KV partition key for a venue's cached Live_Presence_Count counter. */
 function counterKey(nodeId: string): string {
-  return `KV#presence:count:${nodeId}`
+  return `KV#${presenceCounterKvKey(nodeId)}`
+}
+
+/**
+ * A venue's cached Live_Presence_Count from a raw batched KV value.
+ *
+ * The counter is stored as a DynamoDB number, so the value arrives as a number
+ * at runtime even though the KV read is typed as a string. An absent or
+ * unparsable value means nobody is there, which is 0 — never a pulse-derived or
+ * historical substitution (`honest-presence.md`).
+ */
+export function parsePresenceCounterValue(raw: string | null | undefined): number {
+  if (raw === null || raw === undefined || raw === '') return 0
+  const count = Number(raw)
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0
 }
 
 /** Map a raw DynamoDB item to a typed Presence_Record. */
@@ -335,7 +366,7 @@ async function queryNodeIndex(params: {
  * counter (Requirements 6.4, 7.1). Returns 0 honestly when no record is
  * live-present.
  */
-export async function getLivePresenceCount(nodeId: string, now: number): Promise<number> {
+export async function getLivePresenceCount(nodeId: string, now: EpochSeconds): Promise<number> {
   const records = await queryLivePresenceRecords(nodeId, now)
   return livePresenceCount(
     records.map((r) => ({ state: r.presenceState, expiresAt: r.expiresAt })),
@@ -430,7 +461,7 @@ export async function setCounter(nodeId: string, value: number): Promise<void> {
  *
  * @returns the authoritative count the counter was set to.
  */
-export async function reconcileCounter(nodeId: string, now: number): Promise<number> {
+export async function reconcileCounter(nodeId: string, now: EpochSeconds): Promise<number> {
   const count = await getLivePresenceCount(nodeId, now)
   await setCounter(nodeId, count)
   return count

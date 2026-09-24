@@ -290,7 +290,7 @@ function LeaderboardRow({ entry, onVenueStreakTap, t }: LeaderboardRowProps) {
               defaultValue: 'Go to {{venue}}',
             })}
           >
-            📍 {entry.topVenueName}
+            {entry.topVenueName}
           </button>
         )}
       </div>

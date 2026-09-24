@@ -12,6 +12,7 @@
     "backfill:user-locks": "npx tsx src/scripts/backfill-user-locks.ts",
     "backfill:user-search": "npx tsx src/scripts/backfill-user-search.ts",
     "backfill:redemption-code-aliases": "npx tsx src/scripts/backfill-redemption-code-aliases.ts",
+    "seed:proof-of-demand": "npx tsx src/scripts/seed-proof-of-demand.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

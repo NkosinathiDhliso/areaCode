@@ -1,10 +1,18 @@
 import { Spinner } from '@area-code/shared/components/Spinner'
+import { describeOAuthError } from '@area-code/shared/lib/apiError'
 import { exchangeCodeForTokens } from '@area-code/shared/lib/cognitoHostedUiOAuth'
+import {
+  SIGN_IN_STORAGE_REQUIRED_COPY,
+  isStorageAvailable,
+  readStored,
+  removeStored,
+} from '@area-code/shared/lib/safeStorage'
 import { trackEvent } from '@area-code/shared/lib/usageEvents'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CONSUMER_OAUTH_PKCE_KEY, CONSUMER_OAUTH_STATE_KEY } from '../lib/startConsumerGoogleOAuth'
 import type { AppRoute } from '../types'
 
 interface ConsumerOAuthCallbackProps {
@@ -44,10 +52,13 @@ export function ConsumerOAuthCallback({ onNavigate }: ConsumerOAuthCallbackProps
       const params = new URLSearchParams(window.location.search)
       const code = params.get('code')
       const state = params.get('state')
-      const oauthErr = params.get('error_description') ?? params.get('error')
+      const oauthErrCode = params.get('error')
+      const oauthErrDetail = params.get('error_description')
 
-      if (oauthErr) {
-        setError(oauthErr)
+      if (oauthErrCode !== null || oauthErrDetail !== null) {
+        // Cognito's `error_description` is machinery: logged, never rendered (R15.13).
+        console.warn('[consumer-oauth] callback error', { code: oauthErrCode, detail: oauthErrDetail })
+        setError(describeOAuthError(oauthErrCode))
         return
       }
       if (!code || !state) {
@@ -55,10 +66,16 @@ export function ConsumerOAuthCallback({ onNavigate }: ConsumerOAuthCallbackProps
         return
       }
 
-      const storedState = sessionStorage.getItem('consumer_oauth_state')
-      const verifier = sessionStorage.getItem('consumer_oauth_pkce')
+      const storedState = readStored('session', CONSUMER_OAUTH_STATE_KEY)
+      const verifier = readStored('session', CONSUMER_OAUTH_PKCE_KEY)
       if (!storedState || !verifier || state !== storedState) {
-        setError(t('auth.oauth.stateMismatch', 'Sign-in expired. Please try again.'))
+        // No storage at all is a different story from an expired attempt: the
+        // round trip could never have kept the state, so say so (R15.19).
+        setError(
+          isStorageAvailable('session')
+            ? t('auth.oauth.stateMismatch', 'Sign-in expired. Please try again.')
+            : t('auth.oauth.storageBlocked', SIGN_IN_STORAGE_REQUIRED_COPY),
+        )
         return
       }
 
@@ -72,8 +89,8 @@ export function ConsumerOAuthCallback({ onNavigate }: ConsumerOAuthCallbackProps
           code,
           codeVerifier: verifier,
         })
-        sessionStorage.removeItem('consumer_oauth_state')
-        sessionStorage.removeItem('consumer_oauth_pkce')
+        removeStored('session', CONSUMER_OAUTH_STATE_KEY)
+        removeStored('session', CONSUMER_OAUTH_PKCE_KEY)
 
         const syncRes = await fetch(`${apiBase()}/v1/auth/consumer/oauth-sync`, {
           method: 'POST',

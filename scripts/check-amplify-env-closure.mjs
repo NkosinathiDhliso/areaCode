@@ -37,15 +37,7 @@ export const PS1_PATH = join(REPO_ROOT, 'scripts', 'update-all-amplify-apps.ps1'
 const SOURCE_ROOTS = ['apps', 'packages']
 
 /** Directory names never walked (mirrors the other repo scanners). */
-const IGNORED_DIRS = new Set([
-  'node_modules',
-  'dist',
-  '.turbo',
-  'coverage',
-  '.claude',
-  '.expo',
-  'build',
-])
+const IGNORED_DIRS = new Set(['node_modules', 'dist', '.turbo', 'coverage', '.claude', '.expo', 'build'])
 
 /**
  * Keys that ARE read in code but are legitimately NOT provisioned by the
@@ -293,7 +285,9 @@ function main() {
   if (usedButUnmanaged.length > 0) {
     console.error(`[env-closure] FAIL: ${usedButUnmanaged.length} key(s) read in code but NOT provisioned:`)
     for (const key of usedButUnmanaged) console.error(`  x ${key}`)
-    console.error('[env-closure] Add each to update-all-amplify-apps.ps1 for the apps that read it, or allowlist it with a reason.')
+    console.error(
+      '[env-closure] Add each to update-all-amplify-apps.ps1 for the apps that read it, or allowlist it with a reason.',
+    )
     process.exit(1)
   }
 

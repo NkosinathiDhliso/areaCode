@@ -155,6 +155,59 @@ describe('scanDigestForPii (R1.6)', () => {
   })
 })
 
+describe('Attribution_Metrics on the Digest_Row (proof-of-demand R4.5, R11.4)', () => {
+  // A row from the Receipt era: the split, the first-timer count, the per-source
+  // breakdown, and the Receipt entries in the suppression list.
+  const attributionRow: DigestRow = {
+    ...row,
+    metrics: {
+      ...row.metrics,
+      foundYouVisitors: 6,
+      walkInVisitors: 12,
+      foundYouFirstTimers: 4,
+      bySource: { map: 4, share: 2, search: 0, push: 0 },
+      measuredFrom: null,
+    },
+    suppressed: ['firstGetConversions', 'foundYouFirstTimers'],
+  }
+
+  it('reads the new metrics back through the schema unchanged', async () => {
+    mocks.send.mockResolvedValueOnce({
+      Items: [{ pk: 'DIGEST#biz-1', sk: 'WEEK#2026-07-06', ...attributionRow }],
+    })
+
+    const result = await getLatestDigest('biz-1')
+
+    expect(result).toEqual(attributionRow)
+    expect(result?.metrics.foundYouVisitors).toBe(6)
+    expect(result?.metrics.bySource).toEqual({ map: 4, share: 2, search: 0, push: 0 })
+    expect(result?.suppressed).toContain('foundYouFirstTimers')
+  })
+
+  it('still parses a stored history row that predates the Receipt', async () => {
+    // The new fields are optional, so a row written before this spec parses and
+    // reports the week as unmeasured (absent), never as zero demand.
+    mocks.send.mockResolvedValueOnce({ Items: [storedItem] })
+
+    const result = await getLatestDigest('biz-1')
+
+    expect(result).toEqual(row)
+    expect(result?.metrics.foundYouVisitors).toBeUndefined()
+    expect(result?.metrics.bySource).toBeUndefined()
+  })
+
+  it('PII-scans the new metrics: counts pass, a leak inside metrics throws', () => {
+    expect(() => scanDigestForPii(attributionRow)).not.toThrow()
+
+    const leaked: DigestRow = {
+      ...attributionRow,
+      metrics: { ...attributionRow.metrics, busiestDay: 'Friday (thabo@example.com)' },
+    }
+
+    expect(() => scanDigestForPii(leaked)).toThrow(/PII/)
+  })
+})
+
 describe('persistDigest (R1.6 + R3.1)', () => {
   it('scans then writes, returning the putDigestRow result on a clean payload', async () => {
     mocks.send.mockResolvedValueOnce({})

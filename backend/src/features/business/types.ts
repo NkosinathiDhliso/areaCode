@@ -284,6 +284,14 @@ export type PaidInterval = (typeof PAID_INTERVALS)[number]
 export const SUBSCRIPTION_GRACE_DAYS = 7
 
 /**
+ * Length of the free trial, in days. One home: `startTrial` stamps
+ * `trialEndsAt` with it and `resolveReceiptWindow` walks back from
+ * `trialEndsAt` by the same span to find where the trial opened
+ * (proof-of-demand R6.2).
+ */
+export const TRIAL_DAYS = 14
+
+/**
  * Lead time before `paidUntil` lapses for the pre-lapse renewal reminder, in
  * days (R3.4). The trial-reminder worker sends one reminder when a paid
  * monthly/yearly window is within this many days of ending.

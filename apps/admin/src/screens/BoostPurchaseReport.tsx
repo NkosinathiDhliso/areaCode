@@ -1,5 +1,5 @@
-import { api } from '@area-code/shared/lib/api'
-import type { ApiError } from '@area-code/shared/lib/api'
+import { api, type ApiError } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -153,16 +153,10 @@ export function BoostPurchaseReport() {
       // returns INVALID_DATE_RANGE for `from > to` and for ranges over
       // 367 days, plus INVALID_QUERY / INVALID_CURSOR for other issues. 5xx
       // is already toasted by the shared API client.
-      if (isApiError(err) && err.statusCode === 400) {
-        setDateRangeError(err.message || 'Invalid date range')
-        if (!cursor) {
-          setItems([])
-          setNextCursor(null)
-        }
-      } else if (isApiError(err)) {
-        setDateRangeError(err.message || 'Failed to load purchases')
-      } else {
-        setDateRangeError('Failed to load purchases')
+      setDateRangeError(describeApiError(err, 'Failed to load purchases'))
+      if (isApiError(err) && err.statusCode === 400 && !cursor) {
+        setItems([])
+        setNextCursor(null)
       }
     } finally {
       setLoading(false)
@@ -185,11 +179,7 @@ export function BoostPurchaseReport() {
         setEmptyMessage('No purchase found for this checkout id.')
       }
     } catch (err) {
-      if (isApiError(err)) {
-        setYocoLookupError(err.message || 'Failed to look up checkout')
-      } else {
-        setYocoLookupError('Failed to look up checkout')
-      }
+      setYocoLookupError(describeApiError(err, 'Failed to look up checkout'))
       setItems([])
       setNextCursor(null)
     } finally {

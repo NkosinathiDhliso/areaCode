@@ -66,7 +66,32 @@ describe('toVenueCardVM', () => {
       archetypeId: 'archetype-festival-spirit',
       isFirstIn: false,
       momentum: 'steady',
+      // Nothing published for tonight reads as null, never a placeholder
+      // (proof-of-demand R8.6).
+      tonight: null,
+      // An unmeasured Going count is null, never a zero nobody counted
+      // (proof-of-demand R9.2).
+      goingCount: null,
     })
+  })
+
+  it('passes the venue Going count through without folding it into aliveness (R9.2, R9.4)', () => {
+    const vm = toVenueCardVM({ ...makeNode(), goingCount: 7 }, { 'node-1': 12 }, { 'node-1': 35 }, {})
+
+    expect(vm.goingCount).toBe(7)
+    // Intent never touches the aliveness fields.
+    expect(vm.liveCheckInCount).toBe(12)
+    expect(vm.pulseState).toBe('buzzing')
+    expect(vm.isFirstIn).toBe(false)
+  })
+
+  it('passes the venue Tonight summary through to the card model (R8.6)', () => {
+    const tonight = { headline: 'Amapiano all night', startsAt: '21:00', archetypeId: 'archetype-festival-spirit' }
+
+    expect(toVenueCardVM({ ...makeNode(), tonight }, { 'node-1': 12 }, { 'node-1': 35 }, {}).tonight).toEqual(tonight)
+    // A node with no Tonight field at all is null, not undefined, so the card
+    // has one shape to branch on.
+    expect(toVenueCardVM(makeNode(), {}, {}, {}).tonight).toBeNull()
   })
 
   it('surfaces the momentum from the momentum map, defaulting to steady', () => {

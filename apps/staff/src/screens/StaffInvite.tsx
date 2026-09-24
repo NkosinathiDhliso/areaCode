@@ -1,5 +1,6 @@
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { api } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -91,8 +92,7 @@ export function StaffInvite({ token }: StaffInviteProps) {
       setStatus('success')
     } catch (err: unknown) {
       setStatus('error')
-      const apiErr = err as { message?: string }
-      setError(apiErr.message ?? 'Invite is invalid or has expired.')
+      setError(describeApiError(err, 'Invite is invalid or has expired.'))
     }
   }
 

@@ -9,7 +9,7 @@
  * Feature: map-discovery-experience
  */
 
-import type { Node, NodeState, VenueMomentum } from '@area-code/shared/types'
+import type { Node, NodeState, VenueMomentum, VenueTonight } from '@area-code/shared/types'
 
 import { getNodeState } from './mapHelpers'
 
@@ -245,6 +245,29 @@ export interface VenueCardVM {
    * trend) renders nothing.
    */
   momentum: VenueMomentum
+  /**
+   * Tonight for the venue's current local night, passed through from the city
+   * payload (proof-of-demand R8.6). Null when the owner has published nothing:
+   * the card then renders no Tonight line at all rather than a placeholder
+   * (`honest-presence.md`).
+   *
+   * An anticipation magnet that sits ALONGSIDE the aliveness and taste signals.
+   * It never replaces the pulse line or the glyph, and it takes no part in
+   * ordering: `vibeRank` does not read it
+   * (`discovery-dna-vibe-over-convenience.md`).
+   */
+  tonight: VenueTonight | null
+  /**
+   * How many consumers marked going for tonight, passed through from the city
+   * payload (proof-of-demand R9.2). Null when it was not measured, which the
+   * payload reports for a venue with no Tonight.
+   *
+   * INTENT, not presence: it never touches `liveCheckInCount`, `pulseState`,
+   * `isFirstIn` or `momentum`, and `vibeRank` does not read it
+   * (`honest-presence.md`, R9.4). Whether the card may name it at all is decided
+   * by `goingCountToShow`, not here.
+   */
+  goingCount: number | null
 }
 
 /**
@@ -274,5 +297,7 @@ export function toVenueCardVM(
     archetypeId,
     isFirstIn: liveCheckInCount === 0,
     momentum: momentumByNode[node.id] ?? 'steady',
+    tonight: node.tonight ?? null,
+    goingCount: node.goingCount ?? null,
   }
 }

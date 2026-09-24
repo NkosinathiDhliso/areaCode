@@ -6,6 +6,11 @@ coverage
 .terraform
 pnpm-lock.yaml
 
+# Ephemeral git worktree copies and generated test artifacts.
+.claude/worktrees
+tests/e2e/playwright-report
+tests/e2e/test-results
+
 # Generated AI-rule mirrors. Single source of truth is rules/*.md; these are
 # produced by scripts/sync-ai-rules.mjs and must not be hand-formatted.
 .kiro/steering

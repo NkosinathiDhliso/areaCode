@@ -3,6 +3,7 @@ import { ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { kvGet } from '../../shared/kv/dynamodb-kv.js'
+import { epochSecondsFromMs, type EpochSeconds } from '../../shared/time/epoch.js'
 import { getStaffById, getUserById } from '../auth/dynamodb-repository.js'
 import { findBusinessById } from '../business/repository.js'
 import { getEffectiveTier } from '../business/service.js'
@@ -39,12 +40,12 @@ function resolveNodeArchetype(node: {
  * failure (presence table absent in some envs, social GSI hiccup) degrades to an
  * empty map so the feed still renders — taste just falls back toward 0.
  */
-async function friendsPresentByNode(viewerId: string, nowMs: number): Promise<Record<string, number>> {
+async function friendsPresentByNode(viewerId: string, now: EpochSeconds): Promise<Record<string, number>> {
   const counts: Record<string, number> = {}
   try {
     const followingIds = await getFollowingIds(viewerId)
     const mutualIds = await getMutualFollowIds(viewerId, followingIds)
-    const presence = await getFriendsPresence(Array.from(mutualIds), Math.floor(nowMs / 1000))
+    const presence = await getFriendsPresence(Array.from(mutualIds), now)
     for (const p of presence) counts[p.nodeId] = (counts[p.nodeId] ?? 0) + 1
   } catch {
     return {}
@@ -169,6 +170,9 @@ export async function getRewardsNearMe(lat: number, lng: number, viewerId?: stri
   )
   const rewards = rewardsResult.Items || []
   const nowMs = Date.now()
+  // Presence lives in epoch seconds. Passing milliseconds here made every live
+  // record look long expired, so every venue behind a get read as empty (R15.4).
+  const nowSeconds = epochSecondsFromMs(nowMs)
 
   // Viewer taste inputs (best-effort). The viewer's archetype powers the
   // archetype-match term; friends-present powers the friends term. Both degrade
@@ -182,7 +186,7 @@ export async function getRewardsNearMe(lat: number, lng: number, viewerId?: stri
     } catch {
       viewerArchetypeId = null
     }
-    friendsByNode = await friendsPresentByNode(viewerId, nowMs)
+    friendsByNode = await friendsPresentByNode(viewerId, nowSeconds)
   }
 
   const candidates = []
@@ -208,7 +212,7 @@ export async function getRewardsNearMe(lat: number, lng: number, viewerId?: stri
     }
     let liveCount = 0
     try {
-      liveCount = await getLivePresenceCount(node.nodeId, nowMs)
+      liveCount = await getLivePresenceCount(node.nodeId, nowSeconds)
     } catch {
       liveCount = 0
     }

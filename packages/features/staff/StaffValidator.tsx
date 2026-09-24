@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react'
 import { Box, Text } from '../../shared/components/primitives'
 import { api, type ApiError } from '../../shared/lib/api'
 
+import { CAMERA_PLAYBACK_FAILED_COPY, describeCameraError, waitForVideoElement } from './camera'
+
 type FlowState = 'idle' | 'preview' | 'confirming' | 'result'
 type FailurePhase = 'preview' | 'confirm'
 
@@ -37,6 +39,13 @@ export function StaffValidator() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // One decode at a time. `detect()` is async and can outlive the 250 ms tick on
+  // a slow phone, so without this two overlapping calls could both resolve with
+  // a code and both fire the handler, previewing the same code twice.
+  const inFlightRef = useRef(false)
+  // Set the moment the camera stops, so a decode already in flight cannot fire
+  // the handler after the scanner has been torn down. First result wins.
+  const stoppedRef = useRef(false)
 
   useEffect(() => {
     if (flowState === 'idle') {
@@ -64,6 +73,7 @@ export function StaffValidator() {
   }, [])
 
   function stopCamera() {
+    stoppedRef.current = true
     if (scanIntervalRef.current) {
       clearInterval(scanIntervalRef.current)
       scanIntervalRef.current = null
@@ -75,61 +85,41 @@ export function StaffValidator() {
     setScanning(false)
   }
 
-  function waitForVideoElement(maxWait = 2000): Promise<HTMLVideoElement | null> {
-    return new Promise((resolve) => {
-      // Use requestAnimationFrame to wait for next paint (React render flush)
-      requestAnimationFrame(async () => {
-        if (videoRef.current) {
-          resolve(videoRef.current)
-          return
-        }
-        // Yield a microtask to allow React to flush state updates
-        await Promise.resolve()
-        if (videoRef.current) {
-          resolve(videoRef.current)
-          return
-        }
-        // If video element still not available, poll until it appears
-        const start = Date.now()
-        const poll = () => {
-          if (videoRef.current) {
-            resolve(videoRef.current)
-            return
-          }
-          if (Date.now() - start >= maxWait) {
-            resolve(null)
-            return
-          }
-          setTimeout(poll, 50)
-        }
-        setTimeout(poll, 0)
-      })
-    })
-  }
-
+  // Every failure path calls stopCamera() before it returns, so a stream that
+  // did start is always released and the device camera indicator never stays lit
+  // while the UI shows an error (R15.16). The copy is chosen by `err.name` in
+  // `./camera.ts`, so denied, missing, and busy each read differently.
   async function startCamera() {
     setCameraError(null)
+    let stream: MediaStream
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-      })
-      streamRef.current = stream
-      setScanning(true)
-
-      // Wait for video element to be rendered by React
-      const video = await waitForVideoElement()
-      if (video && streamRef.current) {
-        video.srcObject = streamRef.current
-        await video.play()
-        startScanning()
-      } else {
-        setCameraError('Camera failed to initialize. Please try again.')
-        stopCamera()
-      }
-    } catch {
-      setCameraError('Camera access denied. Please use manual code entry.')
-      setScanning(false)
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    } catch (err) {
+      stopCamera()
+      setCameraError(describeCameraError(err))
+      return
     }
+    streamRef.current = stream
+    stoppedRef.current = false
+    inFlightRef.current = false
+    setScanning(true)
+
+    // React renders the <video> a tick after `scanning` flips, so wait for it.
+    const video = await waitForVideoElement(videoRef)
+    if (!video || !streamRef.current) {
+      stopCamera()
+      setCameraError(CAMERA_PLAYBACK_FAILED_COPY)
+      return
+    }
+    video.srcObject = streamRef.current
+    try {
+      await video.play()
+    } catch {
+      stopCamera()
+      setCameraError(CAMERA_PLAYBACK_FAILED_COPY)
+      return
+    }
+    startScanning()
   }
 
   function startScanning() {
@@ -144,23 +134,29 @@ export function StaffValidator() {
     if (BarcodeDetectorAPI) {
       const detector = new BarcodeDetectorAPI({ formats: ['qr_code'] })
       scanIntervalRef.current = setInterval(async () => {
+        if (inFlightRef.current || stoppedRef.current) return
         if (!videoRef.current || videoRef.current.readyState < 2) return
+        inFlightRef.current = true
         try {
           const barcodes = await detector.detect(videoRef.current)
-          if (barcodes.length > 0) {
-            const value = barcodes[0]?.rawValue
-            if (value) {
-              stopCamera()
-              handleCodeScanned(value)
-            }
+          const value = barcodes[0]?.rawValue
+          // stopCamera() clears the interval and sets stoppedRef before the
+          // handler runs, so a decode that resolved late cannot fire a second
+          // preview for the same scan (R15.17).
+          if (value && !stoppedRef.current) {
+            stopCamera()
+            handleCodeScanned(value)
           }
         } catch {
-          // Detection failed, continue scanning
+          // Detection failed on this frame; the next tick tries again.
+        } finally {
+          inFlightRef.current = false
         }
       }, 250)
     } else {
       // Fallback: canvas-based jsQR decoding for Safari/Firefox
       scanIntervalRef.current = setInterval(() => {
+        if (stoppedRef.current) return
         if (!videoRef.current || !canvasRef.current || videoRef.current.readyState < 2) return
         const canvas = canvasRef.current
         const ctx = canvas.getContext('2d')
@@ -170,7 +166,7 @@ export function StaffValidator() {
         ctx.drawImage(videoRef.current, 0, 0)
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
         const qrCode = jsQR(imageData.data, canvas.width, canvas.height)
-        if (qrCode?.data) {
+        if (qrCode?.data && !stoppedRef.current) {
           stopCamera()
           handleCodeScanned(qrCode.data)
         }

@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 
 import { api, type ApiError } from '../lib/api'
+import { cooldownRetryMessage, describeApiError } from '../lib/apiError'
 import { useErrorStore } from '../stores/errorStore'
 import type { CheckInRequest, CheckInResponse } from '../types'
 
@@ -13,18 +14,10 @@ function friendlyMessage(err: ApiError): string {
   // Rate limit (burst or cooldown): show remaining time if we have it
   if (err.statusCode === 429) {
     const cooldownUntil = (err as ApiError & { cooldownUntil?: string }).cooldownUntil
-    if (cooldownUntil) {
-      const remainingMs = new Date(cooldownUntil).getTime() - Date.now()
-      if (remainingMs > 0) {
-        const mins = Math.ceil(remainingMs / 60_000)
-        if (mins >= 60) {
-          const hours = Math.ceil(mins / 60)
-          return `You can check in here again in about ${hours}h.`
-        }
-        return `You can check in here again in ${mins}m.`
-      }
-    }
-    return err.message ?? 'Easy there - too many check-ins. Try again in a moment.'
+    return (
+      cooldownRetryMessage(cooldownUntil, 'You can check in here again') ??
+      describeApiError(err, 'Easy there - too many check-ins. Try again in a moment.')
+    )
   }
 
   if (err.statusCode === 401) return 'Please sign in to check in.'
@@ -33,7 +26,7 @@ function friendlyMessage(err: ApiError): string {
   // 422 accuracy_insufficient is handled by the caller (QR fallback UI),
   // so we don't surface it as a toast.
 
-  return err.message ?? 'Check-in failed. Please try again.'
+  return describeApiError(err, 'Check-in failed. Please try again.')
 }
 
 export function useCheckIn() {

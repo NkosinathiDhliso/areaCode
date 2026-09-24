@@ -1,4 +1,5 @@
 import { api } from '@area-code/shared/lib/api'
+import { formatSastDayMonth, formatSastTime } from '@area-code/shared/lib/sast'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -37,8 +38,7 @@ function pct(n: number): string {
 }
 
 function formatWeek(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleDateString('en-ZA', { day: '2-digit', month: 'short' })
+  return formatSastDayMonth(iso)
 }
 
 /**
@@ -245,7 +245,7 @@ export function RetentionDashboard() {
           </section>
 
           <p className="text-[var(--text-muted)] text-xs text-center">
-            Cached for {data.cacheMinutes} min · Generated {new Date(data.generatedAt).toLocaleTimeString()}
+            Cached for {data.cacheMinutes} min · Generated {formatSastTime(data.generatedAt)}
           </p>
         </>
       )}

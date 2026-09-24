@@ -134,6 +134,52 @@ describe('getNodesByCitySlug — paid-tier filter', () => {
     expect(nodes).toHaveLength(0)
   })
 
+  // proof-of-demand R15.7: a failed business lookup drops a venue off the map,
+  // so it must be visible in CloudWatch instead of a bare `.catch(() => null)`.
+  it('logs at error level with the city slug when a business lookup fails', async () => {
+    mocks.sendMock.mockImplementation(async (cmd: unknown) => {
+      const input = (cmd as { input?: Record<string, unknown> })?.input ?? {}
+      if ('Key' in input) {
+        const key = input['Key'] as { pk?: string }
+        if (key?.pk === `CITY#${CITY_SLUG}`) {
+          return { Item: { cityId: CITY_ID, name: 'Johannesburg', slug: CITY_SLUG } }
+        }
+      }
+      if ('FilterExpression' in input) {
+        return {
+          Items: [
+            {
+              nodeId: 'node-orphaned-by-error',
+              name: 'Paid Venue',
+              slug: 'paid-venue',
+              category: 'nightlife',
+              lat: -26.2,
+              lng: 28.0,
+              cityId: CITY_ID,
+              isActive: true,
+              businessId: 'biz-unreachable',
+              claimStatus: 'claimed',
+            },
+          ],
+        }
+      }
+      return {}
+    })
+    mocks.findBusinessById.mockRejectedValue(new Error('businesses table throttled'))
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const nodes = await getNodesByCitySlug(CITY_SLUG)
+
+    // Membership cannot be proven, so the venue is excluded — but loudly.
+    expect(nodes).toHaveLength(0)
+    expect(errSpy).toHaveBeenCalledTimes(1)
+    const logged = String(errSpy.mock.calls[0]![0])
+    expect(logged).toContain(CITY_SLUG)
+    expect(logged).toContain('biz-unreachable')
+
+    errSpy.mockRestore()
+  })
+
   it('returns nodes for businesses on paid tiers (starter, payg, growth, pro)', async () => {
     const paidTiers = ['starter', 'payg', 'growth', 'pro'] as const
 

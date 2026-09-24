@@ -1,4 +1,5 @@
 import { Spinner } from '@area-code/shared/components/Spinner'
+import { describeOAuthError } from '@area-code/shared/lib/apiError'
 import { exchangeCodeForTokens } from '@area-code/shared/lib/cognitoHostedUiOAuth'
 import type { AdminRole } from '@area-code/shared/types'
 import { useEffect, useState } from 'react'
@@ -37,10 +38,13 @@ export function AdminOAuthCallback() {
       const params = new URLSearchParams(window.location.search)
       const code = params.get('code')
       const state = params.get('state')
-      const oauthErr = params.get('error_description') ?? params.get('error')
+      const oauthErrCode = params.get('error')
+      const oauthErrDetail = params.get('error_description')
 
-      if (oauthErr) {
-        setError(oauthErr)
+      if (oauthErrCode !== null || oauthErrDetail !== null) {
+        // Cognito's `error_description` is machinery: logged, never rendered (R15.13).
+        console.warn('[admin-oauth] callback error', { code: oauthErrCode, detail: oauthErrDetail })
+        setError(describeOAuthError(oauthErrCode))
         return
       }
       if (!code || !state) {

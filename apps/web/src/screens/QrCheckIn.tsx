@@ -1,4 +1,6 @@
 import { api, type ApiError } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
+import { SIGN_IN_STORAGE_REQUIRED_COPY } from '@area-code/shared/lib/safeStorage'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { usePresenceStore } from '@area-code/shared/stores/presenceStore'
 import type { CheckInResponse } from '@area-code/shared/types'
@@ -6,6 +8,7 @@ import { MapPin, Check, Lock, AlertCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { stashQrCheckIn } from '../lib/pendingQrCheckIn'
 import type { AppRoute } from '../types'
 
 interface QrCheckInProps {
@@ -30,16 +33,14 @@ export function QrCheckIn({ nodeId, token, onNavigate }: QrCheckInProps) {
   const isAuthenticated = useConsumerAuthStore((s) => s.isAuthenticated)
   const [phase, setPhase] = useState<Phase>('submitting')
   const [message, setMessage] = useState<string>('')
+  const [resumeStashed, setResumeStashed] = useState(true)
 
   useEffect(() => {
     if (!isAuthenticated) {
-      // Stash the pending QR so we can resume after login.
-      try {
-        sessionStorage.setItem('pendingQrCheckIn', JSON.stringify({ nodeId, token }))
-      } catch {
-        // sessionStorage can throw in private-mode browsers; the fallback is
-        // still useful because the user is about to sign in.
-      }
+      // Stash the pending QR so we can resume after login. A private-mode
+      // browser cannot keep it, so the sign-in hint says so rather than
+      // promising a return trip that will not happen (R15.19).
+      setResumeStashed(stashQrCheckIn({ nodeId, token }))
       setPhase('unauthenticated')
       return
     }
@@ -77,11 +78,13 @@ export function QrCheckIn({ nodeId, token, onNavigate }: QrCheckInProps) {
         if (apiErr.statusCode === 401) {
           setMessage(t('qr.invalidToken', 'This QR code is no longer valid. Ask the venue to reprint.'))
         } else if (apiErr.statusCode === 429) {
-          setMessage(apiErr.message ?? t('qr.cooldown', 'You have already checked in here recently.'))
+          // The per-limiter 429 copy names the wait, so it is passed through when
+          // it reads as copy and mapped when it does not (R15.13).
+          setMessage(describeApiError(err, t('qr.cooldown', 'You have already checked in here recently.')))
         } else if (apiErr.statusCode === 404) {
           setMessage(t('qr.venueGone', 'This venue is no longer listed.'))
         } else {
-          setMessage(apiErr.message ?? t('qr.generic', 'Check-in failed. Please try again at the venue.'))
+          setMessage(describeApiError(err, t('qr.generic', 'Check-in failed. Please try again at the venue.')))
         }
       }
     }
@@ -128,7 +131,9 @@ export function QrCheckIn({ nodeId, token, onNavigate }: QrCheckInProps) {
               {t('qr.signInTitle', 'Sign in to check in')}
             </h1>
             <p className="text-[var(--text-secondary)] text-sm">
-              {t('qr.signInHint', "We'll bring you right back here after you sign in.")}
+              {resumeStashed
+                ? t('qr.signInHint', "We'll bring you right back here after you sign in.")
+                : t('auth.oauth.storageBlocked', SIGN_IN_STORAGE_REQUIRED_COPY)}
             </p>
             <button
               onClick={() => onNavigate('login')}

@@ -20,6 +20,7 @@ export const NOTIFICATION_PREFERENCE_KEYS = [
   'streakAtRisk',
   'leaderboardPrewarning',
   'followedUserCheckin',
+  'tonightReminder',
 ] as const
 
 export type NotificationPreferenceKey = (typeof NOTIFICATION_PREFERENCE_KEYS)[number]
@@ -28,6 +29,9 @@ export type NotificationPreferenceKey = (typeof NOTIFICATION_PREFERENCE_KEYS)[nu
  * Default value for every preference when the user has no persisted record.
  * Only `rewardClaimedPush` defaults on: the code a consumer earns is the one
  * transactional push they expect. Everything else is opt-in.
+ *
+ * `tonightReminder` is opt-in at the moment of intent (proof-of-demand R9.6):
+ * marking Going does not turn it on, only the explicit "remind me" tap does.
  */
 export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreferences = {
   streakAtRisk: false,
@@ -35,4 +39,5 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreferences = {
   rewardClaimedPush: true,
   leaderboardPrewarning: false,
   followedUserCheckin: false,
+  tonightReminder: false,
 }

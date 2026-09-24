@@ -136,15 +136,34 @@ self.addEventListener('push', (event) => {
   }
 })
 
+// Notification click-through. `data.url` is the deep link the backend attached:
+// a venue push carries `/map?venue={slug}&src=push`, which the app parses into a
+// `push` Venue_Open (proof-of-demand R2.1). An already-open tab is focused AND
+// navigated, because focusing alone would silently drop the venue the
+// notification was about.
+// Point an already-open tab at `url`, then focus it. Navigation can fail
+// (cross-origin, or unsupported in this browser); focusing alone is still better
+// than dropping the click, so the failure is noted and the focus still happens.
+async function focusClientAt(client, url) {
+  if ('navigate' in client) {
+    try {
+      await client.navigate(url)
+    } catch {
+      // Cross-origin or unsupported: focus is still better than nothing.
+    }
+  }
+  return client.focus()
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 
   const url = event.notification.data?.url || '/'
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clients) => {
       for (const client of clients) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
-          return client.focus()
+          return focusClientAt(client, url)
         }
       }
       return self.clients.openWindow(url)

@@ -1,5 +1,5 @@
-import { api } from '@area-code/shared/lib/api'
-import type { ApiError } from '@area-code/shared/lib/api'
+import { api, type ApiError } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -138,16 +138,10 @@ export function SubscriptionPaymentsReport() {
       // INVALID_DATE_RANGE for `from > to` and for ranges over 367 days, plus
       // INVALID_QUERY / INVALID_CURSOR for other issues. 5xx is already toasted
       // by the shared API client.
-      if (isApiError(err) && err.statusCode === 400) {
-        setDateRangeError(err.message || 'Invalid date range')
-        if (!cursor) {
-          setItems([])
-          setNextCursor(null)
-        }
-      } else if (isApiError(err)) {
-        setDateRangeError(err.message || 'Failed to load subscription payments')
-      } else {
-        setDateRangeError('Failed to load subscription payments')
+      setDateRangeError(describeApiError(err, 'Failed to load subscription payments'))
+      if (isApiError(err) && err.statusCode === 400 && !cursor) {
+        setItems([])
+        setNextCursor(null)
       }
     } finally {
       setLoading(false)

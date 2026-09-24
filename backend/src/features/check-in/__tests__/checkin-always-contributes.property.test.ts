@@ -56,6 +56,7 @@ const h = vi.hoisted(() => ({
   runAbuseChecks: vi.fn(async () => undefined),
   getUserCheckInCountAtNode: vi.fn(async () => 0),
   incrementLeaderboard: vi.fn(async () => undefined),
+  incrementNodeCheckInTotal: vi.fn(async () => 1),
   getNodeWithCity: vi.fn(),
   insertCheckIn: vi.fn(async () => ({ checkInId: 'ci-1' })),
   incrementTotalCheckIns: vi.fn(async () => ({ totalCheckIns: 5, tier: 'local' })),
@@ -119,6 +120,7 @@ vi.mock('../repository.js', () => ({
   getNodeWithCity: h.getNodeWithCity,
   insertCheckIn: h.insertCheckIn,
   incrementTotalCheckIns: h.incrementTotalCheckIns,
+  incrementNodeCheckInTotal: h.incrementNodeCheckInTotal,
   updateStreak: h.updateStreak,
 }))
 
@@ -207,8 +209,14 @@ describe('Feature: tiered-visibility, Property 1: Check-in always contributes', 
 
         expect(res.success).toBe(true)
 
-        // 1. Daily counter incremented (R1.2).
-        expect(h.kvIncr).toHaveBeenCalledWith(`checkin:today:${s.nodeId}`, expect.any(Number))
+        // 1. Daily counter incremented (R1.2), expiring at the next SAST
+        // midnight rather than 24 hours later (proof-of-demand R15.2).
+        expect(h.kvIncr).toHaveBeenCalledWith(`checkin:today:${s.nodeId}`, expect.any(Number), {
+          resetWhenExpired: true,
+        })
+        const ttlSeconds = h.kvIncr.mock.calls[0]![1] as number
+        expect(ttlSeconds).toBeGreaterThan(0)
+        expect(ttlSeconds).toBeLessThanOrEqual(86_400)
 
         // 2. Pulse score recalculated and stored (R1.1, R1.3).
         const pulseWrites = h.kvSet.mock.calls.filter((c) => String(c[0]).startsWith(`pulse:${s.cityId}:`))

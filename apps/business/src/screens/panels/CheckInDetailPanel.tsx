@@ -1,17 +1,37 @@
+import type { FoundVia } from '@area-code/shared/constants/attribution'
 import { getTierLabel } from '@area-code/shared/constants/tier-levels'
 import { useSocketRoom } from '@area-code/shared/hooks/useSocketRoom'
 import { api } from '@area-code/shared/lib/api'
+import { formatSastTime, sastDateString } from '@area-code/shared/lib/sast'
 import { getSocket } from '@area-code/shared/lib/socket'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import type { Tier } from '@area-code/shared/types'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { FoundViaBadge } from '../../components/FoundViaBadge'
+
 interface CheckInEntry {
   displayName: string
   tier: Tier
   visitCount: number
   timestamp: string
+  /**
+   * How the consumer found the venue (proof-of-demand R4.4). Server-derived, and
+   * `walk_in` for any row cached before the stamp shipped, so the badge is
+   * absent rather than guessed.
+   */
+  foundVia: FoundVia
+}
+
+/**
+ * The listener pair this panel needs from the socket singleton.
+ * `business:checkin_detail` is not in the static event map, so the socket is
+ * narrowed to exactly these two calls instead of being cast to `any`.
+ */
+interface DynamicCheckInSocket {
+  on: (event: string, handler: (payload: CheckInEntry) => void) => void
+  off: (event: string, handler: (payload: CheckInEntry) => void) => void
 }
 
 function getVisitLabel(visitCount: number): string {
@@ -30,7 +50,11 @@ export function CheckInDetailPanel() {
   const { t } = useTranslation()
   const { accessToken, businessId } = useBusinessAuthStore()
   const [entries, setEntries] = useState<CheckInEntry[]>([])
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  // "Today" is the SAST calendar date, the date the check-in detail partition is
+  // keyed by (R15.8, R15.12). The UTC date would ask for tomorrow's partition
+  // between 22:00 and 00:00 UTC, which is 00:00 to 02:00 SAST: the owner would
+  // open the panel at closing time and see an empty night.
+  const [date, setDate] = useState(() => sastDateString())
   const [loading, setLoading] = useState(false)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadError, setLoadError] = useState(false)
@@ -71,16 +95,18 @@ export function CheckInDetailPanel() {
     if (!businessId || !accessToken) return
     const socket = getSocket(accessToken)
     const handler = (payload: CheckInEntry) => {
-      // Only append if viewing today's date
-      const today = new Date().toISOString().slice(0, 10)
-      if (date === today) {
+      // Only append when the owner is looking at today, in SAST: the arriving
+      // row belongs to the SAST day the server stamped it with.
+      if (date === sastDateString()) {
         setEntries((prev) => [payload, ...prev])
       }
     }
-    // business:checkin_detail is a dynamic event not in the static type map
-    ;(socket as any).on('business:checkin_detail', handler)
+    // business:checkin_detail is a dynamic event not in the static type map, so
+    // the socket is narrowed to the listener pair rather than widened to `any`.
+    const dynamic = socket as unknown as DynamicCheckInSocket
+    dynamic.on('business:checkin_detail', handler)
     return () => {
-      ;(socket as any).off('business:checkin_detail', handler)
+      dynamic.off('business:checkin_detail', handler)
     }
   }, [businessId, accessToken, date])
 
@@ -120,7 +146,7 @@ export function CheckInDetailPanel() {
           >
             <div className="flex flex-col gap-1">
               <span className="text-[var(--text-primary)] font-medium text-sm">{entry.displayName}</span>
-              <div className="flex flex-row items-center gap-2">
+              <div className="flex flex-row flex-wrap items-center gap-2">
                 <span className="text-[var(--text-muted)] text-xs">{getTierLabel(entry.tier)}</span>
                 <span
                   className="text-xs font-medium px-2 py-0.5 rounded-full"
@@ -131,11 +157,10 @@ export function CheckInDetailPanel() {
                 >
                   {getVisitLabel(entry.visitCount)}
                 </span>
+                <FoundViaBadge foundVia={entry.foundVia} />
               </div>
             </div>
-            <span className="text-[var(--text-muted)] text-xs">
-              {new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </span>
+            <span className="text-[var(--text-muted)] text-xs">{formatSastTime(entry.timestamp)}</span>
           </div>
         ))}
       </div>

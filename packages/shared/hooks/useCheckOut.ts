@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 
 import { api, type ApiError } from '../lib/api'
+import { cooldownRetryMessage, describeApiError } from '../lib/apiError'
 import { useErrorStore } from '../stores/errorStore'
 import { usePresenceStore } from '../stores/presenceStore'
 import type { CheckOutResponse } from '../types'
@@ -15,24 +16,16 @@ function friendlyMessage(err: ApiError): string {
   // Rate limit (burst or cooldown): show remaining time if we have it.
   if (err.statusCode === 429) {
     const cooldownUntil = (err as ApiError & { cooldownUntil?: string }).cooldownUntil
-    if (cooldownUntil) {
-      const remainingMs = new Date(cooldownUntil).getTime() - Date.now()
-      if (remainingMs > 0) {
-        const mins = Math.ceil(remainingMs / 60_000)
-        if (mins >= 60) {
-          const hours = Math.ceil(mins / 60)
-          return `Too many requests. Try again in about ${hours}h.`
-        }
-        return `Too many requests. Try again in ${mins}m.`
-      }
-    }
-    return err.message ?? 'Easy there - too many requests. Try again in a moment.'
+    return (
+      cooldownRetryMessage(cooldownUntil, 'Too many requests. Try again') ??
+      describeApiError(err, 'Easy there - too many requests. Try again in a moment.')
+    )
   }
 
   if (err.statusCode === 401) return 'Please sign in to check out.'
   if (err.statusCode === 403) return 'Check-out is disabled for this account.'
 
-  return err.message ?? 'Check-out failed. Please try again.'
+  return describeApiError(err, 'Check-out failed. Please try again.')
 }
 
 export function useCheckOut() {

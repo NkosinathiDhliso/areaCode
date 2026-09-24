@@ -1,4 +1,5 @@
 import { api, type ApiError } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
 import { storage } from '@area-code/shared/lib/storage'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import type { CheckInResponse } from '@area-code/shared/types'
@@ -65,11 +66,11 @@ export default function QrCheckIn() {
         if (apiErr.statusCode === 401) {
           setMessage(t('qr.invalidToken', 'This QR code is no longer valid. Ask the venue to reprint.'))
         } else if (apiErr.statusCode === 429) {
-          setMessage(apiErr.message ?? t('qr.cooldown', 'You have already checked in here recently.'))
+          setMessage(describeApiError(err, t('qr.cooldown', 'You have already checked in here recently.')))
         } else if (apiErr.statusCode === 404) {
           setMessage(t('qr.venueGone', 'This venue is no longer listed.'))
         } else {
-          setMessage(apiErr.message ?? t('qr.generic', 'Check-in failed. Please try again at the venue.'))
+          setMessage(describeApiError(err, t('qr.generic', 'Check-in failed. Please try again at the venue.')))
         }
       }
     }

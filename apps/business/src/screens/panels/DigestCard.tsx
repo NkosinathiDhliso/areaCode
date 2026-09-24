@@ -1,4 +1,5 @@
 import { api } from '@area-code/shared/lib/api'
+import { formatSastDate } from '@area-code/shared/lib/sast'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
@@ -49,11 +50,11 @@ interface DigestLatestResponse {
 /* ------------------------------------------------------------------ */
 
 export function formatWeekStart(iso: string): string {
-  // weekStart is a plain ISO date (opening Monday). Render it as a readable
-  // South African date without inventing a timezone shift.
-  const parsed = new Date(`${iso}T00:00:00`)
-  if (Number.isNaN(parsed.getTime())) return iso
-  return parsed.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })
+  // weekStart is a plain ISO date (opening Monday), already a SAST calendar
+  // date. The shared formatter renders it in SAST, so the day never shifts under
+  // a device in another timezone (R15.15).
+  if (Number.isNaN(Date.parse(iso))) return iso
+  return formatSastDate(iso)
 }
 
 /** A signed, honest delta chip label, e.g. "+5" / "-3". Absent when the delta

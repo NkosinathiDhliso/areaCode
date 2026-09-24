@@ -117,9 +117,15 @@ describe('service.getNodesByCitySlug — assembled payload cache (R2.3)', () => 
     expect(result[0]).toMatchObject({ id: 'node-a', pulseScore: 42 })
     expect(result[1]).toMatchObject({ id: 'node-b', pulseScore: 7 })
 
-    // Batched pulse read, not a per-node loop.
+    // One batched read carrying both key sets, not a per-node loop and not a
+    // second round trip for presence (proof-of-demand R15.6).
     expect(mocks.kvBatchGet).toHaveBeenCalledTimes(1)
-    expect(mocks.kvBatchGet).toHaveBeenCalledWith([`pulse:${CITY_ID}:node-a`, `pulse:${CITY_ID}:node-b`])
+    expect(mocks.kvBatchGet).toHaveBeenCalledWith([
+      `pulse:${CITY_ID}:node-a`,
+      `presence:count:node-a`,
+      `pulse:${CITY_ID}:node-b`,
+      `presence:count:node-b`,
+    ])
 
     // Payload written back to KV with the 45s TTL under the per-city key.
     expect(mocks.kvSet).toHaveBeenCalledTimes(1)
@@ -190,5 +196,94 @@ describe('service.getNodesByCitySlug — unchanged response shape (R2.6)', () =>
     const result = await getNodesByCitySlug(CITY_SLUG)
 
     expect(result[0]).toHaveProperty('pulseScore', 0)
+  })
+})
+
+// ─── First-paint live counts (proof-of-demand R15.6) ────────────────────────
+//
+// The map's first paint used to show "Be the first in" on a busy venue until the
+// first socket event arrived, because the REST payload carried no live count.
+// The assembly now seeds it from the presence counters, read in the SAME batched
+// KV call as pulse so the hot path stays at one round trip.
+
+describe('service.getNodesByCitySlug — presence seed on first paint (R15.6)', () => {
+  beforeEach(() => {
+    mocks.kvGet.mockResolvedValue(null)
+    mocks.getCityBySlug.mockResolvedValue({ id: CITY_ID, slug: CITY_SLUG, name: 'Johannesburg' })
+  })
+
+  it('seeds liveCheckInCount from the presence counter in the same batched read', async () => {
+    mocks.getNodesByCitySlug.mockResolvedValue([repoNode('node-busy'), repoNode('node-empty')])
+    mocks.kvBatchGet.mockResolvedValue(
+      new Map<string, string>([
+        [`pulse:${CITY_ID}:node-busy`, '60'],
+        // Counters are stored as DynamoDB numbers, so the value arrives numeric.
+        ['presence:count:node-busy', 12 as unknown as string],
+      ]),
+    )
+
+    const result = await getNodesByCitySlug(CITY_SLUG)
+
+    expect(result[0]).toMatchObject({ id: 'node-busy', pulseScore: 60, liveCheckInCount: 12 })
+    // Absent counter means nobody is there, honestly zero.
+    expect(result[1]).toMatchObject({ id: 'node-empty', pulseScore: 0, liveCheckInCount: 0 })
+  })
+
+  it('reads presence once for the whole city, not once per venue', async () => {
+    const nodes = Array.from({ length: 25 }, (_, i) => repoNode(`node-${i}`))
+    mocks.getNodesByCitySlug.mockResolvedValue(nodes)
+    mocks.kvBatchGet.mockResolvedValue(new Map())
+
+    await getNodesByCitySlug(CITY_SLUG)
+
+    expect(mocks.kvBatchGet).toHaveBeenCalledTimes(1)
+    const [keys] = mocks.kvBatchGet.mock.calls[0]! as [string[]]
+    expect(keys.filter((key) => key.startsWith('presence:count:'))).toHaveLength(25)
+  })
+
+  it('never derives a live count from the pulse score', async () => {
+    // A high pulse with nobody present must read as zero live, never as a crowd
+    // inferred from the score (`honest-presence.md`).
+    mocks.getNodesByCitySlug.mockResolvedValue([repoNode('node-loud')])
+    mocks.kvBatchGet.mockResolvedValue(new Map([[`pulse:${CITY_ID}:node-loud`, '90']]))
+
+    const result = await getNodesByCitySlug(CITY_SLUG)
+
+    expect(result[0]).toMatchObject({ pulseScore: 90, liveCheckInCount: 0 })
+  })
+})
+
+// ─── Loud logging on assembly failure (proof-of-demand R15.7) ───────────────
+
+describe('service.getNodesByCitySlug — assembly failures are loud (R15.7)', () => {
+  it('logs at error level with the city slug when the aliveness read fails', async () => {
+    mocks.kvGet.mockResolvedValue(null)
+    mocks.getNodesByCitySlug.mockResolvedValue([repoNode('node-a')])
+    mocks.getCityBySlug.mockResolvedValue({ id: CITY_ID, slug: CITY_SLUG, name: 'Johannesburg' })
+    mocks.kvBatchGet.mockRejectedValue(new Error('BatchGetItem throttled'))
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const result = await getNodesByCitySlug(CITY_SLUG)
+
+    // The map still renders the venues; the failure is visible, not swallowed.
+    expect(result).toHaveLength(1)
+    expect(errSpy).toHaveBeenCalledTimes(1)
+    expect(String(errSpy.mock.calls[0]![0])).toContain(CITY_SLUG)
+
+    errSpy.mockRestore()
+  })
+
+  it('logs at error level when the city row is missing', async () => {
+    mocks.kvGet.mockResolvedValue(null)
+    mocks.getNodesByCitySlug.mockResolvedValue([repoNode('node-a')])
+    mocks.getCityBySlug.mockResolvedValue(null)
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await getNodesByCitySlug(CITY_SLUG)
+
+    expect(errSpy).toHaveBeenCalledTimes(1)
+    expect(String(errSpy.mock.calls[0]![0])).toContain(CITY_SLUG)
+
+    errSpy.mockRestore()
   })
 })

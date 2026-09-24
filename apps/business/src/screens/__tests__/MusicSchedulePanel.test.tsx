@@ -110,9 +110,49 @@ describe('MusicSchedulePanel - access control (R4.11, R4.12)', () => {
   })
 })
 
+/**
+ * Response shape (proof-of-demand task 15, defect found during task 8.1).
+ *
+ * `GET /v1/business/{id}/music-schedule` sends the MusicSchedule itself
+ * (`backend/src/features/music/handler.ts`), which is the shape `TonightForm`
+ * reads. The panel read `res.schedule`, so every response resolved to undefined
+ * and a venue with a published week saw "no schedule yet".
+ */
+describe('MusicSchedulePanel - GET response shape', () => {
+  const SLOT = {
+    slotId: 'slot-fri',
+    dayOfWeek: 'FRI' as const,
+    startTime: '20:00',
+    endTime: '23:00',
+    startTimeMin: 20 * 60,
+    endTimeMin: 23 * 60,
+    mode: 'blanket' as const,
+    genres: ['amapiano' as const],
+  }
+
+  it('renders the published week from the schedule the handler sends, not an empty state', async () => {
+    apiGet.mockResolvedValue(makeSchedule({ slots: [SLOT] }))
+
+    render(<MusicSchedulePanel />)
+    await waitForLoad()
+
+    expect(screen.getByTestId('music-schedule-slot-slot-fri')).toBeTruthy()
+    expect(screen.queryByTestId('music-schedule-empty')).toBeNull()
+  })
+
+  it('treats a 404 as the honest empty state', async () => {
+    apiGet.mockRejectedValue({ statusCode: 404, error: 'NOT_FOUND', message: 'Music schedule not found' })
+
+    render(<MusicSchedulePanel />)
+    await waitForLoad()
+
+    expect(screen.getByTestId('music-schedule-empty')).toBeTruthy()
+  })
+})
+
 describe('MusicSchedulePanel - empty state (R4.10)', () => {
   it('shows the "Add first slot" CTA and opens the editor on tap', async () => {
-    apiGet.mockResolvedValue({ schedule: null })
+    apiGet.mockResolvedValue(makeSchedule())
     render(<MusicSchedulePanel />)
     await waitForLoad()
     const cta = screen.getByTestId('music-schedule-add-first-slot')
@@ -123,7 +163,7 @@ describe('MusicSchedulePanel - empty state (R4.10)', () => {
 
 describe('MusicSchedulePanel - Cross_Midnight_Pair split on save (R3.12, R4.13)', () => {
   it('persists a cross-midnight blanket slot as two pair-a/-b halves', async () => {
-    apiGet.mockResolvedValue({ schedule: makeSchedule() })
+    apiGet.mockResolvedValue(makeSchedule())
     apiPost.mockImplementation(async (_url: string, body: MusicSchedule) => body)
 
     render(<MusicSchedulePanel />)
@@ -162,7 +202,7 @@ describe('MusicSchedulePanel - Cross_Midnight_Pair split on save (R3.12, R4.13)'
 describe('MusicSchedulePanel - promise-vs-crowd status line (R5.1, R5.2)', () => {
   it('shows the "expected vibe" promise line when the resolved branch is declared_promise', async () => {
     mockBusinessNodes = [{ businessId: 'biz-1', lastBranch: 'declared_promise' }]
-    apiGet.mockResolvedValue({ schedule: null })
+    apiGet.mockResolvedValue(makeSchedule())
     render(<MusicSchedulePanel />)
     await waitForLoad()
     const status = screen.getByTestId('music-schedule-vibe-status')
@@ -174,7 +214,7 @@ describe('MusicSchedulePanel - promise-vs-crowd status line (R5.1, R5.2)', () =>
     mockBusinessNodes = [
       { businessId: 'biz-1', lastBranch: 'crowd_live', liveArchetypeId: 'archetype-festival-spirit' },
     ]
-    apiGet.mockResolvedValue({ schedule: null })
+    apiGet.mockResolvedValue(makeSchedule())
     render(<MusicSchedulePanel />)
     await waitForLoad()
     const status = screen.getByTestId('music-schedule-vibe-status')
@@ -186,7 +226,7 @@ describe('MusicSchedulePanel - promise-vs-crowd status line (R5.1, R5.2)', () =>
 
   it('renders no status line for a neutral branch (asserts nothing false)', async () => {
     mockBusinessNodes = [{ businessId: 'biz-1', lastBranch: 'default' }]
-    apiGet.mockResolvedValue({ schedule: null })
+    apiGet.mockResolvedValue(makeSchedule())
     render(<MusicSchedulePanel />)
     await waitForLoad()
     expect(screen.queryByTestId('music-schedule-vibe-status')).toBeNull()
@@ -194,7 +234,7 @@ describe('MusicSchedulePanel - promise-vs-crowd status line (R5.1, R5.2)', () =>
 
   it('renders no status line when the venue has no resolved branch data', async () => {
     mockBusinessNodes = [{ businessId: 'biz-1' }]
-    apiGet.mockResolvedValue({ schedule: null })
+    apiGet.mockResolvedValue(makeSchedule())
     render(<MusicSchedulePanel />)
     await waitForLoad()
     expect(screen.queryByTestId('music-schedule-vibe-status')).toBeNull()
@@ -204,8 +244,8 @@ describe('MusicSchedulePanel - promise-vs-crowd status line (R5.1, R5.2)', () =>
 describe('MusicSchedulePanel - pair edit-as-unit (R4.14)', () => {
   it('opens both halves of a Cross_Midnight_Pair as a single merged slot', async () => {
     // Seed a schedule that already contains a pair (FRI 22:00→23:59 + SAT 00:00→02:00).
-    apiGet.mockResolvedValue({
-      schedule: makeSchedule({
+    apiGet.mockResolvedValue(
+      makeSchedule({
         slots: [
           {
             slotId: 'pair-abc-a',
@@ -229,7 +269,7 @@ describe('MusicSchedulePanel - pair edit-as-unit (R4.14)', () => {
           },
         ],
       }),
-    })
+    )
     render(<MusicSchedulePanel />)
     await waitForLoad()
 

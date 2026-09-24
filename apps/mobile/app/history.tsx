@@ -1,5 +1,5 @@
 import { api } from '@area-code/shared/lib/api'
-import { formatLocalDate, formatLocalTime } from '@area-code/shared/lib/formatters'
+import { formatSastDate, formatSastTime } from '@area-code/shared/lib/sast'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
@@ -82,8 +82,8 @@ export default function CheckInHistoryScreen() {
                 <Text style={styles.category}>{item.node.category}</Text>
               </View>
               <View style={styles.dateColumn}>
-                <Text style={styles.date}>{formatLocalDate(item.checkedInAt)}</Text>
-                <Text style={styles.time}>{formatLocalTime(item.checkedInAt)}</Text>
+                <Text style={styles.date}>{formatSastDate(item.checkedInAt)}</Text>
+                <Text style={styles.time}>{formatSastTime(item.checkedInAt)}</Text>
               </View>
             </View>
           )}

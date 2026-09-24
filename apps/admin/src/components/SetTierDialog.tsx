@@ -1,4 +1,6 @@
 import { api } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
+import { sastDateTimeLocalToIso, toSastDateTimeLocal } from '@area-code/shared/lib/sast'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -12,12 +14,13 @@ interface SetTierDialogProps {
 }
 
 // A datetime-local value string (YYYY-MM-DDTHH:mm) for now + 1 calendar month,
-// the default Comp_Window length (R1.4).
+// the default Comp_Window length (R1.4). Expressed in SAST, the venue's clock,
+// so an admin working from another timezone seeds and reads the same instant a
+// South African admin would (proof-of-demand R15.15).
 function defaultCompEnd(): string {
-  const d = new Date()
-  d.setMonth(d.getMonth() + 1)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  const oneMonthOn = new Date()
+  oneMonthOn.setMonth(oneMonthOn.getMonth() + 1)
+  return toSastDateTimeLocal(oneMonthOn)
 }
 
 // Admin set-tier dialog (cross-portal-lifecycle-alignment R1). A paid tier is a
@@ -58,13 +61,16 @@ export function SetTierDialog({ businessId, initialTier, onClose, onSaved }: Set
         reason: reason.trim(),
       }
       if (isPaid) {
-        const date = new Date(paidUntil.trim())
-        if (Number.isNaN(date.getTime()) || date.getTime() <= Date.now()) {
-          setError('Entitlement end date must be in the future.')
+        // The field is a wall-clock value with no offset, so it is read as SAST:
+        // the venue's clock decides when the entitlement lapses, not the admin's
+        // device (R15.15).
+        const iso = sastDateTimeLocalToIso(paidUntil)
+        if (iso === null || Date.parse(iso) <= Date.now()) {
+          setError('Entitlement end date must be a valid date in the future.')
           setSaving(false)
           return
         }
-        body.paidUntil = date.toISOString()
+        body.paidUntil = iso
       }
       await api.post(`/v1/admin/businesses/${businessId}/set-tier`, body)
       setSuccess(true)
@@ -73,7 +79,7 @@ export function SetTierDialog({ businessId, initialTier, onClose, onSaved }: Set
         onClose()
       }, 1200)
     } catch (err: unknown) {
-      setError((err as { message?: string })?.message || 'Failed to set tier')
+      setError(describeApiError(err, 'Failed to set tier'))
       setSaving(false)
     }
   }
@@ -110,7 +116,7 @@ export function SetTierDialog({ businessId, initialTier, onClose, onSaved }: Set
               />
               {isPaid && (
                 <>
-                  <label className="text-[var(--text-primary)] text-xs font-medium">Entitlement end date</label>
+                  <label className="text-[var(--text-primary)] text-xs font-medium">Entitlement end date (SAST)</label>
                   <input
                     type="datetime-local"
                     value={paidUntil}

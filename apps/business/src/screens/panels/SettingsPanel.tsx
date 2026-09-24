@@ -1,4 +1,6 @@
 import { api } from '@area-code/shared/lib/api'
+import { classifyApiError, describeApiError } from '@area-code/shared/lib/apiError'
+import { formatSastDate } from '@area-code/shared/lib/sast'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 import { useErrorStore } from '@area-code/shared/stores/errorStore'
 import type { BusinessAccount, StaffAccount } from '@area-code/shared/types'
@@ -81,8 +83,7 @@ export function SettingsPanel() {
       const inviteRes = await api.get<{ items: StaffInvite[] }>('/v1/business/staff/invites')
       setInvites(inviteRes.items ?? [])
     } catch (err: unknown) {
-      const apiErr = err as { message?: string }
-      setInviteError(apiErr.message ?? 'Failed to send invite')
+      setInviteError(describeApiError(err, 'Failed to send the invite. Please try again.'))
     } finally {
       setInviteLoading(false)
     }
@@ -139,11 +140,13 @@ export function SettingsPanel() {
       const res = await api.get<{ url: string }>('/v1/business/nodes/current/qr')
       setQrCheckinUrl(res.url)
     } catch (err: unknown) {
-      const e = err as { message?: string; status?: number }
-      if (e.status === 404 || (e.message ?? '').toLowerCase().includes('no nodes')) {
+      // Branch on the status code, not on the words in the message: `status` was
+      // never a field on the API error, so this only ever matched by sniffing
+      // server text (R15.13).
+      if (classifyApiError(err) === 'notFound') {
         setQrError('No node found. Create a node in the Node tab first.')
       } else {
-        setQrError('Failed to generate QR. Please try again.')
+        setQrError(describeApiError(err, 'Failed to generate QR. Please try again.'))
       }
     }
   }
@@ -200,9 +203,7 @@ export function SettingsPanel() {
           </h3>
           <span className="text-[var(--text-primary)] font-medium capitalize">{biz.tier}</span>
           {biz.trialEndsAt && (
-            <p className="text-[var(--warning)] text-xs mt-1">
-              Trial ends {new Date(biz.trialEndsAt).toLocaleDateString()}
-            </p>
+            <p className="text-[var(--warning)] text-xs mt-1">Trial ends {formatSastDate(biz.trialEndsAt)}</p>
           )}
           <button onClick={() => setPanel('plans')} className="text-[var(--accent)] text-xs mt-2">
             {t('biz.plans.changePlan')}
@@ -330,15 +331,15 @@ export function SettingsPanel() {
               {pendingInvites.map((inv) => (
                 <div
                   key={inv.id}
-                  className="flex flex-row items-center justify-between bg-[var(--bg-raised)] rounded-xl px-3 py-2"
+                  className="flex flex-row items-center justify-between gap-2 bg-[var(--bg-raised)] rounded-xl px-3 py-2"
                 >
-                  <div className="flex flex-col">
-                    <span className="text-[var(--text-primary)] text-sm">{inv.invitedEmail ?? 'No email'}</span>
-                    <span className="text-[var(--text-muted)] text-xs">
-                      Expires {new Date(inv.expiresAt).toLocaleDateString()}
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[var(--text-primary)] text-sm truncate" title={inv.invitedEmail ?? undefined}>
+                      {inv.invitedEmail ?? 'No email'}
                     </span>
+                    <span className="text-[var(--text-muted)] text-xs">Expires {formatSastDate(inv.expiresAt)}</span>
                   </div>
-                  <div className="flex flex-row items-center gap-1">
+                  <div className="flex flex-row items-center gap-1 shrink-0">
                     <button
                       onClick={() => handleCopyLink(inv.inviteToken)}
                       className="text-[var(--accent)] text-xs min-h-11 px-2 active:scale-95"
@@ -366,18 +367,22 @@ export function SettingsPanel() {
             {staff.map((s) => (
               <div
                 key={s.id}
-                className="flex flex-row items-center justify-between bg-[var(--bg-raised)] rounded-xl px-3 py-2"
+                className="flex flex-row items-center justify-between gap-2 bg-[var(--bg-raised)] rounded-xl px-3 py-2"
               >
-                <div className="flex flex-col">
-                  <span className="text-[var(--text-primary)] text-sm">
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[var(--text-primary)] text-sm truncate">
                     {s.name?.trim() || s.email || 'Pending invite'}
                   </span>
-                  {s.email && s.name?.trim() && <span className="text-[var(--text-muted)] text-xs">{s.email}</span>}
+                  {s.email && s.name?.trim() && (
+                    <span className="text-[var(--text-muted)] text-xs truncate" title={s.email}>
+                      {s.email}
+                    </span>
+                  )}
                   {!s.cognitoSub && <span className="text-[var(--warning)] text-xs">Invite pending acceptance</span>}
                 </div>
                 <button
                   onClick={() => handleRemoveStaff(s.id)}
-                  className="text-[var(--danger)] text-xs min-h-11 px-2 active:scale-95"
+                  className="text-[var(--danger)] text-xs min-h-11 px-2 shrink-0 active:scale-95"
                 >
                   Remove
                 </button>

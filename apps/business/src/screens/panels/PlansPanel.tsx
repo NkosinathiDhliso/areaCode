@@ -1,5 +1,6 @@
 import { api } from '@area-code/shared/lib/api'
 import { formatZAR } from '@area-code/shared/lib/formatters'
+import type { ReceiptWindowName } from '@area-code/shared/types'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -7,6 +8,8 @@ import { SubscriptionHistoryPanel } from '../../components/SubscriptionHistoryPa
 
 import { BillingStatusBanner } from './BillingStatusBanner'
 import { CheckoutReturnBanner } from './CheckoutReturnBanner'
+import { PlansReceiptCard } from './PlansReceiptCard'
+import { ReachCard } from './ReachCard'
 import { useCheckoutReturn } from './useCheckoutReturn'
 
 interface PlanInfo {
@@ -92,6 +95,12 @@ export function PlansPanel() {
   // A business gets exactly one trial, ever. trialEndsAt being non-null means
   // they've already claimed it (active or expired), so new trial CTAs are hidden.
   const hasUsedTrial = trialEndsAt !== null
+
+  // Which window the Receipt above the CTA reports (R6.2): the trial once one
+  // has been started (the trial window is the decision the panel is about), the
+  // current paid period for a business that went straight to paying, and this
+  // week for a business with neither. The bounds are resolved server-side.
+  const receiptWindow: ReceiptWindowName = trialEndsAt !== null ? 'trial' : paidUntil !== null ? 'paid' : 'week'
 
   async function handleStartTrial(plan: 'growth' | 'pro') {
     setLoading(plan)
@@ -195,27 +204,24 @@ export function PlansPanel() {
           <span className="text-[var(--text-primary)] font-bold text-lg font-[Syne]">{plan.name}</span>
           {isCurrent && <span className="text-[var(--accent)] text-xs font-medium">{t('biz.plans.current')}</span>}
           {canStartTrial && !isCurrent && (
-            <span className="text-[var(--success)] text-xs font-medium">{plan.trialDays}-day free trial</span>
+            <span className="text-[var(--success)] text-xs font-medium">
+              {t('biz.plans.trialBadge', { days: plan.trialDays })}
+            </span>
           )}
         </div>
 
         <span className="text-[var(--accent)] font-bold text-2xl tracking-[-0.03em]">{priceDisplay}</span>
         {!isPAYG && plan.yearlyPriceCents !== undefined && plan.yearlyPriceCents > 0 && (
           <span className="text-[var(--text-muted)] text-xs">
-            or {formatZAR(plan.yearlyPriceCents / 100)}/year (save ~17%)
+            {t('biz.plans.yearlyAlternative', { price: formatZAR(plan.yearlyPriceCents / 100) })}
           </span>
         )}
         {isPAYG && plan.weeklyPriceCents !== undefined && (
-          <span className="text-[var(--text-muted)] text-xs">or {formatZAR(plan.weeklyPriceCents / 100)}/week</span>
-        )}
-        {canStartTrial && (
           <span className="text-[var(--text-muted)] text-xs">
-            {t(
-              'biz.plans.trialNoCard',
-              'No card needed to start. Choose a plan before your trial ends to keep your features.',
-            )}
+            {t('biz.plans.weeklyAlternative', { price: formatZAR(plan.weeklyPriceCents / 100) })}
           </span>
         )}
+        {canStartTrial && <span className="text-[var(--text-muted)] text-xs">{t('biz.plans.trialNoCard')}</span>}
 
         <div className="flex flex-col gap-1 mt-1">
           <FeatureRow label={t('biz.plans.nodes')} value={formatLimit(plan.maxNodes)} />
@@ -245,7 +251,7 @@ export function PlansPanel() {
             >
               {loading === 'payg'
                 ? '...'
-                : t('biz.plans.buyDayPass', 'Buy day pass ({{price}})', {
+                : t('biz.plans.buyDayPass', {
                     price: `${formatZAR((plan.dailyPriceCents ?? 0) / 100)}/day`,
                   })}
             </button>
@@ -257,7 +263,7 @@ export function PlansPanel() {
               >
                 {loading === 'payg'
                   ? '...'
-                  : t('biz.plans.buyWeekPass', 'Buy week pass ({{price}})', {
+                  : t('biz.plans.buyWeekPass', {
                       price: `${formatZAR((plan.weeklyPriceCents ?? 0) / 100)}/week`,
                     })}
               </button>
@@ -274,7 +280,7 @@ export function PlansPanel() {
   if (loadError) {
     return (
       <div className="p-5 flex items-center justify-center py-16">
-        <span className="text-[var(--danger)] text-sm">Failed to load plans. Check your connection and refresh.</span>
+        <span className="text-[var(--danger)] text-sm">{t('biz.plans.loadFailed')}</span>
       </div>
     )
   }
@@ -300,6 +306,15 @@ export function PlansPanel() {
           {checkoutError}
         </div>
       )}
+
+      {/* The Receipt for the window this decision is about, above the plan cards
+          and their upgrade CTAs (R6.2). It owns its loading and error states and
+          never gates the buttons below: a failed receipt read must not stop
+          anyone paying. */}
+      <PlansReceiptCard receiptWindow={receiptWindow} />
+
+      {/* What the paid tiers buy: the four reach mechanisms, copy from i18n (R10.6). */}
+      <ReachCard />
 
       {!plans && !loadError && (
         <div className="flex flex-col gap-4">
@@ -327,7 +342,7 @@ export function PlansPanel() {
 
       {currentTier !== 'starter' && (
         <button onClick={() => setShowCancelConfirm(true)} className="w-full text-[var(--danger)] text-sm mt-4">
-          {t('biz.plans.cancelSubscription', 'Cancel subscription')}
+          {t('biz.plans.cancelSubscription')}
         </button>
       )}
 
@@ -338,27 +353,22 @@ export function PlansPanel() {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-5">
           <div className="bg-[var(--bg-modal)] border border-[var(--border)] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
             <h3 className="text-[var(--text-primary)] font-bold text-lg mb-2 font-[Syne]">
-              {t('biz.plans.cancelTitle', 'Cancel subscription?')}
+              {t('biz.plans.cancelTitle')}
             </h3>
-            <p className="text-[var(--text-secondary)] text-sm mb-4">
-              {t(
-                'biz.plans.cancelBody',
-                'Your plan will be downgraded to Starter immediately, and your venues will be removed from the consumer map. You will lose access to paid features like extra nodes, gets, and staff slots.',
-              )}
-            </p>
+            <p className="text-[var(--text-secondary)] text-sm mb-4">{t('biz.plans.cancelBody')}</p>
             <div className="flex flex-row gap-3">
               <button
                 onClick={() => setShowCancelConfirm(false)}
                 className="flex-1 border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
               >
-                {t('common.cancel', 'Keep plan')}
+                {t('common.cancel')}
               </button>
               <button
                 onClick={() => void handleCancelSubscription()}
                 disabled={cancelling}
                 className="flex-1 bg-[var(--danger)] text-white rounded-xl py-2.5 text-sm font-medium"
               >
-                {cancelling ? '...' : t('biz.plans.confirmCancel', 'Cancel subscription')}
+                {cancelling ? '...' : t('biz.plans.confirmCancel')}
               </button>
             </div>
           </div>

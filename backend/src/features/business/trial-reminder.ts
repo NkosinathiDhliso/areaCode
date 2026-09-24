@@ -3,15 +3,23 @@ import { ScanCommand } from '@aws-sdk/lib-dynamodb'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { sendTrialExpiryEmail } from '../../shared/email/ses.js'
 
-import { sendRenewalReminders } from './service.js'
+import { getReceiptEmailLines, sendRenewalReminders } from './service.js'
 
 /**
  * Scheduled handler (EventBridge daily) that sends trial expiry reminders and
  * pre-lapse renewal reminders.
  *
- * Trial reminders fire at 3 days and 1 day before trial expiry. The renewal
- * sweep (billing-revenue-integrity R3.4) additionally emails paid monthly/yearly
- * businesses whose `paidUntil` is within 7 days, one send per paid window.
+ * Trial reminders fire at 3 days and 1 day before trial expiry. Both carry the
+ * trial-window Receipt (proof-of-demand R6.1, R6.3): the owner reads how many
+ * people found the venue on Area Code during the trial next to the button that
+ * keeps the numbers running, and a zero-Found_You trial reads as the
+ * Onboarding_Checklist step that is still missing instead of a zero. The
+ * sentences come from `getReceiptEmailLines`, the same resolution the Plans panel
+ * reads, so no wording or count is derived here.
+ *
+ * The renewal sweep (billing-revenue-integrity R3.4) additionally emails paid
+ * monthly/yearly businesses whose `paidUntil` is within 7 days, one send per
+ * paid window, carrying the paid-period Receipt (R6.4).
  */
 export async function handleTrialReminders() {
   const now = Date.now()
@@ -38,13 +46,13 @@ export async function handleTrialReminders() {
     const name = biz['businessName'] as string | undefined
     if (!email) continue
 
-    if (trialEnd === threeDaysFromNow) {
-      await sendTrialExpiryEmail(email, name ?? 'there', 3)
-      sent++
-    } else if (trialEnd === oneDayFromNow) {
-      await sendTrialExpiryEmail(email, name ?? 'there', 1)
-      sent++
-    }
+    const daysLeft = trialEnd === threeDaysFromNow ? 3 : trialEnd === oneDayFromNow ? 1 : null
+    if (daysLeft === null) continue
+
+    const businessId = biz['businessId'] as string
+    const receiptLines = await getReceiptEmailLines(businessId, 'trial')
+    await sendTrialExpiryEmail(email, name ?? 'there', daysLeft, receiptLines)
+    sent++
   }
 
   // billing-revenue-integrity R3.4: the same daily worker sends the pre-lapse

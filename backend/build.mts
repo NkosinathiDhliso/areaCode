@@ -87,6 +87,4 @@ await Promise.all(
   ),
 )
 
-console.log(
-  `✓ Built monolith Lambda + WebSocket Lambda + ${workers.length} worker Lambdas (commit ${buildSha})`,
-)
+console.log(`✓ Built monolith Lambda + WebSocket Lambda + ${workers.length} worker Lambdas (commit ${buildSha})`)

@@ -76,10 +76,21 @@ const deleteScheduleSlot = vi.fn(
 const queryNextTransitions = vi.fn(async () => [])
 
 vi.mock('../schedule-repository.js', () => ({
+  // The one schedule id the route surface uses. It lives on the repository so
+  // the handler and the Tonight reader share one value; the mock has to carry it
+  // or every route would key on `undefined`.
+  DEFAULT_SCHEDULE_ID: 'default',
   getSchedule,
   upsertSchedule,
   deleteScheduleSlot,
   queryNextTransitions,
+}))
+
+// Publishing or deleting a Tonight slot drops the affected city payload caches
+// (proof-of-demand R8.5). That is a nodes-feature write with its own tests; the
+// route contract under test here does not depend on it.
+vi.mock('../../nodes/cache.js', () => ({
+  invalidateCityPayloadForBusiness: vi.fn(async () => {}),
 }))
 
 // ─── Test helpers ───────────────────────────────────────────────────────────
@@ -539,6 +550,81 @@ describe('schedule-crud validation failures', () => {
       expect(upsertSchedule).not.toHaveBeenCalled()
     })
   }
+
+  // proof-of-demand R8.1: the Dated_Slot 14-day horizon is a write-time rule,
+  // so the route is the only place it can be observed. The date below is years
+  // out, so it is past the horizon whenever this test runs.
+  it('POST returns 400 dated_slot_out_of_range for a Dated_Slot beyond the 14-day horizon', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: urlFor(BUSINESS_A),
+      headers: authHeaderFor(BUSINESS_A),
+      payload: {
+        businessId: BUSINESS_A,
+        scheduleId: 'default',
+        timezone: 'Africa/Johannesburg',
+        updatedAt: '2026-03-01T00:00:00.000Z',
+        schemaVersion: 1,
+        slots: [
+          {
+            slotId: 'far-future',
+            // 2099-01-02 is a Friday.
+            date: '2099-01-02',
+            dayOfWeek: 'FRI',
+            startTime: '21:00',
+            endTime: '23:59',
+            mode: 'blanket',
+            genres: ['amapiano'],
+            headline: 'Too far ahead',
+          },
+        ],
+      },
+    })
+
+    expect(response.statusCode).toBe(400)
+    expect((response.json() as Record<string, unknown>)['code']).toBe('dated_slot_out_of_range')
+    expect(upsertSchedule).not.toHaveBeenCalled()
+  })
+
+  it('POST accepts a Dated_Slot for today and persists date and headline', async () => {
+    // "Today" in the schedule's own timezone, which is what the horizon and the
+    // resolver both key off.
+    const todaySast = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const dayOfWeek = (['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const)[
+      (new Date(`${todaySast}T00:00:00Z`).getUTCDay() + 6) % 7
+    ]
+
+    const response = await app.inject({
+      method: 'POST',
+      url: urlFor(BUSINESS_A),
+      headers: authHeaderFor(BUSINESS_A),
+      payload: {
+        businessId: BUSINESS_A,
+        scheduleId: 'default',
+        timezone: 'Africa/Johannesburg',
+        updatedAt: '2026-03-01T00:00:00.000Z',
+        schemaVersion: 1,
+        slots: [
+          {
+            slotId: 'tonight',
+            date: todaySast,
+            dayOfWeek,
+            startTime: '21:00',
+            endTime: '23:59',
+            mode: 'blanket',
+            genres: ['amapiano'],
+            headline: 'Amapiano with DJ Khanya',
+          },
+        ],
+      },
+    })
+
+    expect(response.statusCode).toBe(200)
+    const slot = (response.json() as { slots: Array<Record<string, unknown>> }).slots[0]!
+    expect(slot['date']).toBe(todaySast)
+    expect(slot['headline']).toBe('Amapiano with DJ Khanya')
+    expect(upsertSchedule).toHaveBeenCalledTimes(1)
+  })
 })
 
 // ─── 3. Cross_Midnight_Pair persistence (R3.12, R4.13) ──────────────────────

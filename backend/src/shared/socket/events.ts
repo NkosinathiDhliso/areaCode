@@ -7,6 +7,7 @@ import type {
   VenueMomentum,
   BusinessCheckinPayload,
   BusinessCheckinDetailPayload,
+  BusinessGoingPayload,
   BusinessRewardClaimedPayload,
   TierChangedPayload,
   LiveArchetypeBranch,
@@ -154,6 +155,24 @@ export async function emitLeaderboardUpdate(
 
 export async function emitBusinessCheckin(businessId: string, payload: BusinessCheckinPayload): Promise<number> {
   return safeRoomBroadcast(businessRoom(businessId), 'business:checkin', { ...payload })
+}
+
+/**
+ * Emit the Going count for one venue and one night to its business room
+ * (proof-of-demand R9.5).
+ *
+ * The payload is built from four aggregate values at the call site, so there is
+ * no consumer record behind it and nothing for `sanitizeForBusiness` to filter:
+ * that allowlist exists to strip identity out of a payload assembled from a
+ * consumer row, and it would strip `date` and `goingCount` from this one. The
+ * type is the guarantee here.
+ *
+ * INTENT, not presence. Emitted on every toggle, including the one that takes
+ * the count back to zero, because an owner watching the pipeline needs the drop
+ * as much as the rise (`honest-presence.md`).
+ */
+export async function emitBusinessGoing(businessId: string, payload: BusinessGoingPayload): Promise<number> {
+  return safeRoomBroadcast(businessRoom(businessId), 'business:going', { ...payload })
 }
 
 export async function emitBusinessRewardClaimed(

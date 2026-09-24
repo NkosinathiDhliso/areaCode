@@ -1,5 +1,6 @@
 import { getTierLabel } from '@area-code/shared/constants/tier-levels'
 import { api } from '@area-code/shared/lib/api'
+import { formatSastDate } from '@area-code/shared/lib/sast'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 import type { Tier } from '@area-code/shared/types'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -166,7 +167,7 @@ function directionColor(dir: 'up' | 'down' | 'flat') {
 const DONUT_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899']
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })
+  return formatSastDate(iso)
 }
 
 /* ------------------------------------------------------------------ */

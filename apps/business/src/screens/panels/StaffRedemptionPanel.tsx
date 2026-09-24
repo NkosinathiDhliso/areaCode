@@ -1,4 +1,5 @@
 import { api } from '@area-code/shared/lib/api'
+import { formatSastDateTime } from '@area-code/shared/lib/sast'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -98,18 +99,11 @@ export function StaffRedemptionPanel() {
             key={rdm.redemptionId}
             className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 flex flex-row items-center justify-between"
           >
-            <div className="flex flex-col gap-1">
-              <span className="text-[var(--text-primary)] font-medium text-sm">{rdm.staffName}</span>
-              <span className="text-[var(--text-secondary)] text-xs">{rdm.rewardTitle}</span>
+            <div className="flex flex-col gap-1 min-w-0">
+              <span className="text-[var(--text-primary)] font-medium text-sm truncate">{rdm.staffName}</span>
+              <span className="text-[var(--text-secondary)] text-xs truncate">{rdm.rewardTitle}</span>
             </div>
-            <span className="text-[var(--text-muted)] text-xs">
-              {new Date(rdm.redeemedAt).toLocaleString([], {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </span>
+            <span className="text-[var(--text-muted)] text-xs shrink-0 ml-3">{formatSastDateTime(rdm.redeemedAt)}</span>
           </div>
         ))}
       </div>

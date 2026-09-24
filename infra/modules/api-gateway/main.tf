@@ -10,10 +10,15 @@ variable "lambda_integrations" {
   default = {}
 }
 
-variable "additional_cors_origins" {
-  description = "Extra origins to allow (e.g. Amplify preview URLs)"
+variable "allowed_origins" {
+  description = <<-EOT
+    The one list of browser origins allowed to call the API. The same list is
+    passed to the S3 media bucket CORS rule, because the header-photo upload is
+    a presigned PUT straight to S3 from the origin that called the API: if the
+    two lists disagree the PUT is blocked while API calls succeed (R14.6).
+    Defined once per environment as `local.app_cors_origins`.
+  EOT
   type        = list(string)
-  default     = []
 }
 
 resource "aws_apigatewayv2_api" "this" {
@@ -21,25 +26,7 @@ resource "aws_apigatewayv2_api" "this" {
   protocol_type = "HTTP"
 
   cors_configuration {
-    allow_origins = concat(
-      var.env == "prod" ? [
-        "https://areacode.co.za",
-        "https://www.areacode.co.za",
-        "https://business.areacode.co.za",
-        "https://www.business.areacode.co.za",
-        "https://staff.areacode.co.za",
-        "https://www.staff.areacode.co.za",
-        "https://admin.areacode.co.za",
-        "https://www.admin.areacode.co.za"
-        ] : [
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:3002",
-        "http://localhost:3003",
-        "http://localhost:4000",
-      ],
-      var.additional_cors_origins
-    )
+    allow_origins     = var.allowed_origins
     allow_methods     = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     allow_headers     = ["Content-Type", "Authorization", "X-Requested-With"]
     allow_credentials = false

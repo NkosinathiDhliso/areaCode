@@ -31,6 +31,24 @@ provider "aws" {
 
 locals {
   env = "dev"
+
+  # One list of allowed browser origins, consumed by BOTH the API Gateway CORS
+  # config and the S3 media bucket CORS rule. The business header-photo upload
+  # is a presigned PUT straight to S3 from the origin that just called the API,
+  # so any divergence between the two lists blocks the upload from a phone while
+  # every API call still succeeds (R14.6, dry-reuse-no-duplication.md).
+  app_cors_origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+    "http://localhost:3003",
+    "http://localhost:4000",
+    # Amplify default branch URLs (consumer, business, staff, admin).
+    "https://master.d3pm78r41ma6w6.amplifyapp.com",
+    "https://master.dbp54yxhyjvk0.amplifyapp.com",
+    "https://master.d166bb81tg4k61.amplifyapp.com",
+    "https://master.d1ay6jict0ql9w.amplifyapp.com",
+  ]
 }
 
 # --- VPC (kept for Lambda VPC access — VPC itself is free) ---
@@ -149,18 +167,9 @@ module "sms" {
 # =============================================================================
 
 module "s3_media" {
-  source = "../../modules/s3"
-  env    = local.env
-  allowed_origins = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:3002",
-    "http://localhost:3003",
-    "https://master.d3pm78r41ma6w6.amplifyapp.com",
-    "https://master.dbp54yxhyjvk0.amplifyapp.com",
-    "https://master.d166bb81tg4k61.amplifyapp.com",
-    "https://master.d1ay6jict0ql9w.amplifyapp.com",
-  ]
+  source          = "../../modules/s3"
+  env             = local.env
+  allowed_origins = local.app_cors_origins
 }
 
 # --- Media CDN (CloudFront in front of the private media bucket) ---
@@ -591,6 +600,9 @@ module "lambda_api" {
     AREA_CODE_COGNITO_ADMIN_USER_POOL_ID    = module.cognito_admin.user_pool_id
     AREA_CODE_COGNITO_ADMIN_CLIENT_ID       = module.cognito_admin.client_id
     AREA_CODE_S3_MEDIA_BUCKET               = module.s3_media.bucket_name
+    # Media_CDN origin for server-rendered image URLs (the venue Share_Preview
+    # og:image). Same distribution the frontends read as VITE_CDN_URL.
+    AREA_CODE_MEDIA_CDN_URL = module.media_cdn.media_cdn_url
     # Dev rehearsal of the C12 consent bump (tier-permanence clause). Bumping
     # this re-prompts every consumer once on next open. Prod bump is separate.
     AREA_CODE_CONSENT_VERSION = "v1.1"
@@ -1515,12 +1527,8 @@ module "api_gateway" {
   source = "../../modules/api-gateway"
   env    = local.env
 
-  additional_cors_origins = [
-    "https://master.d3pm78r41ma6w6.amplifyapp.com",
-    "https://master.dbp54yxhyjvk0.amplifyapp.com",
-    "https://master.d166bb81tg4k61.amplifyapp.com",
-    "https://master.d1ay6jict0ql9w.amplifyapp.com",
-  ]
+  # Same list as the S3 media bucket above: see `local.app_cors_origins`.
+  allowed_origins = local.app_cors_origins
 
   # The `$default` catch-all routes every HTTP path (including all
   # `/v1/business/{businessId}/music-schedule[/...]` schedule-CRUD routes

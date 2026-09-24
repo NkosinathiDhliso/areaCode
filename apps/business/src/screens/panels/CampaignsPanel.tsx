@@ -1,5 +1,6 @@
 import { getTierLabel } from '@area-code/shared/constants/tier-levels'
 import { api, type ApiError } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
@@ -288,7 +289,7 @@ function CampaignComposer({ nodes, canSend, prefill, onConsumePrefill, onClose, 
       const est = await api.post<RecipientEstimate>(`/v1/business/me/campaigns/${created.campaignId}/estimate`)
       setEstimate(est)
     } catch (err) {
-      setErrorMsg((err as ApiError)?.message ?? 'Could not prepare the campaign. Please try again.')
+      setErrorMsg(describeApiError(err, 'Could not prepare the campaign. Please try again.'))
     } finally {
       setBusy(false)
     }
@@ -306,7 +307,7 @@ function CampaignComposer({ nodes, canSend, prefill, onConsumePrefill, onClose, 
       if (e?.statusCode === 402) {
         setErrorMsg('Sending is a Growth feature. Upgrade your plan to send this campaign.')
       } else {
-        setErrorMsg(e?.message ?? 'Could not send the campaign. Please try again.')
+        setErrorMsg(describeApiError(err, 'Could not send the campaign. Please try again.'))
       }
     } finally {
       setBusy(false)

@@ -3,10 +3,14 @@ import { useEffect, useRef, useState } from 'react'
 
 import {
   computeReturnState,
+  hasBoostPurchaseLanded,
   hasPaidStateLanded,
+  parseReturnCheckoutId,
   parseReturnStatus,
   POLL_INTERVAL_MS,
   POLL_MAX_MS,
+  RETURN_CHECKOUT_ID_PARAM,
+  RETURN_PARAMS,
   type ReturnProfile,
   type ReturnState,
 } from './checkoutReturnState'
@@ -55,11 +59,12 @@ export function useCheckoutReturnCore<T>({
     onDataRef.current = onData
   })
 
-  // Strip the param on mount in all cases (R6.3) so refresh does not replay.
+  // Strip the return params on mount in all cases (R6.3) so refresh does not
+  // replay. Every caller has already read what it needs during render.
   useEffect(() => {
     if (status === null) return
     const url = new URL(window.location.href)
-    url.searchParams.delete('status')
+    for (const param of RETURN_PARAMS) url.searchParams.delete(param)
     window.history.replaceState({}, '', url.pathname + url.search + url.hash)
   }, [status])
 
@@ -130,45 +135,79 @@ export function useCheckoutReturn<P extends ReturnProfile>({
 }
 
 // A boost purchase row, as returned by GET /v1/business/{id}/boost-purchases.
-// Only the fields needed to detect a new row are typed here.
-interface BoostPurchaseRow {
-  paidAt: string
-  yocoCheckoutId: string
-}
-
+// Only the field that identifies the purchase is typed here.
 interface BoostPurchasesResponse {
-  items: BoostPurchaseRow[]
+  items: Array<{ yocoCheckoutId: string }>
   nextCursor: string | null
 }
 
-// Stable identity for a boost purchase row (matches the BoostPurchasesPanel key).
-function boostRowKey(row: BoostPurchaseRow): string {
-  return `${row.paidAt}#${row.yocoCheckoutId}`
+// Where the pending Yoco checkout id waits while the browser is away at the
+// payment page. Yoco builds no params of its own onto the return URL: the
+// success URL is the one our checkout request supplied, and it is supplied
+// before Yoco has issued the checkout id, so the id cannot ride the redirect.
+// The portal therefore hands it over itself, and the hook reads the return URL
+// as its single source (below).
+const PENDING_BOOST_CHECKOUT_KEY = 'areaCode.pendingBoostCheckoutId'
+
+/**
+ * Remember the checkout the owner is about to pay for, called by `BoostPanel`
+ * immediately before it navigates to Yoco.
+ *
+ * Storage can be unavailable (Safari private mode). That is not masked: without
+ * the id the return leg cannot confirm the specific purchase, so the banner
+ * times out and names support instead of claiming a confirmation.
+ */
+export function rememberPendingBoostCheckout(checkoutId: string): void {
+  try {
+    window.sessionStorage.setItem(PENDING_BOOST_CHECKOUT_KEY, checkoutId)
+  } catch {
+    // Private mode / storage disabled. See above.
+  }
 }
 
-// Boost checkout-return (R6, boost path): a boost has no absolute "paid tier"
-// to poll for, so activation is confirmed when a NEW boost purchase row appears
-// in the boost purchases list. The first poll captures a baseline (count and
-// newest row) taken at mount; the boost is landed once the list grows or a
-// newer row appears. Thin wrapper over the core - the poll loop is shared.
+/**
+ * Move the remembered checkout id onto the return URL, once, on the success
+ * leg. After this the URL is the only thing the hook reads, so there is exactly
+ * one source of the awaited identity and the tests exercise the real one.
+ */
+function promotePendingBoostCheckoutId(search: string): string {
+  if (parseReturnStatus(search) !== 'success') return search
+  if (parseReturnCheckoutId(search) !== null) return search
+  let pending: string | null = null
+  try {
+    pending = window.sessionStorage.getItem(PENDING_BOOST_CHECKOUT_KEY)
+    window.sessionStorage.removeItem(PENDING_BOOST_CHECKOUT_KEY)
+  } catch {
+    return search
+  }
+  if (pending === null || pending.length === 0) return search
+  const url = new URL(window.location.href)
+  url.searchParams.set(RETURN_CHECKOUT_ID_PARAM, pending)
+  window.history.replaceState({}, '', url.pathname + url.search + url.hash)
+  return url.search
+}
+
+// Boost checkout-return (R6, boost path; R15.11): a boost has no absolute "paid
+// tier" to poll for, so the return leg waits for THE purchase the owner just
+// paid for, identified by the `yocoCheckoutId` the return URL carries. That is
+// the same id the purchases list and the Boost_Scoreboard are keyed on.
+//
+// The count baseline this replaced was taken at the first poll, so a webhook
+// that landed before that poll was already inside the baseline: the list never
+// appeared to grow and the owner sat on "still processing" for a payment that
+// had succeeded. Identity has no such window.
 export function useBoostCheckoutReturn(businessId: string | null): UseCheckoutReturnResult {
-  const baselineRef = useRef<{ count: number; newestKey: string | null } | null>(null)
+  // Read once, during the first render, before the core's effect strips the
+  // return params.
+  const [awaitedCheckoutId] = useState(() =>
+    parseReturnCheckoutId(promotePendingBoostCheckoutId(window.location.search)),
+  )
 
   return useCheckoutReturnCore<BoostPurchasesResponse>({
     poll: () => {
       if (!businessId) return Promise.reject(new Error('no businessId'))
       return api.get<BoostPurchasesResponse>(`/v1/business/${businessId}/boost-purchases`)
     },
-    hasLanded: (data) => {
-      const count = data.items.length
-      const newestKey = data.items[0] ? boostRowKey(data.items[0]) : null
-      if (baselineRef.current === null) {
-        // First poll establishes the baseline captured at mount; not landed yet.
-        baselineRef.current = { count, newestKey }
-        return false
-      }
-      const base = baselineRef.current
-      return count > base.count || (newestKey !== null && newestKey !== base.newestKey)
-    },
+    hasLanded: (data) => hasBoostPurchaseLanded(data.items, awaitedCheckoutId),
   })
 }

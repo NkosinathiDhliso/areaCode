@@ -1,7 +1,10 @@
 import { MediaImage } from '@area-code/shared/components/MediaImage'
 import { PhotoUnavailable } from '@area-code/shared/components/PhotoUnavailable'
 import { SOCIAL_PLATFORMS, socialProfileUrl } from '@area-code/shared/constants/social-platforms'
+import { useSafeTimeout } from '@area-code/shared/hooks/useSafeTimeout'
 import { api } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
+import { clipboardFailureCopy, copyToClipboard } from '@area-code/shared/lib/clipboard'
 import { mediaUrl } from '@area-code/shared/lib/mediaUrl'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
@@ -9,18 +12,21 @@ import { useErrorStore } from '@area-code/shared/stores/errorStore'
 import { useLocationStore } from '@area-code/shared/stores/locationStore'
 import { useMapStore } from '@area-code/shared/stores/mapStore'
 import { usePresenceStore } from '@area-code/shared/stores/presenceStore'
+import { useSelectionStore } from '@area-code/shared/stores/selectionStore'
 import type { Node, Reward, NodeState } from '@area-code/shared/types'
-import { useState, memo } from 'react'
+import { useState, memo, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { resolveArchetypeDisplayName } from '../lib/archetypeDisplay'
 import { getCtaInfo } from '../lib/checkInCta'
+import { reportVenueOpen } from '../lib/venueOpen'
 
 import { ArchetypeGlyph } from './ArchetypeGlyph'
 import { CrowdVibeSection } from './CrowdVibeSection'
 import { DirectionsSheet } from './DirectionsSheet'
 import { MomentumBadge } from './MomentumBadge'
 import { QrScannerSheet } from './QrScannerSheet'
+import { TonightBlock } from './TonightBlock'
 
 /**
  * Live_Archetype id used when no live value has arrived for the node and
@@ -118,11 +124,40 @@ export const NodeDetailContent = memo(function NodeDetailContent({
   // description, expiry, and slots-remaining details. Customers complained
   // the chips looked tappable but did nothing; this gives the tap a payoff.
   const [expandedRewardId, setExpandedRewardId] = useState<string | null>(null)
+  // The report and claim success banners self-close on a timer. The sheet can
+  // be dismissed before either fires, so the timers are registered here and
+  // cleared on unmount (R15.25).
+  const setSafeTimeout = useSafeTimeout()
+
+  // Venue_Open for a Commit_Mode open (proof-of-demand R2.1). This body is only
+  // mounted while the sheet is expanded, so the effect fires once per open. The
+  // ref keys on the node id so a re-render, or a parent that keeps the body
+  // mounted across a venue change, records at most one open per venue.
+  //
+  // `search` when the selection that led here came from the Search_Sheet, else
+  // `map`. A Browse_Mode card tap is not an open: it never mounts this body.
+  const recordedOpenForRef = useRef<string | null>(null)
+  const nodeId = node?.id ?? null
+  useEffect(() => {
+    if (nodeId === null || !node) return
+    if (recordedOpenForRef.current === nodeId) return
+    recordedOpenForRef.current = nodeId
+    const selectedVia = useSelectionStore.getState().lastSelectionSource
+    reportVenueOpen(node, selectedVia === 'search' ? 'search' : 'map')
+    // `node` is read for its coordinates only; the id is the identity that
+    // decides whether this is a new open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodeId])
 
   if (!node) return null
 
   const isDormant = state === 'dormant' && rewards.length === 0
   const activeRewards = rewards.filter((r) => r.isActive)
+  // The Tonight featured get, only when it is one of this venue's active reward
+  // rows. That row owns the claim affordance; Tonight just points at it.
+  const featuredGetId = activeRewards.some((r) => r.id === node.tonight?.featuredRewardId)
+    ? node.tonight?.featuredRewardId
+    : undefined
   const hasHeaderKey = typeof node.headerImageKey === 'string' && node.headerImageKey.trim() !== ''
   const headerImageUrl = mediaUrl(node.headerImageKey)
 
@@ -180,16 +215,23 @@ export const NodeDetailContent = memo(function NodeDetailContent({
     const recordShare = () => {
       void api.post(`/v1/nodes/${node!.id}/share`, {}).catch(() => {})
     }
-    if (navigator.share) {
+    // Two surfaces, neither guaranteed. The native share sheet is absent on
+    // desktop browsers, and `navigator.clipboard` is absent (not merely
+    // blocked) on an insecure origin and inside the in-app webviews a
+    // consumer arrives through. Ask before calling, and when neither exists
+    // say so rather than throwing a TypeError that reads as a crash (R15.22).
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       void navigator.share({ title: node!.name, text: shareText, url }).then(recordShare, () => {})
     } else {
-      void navigator.clipboard.writeText(url).then(
-        () => {
-          recordShare()
-          useErrorStore.getState().showError(t('share.copied', 'Link copied to clipboard'))
-        },
-        () => useErrorStore.getState().showError(t('share.copyFailed', "Couldn't copy link")),
-      )
+      void copyToClipboard(url).then((outcome) => {
+        const failure = clipboardFailureCopy(outcome)
+        if (failure) {
+          useErrorStore.getState().showError(failure)
+          return
+        }
+        recordShare()
+        useErrorStore.getState().showError(t('share.copied', 'Link copied'))
+      })
     }
     setMenuOpen(false)
   }
@@ -211,7 +253,7 @@ export const NodeDetailContent = memo(function NodeDetailContent({
         detail: reportDetail.trim() || undefined,
       })
       setReportSuccess(true)
-      setTimeout(() => {
+      setSafeTimeout(() => {
         setReportModalOpen(false)
         setReportSuccess(false)
         setReportDetail('')
@@ -232,13 +274,13 @@ export const NodeDetailContent = memo(function NodeDetailContent({
     try {
       await api.post(`/v1/nodes/${node.id}/claim`, { registrationNumber: registrationNumber.trim() })
       setClaimSuccess(true)
-      setTimeout(() => {
+      setSafeTimeout(() => {
         setClaimModalOpen(false)
         setClaimSuccess(false)
         setRegistrationNumber('')
       }, 2000)
     } catch (err: unknown) {
-      setClaimError((err as { message?: string })?.message || t('node.claimError'))
+      setClaimError(describeApiError(err, t('node.claimError')))
     } finally {
       setClaiming(false)
     }
@@ -327,6 +369,19 @@ export const NodeDetailContent = memo(function NodeDetailContent({
       ) : hasHeaderKey ? (
         <PhotoUnavailable className="w-full h-40 mb-4" />
       ) : null}
+
+      {/* Tonight: the anticipation magnet, above the crowd reading (R8.7). It
+          renders outside the dormant branch on purpose: a promise for tonight is
+          exactly what an empty venue has to offer, and it is the one magnet that
+          works before there is a crowd. The featured get points at its own
+          reward row rather than opening a second claim path. */}
+      <TonightBlock
+        tonight={node.tonight}
+        nodeId={node.id}
+        goingCount={node.goingCount}
+        onSignIn={onSignIn}
+        {...(featuredGetId ? { onOpenFeaturedGet: () => setExpandedRewardId(featuredGetId) } : {})}
+      />
 
       {/* Dormant empty state - "be the first in" (R2.7). */}
       {isDormant ? (

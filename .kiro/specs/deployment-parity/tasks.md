@@ -94,7 +94,7 @@ log, docs sync. Founder-run steps are marked; they need prod AWS access.
     - _Requirements: 8.2_
 
 - [ ] 7. Verify (founder-run, live access) (R10)
-  - [~] 7.1 Re-test all reported failures in prod and record before/after in GO_LIVE_CHECK_RESULT: WS connect, digest card, settings toggle, payments list, music schedule (with and without schedule), photo preview, Instagram save
+  - [ ] 7.1 Re-test all reported failures in prod and record before/after in GO_LIVE_CHECK_RESULT: WS connect, digest card, settings toggle, payments list, music schedule (with and without schedule), photo preview, Instagram save
     - 2026-07-10: before/after recorded in GO_LIVE_CHECK_RESULT. All five
       formerly-404 routes now 401 (live, fail closed); CDN photo fetch 200.
     - 2026-07-10 ~18:50 UTC, after the founder tf apply: WS connect re-tested
@@ -103,7 +103,7 @@ log, docs sync. Founder-run steps are marked; they need prod AWS access.
       in-portal UI checks (digest card, settings toggle, music schedule
       with/without, photo preview, Instagram save).
     - _Requirements: 2.2, 3.2, 4.2, 5.4, 10.1_
-  - [~] 7.2 `go-live-check.ps1 -Environment prod -WsToken <fresh token>` passes with the new gates
+  - [ ] 7.2 `go-live-check.ps1 -Environment prod -WsToken <fresh token>` passes with the new gates
     - 2026-07-10 run: FAIL (6). Root causes fixed in-tree (websocket env,
       api_websocket IAM, yoco placeholder deletion, Sha_Parity "HEAD" false
       negative in the check itself); staff-build FAIL was transient.

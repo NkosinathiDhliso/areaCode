@@ -88,11 +88,8 @@ export async function checkPrivacy(targetUserId: string, viewerId: string | null
     }
 
     try {
-      if (_areMutualFollows) {
-        const mutual = await _areMutualFollows(targetUserId, viewerId)
-        if (mutual) {
-          return { visibility: 'full', reason: 'mutual_follow' }
-        }
+      if (_areMutualFollows && (await _areMutualFollows(targetUserId, viewerId))) {
+        return { visibility: 'full', reason: 'mutual_follow' }
       }
     } catch {
       // Fail closed — if we can't check follows, treat as not friends
@@ -196,6 +193,11 @@ export async function canEmitToFriends(userId: string): Promise<boolean> {
  * Sanitize a business check-in event payload.
  * Business owners see display name and tier ONLY — never phone, email,
  * userId, cognitoSub, lat, lng, or any tracking-enabling data.
+ *
+ * `foundVia` is on the list because the Receipt needs it live (proof-of-demand
+ * R3.6): it is a five-value enum describing how the venue was found, with no
+ * share token, referrer or campaign id behind it (R11.2), so it identifies
+ * nobody and enables no tracking.
  */
 export function sanitizeForBusiness(data: Record<string, unknown>): Record<string, unknown> {
   const ALLOWED_FIELDS = new Set([
@@ -207,6 +209,7 @@ export function sanitizeForBusiness(data: Record<string, unknown>): Record<strin
     'tier',
     'visitCount',
     'type',
+    'foundVia',
   ])
 
   const sanitized: Record<string, unknown> = {}

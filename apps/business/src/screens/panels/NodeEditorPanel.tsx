@@ -2,10 +2,14 @@ import { MediaImage } from '@area-code/shared/components/MediaImage'
 import { PhotoUnavailable } from '@area-code/shared/components/PhotoUnavailable'
 import { SOCIAL_PLATFORMS, type SocialLinks } from '@area-code/shared/constants/social-platforms'
 import { api } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
 import {
   compressImageFile,
+  mapUploadError,
   MAX_HEADER_IMAGE_BYTES,
   MAX_HEADER_IMAGE_LABEL,
+  sniffImageFormat,
+  UPLOAD_ERROR_COPY,
 } from '@area-code/shared/lib/imageCompression'
 import { mediaUrl } from '@area-code/shared/lib/mediaUrl'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
@@ -162,7 +166,7 @@ export function NodeEditorPanel() {
         setName(items[0].name)
       }
     } catch (err: unknown) {
-      setAddVenueError((err as { message?: string })?.message || 'Failed to add venue')
+      setAddVenueError(describeApiError(err, 'Failed to add venue. Please try again.'))
     } finally {
       setAddVenueLoading(false)
     }
@@ -196,7 +200,7 @@ export function NodeEditorPanel() {
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 3000)
     } catch (err: unknown) {
-      setSaveError((err as { message?: string })?.message || 'Failed to save changes. Please try again.')
+      setSaveError(describeApiError(err, 'Failed to save changes. Please try again.'))
     } finally {
       setSaving(false)
     }
@@ -207,12 +211,19 @@ export function NodeEditorPanel() {
     e.target.value = '' // reset so same file can be re-picked
     if (!file || !selected) return
 
-    if (!['image/jpeg', 'image/png'].includes(file.type)) {
-      setPhotoMessage({ type: 'error', text: 'Only JPG or PNG allowed.' })
-      return
-    }
     if (file.size > MAX_HEADER_IMAGE_BYTES) {
       setPhotoMessage({ type: 'error', text: `Image must be under ${MAX_HEADER_IMAGE_LABEL}.` })
+      return
+    }
+
+    // The gate is the file's leading bytes, never `file.type`: Android pickers
+    // report '' or application/octet-stream and iOS High Efficiency reports
+    // image/heic for a file named .jpg, so the MIME label rejects real photos
+    // (R14.1). HEIC is attempted, not blocked; if the browser cannot decode it
+    // the owner gets the Most Compatible instruction (R14.3).
+    const format = await sniffImageFormat(file)
+    if (format === 'unknown') {
+      setPhotoMessage({ type: 'error', text: UPLOAD_ERROR_COPY.format })
       return
     }
 
@@ -232,7 +243,9 @@ export function NodeEditorPanel() {
         headers: { 'Content-Type': upload.type },
         body: upload,
       })
-      if (!putRes.ok) throw new Error(`S3 upload failed (${putRes.status})`)
+      if (!putRes.ok) {
+        throw Object.assign(new Error('S3 upload rejected'), { statusCode: putRes.status })
+      }
       // Sanitise the upload server-side (strip EXIF/GPS, resize, WebP) and use
       // the returned final key. Non-fatal if processing is unavailable - the
       // backend keeps the raw upload and returns its key.
@@ -253,7 +266,9 @@ export function NodeEditorPanel() {
       setPhotoMessage({ type: 'success', text: 'Photo uploaded.' })
       setTimeout(() => setPhotoMessage(null), 3000)
     } catch (err: unknown) {
-      setPhotoMessage({ type: 'error', text: (err as { message?: string })?.message || 'Upload failed.' })
+      // Specific copy per cause (decode, HEIC, blocked PUT, server). A raw
+      // DOMException or "Failed to fetch" tells an owner nothing (R14.5).
+      setPhotoMessage({ type: 'error', text: mapUploadError(err, format) })
     } finally {
       setPhotoUploading(false)
     }
@@ -275,7 +290,9 @@ export function NodeEditorPanel() {
       setPhotoMessage({ type: 'success', text: 'Photo removed.' })
       setTimeout(() => setPhotoMessage(null), 3000)
     } catch (err: unknown) {
-      setPhotoMessage({ type: 'error', text: (err as { message?: string })?.message || 'Delete failed.' })
+      // Left for R15.13 when the upload copy landed: a delete that fails must
+      // name the cause, not echo whatever the server said.
+      setPhotoMessage({ type: 'error', text: describeApiError(err, "The photo couldn't be removed. Try again.") })
     } finally {
       setPhotoDeleting(false)
     }
@@ -390,7 +407,9 @@ export function NodeEditorPanel() {
                 <input
                   ref={photoInputRef}
                   type="file"
-                  accept="image/jpeg,image/png"
+                  // image/* so Android pickers do not hide camera photos with an
+                  // odd MIME label; the byte sniff is the real gate (R14.7).
+                  accept="image/*"
                   onChange={(e) => void handlePhotoSelected(e)}
                   className="hidden"
                 />

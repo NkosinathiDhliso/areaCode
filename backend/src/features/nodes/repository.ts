@@ -55,7 +55,19 @@ export async function getNodesByCitySlug(citySlug: string) {
   const paidBusinessTiers = new Map<string, string>()
   if (businessIds.length > 0) {
     const { findBusinessById } = await import('../business/repository.js')
-    const businesses = await Promise.all(businessIds.map((id) => findBusinessById(id).catch(() => null)))
+    // A failed business lookup excludes that venue from the map (no tier, no
+    // membership), which is a venue silently disappearing from a paying owner's
+    // city. It must never be a bare `.catch(() => null)`: log at error level with
+    // the city slug and the business id so it is diagnosable in CloudWatch
+    // (proof-of-demand R15.7). The map still renders the venues that did resolve.
+    const businesses = await Promise.all(
+      businessIds.map((id) =>
+        findBusinessById(id).catch((err: unknown) => {
+          console.error(`[getNodesByCitySlug] business lookup failed for ${id} in city ${citySlug}`, err)
+          return null
+        }),
+      ),
+    )
     businesses.forEach((b, i) => {
       const tier = b?.tier ?? 'free'
       if (b && PAID_TIERS_SET.has(tier)) {
@@ -72,7 +84,7 @@ export async function getNodesByCitySlug(citySlug: string) {
       return paidBusinessTiers.has(bid)
     })
     .map((n) => ({
-      id: n['nodeId'],
+      id: n['nodeId'] as string,
       name: n['name'],
       slug: n['slug'],
       category: n['category'],
@@ -84,6 +96,10 @@ export async function getNodesByCitySlug(citySlug: string) {
       isVerified: n['isVerified'],
       headerImageKey: n['headerImageKey'] ?? null,
       socialLinks: normaliseSocialLinks(n['socialLinks']),
+      // The owning business. Map membership already requires one, and the
+      // service needs it to attach the business-scoped Tonight summary
+      // (proof-of-demand R8.5).
+      businessId: n['businessId'] as string,
       businessTier: paidBusinessTiers.get(n['businessId'] as string) ?? 'starter',
       // Paid Boost_Window, computed at read time (billing R5.2, R5.5). `boostActive`
       // reverts to false on the next read once the window passes — no expiry worker.
@@ -132,11 +148,20 @@ export async function getNodeBySlug(slug: string) {
     city = c.Item ? { name: c.Item['name'], slug: c.Item['slug'] } : null
   }
   return {
+    // The public read model keys its pulse and presence reads on the node id
+    // (proof-of-demand R1.4), so the slug read must carry it.
+    id: node.nodeId,
     name: node.name,
     category: node.category,
     lat: node.lat,
     lng: node.lng,
     city,
+    // Tonight is business-scoped, so the public read needs the owning business
+    // to resolve it (proof-of-demand R8.5, R1.2).
+    businessId: node.businessId ?? null,
+    // S3 object key of the venue header image; the service resolves it to a
+    // Media_CDN URL for the Share_Preview `og:image` (proof-of-demand R1.2).
+    headerImageKey: node.headerImageKey ?? null,
     rewards: rewards.map((r) => ({ id: r.rewardId })),
   }
 }
@@ -323,9 +348,29 @@ export async function getWhoIsHere(nodeId: string, limit: number) {
   return { items, nextCursor: null, hasMore }
 }
 
-export async function getCityBySlug(slug: string) {
+/**
+ * The CITY row. Cities are keyed by the same value in both partition and sort
+ * key (`CITY#{key}`), and for seeded cities that key is the slug, so one read
+ * serves both accessors below.
+ */
+async function readCityRow(key: string): Promise<Record<string, unknown> | null> {
   const result = await documentClient.send(
-    new GetCommand({ TableName: TableNames.appData, Key: { pk: `CITY#${slug}`, sk: `CITY#${slug}` } }),
+    new GetCommand({ TableName: TableNames.appData, Key: { pk: `CITY#${key}`, sk: `CITY#${key}` } }),
   )
-  return result.Item ? { id: result.Item['cityId'] ?? slug, slug, name: result.Item['name'] } : null
+  return result.Item ?? null
+}
+
+export async function getCityBySlug(slug: string) {
+  const item = await readCityRow(slug)
+  return item ? { id: (item['cityId'] as string | undefined) ?? slug, slug, name: item['name'] } : null
+}
+
+/**
+ * The city a node belongs to, resolved from the node's stored `cityId`. Needed
+ * by cache invalidation, which starts from a node and has to reach the city
+ * payload key (which is slug-based).
+ */
+export async function getCityById(cityId: string) {
+  const item = await readCityRow(cityId)
+  return item ? { id: cityId, slug: (item['slug'] as string | undefined) ?? cityId, name: item['name'] } : null
 }

@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 
 import * as cognito from '../../shared/cognito/client.js'
-import { AWS_REGION, DEV_MODE } from '../../shared/config/env.js'
+import { AWS_REGION, DEV_MODE, webBaseUrl } from '../../shared/config/env.js'
 import { sendEmailVerificationEmail } from '../../shared/email/ses.js'
 import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet, kvSet, kvDel, kvIncr } from '../../shared/kv/dynamodb-kv.js'
@@ -136,7 +136,7 @@ function suggestedUsernameFromEmail(email: string): string {
 
 /** Called once after Hosted UI Google OAuth returns Cognito tokens. Ensures Dynamo user + Cognito custom:userId. */
 export async function consumerOAuthSync(opts: { cognitoSub: string; email?: string | undefined; userAgent: string }) {
-  const { cognitoSub, email: rawEmail, userAgent } = opts
+  const { cognitoSub, email: rawEmail } = opts
 
   if (DEV_MODE) {
     const userId = `dev-user-google-${Date.now()}`
@@ -274,10 +274,6 @@ export async function consumerVerifyOtp(phone: string, code: string, userAgent?:
  * password. This never resets a live account's password.
  */
 const EMAIL_VERIFY_TTL_SECONDS = 24 * 60 * 60
-
-function webBaseUrl(): string {
-  return process.env['AREA_CODE_WEB_URL'] ?? 'https://areacode.co.za'
-}
 
 /**
  * Issue a single-use, TTL-bound verification token and email the link.
@@ -427,7 +423,7 @@ export async function consumerEmailSignup(data: {
   }
 }
 
-export async function consumerEmailLogin(emailRaw: string, password: string, userAgent?: string) {
+export async function consumerEmailLogin(emailRaw: string, password: string, _userAgent?: string) {
   if (DEV_MODE) {
     const userId = `dev-user-${Date.now()}`
     return {
@@ -597,7 +593,7 @@ export async function businessEmailSignup(data: {
   }
 }
 
-export async function businessEmailLogin(emailRaw: string, password: string, userAgent?: string) {
+export async function businessEmailLogin(emailRaw: string, password: string, _userAgent?: string) {
   if (DEV_MODE) {
     const businessId = `dev-biz-${Date.now()}`
     return {
@@ -724,7 +720,7 @@ export async function staffOAuthSync(opts: { cognitoSub: string; userAgent: stri
   }
 }
 
-export async function staffEmailLogin(emailRaw: string, password: string, userAgent?: string) {
+export async function staffEmailLogin(emailRaw: string, password: string, _userAgent?: string) {
   if (DEV_MODE) {
     const staffId = `dev-staff-${Date.now()}`
     return {

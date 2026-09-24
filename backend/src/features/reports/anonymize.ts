@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto'
 
+import type { FoundVia } from '@area-code/shared/constants/attribution'
+
+import { SAST_OFFSET_MS } from '../../shared/time/sast.js'
+
 import type { AnonymizedCheckIn } from './types.js'
 
 // ============================================================================
@@ -15,13 +19,17 @@ export interface RawCheckIn {
   nodeId: string
   tier: string
   checkedInAt: string // ISO 8601
+  /**
+   * Server-derived Found_Via (proof-of-demand R3.1). Absent on check-ins
+   * written before the Phase 1 deploy, which `computeReceipt` reads as
+   * `walk_in`. Stripped by `anonymizeCheckIns` along with the identifiers.
+   */
+  foundVia?: FoundVia
 }
 
 // ============================================================================
 // SAST Timezone Helpers
 // ============================================================================
-
-const SAST_OFFSET_MS = 2 * 60 * 60 * 1000 // UTC+2
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const
 

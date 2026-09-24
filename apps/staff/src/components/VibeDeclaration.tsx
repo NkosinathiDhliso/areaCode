@@ -20,6 +20,7 @@
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { MUSIC_GENRES, GENRE_LABELS } from '@area-code/shared/constants/genre-weights'
 import { api, type ApiError } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
 import { validateMusicSchedule } from '@area-code/shared/lib/schedule-validator'
 import { resolveActiveSlot, resolveScheduleClock } from '@area-code/shared/lib/scheduleResolver'
 import type { MusicGenre, MusicSchedule, ScheduleSlot } from '@area-code/shared/types'
@@ -151,7 +152,7 @@ export function VibeDeclaration() {
           setSchedule(null)
           return
         }
-        setLoadError(err.message ?? 'Could not load the vibe.')
+        setLoadError(describeApiError(err, 'Could not load the vibe.'))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -207,8 +208,7 @@ export function VibeDeclaration() {
       setSchedule(persisted)
       setSavedAt(Date.now())
     } catch (err) {
-      const apiErr = err as ApiError
-      setSaveError(apiErr.message ?? 'Could not save the vibe. Please try again.')
+      setSaveError(describeApiError(err, 'Could not save the vibe. Please try again.'))
     } finally {
       setSaving(false)
     }

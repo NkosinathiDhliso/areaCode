@@ -1,4 +1,5 @@
 import { Spinner } from '@area-code/shared/components/Spinner'
+import { describeApiError, describeOAuthError } from '@area-code/shared/lib/apiError'
 import { exchangeCodeForTokens } from '@area-code/shared/lib/cognitoHostedUiOAuth'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -38,10 +39,13 @@ export function StaffOAuthCallback() {
       const params = new URLSearchParams(window.location.search)
       const code = params.get('code')
       const state = params.get('state')
-      const oauthErr = params.get('error_description') ?? params.get('error')
+      const oauthErrCode = params.get('error')
+      const oauthErrDetail = params.get('error_description')
 
-      if (oauthErr) {
-        setError(oauthErr)
+      if (oauthErrCode !== null || oauthErrDetail !== null) {
+        // Cognito's `error_description` is machinery: logged, never rendered (R15.13).
+        console.warn('[staff-oauth] callback error', { code: oauthErrCode, detail: oauthErrDetail })
+        setError(describeOAuthError(oauthErrCode))
         return
       }
       if (!code || !state) {
@@ -86,8 +90,14 @@ export function StaffOAuthCallback() {
         })
 
         if (!syncRes.ok) {
-          const errBody = (await syncRes.json().catch(() => null)) as { message?: string } | null
-          throw new Error(errBody?.message ?? `sync_failed_${syncRes.status}`)
+          // Thrown in the shape the shared API client throws, so the catch below
+          // describes it the same way every other failure is described.
+          const errBody = (await syncRes.json().catch(() => null)) as { message?: string; error?: string } | null
+          throw {
+            statusCode: syncRes.status,
+            error: errBody?.error ?? 'sync_failed',
+            message: errBody?.message ?? '',
+          }
         }
 
         sessionStorage.removeItem('staff_oauth_invite_token')
@@ -104,12 +114,10 @@ export function StaffOAuthCallback() {
       } catch (err) {
         if (cancelled) return
         // Surface the server's specific reason (wrong Google email, invite
-        // expired/already used, staff limit reached) instead of a generic
-        // failure. Only fall back to the generic copy for opaque errors
-        // (token exchange, network) that carry no useful message.
-        const message = err instanceof Error ? err.message : ''
-        const generic = t('auth.oauth.failed', 'Google sign-in failed. Try again.')
-        setError(message && !message.startsWith('sync_failed_') ? message : generic)
+        // expired or already used, staff limit reached) when it reads as copy a
+        // person can act on, and the mapped line otherwise. A token-exchange or
+        // network failure carries technical text that must never render (R15.13).
+        setError(describeApiError(err, t('auth.oauth.failed', 'Google sign-in failed. Try again.')))
       }
     }
 

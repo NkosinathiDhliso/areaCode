@@ -9,6 +9,8 @@ import { rateLimitMiddleware } from '../../shared/middleware/rate-limit.js'
 import { validate } from '../../shared/middleware/validation.js'
 import { getRedemptionsByStaffId } from '../rewards/repository.js'
 
+import { getBoostScoreboard } from './boost-scoreboard-read.js'
+import { RECEIPT_WINDOW_NAMES } from './receipt-window.js'
 import { MalformedCursorError } from './repository.js'
 import * as service from './service.js'
 import {
@@ -32,6 +34,23 @@ const digestHistoryQuerySchema = z.object({ cursor: z.string().min(1).optional()
 const checkInQuerySchema = z.object({
   date: z.string().optional(),
   cursor: z.string().optional(),
+})
+
+// proof-of-demand R6.2: the Receipt read behind the Plans panel. `window` is
+// required and must be one of the three windows the resolver knows, which are
+// themselves tied to the copy builder's reviewed window phrases. Anything else
+// is a 400 before the service runs, so no unlabelled window can be reported.
+const receiptQuerySchema = z.object({ window: z.enum(RECEIPT_WINDOW_NAMES) })
+
+// proof-of-demand R7.1: the Boost_Scoreboard read. `boostId` is the purchase's
+// `yocoCheckoutId`, so the bound is the Idempotency_Marker key's own character
+// set: anything that could never key a marker is 400 before any read runs.
+const boostIdParamsSchema = z.object({
+  boostId: z
+    .string()
+    .min(1)
+    .max(128)
+    .regex(/^[\w-]+$/),
 })
 
 // R6.1–R6.6: operator boost-purchases panel. Path-level `businessId` is
@@ -173,6 +192,31 @@ export async function businessRoutes(app: FastifyInstance) {
     return service.getPlans()
   })
 
+  // GET /v1/business/receipt?window=trial|paid|week
+  //
+  // The Receipt for one of the owner's decision windows (proof-of-demand R6.2),
+  // rendered above the Plans panel upgrade CTA. Owner-only: `manage_billing` is
+  // an owner permission, so a manager never reads the renewal numbers. The
+  // window is resolved from the subscription server-side; the client names which
+  // window it wants, never its bounds. Every string in the response is worded by
+  // `buildReceiptCopy`, so the panel renders it verbatim (R4.6).
+  app.get(
+    '/v1/business/receipt',
+    {
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('manage_billing'),
+        validate({ query: receiptQuerySchema }),
+        rateLimitMiddleware({ key: 'business-receipt', max: 60, windowSeconds: 60 }),
+      ],
+    },
+    async (request) => {
+      const { businessId } = getBusinessRole(request)
+      const query = request.query as z.infer<typeof receiptQuerySchema>
+      return service.getBusinessReceipt(businessId, query.window)
+    },
+  )
+
   // POST /v1/business/checkout
   app.post(
     '/v1/business/checkout',
@@ -221,6 +265,33 @@ export async function businessRoutes(app: FastifyInstance) {
       const auth = getAuth(request)
       const body = request.body as z.infer<typeof boostBodySchema>
       return service.purchaseBoost(auth.userId, body.nodeId, body.duration)
+    },
+  )
+
+  // GET /v1/business/boosts/:boostId/scoreboard
+  //
+  // What one Boost_Window recorded, next to the same clock window seven days
+  // earlier (proof-of-demand R7.1, R7.2). Owner-only on the same gate as the
+  // Receipt read: a boost is a billing decision, so `manage_billing` is the
+  // permission, and a manager never reads it. The business scope comes from the
+  // JWT, never the path, so the only thing the client names is which of its own
+  // purchases it is asking about.
+  app.get(
+    '/v1/business/boosts/:boostId/scoreboard',
+    {
+      preHandler: [
+        requireAuth('business', 'staff'),
+        requireBusinessPermission('manage_billing'),
+        validate({ params: boostIdParamsSchema }),
+        // The purchases list renders one scoreboard per row (R7.4), so a page of
+        // 25 purchases is 25 reads. Sized for several pages a minute.
+        rateLimitMiddleware({ key: 'business-boost-scoreboard', max: 120, windowSeconds: 60 }),
+      ],
+    },
+    async (request) => {
+      const { businessId } = getBusinessRole(request)
+      const params = request.params as z.infer<typeof boostIdParamsSchema>
+      return getBoostScoreboard(businessId, params.boostId)
     },
   )
 

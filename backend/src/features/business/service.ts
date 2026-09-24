@@ -1,16 +1,27 @@
 import { createHmac, randomUUID } from 'node:crypto'
 
+import type {
+  BusinessReceipt,
+  LiveGoingLine,
+  LiveStats,
+  OnboardingStatus,
+  ReceiptWindowName,
+} from '@area-code/shared/types'
+
 import { APP_ENV, AWS_REGION, DEV_MODE, qrHmacSecret, requireEnv } from '../../shared/config/env.js'
 import { sendRenewalReminderEmail, sendRenewalUpcomingEmail } from '../../shared/email/ses.js'
 import { AppError } from '../../shared/errors/AppError.js'
 import { digestsEqual } from '../../shared/security/hmac.js'
 import { deactivateNodesForBusiness } from '../nodes/dynamodb-repository.js'
 import { buildDigestCopy, type DigestData } from '../reports/digest.js'
+import { buildReceiptCopy, type ReceiptCopy } from '../reports/receipt-copy.js'
+import type { Receipt, ReceiptWindow } from '../reports/receipt.js'
 import { getLatestDigest, queryDigestHistory } from '../reports/repository.js'
 import type { DigestRow } from '../reports/types.js'
 import { classifyLifecycle, type Lifecycle } from '../rewards/lifecycle.js'
 
 import { decideBoostFloorWithMetric, type BoostMetricInput } from './floor-decision.js'
+import { resolveReceiptWindow, type SubscriptionWindowFacts } from './receipt-window.js'
 import * as repo from './repository.js'
 import {
   BUSINESS_PLANS,
@@ -22,6 +33,7 @@ import {
   PAID_INTERVALS,
   SUBSCRIPTION_GRACE_DAYS,
   RENEWAL_REMINDER_LEAD_DAYS,
+  TRIAL_DAYS,
   addPaidInterval,
   boostWindowEnd,
   type AdminBoosterPurchaseView,
@@ -163,7 +175,7 @@ export function checkBoostFloor(
 
 // ─── Onboarding Status ──────────────────────────────────────────────────────
 
-export async function getOnboardingStatus(businessId: string) {
+export async function getOnboardingStatus(businessId: string): Promise<OnboardingStatus> {
   if (DEV_MODE) return { hasNode: true, hasReward: true, hasStaff: true, hasQr: true }
   const nodes = await repo.getNodesForBusiness(businessId)
   const rewards = await getBusinessRewards(businessId)
@@ -574,6 +586,20 @@ async function handlePaymentSucceeded(payload: Record<string, unknown>) {
 const SUBSCRIPTION_PLANS_SET: ReadonlySet<'growth' | 'pro' | 'payg'> = new Set(['growth', 'pro', 'payg'])
 const PAID_INTERVALS_SET: ReadonlySet<PaidInterval> = new Set(PAID_INTERVALS)
 
+/**
+ * Drop the cached city payload for every venue this business owns.
+ *
+ * Tier decides map membership, so an activation, a comp, or a demotion has to
+ * reach the consumer map on the next read instead of waiting out the payload TTL
+ * (proof-of-demand R15.5). Dynamically imported so the business feature keeps no
+ * static edge into the nodes feature, matching the other cross-feature calls
+ * here. The invalidation helper logs and swallows its own failures.
+ */
+async function invalidateMapForBusiness(businessId: string): Promise<void> {
+  const { invalidateCityPayloadForBusiness } = await import('../nodes/cache.js')
+  await invalidateCityPayloadForBusiness(businessId)
+}
+
 function logSubscriptionBranch(branch: string, fields: Record<string, unknown> = {}): void {
   console.info(
     JSON.stringify({
@@ -722,6 +748,7 @@ async function persistSubscriptionPayment(payload: Record<string, unknown>): Pro
         paidUntil: existingRow.paidUntilProduced,
         paidInterval: existingRow.interval,
       })
+      await invalidateMapForBusiness(businessId)
       logSubscriptionBranch('activation_replay_reconciled', {
         businessId,
         plan: existingRow.plan,
@@ -744,6 +771,7 @@ async function persistSubscriptionPayment(payload: Record<string, unknown>): Pro
     paidUntil,
     paidInterval: validInterval,
   })
+  await invalidateMapForBusiness(businessId)
   logSubscriptionBranch('activation_written', {
     businessId,
     plan: validPlan,
@@ -927,6 +955,11 @@ async function persistBoosterPurchase(payload: Record<string, unknown>): Promise
   const boostUntil = boostWindowEnd(paidAtIso, validDuration)
   const { setNodeBoostWindow } = await import('../nodes/dynamodb-repository.js')
   await setNodeBoostWindow(nodeId, boostUntil)
+  // `boostUntil` and the derived `boostActive` ride on the city payload, so the
+  // paid window has to reach the map on the next read, not 45s later
+  // (proof-of-demand R15.5). The webhook path is the one the owner watches.
+  const { invalidateCityPayloadForNode } = await import('../nodes/cache.js')
+  await invalidateCityPayloadForNode(nodeId)
 }
 
 async function handlePaymentFailed(payload: Record<string, unknown>) {
@@ -1068,8 +1101,6 @@ export async function getQrData(nodeId: string, businessId: string) {
 
 // ─── Trial Management ───────────────────────────────────────────────────────
 
-const TRIAL_DAYS = 14
-
 export async function startTrial(businessId: string, plan: 'growth' | 'pro') {
   if (DEV_MODE) {
     return {
@@ -1101,11 +1132,187 @@ export async function startTrial(businessId: string, plan: 'growth' | 'pro') {
 
 // ─── Live Stats ─────────────────────────────────────────────────────────────
 
-export async function getLiveStats(businessId: string) {
-  if (DEV_MODE) {
-    return { checkInsToday: 34, rewardsClaimed: 12, pulseScore: 45, totalCheckIns: 1247 }
+/**
+ * Turn the Receipt into the live panel's two sentences and two counts.
+ *
+ * The portal never words the Found_You fact itself, so both the production read
+ * and the DEV fixture go through `buildReceiptCopy` with the `today` window
+ * label. The live panel states its own window, so only the headline and the
+ * walk-in line travel; the first-timer, per-source and measured-from clauses
+ * belong to the digest and the Plans panel.
+ */
+/**
+ * DEV fixture split, sized like the UAT seed (9 found you, 6 of them new). One
+ * fixture for every DEV Receipt surface, so a dev run of the live panel and the
+ * Plans panel rehearses the same sentences.
+ */
+const DEV_RECEIPT: Receipt = {
+  foundYouVisitors: 9,
+  walkInVisitors: 13,
+  uniqueVisitors: 22,
+  foundYouFirstTimers: 6,
+  bySource: { map: 6, share: 2, search: 1, push: 0 },
+  suppressed: [],
+  measuredFrom: null,
+}
+
+/**
+ * DEV fixture for the Going seed, sized above the Going_Threshold so a dev run
+ * of the live panel shows the line the owner will see (R9.5).
+ */
+const DEV_GOING_TONIGHT: LiveGoingLine[] = [{ nodeId: 'dev-node-1', nodeName: 'The Lookout', goingCount: 7 }]
+
+function liveReceiptFields(receipt: Receipt): Pick<LiveStats, 'foundYouToday' | 'walkInsToday' | 'receiptToday'> {
+  const copy = buildReceiptCopy(receipt, null, 'today')
+  return {
+    foundYouToday: receipt.foundYouVisitors,
+    walkInsToday: receipt.walkInVisitors,
+    receiptToday: { headline: copy.headline, walkIn: copy.walkIn },
   }
-  return repo.getLiveStats(businessId)
+}
+
+export async function getLiveStats(businessId: string): Promise<LiveStats> {
+  if (DEV_MODE) {
+    return {
+      checkInsToday: 34,
+      rewardsClaimed: 12,
+      pulseScore: 45,
+      totalCheckIns: 1247,
+      ...liveReceiptFields(DEV_RECEIPT),
+      goingTonight: DEV_GOING_TONIGHT,
+    }
+  }
+  const { receipt, venues, ...stats } = await repo.getLiveStats(businessId)
+  return { ...stats, ...liveReceiptFields(receipt), goingTonight: await readGoingTonight(venues) }
+}
+
+/**
+ * Tonight's Going marks per venue, so the live panel opens on the pipeline that
+ * already exists instead of on nothing until the next toggle (R9.5).
+ *
+ * Reuses the one Going count read (`loadGoingCountByNode`), which owns the night
+ * rule and the count query; this only labels the result. A venue whose partition
+ * could not be counted is omitted by that reader and therefore absent here:
+ * unmeasured is not zero (`honest-presence.md`). A measured zero is kept,
+ * because the owner is entitled to the true number including the drop.
+ */
+async function readGoingTonight(venues: Array<{ nodeId: string; nodeName: string }>): Promise<LiveGoingLine[]> {
+  if (venues.length === 0) return []
+  // Imported at call time, not at module load. The Going service reaches the
+  // socket emitter, which reads `CONNECTIONS_TABLE` at module scope; this module
+  // also exports `getEffectiveTier` to the report, campaign and reward workers,
+  // and a static import would make every one of those Lambdas require a table
+  // they never touch. Deferring keeps the requirement where the read is: the API
+  // Lambda.
+  const { loadGoingCountByNode } = await import('../nodes/going-service.js')
+  const counts = await loadGoingCountByNode(venues.map((venue) => venue.nodeId))
+  const lines: LiveGoingLine[] = []
+  for (const venue of venues) {
+    const goingCount = counts.get(venue.nodeId)
+    if (goingCount === undefined) continue
+    lines.push({ nodeId: venue.nodeId, nodeName: venue.nodeName, goingCount })
+  }
+  return lines
+}
+
+// ─── Receipt for a renewal moment (proof-of-demand R6.2, R6.3) ───────────────
+
+/**
+ * The Receipt the Plans panel shows above the upgrade CTA, for the window the
+ * owner is deciding about.
+ *
+ * The window comes from the subscription (`resolveReceiptWindow`), the counts
+ * from `computeReceipt` and the sentences from `buildReceiptCopy`, so this adds
+ * neither arithmetic nor wording. The Onboarding_Checklist is read only when
+ * Found_You is zero, which is the one case the copy needs it: the zero branch
+ * points at the flag that is actually false instead of implying failure.
+ */
+async function resolveBusinessReceipt(
+  businessId: string,
+  window: ReceiptWindowName,
+): Promise<{ receiptWindow: ReceiptWindow; receipt: Receipt; copy: ReceiptCopy }> {
+  const facts: SubscriptionWindowFacts = DEV_MODE
+    ? {
+        // Fixture subscription: a trial ending in a week and a paid period
+        // bought 20 days ago, so a dev run resolves every window for real.
+        trialEndsAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+        paidPeriodStart: new Date(Date.now() - 20 * 86400000).toISOString(),
+        paidPeriodEnd: new Date(Date.now() + 10 * 86400000).toISOString(),
+      }
+    : await readSubscriptionWindowFacts(businessId, window)
+
+  const receiptWindow = resolveReceiptWindow(window, facts)
+  const receipt = DEV_MODE ? DEV_RECEIPT : await repo.getReceiptForWindow(businessId, receiptWindow)
+
+  const checklist = receipt.foundYouVisitors === 0 ? await getOnboardingStatus(businessId) : null
+
+  return { receiptWindow, receipt, copy: buildReceiptCopy(receipt, checklist, window) }
+}
+
+export async function getBusinessReceipt(businessId: string, window: ReceiptWindowName): Promise<BusinessReceipt> {
+  const { receiptWindow, receipt, copy } = await resolveBusinessReceipt(businessId, window)
+
+  return {
+    window,
+    windowStartUtc: receiptWindow.windowStartUtc,
+    windowEndUtc: receiptWindow.windowEndUtc,
+    foundYouVisitors: receipt.foundYouVisitors,
+    walkInVisitors: receipt.walkInVisitors,
+    headline: copy.headline,
+    walkIn: copy.walkIn,
+    firstTimers: copy.firstTimers,
+    bySource: copy.bySource,
+    measuredFrom: copy.measuredFrom,
+    nextStep: copy.nextStep === null ? null : { step: copy.nextStep.step, text: copy.nextStep.text },
+  }
+}
+
+/**
+ * The Receipt sentences a lifecycle email renders (proof-of-demand R6.1, R6.4).
+ *
+ * The same resolution the Plans panel reads, so the trial reminder, the renewal
+ * reminder and the panel state one measured fact in one wording. The email
+ * module is a renderer: it receives these lines and never re-derives a count.
+ *
+ * A business with no such window on record, or a Receipt read that fails, yields
+ * no lines: the reminder is time-critical and still goes out, saying less rather
+ * than reporting a number we cannot stand behind. The reason is logged at warn
+ * so a broken read surfaces instead of quietly becoming an empty receipt.
+ */
+export async function getReceiptEmailLines(businessId: string, window: ReceiptWindowName): Promise<string[]> {
+  try {
+    const { copy } = await resolveBusinessReceipt(businessId, window)
+    return copy.lines
+  } catch (err) {
+    console.warn(`[business] getReceiptEmailLines: no ${window} receipt for ${businessId}: ${String(err)}`)
+    return []
+  }
+}
+
+/**
+ * What the subscription states about this business's windows. The paid-period
+ * start is the `paidAt` of the most recent Subscription_Payment_Row, so the paid
+ * window is a stored fact; that row is read only when a paid receipt is asked
+ * for.
+ */
+async function readSubscriptionWindowFacts(
+  businessId: string,
+  window: ReceiptWindowName,
+): Promise<SubscriptionWindowFacts> {
+  const biz = await repo.findBusinessById(businessId)
+  if (!biz) throw AppError.notFound('Business not found')
+
+  let paidPeriodStart: string | null = null
+  if (window === 'paid') {
+    const payments = await repo.querySubscriptionPaymentsForBusiness(businessId, null, 1)
+    paidPeriodStart = payments.items[0]?.paidAt ?? null
+  }
+
+  return {
+    trialEndsAt: biz.trialEndsAt ?? null,
+    paidPeriodStart,
+    paidPeriodEnd: biz.paidUntil ?? null,
+  }
 }
 
 // ─── Business Nodes ─────────────────────────────────────────────────────────
@@ -1211,18 +1418,21 @@ export async function getCheckInDetails(businessId: string, date?: string, curso
           tier: 'regular',
           visitCount: 12,
           timestamp: new Date(Date.now() - 600000).toISOString(),
+          foundVia: 'walk_in',
         },
         {
           displayName: 'Naledi K.',
           tier: 'fixture',
           visitCount: 3,
           timestamp: new Date(Date.now() - 1800000).toISOString(),
+          foundVia: 'map',
         },
         {
           displayName: 'Sipho D.',
           tier: 'local',
           visitCount: 1,
           timestamp: new Date(Date.now() - 3600000).toISOString(),
+          foundVia: 'share',
         },
       ],
       nextCursor: null,
@@ -1355,6 +1565,9 @@ export async function deactivateForNonPayment(
   await repo.deactivateBusiness(businessId)
   const nodesDeactivated = await deactivateNodesForBusiness(businessId)
   await repo.setPaymentGrace(businessId, null)
+  // The demotion is the single mechanism that takes a venue off the map, so the
+  // cached city payload goes with it (R15.5).
+  await invalidateMapForBusiness(businessId)
   // System-actor audit entry (cross-portal-lifecycle-alignment R2.3) so admin can
   // answer "why did this venue leave the map". Reuses the admin audit-log write
   // (one home for audit rows); actor `system:lapse-sweep` renders in the existing
@@ -1446,7 +1659,11 @@ export async function sendRenewalReminders(nowMs: number = Date.now()): Promise<
     try {
       const msLeft = Date.parse(biz.paidUntil) - nowMs
       const daysLeft = Math.max(1, Math.ceil(msLeft / (24 * 60 * 60 * 1000)))
-      await sendRenewalUpcomingEmail(biz.email, biz.businessName, daysLeft)
+      // The Receipt for the period being renewed (proof-of-demand R6.4): the
+      // owner reads what the paid window measured before deciding to renew. Same
+      // resolution and wording as the Plans panel and the trial reminder.
+      const receiptLines = await getReceiptEmailLines(biz.businessId, 'paid')
+      await sendRenewalUpcomingEmail(biz.email, biz.businessName, daysLeft, receiptLines)
       await repo.setRenewalReminderSent(biz.businessId, biz.paidUntil)
       reminded++
     } catch (err) {

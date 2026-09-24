@@ -11,8 +11,11 @@
  * First-Get on mount and renders nothing if the venue hasn't configured one.
  */
 
-import { api, type ApiError } from '@area-code/shared/lib/api'
-import { Gift, Printer, X } from 'lucide-react'
+import { api } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
+import { clipboardFailureCopy, copyToClipboard } from '@area-code/shared/lib/clipboard'
+import { formatSastDayMonth } from '@area-code/shared/lib/sast'
+import { Copy, Gift, Printer, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 interface FirstGet {
@@ -35,6 +38,12 @@ export function FirstGetIssuer() {
   const [issued, setIssued] = useState<IssuedToken | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState(false)
+  // Set when the print window could not be opened at all: a popup blocker, an
+  // in-app webview, or iOS Safari refusing a programmatic window. The token is
+  // still on screen, so the recovery is to copy it (R15.18).
+  const [printBlocked, setPrintBlocked] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [copyError, setCopyError] = useState<string | null>(null)
 
   function load() {
     let cancelled = false
@@ -46,8 +55,8 @@ export function FirstGetIssuer() {
         if (!cancelled) setReward(res.reward)
       })
       .catch(() => {
-        // A real fetch failure is NOT the same as "no reward" — surface it so
-        // the First-Get tool isn't silently missing on a transient error.
+        // A real fetch failure is NOT the same as "no reward", so surface it:
+        // the First-Get tool must not go silently missing on a transient error.
         if (!cancelled) setLoadError(true)
       })
     return () => {
@@ -72,16 +81,33 @@ export function FirstGetIssuer() {
       setIssued({ token: res.token, expiresAt: res.expiresAt })
       setPhase('displayed')
     } catch (err) {
-      const apiErr = err as ApiError
-      setError(apiErr.message ?? 'Could not issue token')
+      setError(describeApiError(err, 'Could not issue the code. Try again.'))
       setPhase('idle')
     }
   }
 
+  async function handleCopyToken() {
+    if (!issued) return
+    const outcome = await copyToClipboard(issued.token)
+    setCopied(outcome === 'copied')
+    setCopyError(clipboardFailureCopy(outcome))
+  }
+
   function handlePrint() {
     if (!issued || !reward) return
-    const w = window.open('', '_blank', 'width=400,height=500')
-    if (!w) return
+    setPrintBlocked(false)
+    // A popup blocker returns null; an in-app webview can throw instead. Both
+    // mean the same thing to the staff member: no print, copy the code.
+    let w: Window | null = null
+    try {
+      w = window.open('', '_blank', 'width=400,height=500')
+    } catch {
+      w = null
+    }
+    if (!w) {
+      setPrintBlocked(true)
+      return
+    }
     w.document.write(`<!doctype html>
 <html><head><title>Area Code · ${escapeHtml(reward.title)}</title>
 <style>
@@ -115,6 +141,9 @@ export function FirstGetIssuer() {
     setPhase('idle')
     setIssued(null)
     setError(null)
+    setPrintBlocked(false)
+    setCopied(false)
+    setCopyError(null)
   }
 
   // Genuine empty (no reward configured) renders nothing. A load failure shows
@@ -178,17 +207,31 @@ export function FirstGetIssuer() {
             <div className="flex flex-row gap-2">
               <button
                 onClick={handlePrint}
-                className="flex-1 flex items-center justify-center gap-2 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl py-2.5 text-sm"
+                className="flex-1 flex items-center justify-center gap-2 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl min-h-11 py-2.5 text-sm active:scale-95"
               >
                 <Printer size={14} strokeWidth={1.5} /> Print
               </button>
               <button
-                onClick={reset}
-                className="flex items-center justify-center gap-2 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-secondary)] rounded-xl py-2.5 px-4 text-sm"
+                onClick={() => void handleCopyToken()}
+                className="flex-1 flex items-center justify-center gap-2 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl min-h-11 py-2.5 text-sm active:scale-95"
               >
-                <X size={14} strokeWidth={1.5} /> Done
+                <Copy size={14} strokeWidth={1.5} /> {copied ? 'Copied' : 'Copy code'}
               </button>
             </div>
+            {/* Three controls do not fit one 375px row at a readable size, so
+                Done sits on its own line. */}
+            <button
+              onClick={reset}
+              className="w-full flex items-center justify-center gap-2 bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-secondary)] rounded-xl min-h-11 py-2.5 px-4 text-sm active:scale-95"
+            >
+              <X size={14} strokeWidth={1.5} /> Done
+            </button>
+            {printBlocked && (
+              <p className="text-[var(--warning)] text-xs" role="status">
+                Printing is blocked in this browser. Copy the code instead.
+              </p>
+            )}
+            {copyError && <p className="text-[var(--warning)] text-xs">{copyError}</p>}
           </div>
         )}
 
@@ -207,7 +250,8 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;')
 }
 
+// The till clock is SAST, so the expiry the staff member reads out comes from
+// the one shared formatter rather than the device timezone (R15.15).
 function formatExpiry(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleDateString('en-ZA', { day: '2-digit', month: 'short' })
+  return formatSastDayMonth(iso)
 }

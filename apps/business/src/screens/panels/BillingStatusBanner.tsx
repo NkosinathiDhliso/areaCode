@@ -1,3 +1,5 @@
+import { formatSastLongDate } from '@area-code/shared/lib/sast'
+
 type Tier = 'starter' | 'growth' | 'pro' | 'payg'
 
 interface BillingStatusBannerProps {
@@ -22,13 +24,10 @@ const TIER_LABELS: Record<Tier, string> = {
   payg: 'Pay-as-you-go',
 }
 
-// Readable date, e.g. "9 August 2026".
+// Readable date, e.g. "9 August 2026", in SAST through the one shared formatter
+// so a billing deadline never reads a day out from the venue's clock (R15.15).
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
+  return formatSastLongDate(iso)
 }
 
 function daysUntil(iso: string, now: number): number {

@@ -1,6 +1,7 @@
 // DynamoDB-backed Business Repository (replaces Prisma)
 import { randomBytes } from 'node:crypto'
 
+import { isFoundVia, RECEIPT_MEASURED_FROM_ISO, type FoundVia } from '@area-code/shared/constants/attribution'
 import type { AudienceAnalytics, BusinessMusicAudience, LiveStats, MusicGenre } from '@area-code/shared/types'
 import {
   BatchGetCommand,
@@ -17,17 +18,19 @@ import { requireEnv } from '../../shared/config/env.js'
 import { documentClient, TableNames, isConditionalCheckFailedError } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
 import { kvGet } from '../../shared/kv/dynamodb-kv.js'
+import { sastDateString, startOfSastDayIso } from '../../shared/time/sast.js'
 import {
   getBusinessById as getBusinessDynamo,
   getBusinessByCognitoSub,
   updateBusiness,
   getStaffByBusinessId,
 } from '../auth/dynamodb-repository.js'
-import { getCheckInsByNode } from '../check-in/dynamodb-repository.js'
+import { getCheckInsByNode, getCheckInsByNodeSince } from '../check-in/dynamodb-repository.js'
 import { analyzeCrowdComposition } from '../reports/analyzers/crowd-composition.js'
 import { analyzeMusicProfile } from '../reports/analyzers/music-profile.js'
 import { analyzePeakHours } from '../reports/analyzers/peak-hours.js'
 import { anonymizeCheckIns, type RawCheckIn } from '../reports/anonymize.js'
+import { computeReceipt, type Receipt, type ReceiptCheckIn, type ReceiptWindow } from '../reports/receipt.js'
 import type { MusicPrefs } from '../reports/types.js'
 
 import { listRedemptionsForBusiness } from './staff-leaderboard.js'
@@ -436,17 +439,36 @@ export async function deactivateBusinessRewards(businessId: string) {
 // ─── Live Stats ─────────────────────────────────────────────────────────────
 
 /**
- * SAST is UTC+2. Start of the current SAST calendar day expressed as a UTC ISO
- * string, used to count "same-day" redemptions. Mirrors the SAST day-boundary
- * arithmetic used by streaks / pulse-decay (00:00 SAST = 22:00 UTC prev day).
+ * The live-panel read, before the service turns the Receipt into sentences.
+ *
+ * The Receipt travels as numbers, not copy: `buildReceiptCopy` is the one home
+ * for the Found_You wording and it lives in the reports feature, so the
+ * repository hands the split up and the service words it.
  */
-const SAST_OFFSET_MS = 2 * 60 * 60 * 1000
-function startOfSastDayIso(now: number = Date.now()): string {
-  const sastDayStr = new Date(now + SAST_OFFSET_MS).toISOString().slice(0, 10)
-  return new Date(new Date(`${sastDayStr}T00:00:00Z`).getTime() - SAST_OFFSET_MS).toISOString()
+export type LiveStatsRead = Omit<LiveStats, 'foundYouToday' | 'walkInsToday' | 'receiptToday' | 'goingTonight'> & {
+  receipt: Receipt
+  /**
+   * The business's venues, for the Going seed the service reads (R9.5). Names
+   * travel with the ids because the live panel labels each line, and the
+   * repository already has both from the one BusinessIndex query.
+   */
+  venues: Array<{ nodeId: string; nodeName: string }>
 }
 
-export async function getLiveStats(businessId: string): Promise<LiveStats> {
+/**
+ * The stored decaying pulse score for one node, or null when no score is recorded
+ * or the stored value is not a number. Reuses the same KV path the consumer map
+ * and the pulse-decay worker use (`pulse:{cityId}:{nodeId}`). No silent catch: a
+ * KV failure surfaces rather than degrading into a fake 0 (no-fallbacks-no-legacy).
+ */
+async function readPulseScore(cityId: string, nodeId: string): Promise<number | null> {
+  const scoreStr = await kvGet(`pulse:${cityId}:${nodeId}`)
+  if (scoreStr === null) return null
+  const score = parseFloat(scoreStr)
+  return Number.isNaN(score) ? null : score
+}
+
+export async function getLiveStats(businessId: string): Promise<LiveStatsRead> {
   const nodesResult = await documentClient.send(
     new QueryCommand({
       TableName: TableNames.nodes,
@@ -457,33 +479,44 @@ export async function getLiveStats(businessId: string): Promise<LiveStats> {
   )
   const nodes = (nodesResult.Items || []).map((n) => ({
     nodeId: n['nodeId'] as string,
+    nodeName: (n['name'] as string | undefined) ?? '',
     cityId: n['cityId'] as string | undefined,
+    // Maintained lifetime counter, incremented at check-in. Absent means the
+    // venue has never been checked into (or predates the counter, which
+    // `scripts/backfill-node-checkin-totals.mjs` seeds), and zero is the honest
+    // reading of that. The BusinessIndex projects ALL, so this costs no read.
+    nodeTotalCheckIns: (n['totalCheckIns'] as number | undefined) ?? 0,
   }))
 
   let checkInsToday = 0
   let totalCheckIns = 0
+  // "Today" is the SAST calendar day, not a rolling 24 hours: an owner reading
+  // the panel at 09:00 is asking about today, not about last night plus this
+  // morning. The Receipt is computed from exactly the rows `checkInsToday`
+  // counts, so the split can never describe a different window from the number
+  // above it.
+  const windowEndUtc = new Date().toISOString()
+  const windowStartUtc = startOfSastDayIso()
+  const todayCheckIns: ReceiptCheckIn[] = []
   // Headline pulseScore is the MAX per-node decaying pulse (the business's
   // most-alive venue), never a sum: a sum would break the 0-N scale the
   // consumer map uses for a single node (Req 1.2). Genuine absence of every
   // node's pulse row stays `null` -- never a fabricated 0 (Req 1.4).
   let maxPulse: number | null = null
-  for (const { nodeId, cityId } of nodes) {
-    const { checkIns: todayCIs } = await getCheckInsByNode(nodeId, { hours: 24 })
+  for (const { nodeId, cityId, nodeTotalCheckIns } of nodes) {
+    // Paginated to completion: a busy venue's day exceeds one page, and a
+    // truncated read would quietly under-report the owner's headline number.
+    const todayCIs = await getCheckInsByNodeSince(nodeId, windowStartUtc)
     checkInsToday += todayCIs.length
-    const { checkIns: allCIs } = await getCheckInsByNode(nodeId, {})
-    totalCheckIns += allCIs.length
+    todayCheckIns.push(...todayCIs)
+    totalCheckIns += nodeTotalCheckIns
 
     // Reuse the same pulse KV read path the consumer map / pulse-decay worker
     // use (`pulse:{cityId}:{nodeId}`). No silent catch: a KV failure must
     // surface, not degrade into a fake 0 (no-fallbacks-no-legacy).
     if (cityId) {
-      const scoreStr = await kvGet(`pulse:${cityId}:${nodeId}`)
-      if (scoreStr !== null) {
-        const score = parseFloat(scoreStr)
-        if (!Number.isNaN(score)) {
-          maxPulse = maxPulse === null ? score : Math.max(maxPulse, score)
-        }
-      }
+      const score = await readPulseScore(cityId, nodeId)
+      if (score !== null) maxPulse = maxPulse === null ? score : Math.max(maxPulse, score)
     }
   }
 
@@ -493,7 +526,85 @@ export async function getLiveStats(businessId: string): Promise<LiveStats> {
   const redemptions = await listRedemptionsForBusiness(businessId, startOfSastDayIso())
   const rewardsClaimed = redemptions.length
 
-  return { checkInsToday, rewardsClaimed, pulseScore: maxPulse, totalCheckIns }
+  // One computation behind every owner-facing "found you" number (R4.1): the
+  // live panel reads the same function the digest, the trial emails, the Plans
+  // panel and the boost scoreboard read.
+  const receipt = computeReceipt(todayCheckIns, { windowStartUtc, windowEndUtc })
+
+  return {
+    checkInsToday,
+    rewardsClaimed,
+    pulseScore: maxPulse,
+    totalCheckIns,
+    receipt,
+    venues: nodes.map(({ nodeId, nodeName }) => ({ nodeId, nodeName })),
+  }
+}
+
+// ─── Receipt for an arbitrary window ────────────────────────────────────────
+
+/** Page size for the windowed check-in read. Pages until the window is covered. */
+const RECEIPT_CHECKIN_PAGE_SIZE = 200
+
+/**
+ * Every check-in at one node inside a half-open window `[start, end)`.
+ *
+ * The one windowed node read: the business-wide Receipt below loops it over the
+ * business's nodes, and the Boost_Scoreboard calls it once for the boosted node
+ * over the span from the baseline start to the window end. The node query is
+ * bounded by time-since-window-start and the exact window is applied here, so
+ * an open window end never counts a later row.
+ */
+export async function getNodeCheckInsInRange(nodeId: string, window: ReceiptWindow): Promise<ReceiptCheckIn[]> {
+  const windowStartMs = new Date(window.windowStartUtc).getTime()
+  const windowEndMs = new Date(window.windowEndUtc).getTime()
+  const hours = Math.max(1, Math.ceil((Date.now() - windowStartMs) / (60 * 60 * 1000)))
+
+  const rows: ReceiptCheckIn[] = []
+  let cursor: string | undefined
+  do {
+    const page = await getCheckInsByNode(nodeId, { hours, limit: RECEIPT_CHECKIN_PAGE_SIZE, cursor })
+    for (const checkIn of page.checkIns) {
+      const at = new Date(checkIn.checkedInAt).getTime()
+      if (at >= windowStartMs && at < windowEndMs) rows.push(checkIn)
+    }
+    cursor = page.nextCursor
+  } while (cursor)
+
+  return rows
+}
+
+/**
+ * The Receipt for one business over one window (proof-of-demand R6.2).
+ *
+ * Same shape as the live-panel read above: resolve the business's nodes through
+ * the BusinessIndex, load their check-ins through the one check-in read path,
+ * then hand the rows to `computeReceipt`. Only the window differs, so the trial
+ * and paid receipts are the same arithmetic the live panel and the Monday digest
+ * report, never a second count that can drift.
+ *
+ * `earliestCheckInByUser` is deliberately not loaded: that is a per-visitor
+ * lifetime read the weekly pass can afford and a synchronous panel read cannot.
+ * `computeReceipt` then reports `foundYouFirstTimers` as unmeasured rather than
+ * zero, and `buildReceiptCopy` omits the clause instead of claiming none.
+ */
+export async function getReceiptForWindow(businessId: string, window: ReceiptWindow): Promise<Receipt> {
+  const nodesResult = await documentClient.send(
+    new QueryCommand({
+      TableName: TableNames.nodes,
+      IndexName: 'BusinessIndex',
+      KeyConditionExpression: 'businessId = :bid',
+      ExpressionAttributeValues: { ':bid': businessId },
+    }),
+  )
+  const nodeIds = (nodesResult.Items || []).map((n) => n['nodeId'] as string)
+
+  const windowCheckIns: ReceiptCheckIn[] = []
+  for (const nodeId of nodeIds) {
+    windowCheckIns.push(...(await getNodeCheckInsInRange(nodeId, window)))
+  }
+
+  return computeReceipt(windowCheckIns, window)
 }
 
 // ─── Business Nodes ─────────────────────────────────────────────────────────
@@ -783,30 +894,112 @@ export async function getRecentRedemptions(businessId: string) {
 
 // ─── Check-In Details ────────────────────────────────────────────────────────
 
-export async function getCheckInDetails(businessId: string, date?: string, cursor?: string) {
-  const targetDate = date ?? new Date().toISOString().slice(0, 10)
-  // Query BIZ_CHECKIN cache from app-data table
+/** Partition key for one business's cached check-in rows on one day. */
+function checkInDetailPk(businessId: string, date: string): string {
+  return `BIZ_CHECKIN#${businessId}#${date}`
+}
+
+/** One page of cached check-in rows for a day partition. */
+async function queryCheckInDetailPartition(pk: string, cursor?: string) {
   const params: Record<string, unknown> = {
     TableName: TableNames.appData,
     KeyConditionExpression: 'pk = :pk',
-    ExpressionAttributeValues: { ':pk': `BIZ_CHECKIN#${businessId}#${targetDate}` } as Record<string, string>,
+    ExpressionAttributeValues: { ':pk': pk } as Record<string, string>,
     ScanIndexForward: false,
     Limit: 50,
   }
   if (cursor) {
     ;(params as any).ExclusiveStartKey = JSON.parse(Buffer.from(cursor, 'base64url').toString())
   }
-  const result = await documentClient.send(new QueryCommand(params as any))
-  const items = (result.Items || []).map((i) => ({
+  return documentClient.send(new QueryCommand(params as any))
+}
+
+/**
+ * The instant a cached row describes. `timestamp` since the row shape settled;
+ * older rows carry only `sk` (`CHECKIN#{epochMs}#{checkInId}`), so the epoch ms
+ * is read out of it rather than guessed.
+ */
+function checkInRowInstantMs(row: Record<string, unknown>): number | null {
+  const timestamp = row['timestamp']
+  if (typeof timestamp === 'string') {
+    const parsed = Date.parse(timestamp)
+    if (!Number.isNaN(parsed)) return parsed
+  }
+  const sk = row['sk']
+  if (typeof sk === 'string') {
+    const parsed = Number(sk.split('#')[1])
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return null
+}
+
+function mapCheckInDetailRow(i: Record<string, unknown>) {
+  return {
     displayName: i['displayName'] as string,
     tier: i['tier'] as string,
     visitCount: (i['visitCount'] as number) ?? 1,
     timestamp: (i['timestamp'] as string) ?? (i['sk'] as string),
-  }))
-  const nextCursor = result.LastEvaluatedKey
-    ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64url')
-    : null
-  return { items, nextCursor }
+    // Rows cached before the Found_Via stamp shipped carry no attribute and read
+    // as `walk_in`, the same way the check-in row mapper reads them, so a
+    // pre-spec history never shows a source badge it never measured (R4.4).
+    foundVia: isFoundVia(i['foundVia']) ? i['foundVia'] : ('walk_in' as FoundVia),
+  }
+}
+
+/** The SAST date the UTC-keyed rows stop existing on (the Phase 1 deploy day). */
+const CHECK_IN_DETAIL_SAST_FROM = sastDateString(RECEIPT_MEASURED_FROM_ISO)
+/** The day before `date`, as a SAST calendar date. */
+function previousDate(date: string): string {
+  return sastDateString(Date.parse(`${date}T12:00:00.000Z`) - 24 * 60 * 60 * 1000)
+}
+
+/**
+ * Cached check-in rows for one SAST calendar day (proof-of-demand R15.8).
+ *
+ * The day is part of the partition key, so the key shape change cannot be
+ * backfilled by a rewrite: new rows are written under the SAST date
+ * (`check-in/service.ts`), and a date before the Phase 1 deploy boundary
+ * (`RECEIPT_MEASURED_FROM_ISO`) additionally reads the partition the old UTC
+ * date put those rows in. A SAST day starts at 22:00 UTC the day before, so the
+ * first two hours of SAST day D were UTC-keyed under D-1; both partitions are
+ * read and every row is filtered to the SAST day by its own timestamp, so a
+ * check-in is reported on exactly one day and never twice.
+ *
+ * The dual read is one page of history (the legacy partition is bounded by the
+ * same 50-row limit and `nextCursor` is null), because a pre-deploy date is a
+ * closed day the panel shows once, not a live feed. Current dates keep the
+ * single-partition cursor pagination unchanged.
+ *
+ * Decision recorded in `docs/decisions/proof-of-demand.md` (decision 11).
+ */
+export async function getCheckInDetails(businessId: string, date?: string, cursor?: string) {
+  const targetDate = date ?? sastDateString()
+
+  if (targetDate >= CHECK_IN_DETAIL_SAST_FROM) {
+    const result = await queryCheckInDetailPartition(checkInDetailPk(businessId, targetDate), cursor)
+    const items = (result.Items || []).map(mapCheckInDetailRow)
+    const nextCursor = result.LastEvaluatedKey
+      ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64url')
+      : null
+    return { items, nextCursor }
+  }
+
+  const [onDate, dayBefore] = await Promise.all([
+    queryCheckInDetailPartition(checkInDetailPk(businessId, targetDate)),
+    queryCheckInDetailPartition(checkInDetailPk(businessId, previousDate(targetDate))),
+  ])
+
+  const rows = [...(onDate.Items ?? []), ...(dayBefore.Items ?? [])]
+    .filter((row) => {
+      const instantMs = checkInRowInstantMs(row)
+      // A row we cannot place in time is not claimed for this day: an owner's
+      // "today" must not include a check-in nobody can date.
+      return instantMs !== null && sastDateString(instantMs) === targetDate
+    })
+    .sort((a, b) => (checkInRowInstantMs(b) ?? 0) - (checkInRowInstantMs(a) ?? 0))
+    .slice(0, 50)
+
+  return { items: rows.map(mapCheckInDetailRow), nextCursor: null }
 }
 
 // ─── Reward Metrics ─────────────────────────────────────────────────────────

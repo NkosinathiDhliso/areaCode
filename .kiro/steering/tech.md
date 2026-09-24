@@ -131,7 +131,10 @@ masking defaults (see `no-fallbacks-no-legacy.md`).
   `..._BUSINESS_USER_POOL_ID` / `..._BUSINESS_CLIENT_ID`,
   `..._STAFF_USER_POOL_ID` / `..._STAFF_CLIENT_ID`,
   `..._ADMIN_USER_POOL_ID` / `..._ADMIN_CLIENT_ID`.
-- Media storage: `AREA_CODE_S3_MEDIA_BUCKET`.
+- Media storage: `AREA_CODE_S3_MEDIA_BUCKET`, `AREA_CODE_MEDIA_CDN_URL`
+  (Media_CDN origin for server-rendered image URLs, e.g. the venue
+  Share_Preview `og:image`; same distribution as `VITE_CDN_URL`. Unset means no
+  venue image, so the preview uses the site default).
 - Async queues and invokes: `AREA_CODE_REPORT_QUEUE_URL`,
   `AREA_CODE_REWARD_QUEUE_URL`, `AREA_CODE_CAMPAIGN_SEND_QUEUE_URL`,
   `AREA_CODE_CAMPAIGN_DISPATCHER_FUNCTION` (campaign dispatcher Lambda name).

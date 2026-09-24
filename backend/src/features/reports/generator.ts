@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
+import { isFoundVia } from '@area-code/shared/constants/attribution'
 import { QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb'
 
 import { requireEnv } from '../../shared/config/env.js'
@@ -8,6 +9,8 @@ import { sendReportReadyEmail, sendDigestEmail } from '../../shared/email/ses.js
 import { getBusinessById } from '../auth/dynamodb-repository.js'
 import { getEffectiveTier } from '../business/service.js'
 import { getCheckInsByUser } from '../check-in/dynamodb-repository.js'
+import { listGoingMarks } from '../nodes/going-repository.js'
+import { goingNightFor, goingNightsForWeek } from '../nodes/going.js'
 import { getRedemptionsByRewardId, getRewardsByNodeId } from '../rewards/dynamodb-repository.js'
 import { listGuestClaimsSince } from '../rewards/guest-claim.js'
 
@@ -81,6 +84,13 @@ async function getBusinessNodes(businessId: string): Promise<Array<{ nodeId: str
 /**
  * Load all check-ins for a node within the reporting period.
  * Paginates through all results using the NodeIndex GSI.
+ *
+ * `foundVia` travels with the row (proof-of-demand R4.5): the digest path hands
+ * these rows straight to `computeReceipt`, so dropping the stamp here would make
+ * every check-in read as `walk_in` and the Monday digest would report zero
+ * Found_You for a week that measured some. An absent or unrecognised value is
+ * left undefined (`isFoundVia`), which `computeReceipt` already reads as a
+ * Walk_In, so a pre-deploy history is still never sold as demand.
  */
 async function loadCheckInsForNode(nodeId: string, periodStart: string, periodEnd: string): Promise<RawCheckIn[]> {
   const checkIns: RawCheckIn[] = []
@@ -112,6 +122,7 @@ async function loadCheckInsForNode(nodeId: string, periodStart: string, periodEn
         phone: item['phone'] as string | undefined,
         email: item['email'] as string | undefined,
         avatarUrl: item['avatarUrl'] as string | undefined,
+        ...(isFoundVia(item['foundVia']) ? { foundVia: item['foundVia'] } : {}),
       })
     }
 
@@ -119,6 +130,32 @@ async function loadCheckInsForNode(nodeId: string, periodStart: string, periodEn
   } while (lastKey)
 
   return checkIns
+}
+
+/**
+ * Map one projected `users` row to the tier and music-preference pair the digest
+ * needs. `musicPrefs` is null when the user has declared no genres, which is what
+ * `computeDigest` reads as "no taste signal".
+ */
+function readUserDataRow(item: Record<string, unknown>): {
+  userId: string
+  tier: string
+  musicPrefs: MusicPrefs | null
+} {
+  const genres = item['musicGenres'] as string[] | undefined
+  const musicPrefs: MusicPrefs | null =
+    genres && genres.length > 0
+      ? {
+          energy: (item['energy'] as number) ?? 50,
+          cultural_rootedness: (item['cultural_rootedness'] as number) ?? 50,
+          sophistication: (item['sophistication'] as number) ?? 50,
+          edge: (item['edge'] as number) ?? 50,
+          spirituality: (item['spirituality'] as number) ?? 50,
+          genres,
+        }
+      : null
+
+  return { userId: item['userId'] as string, tier: (item['tier'] as string) ?? 'local', musicPrefs }
 }
 
 /**
@@ -151,22 +188,7 @@ async function loadUserData(userIds: string[]): Promise<Map<string, { tier: stri
 
       const items = result.Responses?.[TableNames.users] || []
       for (const item of items) {
-        const userId = item['userId'] as string
-        const tier = (item['tier'] as string) ?? 'local'
-
-        let musicPrefs: MusicPrefs | null = null
-        const genres = item['musicGenres'] as string[] | undefined
-        if (genres && genres.length > 0) {
-          musicPrefs = {
-            energy: (item['energy'] as number) ?? 50,
-            cultural_rootedness: (item['cultural_rootedness'] as number) ?? 50,
-            sophistication: (item['sophistication'] as number) ?? 50,
-            edge: (item['edge'] as number) ?? 50,
-            spirituality: (item['spirituality'] as number) ?? 50,
-            genres,
-          }
-        }
-
+        const { userId, tier, musicPrefs } = readUserDataRow(item)
         userDataMap.set(userId, { tier, musicPrefs })
       }
     } catch (error) {
@@ -385,6 +407,24 @@ const EARLIEST_CHECKIN_PAGE_SIZE = 100
  * design for a GSI revisit at scale. A visitor absent from the map has no recorded
  * check-in at the business's nodes and is treated as a first-timer by computeDigest.
  */
+/**
+ * The earliest of `min` and any check-in on this page that happened at one of the
+ * business's nodes. ISO 8601 timestamps compare correctly lexicographically, so
+ * the comparison needs no parsing.
+ */
+function earliestAtNodes(
+  checkIns: readonly { nodeId: string; checkedInAt: string }[],
+  businessNodeIds: Set<string>,
+  min: string | undefined,
+): string | undefined {
+  let earliest = min
+  for (const checkIn of checkIns) {
+    if (!businessNodeIds.has(checkIn.nodeId)) continue
+    if (earliest === undefined || checkIn.checkedInAt < earliest) earliest = checkIn.checkedInAt
+  }
+  return earliest
+}
+
 async function loadEarliestCheckInByUser(
   businessNodeIds: Set<string>,
   userIds: string[],
@@ -397,11 +437,7 @@ async function loadEarliestCheckInByUser(
 
     do {
       const page = await getCheckInsByUser(userId, { limit: EARLIEST_CHECKIN_PAGE_SIZE, cursor })
-      for (const checkIn of page.checkIns) {
-        if (!businessNodeIds.has(checkIn.nodeId)) continue
-        // ISO 8601 timestamps compare correctly lexicographically.
-        if (min === undefined || checkIn.checkedInAt < min) min = checkIn.checkedInAt
-      }
+      min = earliestAtNodes(page.checkIns, businessNodeIds, min)
       cursor = page.nextCursor
     } while (cursor)
 
@@ -417,6 +453,21 @@ async function loadEarliestCheckInByUser(
  * read (rewards by node) to the redemption read (redemptions by reward), reusing
  * the rewards feature repository rather than forking a query.
  */
+/** Redemptions of one reward whose `redeemedAt` falls inside `[startMs, endMs)`. */
+function countRedeemedInWindow(
+  redemptions: readonly { redeemedAt?: string | null | undefined }[],
+  startMs: number,
+  endMs: number,
+): number {
+  let count = 0
+  for (const redemption of redemptions) {
+    if (!redemption.redeemedAt) continue
+    const redeemedMs = new Date(redemption.redeemedAt).getTime()
+    if (redeemedMs >= startMs && redeemedMs < endMs) count++
+  }
+  return count
+}
+
 async function countRedemptionsInWindow(
   nodeIds: string[],
   windowStartMs: number,
@@ -428,11 +479,7 @@ async function countRedemptionsInWindow(
     const rewards = await getRewardsByNodeId(nodeId)
     for (const reward of rewards) {
       const redemptions = await getRedemptionsByRewardId(reward.rewardId)
-      for (const redemption of redemptions) {
-        if (!redemption.redeemedAt) continue
-        const redeemedMs = new Date(redemption.redeemedAt).getTime()
-        if (redeemedMs >= windowStartMs && redeemedMs < windowEndMs) count++
-      }
+      count += countRedeemedInWindow(redemptions, windowStartMs, windowEndMs)
     }
   }
 
@@ -509,6 +556,83 @@ async function flipDigestEmailSent(businessId: string, weekStart: string): Promi
   }
 }
 
+/**
+ * The week's Going marks and how many of them also checked in (R9.8).
+ *
+ * Reads the Going rows for each (venue, night) of the Digest_Week, which are
+ * still live on the Monday pass by the TTL rule in `going.ts`, then joins them to
+ * the window check-ins in memory. Bounded and anchored: seven partition queries
+ * per venue, no scan.
+ *
+ * The join is on (venue, night, consumer). A check-in's night comes from the same
+ * `goingNightFor` rule the mark was keyed with, so a mark at 21:00 and an arrival
+ * at 01:30 belong to the same night rather than to two.
+ *
+ * Aggregate only: two integers leave this function and no identifier does
+ * (R9.9, R11.3).
+ *
+ * Returns `undefined` when the read fails. The digest then says nothing about
+ * Going for the week rather than reporting a zero nobody measured
+ * (`honest-presence.md`); the failure is logged at error level, not swallowed.
+ */
+/**
+ * Going marks for one venue across every night of the Digest_Week, and how many
+ * of those marks turned into a check-in. `arrived` holds the
+ * `venue|night|consumer` triples that produced one, so the join is a set
+ * membership test. A read failure throws to the caller, which is what turns the
+ * Going line off for the whole digest rather than reporting a partial count.
+ */
+async function tallyGoingForNode(
+  nodeId: string,
+  weekStartIso: string,
+  nowSeconds: number,
+  arrived: Set<string>,
+): Promise<{ marks: number; checkedIn: number }> {
+  let marks = 0
+  let checkedIn = 0
+
+  for (const night of goingNightsForWeek(weekStartIso)) {
+    for (const mark of await listGoingMarks(nodeId, night, nowSeconds)) {
+      marks++
+      if (arrived.has(`${nodeId}|${night}|${mark.userId}`)) checkedIn++
+    }
+  }
+
+  return { marks, checkedIn }
+}
+
+async function loadGoingForWeek(
+  nodeIds: string[],
+  weekStartIso: string,
+  windowCheckIns: RawCheckIn[],
+): Promise<{ marks: number; checkedIn: number } | undefined> {
+  if (nodeIds.length === 0) return { marks: 0, checkedIn: 0 }
+
+  // (venue, night, consumer) triples that produced a check-in, so the join is a
+  // set membership test rather than a nested loop over the week.
+  const arrived = new Set<string>()
+  for (const checkIn of windowCheckIns) {
+    arrived.add(`${checkIn.nodeId}|${goingNightFor(checkIn.checkedInAt)}|${checkIn.userId}`)
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000)
+  let marks = 0
+  let checkedIn = 0
+
+  try {
+    for (const nodeId of nodeIds) {
+      const tally = await tallyGoingForNode(nodeId, weekStartIso, nowSeconds, arrived)
+      marks += tally.marks
+      checkedIn += tally.checkedIn
+    }
+  } catch (err) {
+    console.error(`[generator] Going read failed for week ${weekStartIso}; digest reports no Going line`, err)
+    return undefined
+  }
+
+  return { marks, checkedIn }
+}
+
 async function runDigestPath(
   businessId: string,
   nodes: Array<{ nodeId: string; nodeName: string }>,
@@ -532,6 +656,7 @@ async function runDigestPath(
     windowEndMs,
   )
   const shares = await getNodeShareCountsForWeek(nodeIds, week.weekStartIso)
+  const going = await loadGoingForWeek(nodeIds, week.weekStartIso, windowCheckIns)
 
   const sources: DigestSources = {
     windowCheckIns,
@@ -540,6 +665,7 @@ async function runDigestPath(
     firstGetIssued,
     firstGetConversions,
     shares,
+    ...(going ? { going } : {}),
   }
 
   // Prior-week metrics for deltas are read BEFORE the conditional put, so

@@ -26,6 +26,16 @@ export interface SelectionState {
   carouselOrder: string[]
   openedFromFocus: boolean
   /**
+   * The {@link SelectionSource} of the most recent {@link selectVenue}, or null
+   * when the Active_Venue last changed by another path (a carousel step, a
+   * spotlight, a re-open) or nothing is selected.
+   *
+   * Read by the Commit_Mode Venue_Open so an open that followed a search reads
+   * as `search` and every other in-app open reads as `map` (proof-of-demand
+   * R2.1). Client-memory only; never persisted.
+   */
+  lastSelectionSource: SelectionSource | null
+  /**
    * The id of the most recently active venue, retained after `dismiss` so the
    * carousel can be re-opened on the last venue without a fresh selection
    * gesture. Cleared only when a new venue is selected (it tracks that venue
@@ -104,6 +114,7 @@ export const useSelectionStore = create<SelectionState>()(
     openedFromFocus: false,
     lastVenueId: null,
     spotlightVenueId: null,
+    lastSelectionSource: null,
 
     // Sets the Active_Venue from any input source. Opens Peek_Carousel into
     // Browse_Mode when it was closed, and preserves the current open mode
@@ -121,6 +132,7 @@ export const useSelectionStore = create<SelectionState>()(
         state.activeVenueId = id
         state.lastVenueId = id
         state.openedFromFocus = source === 'focus'
+        state.lastSelectionSource = source
         if (state.mode === 'closed') {
           state.mode = 'browse'
         }
@@ -145,6 +157,9 @@ export const useSelectionStore = create<SelectionState>()(
         const nextId = carouselOrder[nextIndex]
         if (nextId !== undefined) {
           state.activeVenueId = nextId
+          // A step is not a fresh selection gesture: the search (or marker)
+          // source belonged to the venue we just stepped off.
+          state.lastSelectionSource = null
         }
       }),
 
@@ -181,6 +196,7 @@ export const useSelectionStore = create<SelectionState>()(
         state.activeVenueId = null
         state.mode = 'closed'
         state.openedFromFocus = false
+        state.lastSelectionSource = null
         // A closed carousel never leaves a stale isolation (invariant I1).
         state.spotlightVenueId = null
       }),
@@ -193,6 +209,7 @@ export const useSelectionStore = create<SelectionState>()(
         if (state.lastVenueId === null) return
         state.activeVenueId = state.lastVenueId
         state.openedFromFocus = false
+        state.lastSelectionSource = null
         if (state.mode === 'closed') {
           state.mode = 'browse'
         }
@@ -208,6 +225,7 @@ export const useSelectionStore = create<SelectionState>()(
           state.activeVenueId = null
           state.mode = 'closed'
           state.openedFromFocus = false
+          state.lastSelectionSource = null
           // A closed carousel never leaves a stale isolation (invariant I1).
           state.spotlightVenueId = null
           return
@@ -218,6 +236,7 @@ export const useSelectionStore = create<SelectionState>()(
         state.activeVenueId = target
         state.lastVenueId = target
         state.openedFromFocus = false
+        state.lastSelectionSource = null
         state.mode = 'browse'
       }),
 
@@ -236,6 +255,7 @@ export const useSelectionStore = create<SelectionState>()(
         state.activeVenueId = id
         state.lastVenueId = id
         state.openedFromFocus = false
+        state.lastSelectionSource = null
         if (state.mode === 'closed') {
           state.mode = 'browse'
         }

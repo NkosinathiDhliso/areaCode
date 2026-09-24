@@ -23,14 +23,16 @@
  *     (R14.6);
  *   - failing safe when offline - a check-in attempted with no connectivity
  *     surfaces a failure and never reports a false success (R19.3);
- *   - preventing duplicate submissions while a request is in flight (R14.8).
+ *   - preventing duplicate submissions while a request is in flight (R14.8),
+ *     claiming the guard before the awaited location request so a double tap
+ *     cannot start two geolocation attempts (R15.23).
  *
  * This feature is strictly client-side UI: it adds no backend service and no
  * always-on resource (serverless-only rule), and the only auth entry it can
  * open is the `SignInSheet`.
  *
  * Feature: map-discovery-experience
- * Validates: Requirements 14.2, 14.3, 14.4, 14.5, 14.6, 14.8, 19.3, 20.1
+ * Validates: Requirements 14.2, 14.3, 14.4, 14.5, 14.6, 14.8, 19.3, 20.1, 15.23
  */
 
 import { useCheckIn, useGeolocation } from '@area-code/shared/hooks'
@@ -109,33 +111,60 @@ export function useCheckInFlow(params: UseCheckInFlowParams = {}): CheckInFlow {
    * Local in-flight guard. `useCheckIn` already guards its own request with an
    * in-flight ref, but `activateCheckIn` performs an awaited `requestLocation`
    * *before* calling `checkIn`, so two rapid activations could both clear that
-   * pre-step before either reaches the request. This ref closes that window so
-   * exactly one submission is ever in flight (R14.8 / Property 22).
+   * pre-step before either reaches the request. The ref is claimed by
+   * `beginSubmit` at the very first synchronous step of an activation, before
+   * any await, so exactly one submission is ever in flight (R14.8 / R15.23).
    */
   const submittingRef = useRef(false)
 
-  // The CTA presentation is a pure function of the live Geo_Status, the QR
-  // fallback flag, and the pending flag (R14.1, R10.6, R10.7).
-  const ctaInfo = getCtaInfo({ geoStatus, qrFallback, pending: isPending })
+  /**
+   * Render-visible mirror of `submittingRef`. The ref alone cannot disable the
+   * CTA, because writing a ref does not re-render; this state makes the button
+   * disabled from the first tap, while geolocation is still being acquired
+   * (R15.23, code-style loading-state rule).
+   */
+  const [submitting, setSubmitting] = useState(false)
 
   /**
-   * Submit a check-in for the given payload, guarding against duplicate and
-   * offline submissions. Returns whether a submission was actually performed.
+   * Claim the in-flight guard. Returns false when a submission is already
+   * running, in which case the caller must do nothing at all. Callers that get
+   * `true` own the guard and MUST release it through `endSubmit`.
+   */
+  const beginSubmit = useCallback((): boolean => {
+    if (submittingRef.current || isPending) return false
+    submittingRef.current = true
+    setSubmitting(true)
+    return true
+  }, [isPending])
+
+  /** Release the in-flight guard and re-enable the CTA. */
+  const endSubmit = useCallback(() => {
+    submittingRef.current = false
+    setSubmitting(false)
+  }, [])
+
+  // The CTA presentation is a pure function of the live Geo_Status, the QR
+  // fallback flag, and the pending flag (R14.1, R10.6, R10.7). `submitting`
+  // covers the pre-request window (acquiring a fix) that `isPending` misses.
+  const ctaInfo = getCtaInfo({ geoStatus, qrFallback, pending: isPending || submitting })
+
+  /**
+   * Submit a check-in for the given payload, guarding against offline
+   * submissions. Returns whether a submission was actually performed.
+   *
+   * The caller MUST already hold the in-flight guard (`beginSubmit`); this
+   * function releases it on every exit path.
    */
   const submitCheckIn = useCallback(
     async (payload: CheckInRequest): Promise<boolean> => {
-      // Prevent duplicate submissions while a request is already in flight
-      // (R14.8). The guard wraps the entire await chain, not just the request.
-      if (submittingRef.current || isPending) return false
-
       // Fail safe when offline: surface a failure and never attempt a request
       // that could be misreported as success (R19.3 / Property 30).
       if (connectivity === 'offline') {
         showError(t('checkin.offline', 'You are offline. Reconnect to check in.'))
+        endSubmit()
         return false
       }
 
-      submittingRef.current = true
       try {
         const result = await checkIn(payload)
         if (result) {
@@ -162,10 +191,10 @@ export function useCheckInFlow(params: UseCheckInFlowParams = {}): CheckInFlow {
         }
         return false
       } finally {
-        submittingRef.current = false
+        endSubmit()
       }
     },
-    [isPending, connectivity, showError, t, checkIn, onCheckInSuccess, errorStatusRef, enqueueOutbox],
+    [connectivity, showError, t, checkIn, onCheckInSuccess, errorStatusRef, enqueueOutbox, endSubmit],
   )
 
   /**
@@ -191,6 +220,11 @@ export function useCheckInFlow(params: UseCheckInFlowParams = {}): CheckInFlow {
       return
     }
 
+    // Claim the guard synchronously, before the awaited `requestLocation`, so a
+    // double tap cannot start two geolocation attempts and the CTA is disabled
+    // from the first tap (R15.23).
+    if (!beginSubmit()) return
+
     void (async () => {
       // Acquire a fresh fix before checking in. A poor-accuracy fix is still
       // allowed through so the server can decide (and, if too far, trigger the
@@ -198,6 +232,7 @@ export function useCheckInFlow(params: UseCheckInFlowParams = {}): CheckInFlow {
       // scanner instead of silently doing nothing.
       const pos = await requestLocation()
       if (!pos && geoStatus !== 'poorAccuracy') {
+        endSubmit()
         setQrScannerOpen(true)
         return
       }
@@ -208,7 +243,7 @@ export function useCheckInFlow(params: UseCheckInFlowParams = {}): CheckInFlow {
         ...(pos ? { lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy } : {}),
       })
     })()
-  }, [activeNode, isAuthenticated, qrFallback, requestLocation, geoStatus, submitCheckIn])
+  }, [activeNode, isAuthenticated, qrFallback, requestLocation, geoStatus, submitCheckIn, beginSubmit, endSubmit])
 
   /**
    * Handler for a decoded QR payload from `QrScannerSheet`. A valid Area Code
@@ -226,6 +261,9 @@ export function useCheckInFlow(params: UseCheckInFlowParams = {}): CheckInFlow {
         return
       }
 
+      // Same guard as the CTA path: one submission at a time (R14.8, R15.23).
+      if (!beginSubmit()) return
+
       resetQrFallback()
       void submitCheckIn({
         nodeId: parsed.nodeId,
@@ -233,7 +271,7 @@ export function useCheckInFlow(params: UseCheckInFlowParams = {}): CheckInFlow {
         qrToken: parsed.token,
       })
     },
-    [showError, t, resetQrFallback, submitCheckIn],
+    [showError, t, resetQrFallback, submitCheckIn, beginSubmit],
   )
 
   const closeSignIn = useCallback(() => setSignInOpen(false), [])

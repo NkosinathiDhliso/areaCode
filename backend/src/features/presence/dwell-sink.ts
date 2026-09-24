@@ -20,6 +20,7 @@ import { PutCommand } from '@aws-sdk/lib-dynamodb'
 
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { generateId } from '../../shared/db/entities.js'
+import { sastDateString } from '../../shared/time/sast.js'
 import { isPeakHour } from '../../workers/pulse-decay.js'
 import type { DwellRow, DwellTermination } from '../check-out/types.js'
 
@@ -30,9 +31,6 @@ import type { DwellRow, DwellTermination } from '../check-out/types.js'
  * TTL deletion timing.
  */
 const DWELL_ROW_TTL_SECONDS = 365 * 24 * 60 * 60
-
-/** Milliseconds offset for SAST (UTC+2). */
-const SAST_OFFSET_MS = 2 * 60 * 60 * 1000
 
 /**
  * Input for a single dwell-row write. These are exactly the facts a record end
@@ -49,19 +47,6 @@ export interface WriteDwellRowInput {
   termination: DwellTermination
   /** Epoch seconds at which the record ended (check-out time, or `expiresAt` on expiry). */
   endedAt: number
-}
-
-/**
- * Compute the SAST (UTC+2) calendar date as `yyyy-mm-dd` for an epoch-seconds
- * instant. Shifting the instant by +2h and reading the UTC date parts yields the
- * civil date in South Africa without pulling in a timezone library.
- */
-function sastDateString(endedAtEpochSeconds: number): string {
-  const sast = new Date(endedAtEpochSeconds * 1000 + SAST_OFFSET_MS)
-  const year = sast.getUTCFullYear()
-  const month = String(sast.getUTCMonth() + 1).padStart(2, '0')
-  const day = String(sast.getUTCDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
 }
 
 /**
@@ -94,7 +79,8 @@ export async function writeDwellRow(input: WriteDwellRowInput): Promise<DwellRow
     ttl,
   }
 
-  const datePartition = sastDateString(endedAt)
+  // `endedAt` is epoch seconds; the shared helper reads epoch milliseconds.
+  const datePartition = sastDateString(endedAt * 1000)
   const recordId = generateId()
 
   await documentClient.send(

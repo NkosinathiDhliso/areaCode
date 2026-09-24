@@ -1,6 +1,7 @@
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2'
 
 import { AWS_REGION } from '../config/env.js'
+import { escapeHtml } from '../html/escape.js'
 
 const ses = new SESv2Client({ region: AWS_REGION })
 const FROM_EMAIL = process.env['AREA_CODE_FROM_EMAIL'] ?? 'noreply@areacode.co.za'
@@ -27,18 +28,37 @@ export async function sendPasswordResetEmail(to: string, code: string) {
   )
 }
 
-export async function sendTrialExpiryEmail(to: string, businessName: string, daysLeft: number) {
+/**
+ * Trial reminder (proof-of-demand R6.1, R6.3).
+ *
+ * Renderer only, like `sendDigestEmail`: `receiptLines` are the already-built
+ * sentences from `buildReceiptCopy` (via `getReceiptEmailLines`), so the trial
+ * email, the Plans panel and the Monday digest word the same fact identically
+ * and this module never re-derives a count or a claim. An empty array means the
+ * Receipt could not be computed for this business, and the email says less
+ * rather than reporting a number it cannot stand behind.
+ *
+ * The zero-Found_You branch arrives here as the Onboarding_Checklist next step
+ * inside `receiptLines`, which is why the body closes on exactly one CTA (the
+ * Plans panel): a second link would split the one decision the email asks for.
+ */
+export async function sendTrialExpiryEmail(to: string, businessName: string, daysLeft: number, receiptLines: string[]) {
+  const dayWord = daysLeft === 1 ? 'day' : 'days'
+  const body = lifecycleEmailBody(
+    businessName,
+    receiptLines,
+    `Your free trial ends in ${daysLeft} ${dayWord}. Choose a plan to keep your venues on the map.`,
+  )
   await ses.send(
     new SendEmailCommand({
       FromEmailAddress: FROM_EMAIL,
       Destination: { ToAddresses: [to] },
       Content: {
         Simple: {
-          Subject: { Data: `Your Area Code trial ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'}` },
+          Subject: { Data: `Your Area Code trial ends in ${daysLeft} ${dayWord}` },
           Body: {
-            Text: {
-              Data: `Hi ${businessName},\n\nYour free trial ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. Subscribe to keep your Growth/Pro features.\n\nVisit your Plans panel to choose a plan.`,
-            },
+            Text: { Data: body.text },
+            Html: { Data: body.html },
           },
         },
       },
@@ -88,9 +108,23 @@ export async function sendRenewalReminderEmail(to: string, businessName: string)
  * for both copies would be a lie in one of the two states. Transactional,
  * email-only, no SMS or phone path (no-sms-no-phone-auth.md). Follows the
  * `sendTrialExpiryEmail` shape.
+ *
+ * Carries the paid-period Receipt (proof-of-demand R6.4): `receiptLines` are
+ * the same `buildReceiptCopy` sentences the trial email and the Plans panel
+ * render, for the window the owner is deciding about.
  */
-export async function sendRenewalUpcomingEmail(to: string, businessName: string, daysLeft: number) {
+export async function sendRenewalUpcomingEmail(
+  to: string,
+  businessName: string,
+  daysLeft: number,
+  receiptLines: string[],
+) {
   const dayWord = daysLeft === 1 ? 'day' : 'days'
+  const body = lifecycleEmailBody(
+    businessName,
+    receiptLines,
+    `Your Area Code subscription expires in ${daysLeft} ${dayWord}. Renew to keep your venues on the map.`,
+  )
   await ses.send(
     new SendEmailCommand({
       FromEmailAddress: FROM_EMAIL,
@@ -99,9 +133,8 @@ export async function sendRenewalUpcomingEmail(to: string, businessName: string,
         Simple: {
           Subject: { Data: `Your Area Code subscription renews in ${daysLeft} ${dayWord}` },
           Body: {
-            Text: {
-              Data: `Hi ${businessName},\n\nYour Area Code subscription expires in ${daysLeft} ${dayWord}. Renew from your Plans panel to keep your Growth/Pro features and keep your venues on the map.`,
-            },
+            Text: { Data: body.text },
+            Html: { Data: body.html },
           },
         },
       },
@@ -151,15 +184,6 @@ export async function sendCampaignEmail(
       },
     }),
   )
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 }
 
 /**
@@ -251,11 +275,43 @@ export async function sendDigestEmail(
 
 /**
  * Base URL of the business portal (Reports/Plans panels live here). Mirrors the
- * `webBaseUrl()` accessor in auth/service.ts; the default matches the prod
- * business subdomain in `shared/security/origins.ts`.
+ * `webBaseUrl()` accessor in `shared/config/env.ts`; the default matches the
+ * prod business subdomain in `shared/security/origins.ts`.
  */
 function businessPortalBaseUrl(): string {
   return (process.env['AREA_CODE_BUSINESS_URL'] ?? 'https://business.areacode.co.za').replace(/\/+$/, '')
+}
+
+/**
+ * The body shared by the two lifecycle emails that carry a Receipt (the trial
+ * reminder and the pre-lapse renewal reminder, proof-of-demand R6.1, R6.4).
+ *
+ * Render order is Receipt first, then the state of the window, then exactly one
+ * CTA: the owner reads what was measured before being asked to decide. The CTA
+ * is the Plans panel and nothing else, in both the text and the HTML body, so
+ * each email asks for exactly one action. Every dynamic value in the HTML body
+ * is escaped.
+ */
+function lifecycleEmailBody(
+  businessName: string,
+  receiptLines: string[],
+  stateLine: string,
+): { text: string; html: string } {
+  const ctaUrl = `${businessPortalBaseUrl()}/plans`
+  const paragraphs = [`Hi ${businessName},`, ...receiptLines, stateLine]
+
+  const text = `${paragraphs.join('\n\n')}\n\nOpen your Plans panel:\n${ctaUrl}`
+
+  const htmlParagraphs = paragraphs
+    .map((line) => `<p style="color:#444;font-size:15px;line-height:1.5;margin:0 0 12px">${escapeHtml(line)}</p>`)
+    .join('')
+  const html =
+    `<div style="font-family:sans-serif;max-width:440px;margin:0 auto;padding:24px">${htmlParagraphs}` +
+    `<p style="margin:24px 0"><a href="${escapeHtml(ctaUrl)}" style="background:#6366f1;color:#fff;` +
+    `text-decoration:none;padding:12px 24px;border-radius:10px;font-weight:600;display:inline-block">` +
+    `Open your Plans panel</a></p></div>`
+
+  return { text, html }
 }
 
 /**

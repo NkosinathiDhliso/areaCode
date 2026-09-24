@@ -78,11 +78,15 @@ export function ProximityNudgeBanner({ onNavigate }: ProximityNudgeBannerProps) 
           dismiss()
           onNavigate('map')
         }}
-        className="bg-[var(--accent-cta)] text-white text-xs font-medium rounded-xl px-3 py-1.5 shrink-0"
+        className="bg-[var(--accent-cta)] text-white text-xs font-medium rounded-xl px-3 min-h-11 shrink-0 flex items-center justify-center active:scale-95 transition-transform"
       >
         Check in
       </button>
-      <button onClick={dismiss} aria-label="Dismiss" className="text-[var(--text-muted)] shrink-0">
+      <button
+        onClick={dismiss}
+        aria-label="Dismiss"
+        className="w-11 h-11 -mr-1.5 rounded-xl text-[var(--text-muted)] shrink-0 flex items-center justify-center active:scale-95 transition-transform"
+      >
         <X size={18} strokeWidth={1.5} />
       </button>
     </div>

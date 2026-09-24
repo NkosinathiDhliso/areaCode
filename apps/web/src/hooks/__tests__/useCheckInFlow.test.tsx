@@ -90,6 +90,73 @@ describe('Feature: map-discovery-experience, Property 22: In-progress check-in p
   })
 })
 
+describe('Proof of Demand R15.23: the guard is claimed before geolocation', () => {
+  it('starts one geolocation attempt and one check-in for a double tap', async () => {
+    let resolvePosition: (v: { lat: number; lng: number } | null) => void = () => {}
+    mock.state.requestLocation = vi
+      .fn()
+      .mockImplementation(() => new Promise<{ lat: number; lng: number } | null>((res) => (resolvePosition = res)))
+
+    const { result } = renderHook(() => useCheckInFlow())
+
+    // Two taps inside the awaited location request: the second is a no-op.
+    act(() => {
+      result.current.activateCheckIn()
+      result.current.activateCheckIn()
+    })
+
+    expect(mock.state.requestLocation).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolvePosition({ lat: -26.2, lng: 28.04 })
+      await flush()
+    })
+
+    expect(mock.state.checkIn).toHaveBeenCalledTimes(1)
+  })
+
+  it('disables the CTA from the first tap, while the fix is still being acquired', async () => {
+    let resolvePosition: (v: { lat: number; lng: number } | null) => void = () => {}
+    mock.state.requestLocation = vi
+      .fn()
+      .mockImplementation(() => new Promise<{ lat: number; lng: number } | null>((res) => (resolvePosition = res)))
+
+    const { result } = renderHook(() => useCheckInFlow())
+    expect(result.current.ctaInfo.disabled).toBe(false)
+
+    act(() => {
+      result.current.activateCheckIn()
+    })
+
+    // `isPending` is still false here: the request has not been made yet. The
+    // CTA must already be disabled (R15.23).
+    expect(mock.state.isPending).toBe(false)
+    expect(result.current.ctaInfo.disabled).toBe(true)
+
+    await act(async () => {
+      resolvePosition({ lat: -26.2, lng: 28.04 })
+      await flush()
+    })
+
+    expect(result.current.ctaInfo.disabled).toBe(false)
+  })
+
+  it('re-enables the CTA when no fix can be acquired and the QR scanner opens', async () => {
+    mock.state.requestLocation = vi.fn().mockResolvedValue(null)
+
+    const { result } = renderHook(() => useCheckInFlow())
+
+    await act(async () => {
+      result.current.activateCheckIn()
+      await flush()
+    })
+
+    expect(result.current.qrScannerOpen).toBe(true)
+    expect(result.current.ctaInfo.disabled).toBe(false)
+    expect(mock.state.checkIn).not.toHaveBeenCalled()
+  })
+})
+
 describe('Feature: map-discovery-experience, Property 30: Offline check-in fails safe', () => {
   it('surfaces an error and never submits when offline', async () => {
     useConnectivityStore.setState({ state: 'offline' })

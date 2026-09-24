@@ -1,8 +1,17 @@
 // DynamoDB-backed cleanup worker (replaces Prisma)
-import { ScanCommand, QueryCommand, DeleteCommand, UpdateCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb'
+import {
+  ScanCommand,
+  QueryCommand,
+  DeleteCommand,
+  UpdateCommand,
+  BatchWriteCommand,
+  type QueryCommandInput,
+  type ScanCommandInput,
+} from '@aws-sdk/lib-dynamodb'
 
 import { deleteUser, getUserById } from '../features/auth/dynamodb-repository.js'
 import { deleteCheckInsByUser } from '../features/check-in/dynamodb-repository.js'
+import { deleteGoingRowsForUser } from '../features/nodes/going-repository.js'
 import { deleteUserByUsername } from '../shared/cognito/client.js'
 import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 import { deleteConnectionsByUser } from '../shared/websocket/broadcast.js'
@@ -31,17 +40,16 @@ import { deleteConnectionsByUser } from '../shared/websocket/broadcast.js'
 // 7-year horizon.
 export const RETENTION_YEARS_MS = 7 * 365.25 * 24 * 60 * 60 * 1000
 
-// ─── Digest 12-month retention ──────────────────────────────────────────────
+// ─── 12-month retention (owner-facing history rows) ─────────────────────────
 //
-// See `.kiro/specs/weekly-attribution-digest/` requirement 3.2.
-//
-// `Digest_Row` rows (pk `DIGEST#<businessId>`, sk `WEEK#<weekStartIso>`)
-// carry no DynamoDB `ttl` attribute, consistent with the other audited rows.
-// Their 12-month retention is enforced here by the daily `cleanup` worker,
-// the same pattern as the 7-year booster retention sweeps above. The
-// `365.25` factor absorbs leap years across the 12-month horizon, matching
-// the booster factor style. The boundary is strict greater-than (below).
-export const DIGEST_RETENTION_MS = 365.25 * 24 * 60 * 60 * 1000
+// weekly-attribution-digest R3.2 and proof-of-demand R7.2. Two row types share
+// this horizon, so they share one constant: `Digest_Row` (pk
+// `DIGEST#<businessId>`) and the closed-window Boost_Scoreboard cache row (pk
+// `KV#boost:score:<boostPk>:<boostSk>`). Neither carries a DynamoDB `ttl`,
+// consistent with the audited booster rows, so retention is enforced here by
+// the daily worker. `365.25` absorbs leap years; the boundary is strict
+// greater-than (below).
+export const RETENTION_TWELVE_MONTHS_MS = 365.25 * 24 * 60 * 60 * 1000
 
 // Per-invocation, per-row-type delete budget. Paginated batches are 25 items
 // (DynamoDB `BatchWriteItem` hard limit), so 1000 deletes ≈ 40 batches per
@@ -99,7 +107,19 @@ export function isIdempotencyMarkerExpired(row: { createdAt?: unknown }, nowMs: 
 export function isDigestRowExpired(row: { createdAt?: unknown }, nowMs: number): boolean {
   const ms = parseIsoToMs(row.createdAt)
   if (ms === null) return false
-  return nowMs - ms > DIGEST_RETENTION_MS
+  return nowMs - ms > RETENTION_TWELVE_MONTHS_MS
+}
+
+/**
+ * Pure predicate — true iff a closed-window Boost_Scoreboard cache row is
+ * older than the 12-month horizon at `nowMs` (R7.2). `kvSet` stamps
+ * `updatedAt` and no `ttl`, so `updatedAt` is the write instant and the only
+ * reference available. Strict greater-than; malformed values yield false.
+ */
+export function isBoostScoreboardCacheExpired(row: { updatedAt?: unknown }, nowMs: number): boolean {
+  const ms = parseIsoToMs(row.updatedAt)
+  if (ms === null) return false
+  return nowMs - ms > RETENTION_TWELVE_MONTHS_MS
 }
 
 async function batchDeleteKeys(keys: Array<{ pk: string; sk: string }>): Promise<void> {
@@ -114,6 +134,52 @@ async function batchDeleteKeys(keys: Array<{ pk: string; sk: string }>): Promise
       }),
     )
   }
+}
+
+/**
+ * Delete every app-data row that names this consumer and return the row count
+ * for the erasure audit log. Two anchored sets, no full-table scan (R2.4):
+ * partitions the user owns, and the GSI1 partitions that embed the user id
+ * (reverse edges and admin messages), which keeps the coverage the old
+ * `contains(sk)` scan had while staying anchored.
+ */
+async function deleteAppDataForUser(userId: string): Promise<number> {
+  // Rows the user owns (partition key IS the user).
+  const ownedPartitions = [
+    `USER#${userId}`, // consent (sk CONSENT#{id}); Going mirrors already gone above
+    `FOLLOW#${userId}`, // outgoing follow edges
+    `BLOCK#${userId}`, // outgoing block edges
+    `NOTIF#${userId}`, // in-app notifications
+    `NOTIF_PREFS#${userId}`, // notification preferences
+    `USER_TOKEN#${userId}`, // web-push device tokens
+    `MILESTONE#${userId}`, // milestones / achievements
+    `COPTOUT#${userId}`, // campaign opt-outs
+  ]
+  const referencingGsi1Partitions = [
+    `FOLLOWERS#${userId}`, // others following this user
+    `BLOCKED_BY#${userId}`, // others who blocked this user
+    `USER_MESSAGES#${userId}`, // admin messages addressed to this user
+  ]
+
+  let deleted = 0
+  for (const partition of ownedPartitions) {
+    deleted += await deleteAppDataPartition(partition)
+  }
+  for (const partition of referencingGsi1Partitions) {
+    deleted += await deleteAppDataPartition(partition, { index: 'GSI1' })
+  }
+  return deleted
+}
+
+/**
+ * The `{pk, sk}` of a scanned row, or null when either key is absent or not a
+ * string. A row we cannot address is a row we must not try to delete.
+ */
+function retentionKeyOf(item: Record<string, unknown>): { pk: string; sk: string } | null {
+  const pk = item['pk']
+  const sk = item['sk']
+  if (typeof pk !== 'string' || typeof sk !== 'string') return null
+  return { pk, sk }
 }
 
 /**
@@ -141,19 +207,15 @@ async function sweepExpiredRows(args: {
       ExpressionAttributeValues: expressionAttributeValues,
     }
     if (cursor) params['ExclusiveStartKey'] = cursor
-    const result = await documentClient.send(new ScanCommand(params as any))
+    const result = await documentClient.send(new ScanCommand(params as ScanCommandInput))
     const items = (result.Items ?? []) as Array<Record<string, unknown>>
 
     const expiredKeys: Array<{ pk: string; sk: string }> = []
     for (const item of items) {
       if (deleted + expiredKeys.length >= RETENTION_MAX_DELETES_PER_RUN_PER_TYPE) break
-      if (predicate(item, nowMs)) {
-        const pk = item['pk']
-        const sk = item['sk']
-        if (typeof pk === 'string' && typeof sk === 'string') {
-          expiredKeys.push({ pk, sk })
-        }
-      }
+      if (!predicate(item, nowMs)) continue
+      const key = retentionKeyOf(item)
+      if (key) expiredKeys.push(key)
     }
 
     if (expiredKeys.length > 0) {
@@ -191,7 +253,7 @@ async function deleteAppDataPartition(partitionValue: string, opts?: { index: 'G
     if (opts?.index) params['IndexName'] = opts.index
     if (cursor) params['ExclusiveStartKey'] = cursor
 
-    const page = await documentClient.send(new QueryCommand(params as any))
+    const page = await documentClient.send(new QueryCommand(params as QueryCommandInput))
     for (const item of page.Items || []) {
       const pk = item['pk']
       const sk = item['sk']
@@ -227,7 +289,7 @@ export async function handler() {
       ExpressionAttributeValues: { ':prefix': 'ERASURE#', ':pending': 'pending', ':cutoff': thirtyDaysAgo },
     }
     if (erasureCursor) erasureParams['ExclusiveStartKey'] = erasureCursor
-    const erasureResult = await documentClient.send(new ScanCommand(erasureParams as any))
+    const erasureResult = await documentClient.send(new ScanCommand(erasureParams as ScanCommandInput))
     for (const req of erasureResult.Items || []) erasureRequests.push(req)
     erasureCursor = erasureResult.LastEvaluatedKey as Record<string, unknown> | undefined
   } while (erasureCursor)
@@ -287,35 +349,23 @@ export async function handler() {
       //  - ABUSE#{flagId} (sk USER#{userId}) — moderation/safety records with
       //    no per-user anchor; deleting them would require the very full-table
       //    scan R2.4 removes. Flagged, not silently dropped.
+      // Going pairs (proof-of-demand R9.9). Must run BEFORE the `USER#{userId}`
+      // partition sweep below: that sweep removes the mirror rows, and the mirror
+      // row is the only anchor that names the venue partition the countable row
+      // lives in. Deleted the other way round, the venue rows would be orphaned
+      // and the owner's Going count would keep including a person who no longer
+      // exists.
+      //
+      // Both rows of each pair go through the Going repository's own transaction,
+      // so the count drops by exactly the marks this person made. Query-anchored
+      // on `pk USER#{userId}` with `begins_with(sk, 'GOING#')`: no scan.
       if (userId) {
-        // Rows the user owns (partition key IS the user).
-        const ownedPartitions = [
-          `USER#${userId}`, // consent (sk CONSENT#{id})
-          `FOLLOW#${userId}`, // outgoing follow edges
-          `BLOCK#${userId}`, // outgoing block edges
-          `NOTIF#${userId}`, // in-app notifications
-          `NOTIF_PREFS#${userId}`, // notification preferences
-          `USER_TOKEN#${userId}`, // web-push device tokens
-          `MILESTONE#${userId}`, // milestones / achievements
-          `COPTOUT#${userId}`, // campaign opt-outs
-        ]
-        // Rows owned by other entities that persist this user's id, anchored
-        // via the GSI1 partition that embeds the user (reverse edges + admin
-        // messages). Keeps the coverage the old contains(sk) scan had, still
-        // anchored (no full-table scan).
-        const referencingGsi1Partitions = [
-          `FOLLOWERS#${userId}`, // others following this user
-          `BLOCKED_BY#${userId}`, // others who blocked this user
-          `USER_MESSAGES#${userId}`, // admin messages addressed to this user
-        ]
+        const goingPairsDeleted = await deleteGoingRowsForUser(userId)
+        console.log(`[cleanup] Erasure ${userId}: going pairs deleted=${goingPairsDeleted}`)
+      }
 
-        let appDataDeleted = 0
-        for (const partition of ownedPartitions) {
-          appDataDeleted += await deleteAppDataPartition(partition)
-        }
-        for (const partition of referencingGsi1Partitions) {
-          appDataDeleted += await deleteAppDataPartition(partition, { index: 'GSI1' })
-        }
+      if (userId) {
+        const appDataDeleted = await deleteAppDataForUser(userId)
         console.log(`[cleanup] Erasure ${userId}: app-data rows deleted=${appDataDeleted}`)
       }
 
@@ -433,6 +483,23 @@ export async function handler() {
     console.warn(`[cleanup] digest-row retention sweep failed: ${String(err)}`)
   }
 
+  // ─── 12-month retention sweep for closed Boost_Scoreboard cache rows ────
+  // proof-of-demand R7.2. A closed window's scoreboard is stored with no TTL
+  // and never recomputed, so its expiry is enforced here alongside the boost
+  // row it describes. It is derived from check-ins, not a financial record, so
+  // 12 months rather than the boost row's 7 years.
+  let boostScoreboardCachesDeleted = 0
+  try {
+    boostScoreboardCachesDeleted = await sweepExpiredRows({
+      filterExpression: 'begins_with(pk, :prefix) AND attribute_exists(updatedAt)',
+      expressionAttributeValues: { ':prefix': 'KV#boost:score:' },
+      predicate: (row, now) => isBoostScoreboardCacheExpired(row as { updatedAt?: unknown }, now),
+      nowMs,
+    })
+  } catch (err) {
+    console.warn(`[cleanup] boost-scoreboard-cache retention sweep failed: ${String(err)}`)
+  }
+
   // ─── Lapse_Sweep phase 1: paidUntil lapse → grace + renewal email ────────
   // billing-revenue-integrity R3.1. Businesses whose paid window has lapsed but
   // that have not yet entered the renewal grace window get a 7-day
@@ -467,6 +534,7 @@ export async function handler() {
       `floor audits deleted: ${floorAuditsDeleted}, ` +
       `idempotency markers deleted: ${idempotencyMarkersDeleted}, ` +
       `digest rows deleted: ${digestRowsDeleted}, ` +
+      `boost scoreboard caches deleted: ${boostScoreboardCachesDeleted}, ` +
       `lapse-sweep graced: ${lapseGraced}, ` +
       `lapsed payments processed: ${lapsedPaymentsProcessed}`,
   )
@@ -479,6 +547,7 @@ export async function handler() {
     floorAuditsDeleted,
     idempotencyMarkersDeleted,
     digestRowsDeleted,
+    boostScoreboardCachesDeleted,
     lapseGraced,
     lapsedPaymentsProcessed,
   }

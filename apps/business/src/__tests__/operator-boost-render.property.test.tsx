@@ -17,8 +17,10 @@
  * - the panel must not render their key names or values regardless.
  */
 // @vitest-environment jsdom
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, cleanup, waitFor } from '@testing-library/react'
 import * as fc from 'fast-check'
+import type { ReactNode } from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -114,6 +116,28 @@ const leakyRowArb: fc.Arbitrary<LeakyRow> = fc.record({
   floorAtPurchaseCents: fc.integer({ min: 1, max: 1_000_000 }),
 })
 
+/** A Boost_Scoreboard the row's card can render, so the DOM reaches its
+ *  rendered state without the card's error branch standing in for it. */
+function scoreboardFor(boostId: string, nodeId: string) {
+  const period = {
+    windowStartUtc: '2026-03-06T18:00:00.000Z',
+    windowEndUtc: '2026-03-06T20:00:00.000Z',
+    checkIns: 6,
+    visitors: 5,
+    foundYou: 3,
+    walkIns: 2,
+  }
+  return {
+    boostId,
+    nodeId,
+    windowClosed: true,
+    window: period,
+    baseline: { ...period, windowStartUtc: '2026-02-27T18:00:00.000Z', windowEndUtc: '2026-02-27T20:00:00.000Z' },
+    comparable: true,
+    delta: { checkIns: 0, visitors: 0, foundYou: 0, walkIns: 0 },
+  }
+}
+
 // ─── Test ─────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
@@ -128,12 +152,20 @@ describe('BoostPurchasesPanel - operator render visibility (Property 8)', () => 
   it('never renders tierSnapshot, neighbourhoodIdSnapshot, or floorAtPurchaseCents key names or values', async () => {
     await fc.assert(
       fc.asyncProperty(leakyRowArb, async (row) => {
-        // Reset the API mock per run and resolve with a single-row page so
-        // the panel transitions into its rendered state.
+        // Reset the API mock per run and route the panel's two reads: the
+        // purchases page, and the per-purchase Boost_Scoreboard each row renders.
         apiGet.mockReset()
-        apiGet.mockResolvedValue({ items: [row], nextCursor: null })
+        apiGet.mockImplementation((url: string) =>
+          url.includes('/scoreboard')
+            ? Promise.resolve(scoreboardFor(row.yocoCheckoutId, row.nodeId))
+            : Promise.resolve({ items: [row], nextCursor: null }),
+        )
 
-        const { container, unmount } = render(<BoostPurchasesPanel />)
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        const wrapper = ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={client}>{children}</QueryClientProvider>
+        )
+        const { container, unmount } = render(<BoostPurchasesPanel />, { wrapper })
 
         // Wait for the row to appear (the panel formats `paidAt` into the
         // displayed string, so we wait on the duration cell which is rendered

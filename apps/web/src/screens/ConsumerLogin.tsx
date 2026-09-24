@@ -1,13 +1,14 @@
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { api } from '@area-code/shared/lib/api'
 import { classifyLoginError } from '@area-code/shared/lib/loginError'
+import { SIGN_IN_STORAGE_REQUIRED_COPY } from '@area-code/shared/lib/safeStorage'
 import { trackEvent } from '@area-code/shared/lib/usageEvents'
 import { useConsumerAuthStore } from '@area-code/shared/stores/consumerAuthStore'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { cleanFirstGetToken, redeemFirstGetToken } from '../lib/firstGetToken'
-import { startConsumerGoogleOAuthWeb } from '../lib/startConsumerGoogleOAuth'
+import { OAUTH_STORAGE_UNAVAILABLE, startConsumerGoogleOAuthWeb } from '../lib/startConsumerGoogleOAuth'
 import type { AppRoute } from '../types'
 
 interface ConsumerLoginProps {
@@ -145,9 +146,15 @@ export function ConsumerLogin({ onNavigate }: ConsumerLoginProps) {
     setError(null)
     try {
       await startConsumerGoogleOAuthWeb()
-    } catch {
+    } catch (err) {
       setGoogleLoading(false)
-      setError(t('auth.oauth.misconfigured', 'Google sign-in is not configured for this deployment.'))
+      // Private-mode storage is a different problem from a missing config, and
+      // the user can fix it themselves (R15.19).
+      setError(
+        (err as Error | null)?.message === OAUTH_STORAGE_UNAVAILABLE
+          ? t('auth.oauth.storageBlocked', SIGN_IN_STORAGE_REQUIRED_COPY)
+          : t('auth.oauth.misconfigured', 'Google sign-in is not configured for this deployment.'),
+      )
     }
   }
 

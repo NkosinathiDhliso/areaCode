@@ -51,7 +51,7 @@ function MilestoneRow({ title, body }: { title: string; body: string }) {
         onClick={() => void handleShare()}
         disabled={sharing}
         aria-label={t('feed.shareMilestone', 'Share milestone')}
-        className="shrink-0 p-2 rounded-xl text-[var(--accent)] transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:opacity-50"
+        className="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl text-[var(--accent)] transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:opacity-50"
       >
         <Share2 size={18} strokeWidth={1.75} />
       </button>

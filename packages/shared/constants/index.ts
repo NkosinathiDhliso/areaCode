@@ -25,3 +25,14 @@ export {
   type NotificationPreferenceKey,
 } from './notification-preferences'
 export { USAGE_EVENT_NAMES, isUsageEventName, type UsageEventName } from './usage-events'
+export {
+  ATTRIBUTION_WINDOW_HOURS,
+  AWAY_GATE_MIN_MINUTES,
+  AWAY_DISTANCE_METRES,
+  GOING_PUBLIC_THRESHOLD,
+  RECEIPT_MEASURED_FROM_ISO,
+  OPEN_SOURCES,
+  FOUND_VIA,
+  type OpenSource,
+  type FoundVia,
+} from './attribution'

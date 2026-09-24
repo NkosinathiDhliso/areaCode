@@ -34,6 +34,31 @@ provider "aws" {
 
 locals {
   env = "prod"
+
+  # One list of allowed browser origins, consumed by BOTH the API Gateway CORS
+  # config and the S3 media bucket CORS rule. The business header-photo upload
+  # is a presigned PUT straight to S3 from the origin that just called the API,
+  # so any divergence between the two lists blocks the upload from a phone while
+  # every API call still succeeds. Two lists that must agree is the duplication
+  # this removes (R14.6, dry-reuse-no-duplication.md).
+  #
+  # Add a host here and it is allowed on both surfaces, or on neither.
+  app_cors_origins = [
+    "https://areacode.co.za",
+    "https://www.areacode.co.za",
+    "https://business.areacode.co.za",
+    "https://www.business.areacode.co.za",
+    "https://staff.areacode.co.za",
+    "https://www.staff.areacode.co.za",
+    "https://admin.areacode.co.za",
+    "https://www.admin.areacode.co.za",
+    # Amplify default branch URLs (consumer, business, staff, admin). Kept so an
+    # owner who reaches the portal on the Amplify host can still upload.
+    "https://master.d3pm78r41ma6w6.amplifyapp.com",
+    "https://master.dbp54yxhyjvk0.amplifyapp.com",
+    "https://master.d166bb81tg4k61.amplifyapp.com",
+    "https://master.d1ay6jict0ql9w.amplifyapp.com",
+  ]
 }
 
 variable "spotify_client_id" {
@@ -628,14 +653,9 @@ module "cognito_triggers_staff" {
 
 # --- S3 media bucket ---
 module "s3_media" {
-  source = "../../modules/s3"
-  env    = local.env
-  allowed_origins = [
-    "https://areacode.co.za",
-    "https://business.areacode.co.za",
-    "https://staff.areacode.co.za",
-    "https://admin.areacode.co.za"
-  ]
+  source          = "../../modules/s3"
+  env             = local.env
+  allowed_origins = local.app_cors_origins
 }
 
 # --- Media CDN (CloudFront in front of the private media bucket) ---
@@ -1112,6 +1132,12 @@ module "lambda_api" {
     AREA_CODE_S3_MEDIA_BUCKET               = module.s3_media.bucket_name
     AREA_CODE_CONSENT_VERSION               = "v1.0"
     AREA_CODE_ANONYMIZATION_SALT            = var.anonymization_salt
+    # Media_CDN origin for server-rendered image URLs (the venue Share_Preview
+    # og:image). Same distribution the frontends read as VITE_CDN_URL.
+    AREA_CODE_MEDIA_CDN_URL = module.media_cdn.media_cdn_url
+    # Consumer web origin the API points consumers at: email verification links
+    # and the Share_Preview canonical / og:url. Required in prod (webBaseUrl()).
+    AREA_CODE_WEB_URL = "https://areacode.co.za"
     # Win-back campaigns: the API async-invokes this dispatcher on send-now.
     AREA_CODE_CAMPAIGN_DISPATCHER_FUNCTION = module.lambda_campaign_dispatcher.function_name
     # HMAC secret used for QR codes AND Spotify OAuth state signing
@@ -2054,12 +2080,8 @@ module "api_gateway" {
   source = "../../modules/api-gateway"
   env    = local.env
 
-  additional_cors_origins = [
-    "https://master.d3pm78r41ma6w6.amplifyapp.com",
-    "https://master.dbp54yxhyjvk0.amplifyapp.com",
-    "https://master.d166bb81tg4k61.amplifyapp.com",
-    "https://master.d1ay6jict0ql9w.amplifyapp.com",
-  ]
+  # Same list as the S3 media bucket above: see `local.app_cors_origins`.
+  allowed_origins = local.app_cors_origins
 
   lambda_integrations = {
     # Monolith catch-all — serves all Fastify routes, including the

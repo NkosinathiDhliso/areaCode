@@ -1,5 +1,6 @@
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { api } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
 import { useEffect, useState } from 'react'
 
 const ROLES = ['super_admin', 'support_agent', 'content_moderator'] as const
@@ -64,8 +65,7 @@ export function AdminIAM() {
       setCreateRole('support_agent')
       void loadAdmins()
     } catch (err: unknown) {
-      const e = err as { message?: string }
-      setCreateError(e.message ?? 'Failed to create admin')
+      setCreateError(describeApiError(err, 'Failed to create admin'))
     } finally {
       setCreateLoading(false)
     }

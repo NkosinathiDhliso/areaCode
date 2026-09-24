@@ -25,7 +25,9 @@
 
 import { GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 
-import { type NextTransitionRow, queryNextTransitions } from '../features/music/schedule-repository.js'
+import { getSchedule, type NextTransitionRow, queryNextTransitions } from '../features/music/schedule-repository.js'
+import { datedSlotStartsInWindow } from '../features/music/schedule-transitions.js'
+import { sendTonightReminders } from '../features/nodes/tonight-reminder.js'
 import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 
 import {
@@ -57,6 +59,12 @@ export interface ScheduleTransitionTickOutcome {
   routingFailures: number
   /** Number of per-venue evaluator exceptions caught and logged. */
   evaluatorErrors: number
+  /**
+   * Tonight_Reminders delivered this tick (proof-of-demand R9.7). Counted here
+   * rather than in a second worker: the reminder fires at a Dated_Slot start,
+   * which is a boundary this tick already wakes on.
+   */
+  tonightRemindersSent: number
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -151,11 +159,13 @@ function p99(latenciesMs: readonly number[]): number {
 async function processVenue(
   row: NextTransitionRow,
   timestampIso: string,
+  windowEndIso: string,
 ): Promise<{
   outcome: EvaluationTickOutcome | null
   latencyMs: number
   routingFailed: boolean
   errored: boolean
+  tonightRemindersSent: number
 }> {
   const started = Date.now()
   let routing: VenueRouting | null = null
@@ -172,6 +182,7 @@ async function processVenue(
       latencyMs: Date.now() - started,
       routingFailed: true,
       errored: false,
+      tonightRemindersSent: 0,
     }
   }
   if (!routing) {
@@ -183,8 +194,15 @@ async function processVenue(
       latencyMs: Date.now() - started,
       routingFailed: true,
       errored: false,
+      tonightRemindersSent: 0,
     }
   }
+
+  // Tonight_Reminder (R9.7). Runs before the evaluator so an evaluator failure
+  // cannot swallow a reminder the consumer explicitly asked for, and it is
+  // counted separately so the tick metric shows reminders even on a tick where
+  // no archetype changed.
+  const tonightRemindersSent = await fanOutTonightReminders(row, routing.nodeId, timestampIso, windowEndIso)
 
   const event: EvaluationTickEvent = {
     businessId: row.businessId,
@@ -201,6 +219,7 @@ async function processVenue(
       latencyMs: Date.now() - started,
       routingFailed: false,
       errored: false,
+      tonightRemindersSent,
     }
   } catch (err) {
     console.error(
@@ -213,7 +232,53 @@ async function processVenue(
       latencyMs: Date.now() - started,
       routingFailed: false,
       errored: true,
+      tonightRemindersSent,
     }
+  }
+}
+
+/**
+ * Fan out the Tonight_Reminder for any Dated_Slot starting in this tick's window
+ * (proof-of-demand R9.7).
+ *
+ * One schedule read, and only for a business the GSI already says has a boundary
+ * inside the window, so the reminder costs nothing on a quiet minute. The window
+ * is the tick's own `[now, now + 60s)`: a start lands in exactly one tick, which
+ * is the first half of "once per row" (the second half is the conditional claim
+ * on the Going row itself).
+ *
+ * A slot the owner deleted or moved produces no start here, so no reminder is
+ * sent for a night that is no longer on, while the Going rows themselves stay
+ * (R9.10).
+ *
+ * Failures are logged and counted as zero rather than thrown: one venue's
+ * reminder must not poison the tick (R11.5), and the claim-before-send rule means
+ * an unclaimed row is simply picked up by nothing, never sent twice.
+ */
+async function fanOutTonightReminders(
+  row: NextTransitionRow,
+  nodeId: string,
+  windowStartIso: string,
+  windowEndIso: string,
+): Promise<number> {
+  try {
+    const schedule = await getSchedule(row.businessId, row.scheduleId)
+    if (!schedule) return 0
+
+    const starting = datedSlotStartsInWindow(schedule, windowStartIso, windowEndIso)
+    let sent = 0
+    for (const slot of starting) {
+      const outcome = await sendTonightReminders({ nodeId, date: slot.date, headline: slot.headline })
+      sent += outcome.sent
+    }
+    return sent
+  } catch (err) {
+    console.error(
+      `[schedule-transition-tick] Tonight_Reminder fan-out failed for business=${row.businessId} node=${nodeId}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    )
+    return 0
   }
 }
 
@@ -252,10 +317,12 @@ export async function runTransitionTick(nowMs: number = Date.now()): Promise<Sch
   let changesEmitted = 0
   let routingFailures = 0
   let evaluatorErrors = 0
+  let tonightRemindersSent = 0
 
   for (const row of rows) {
-    const result = await processVenue(row, windowStartIso)
+    const result = await processVenue(row, windowStartIso, windowEndIso)
     latencies.push(result.latencyMs)
+    tonightRemindersSent += result.tonightRemindersSent
     if (result.routingFailed) {
       routingFailures++
       continue
@@ -276,6 +343,7 @@ export async function runTransitionTick(nowMs: number = Date.now()): Promise<Sch
     p99LatencyMs: p99(latencies),
     routingFailures,
     evaluatorErrors,
+    tonightRemindersSent,
   }
 
   // Tick-level metric (design "Observability"). Single structured info log
@@ -316,6 +384,7 @@ export async function handler(): Promise<ScheduleTransitionTickOutcome> {
       p99LatencyMs: 0,
       routingFailures: 0,
       evaluatorErrors: 0,
+      tonightRemindersSent: 0,
     }
   }
 }

@@ -1,4 +1,5 @@
 import { api } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -45,8 +46,7 @@ export function ForgotPassword({ onNavigate }: ForgotPasswordProps) {
       await api.post('/v1/auth/reset-password', { email: email.trim(), code: code.trim(), newPassword })
       setPhase('success')
     } catch (err: unknown) {
-      const apiErr = err as { message?: string }
-      setError(apiErr.message ?? 'Invalid or expired code. Try again.')
+      setError(describeApiError(err, 'Invalid or expired code. Try again.'))
     } finally {
       setLoading(false)
     }

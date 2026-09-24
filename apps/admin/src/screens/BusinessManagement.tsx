@@ -1,4 +1,5 @@
 import { api } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
 import type { BusinessAccount } from '@area-code/shared/types'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -59,7 +60,7 @@ export function BusinessManagement() {
       setConfirmDeactivateRewards(null)
       void handleSearch()
     } catch (err: unknown) {
-      setActionError((err as { message?: string })?.message ?? 'Action failed. Please try again.')
+      setActionError(describeApiError(err, 'Action failed. Please try again.'))
       setConfirmDeactivateRewards(null)
     }
   }
@@ -160,12 +161,19 @@ export function BusinessManagement() {
             onClick={() => setSelected(selected?.id === biz.id ? null : biz)}
             className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 cursor-pointer"
           >
-            <div className="flex flex-row items-center justify-between">
-              <span className="text-[var(--text-primary)] font-medium">{biz.businessName}</span>
-              <span className="text-[var(--text-muted)] text-xs capitalize">{biz.tier}</span>
+            <div className="flex flex-row items-center justify-between gap-2">
+              <span className="text-[var(--text-primary)] font-medium truncate min-w-0">{biz.businessName}</span>
+              <span className="text-[var(--text-muted)] text-xs capitalize shrink-0">{biz.tier}</span>
             </div>
-            <div className="text-[var(--text-secondary)] text-xs mt-1">
-              {biz.email} · {biz.nodeCount} nodes · {biz.staffCount} staff · {biz.activeRewardCount} rewards
+            {/* A long owner email must not push the counts off a 375px screen,
+                so it truncates on its own line (R15.14). */}
+            <div className="text-[var(--text-secondary)] text-xs mt-1 flex flex-col">
+              <span className="truncate min-w-0" title={biz.email}>
+                {biz.email}
+              </span>
+              <span>
+                {biz.nodeCount} nodes · {biz.staffCount} staff · {biz.activeRewardCount} rewards
+              </span>
             </div>
 
             <BusinessStateBadge

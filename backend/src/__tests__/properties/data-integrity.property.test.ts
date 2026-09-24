@@ -246,6 +246,7 @@ describe('Property 7: Business check-in events contain only privacy-safe fields'
       'tier',
       'visitCount',
       'type',
+      'foundVia',
     ])
 
     fc.assert(
@@ -266,9 +267,11 @@ describe('Property 7: Business check-in events contain only privacy-safe fields'
       fc.property(businessCheckinPayloadWithSensitiveFieldsArb, (payload) => {
         const sanitized = sanitizeForBusiness(payload as unknown as Record<string, unknown>)
 
-        // The only consumer-identifying fields allowed are displayName and tier
+        // The only consumer-identifying fields allowed are displayName and tier.
+        // `foundVia` is a five-value enum (how the venue was found), not an
+        // identifier, so it sits with the venue fields (proof-of-demand R11.2).
         const consumerFields = Object.keys(sanitized).filter(
-          (k) => !['nodeId', 'nodeName', 'checkInCount', 'timestamp', 'visitCount', 'type'].includes(k),
+          (k) => !['nodeId', 'nodeName', 'checkInCount', 'timestamp', 'visitCount', 'type', 'foundVia'].includes(k),
         )
 
         for (const field of consumerFields) {
@@ -289,6 +292,7 @@ describe('Property 7: Business check-in events contain only privacy-safe fields'
       'tier',
       'visitCount',
       'type',
+      'foundVia',
     ])
 
     // Generate extra field names that are guaranteed NOT in the allowed set

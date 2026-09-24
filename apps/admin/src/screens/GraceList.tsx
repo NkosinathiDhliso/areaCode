@@ -1,4 +1,5 @@
 import { api } from '@area-code/shared/lib/api'
+import { formatSastDate } from '@area-code/shared/lib/sast'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -14,10 +15,10 @@ interface GraceBusiness {
   paymentGraceUntil: string
 }
 
+// Grace expiry is a venue-clock deadline, so it renders in SAST through the one
+// shared formatter (R15.15).
 function formatDate(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+  return Number.isNaN(Date.parse(iso)) ? iso : formatSastDate(iso)
 }
 
 function daysUntil(iso: string): number {

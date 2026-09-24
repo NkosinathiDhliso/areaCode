@@ -1,4 +1,5 @@
 import { api } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
 import { formatRelativeTime } from '@area-code/shared/lib/formatters'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 import { useErrorStore } from '@area-code/shared/stores/errorStore'
@@ -243,8 +244,7 @@ function RewardEditForm({ reward, onSaved, onCancel }: { reward: Reward; onSaved
       await api.put(`/v1/business/rewards/${reward.id}`, buildBody())
       onSaved()
     } catch (err: unknown) {
-      const e = err as { message?: string }
-      setError(e.message ?? 'Failed to update reward.')
+      setError(describeApiError(err, 'Failed to update reward.'))
     } finally {
       setLoading(false)
     }
@@ -272,8 +272,7 @@ function RewardEditForm({ reward, onSaved, onCancel }: { reward: Reward; onSaved
         }
       } catch (err: unknown) {
         setLoading(false)
-        const e = err as { message?: string }
-        setError(e.message ?? "Couldn't check affected customers. Try again.")
+        setError(describeApiError(err, "Couldn't check affected customers. Try again."))
         return
       }
     }
@@ -449,8 +448,7 @@ function RewardForm({ nodes, onCreated }: { nodes: Node[]; onCreated: () => void
       await api.post('/v1/business/rewards', body)
       onCreated()
     } catch (err: unknown) {
-      const e = err as { message?: string }
-      setError(e.message ?? 'Failed to create reward. Please try again.')
+      setError(describeApiError(err, 'Failed to create reward. Please try again.'))
     } finally {
       setLoading(false)
     }

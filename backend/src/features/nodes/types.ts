@@ -13,6 +13,23 @@ export const nodeSlugParamsSchema = z.object({
   nodeSlug: z.string().min(1),
 })
 
+/**
+ * Venue slug shape as `slugify` (service.ts) produces it: lowercase
+ * alphanumerics in hyphen-separated groups, e.g. `father-coffee-a1b2c3`.
+ *
+ * The Share_Preview route interpolates the slug into HTML, so it is validated
+ * against this shape before use — anything carrying a quote, angle bracket or
+ * whitespace is rejected at the boundary with a 400 rather than escaped deeper
+ * in (proof-of-demand R12.2).
+ */
+export const shareSlugParamsSchema = z.object({
+  slug: z
+    .string()
+    .min(1)
+    .max(120)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Invalid venue slug'),
+})
+
 export const searchQuerySchema = z.object({
   q: z.string().min(2, 'Query must be at least 2 characters'),
   lat: z.coerce.number().min(-90).max(90),
@@ -58,6 +75,32 @@ export const reportNodeBodySchema = z.object({
 export const whoIsHereQuerySchema = z.object({
   cursor: z.string().optional(),
   limit: z.coerce.number().min(1).max(50).default(20),
+})
+
+/**
+ * Going night as a SAST calendar date (proof-of-demand R9.1). The server derives
+ * the night itself; this is the client stating which night it believes it is
+ * acting on, so a screen left open across the 04:00 rollover is rejected instead
+ * of silently recording intent for a different night.
+ */
+const goingNightSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected a YYYY-MM-DD night')
+
+export const goingBodySchema = z.object({
+  date: goingNightSchema.optional(),
+  /**
+   * Tonight_Reminder opt-in at the moment of intent (proof-of-demand R9.6).
+   * Absent or false records intent without asking for anything to be sent.
+   */
+  remind: z.boolean().optional(),
+})
+
+/**
+ * `DELETE` carries the night in the query string, not a body: the one shared API
+ * client sends no body on a delete (`packages/shared/lib/api.ts`), and widening
+ * it for a single calendar date would be a second way to pass the same value.
+ */
+export const goingQuerySchema = z.object({
+  date: goingNightSchema.optional(),
 })
 
 export const presignedUploadBodySchema = z.object({

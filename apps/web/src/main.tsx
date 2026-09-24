@@ -1,11 +1,9 @@
+import { installDomReconciliationGuard } from '@area-code/shared/lib/domReconciliationGuard'
+import { installPreloadErrorHandler } from '@area-code/shared/lib/preloadErrorHandler'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-
 import 'mapbox-gl/dist/mapbox-gl.css'
-
-import { installPreloadErrorHandler } from '@area-code/shared/lib/preloadErrorHandler'
-import { installDomReconciliationGuard } from '@area-code/shared/lib/domReconciliationGuard'
 
 import { App } from './App'
 import './i18n'
@@ -122,6 +120,6 @@ void bootstrap().catch(() => {
   const root = document.getElementById('root')
   if (root) {
     root.innerHTML =
-      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100dvh;background:#0a0a0a;color:#e5e5e5;font-family:system-ui;padding:24px;text-align:center"><div style="font-size:48px;margin-bottom:16px">📍</div><h1 style="font-size:20px;font-weight:700;margin-bottom:8px">Area Code</h1><p style="font-size:14px;color:#a3a3a3;margin-bottom:24px;max-width:280px">Something went wrong loading the app. Please check your connection and reload.</p><button onclick="location.reload()" style="background:#778CA9;color:#fff;font-weight:600;border-radius:12px;padding:14px 32px;font-size:15px;border:none;cursor:pointer">Reload</button></div>'
+      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100dvh;background:#0a0a0a;color:#e5e5e5;font-family:system-ui;padding:24px;text-align:center"><h1 style="font-size:20px;font-weight:700;margin-bottom:8px">Area Code</h1><p style="font-size:14px;color:#a3a3a3;margin-bottom:24px;max-width:280px">Something went wrong loading the app. Please check your connection and reload.</p><button onclick="location.reload()" style="background:#778CA9;color:#fff;font-weight:600;border-radius:12px;padding:14px 32px;font-size:15px;border:none;cursor:pointer">Reload</button></div>'
   }
 })

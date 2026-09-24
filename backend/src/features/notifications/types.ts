@@ -13,6 +13,10 @@ export const notificationPrefsSchema = z
     rewardClaimedPush: z.boolean().optional(),
     leaderboardPrewarning: z.boolean().optional(),
     followedUserCheckin: z.boolean().optional(),
+    // Tonight_Reminder opt-in (proof-of-demand R9.6). Written by the Going
+    // control at the moment of intent and read by `sendNotification`'s
+    // preference gate for the `tonight_reminder` type.
+    tonightReminder: z.boolean().optional(),
   })
   .strict()
 

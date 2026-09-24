@@ -16,10 +16,21 @@
 // reward in this release: this service exposes no reward coupling whatsoever.
 import { DEV_MODE } from '../../shared/config/env.js'
 import { AppError } from '../../shared/errors/AppError.js'
+import { kvDel, kvGet, kvSet } from '../../shared/kv/dynamodb-kv.js'
 import { canEmitToFriends } from '../../shared/privacy/privacy-guard.js'
-import { emitPresenceUpdate, emitFriendCheckout } from '../../shared/socket/events.js'
+import { emitPresenceUpdate, emitFriendCheckout, emitPulseUpdate } from '../../shared/socket/events.js'
+import { nowEpochSeconds } from '../../shared/time/epoch.js'
 import { getUserById } from '../auth/repository.js'
+import { checkInCooldownKey } from '../check-in/cooldown.js'
 import { getNodeWithCity } from '../check-in/repository.js'
+import {
+  computePulse,
+  dailyCheckInKvKey,
+  parseDailyCheckInCount,
+  pulseKvKey,
+  pulseStateFor,
+  PULSE_TTL_SECONDS,
+} from '../nodes/pulse.js'
 import { writeDwellRow } from '../presence/dwell-sink.js'
 import { endPresenceByCheckOut, getLivePresenceCount, recordPresenceSample } from '../presence/repository.js'
 import { getMutualFollowIds, getFollowingIds } from '../social/repository.js'
@@ -56,7 +67,7 @@ export async function processCheckOut(userId: string, input: CheckOutInput): Pro
 
   // 2. Conditional end transition. The repository decrements the venue counter
   //    itself on a successful end — do NOT decrement again here.
-  const now = Math.floor(Date.now() / 1000)
+  const now = nowEpochSeconds()
   const record = await endPresenceByCheckOut({ userId, nodeId: input.nodeId, now })
 
   if (record === null) {
@@ -73,6 +84,17 @@ export async function processCheckOut(userId: string, input: CheckOutInput): Pro
     endedAt: record.endedAt!,
   })
 
+  // Clear the presence cooldown for this venue (R15.3). The consumer has left,
+  // so the next arrival is a real arrival and must not be refused with a 429.
+  // Only the presence cooldown: the reward cooldown is an abuse control, and a
+  // check-out is one button press, so clearing it would turn leaving into a way
+  // to mint a second reward inside the four-hour window.
+  try {
+    await kvDel(checkInCooldownKey('presence', userId, input.nodeId))
+  } catch (err) {
+    console.warn(`[check-out] cooldown clear failed: ${String(err)}`)
+  }
+
   // Best-effort honest live-count broadcast (Requirements 7.2, 7.5, 7.6). The
   // count just changed (a present record was ended), so recompute the
   // AUTHORITATIVE read-model count and emit `node:presence_update` with cause
@@ -83,8 +105,28 @@ export async function processCheckOut(userId: string, input: CheckOutInput): Pro
   try {
     const node = await getNodeWithCity(input.nodeId)
     const citySlug = node?.city?.slug ?? ''
+    const cityId = node?.city?.id ?? ''
+    const livePresenceCount = await getLivePresenceCount(input.nodeId, now)
+
+    // Recompute and store the pulse from the new presence count (R15.3). A
+    // visible departure has to lower the beam: without this write the score
+    // stays where the last arrival left it until the decay worker runs, and the
+    // map keeps claiming a room that is emptying (honest-presence rules 1, 5).
+    if (cityId) {
+      const dailyCount = parseDailyCheckInCount(await kvGet(dailyCheckInKvKey(input.nodeId)))
+      const pulseScore = computePulse(dailyCount, livePresenceCount)
+      await kvSet(pulseKvKey(cityId, input.nodeId), String(pulseScore), PULSE_TTL_SECONDS)
+      if (citySlug) {
+        await emitPulseUpdate(citySlug, {
+          nodeId: input.nodeId,
+          pulseScore,
+          checkInCount: dailyCount,
+          state: pulseStateFor(pulseScore),
+        })
+      }
+    }
+
     if (citySlug) {
-      const livePresenceCount = await getLivePresenceCount(input.nodeId, now)
       // Record the observation; a departure makes the count fall, which is the
       // only honest basis for a "winding down" trend (honest-presence rule 5).
       const momentum = await recordPresenceSample(input.nodeId, livePresenceCount, now)

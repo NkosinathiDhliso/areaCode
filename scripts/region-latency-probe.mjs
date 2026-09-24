@@ -112,7 +112,7 @@ async function main() {
       `${target.region.padEnd(11)} ${target.label}\n` +
         `  url    ${target.url}\n` +
         `  min ${fmt(s.min)}  median ${fmt(s.median)}  p95 ${fmt(s.p95)}  ` +
-        `max ${fmt(s.max)}  failures ${s.failures}/${SAMPLES}\n`
+        `max ${fmt(s.max)}  failures ${s.failures}/${SAMPLES}\n`,
     )
   }
 
@@ -120,9 +120,7 @@ async function main() {
   if (a?.s.median != null && b?.s.median != null) {
     const gap = a.s.median - b.s.median
     const nearer = gap > 0 ? b.target.region : a.target.region
-    console.log(
-      `Median gap: ${Math.abs(gap).toFixed(0)}ms (${nearer} is nearer from this vantage point).`
-    )
+    console.log(`Median gap: ${Math.abs(gap).toFixed(0)}ms (${nearer} is nearer from this vantage point).`)
   }
 }
 

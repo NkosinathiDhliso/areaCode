@@ -5,6 +5,10 @@ import {
   type NotificationPreferenceKey,
 } from '@area-code/shared/constants/notification-preferences'
 import { api } from '@area-code/shared/lib/api'
+import {
+  readNotificationPreferences,
+  updateNotificationPreferences,
+} from '@area-code/shared/lib/notificationPreferences'
 import { useErrorStore } from '@area-code/shared/stores/errorStore'
 import type { NotificationPreferences } from '@area-code/shared/types'
 import { useQuery } from '@tanstack/react-query'
@@ -21,7 +25,7 @@ export function NotificationSettings() {
   const { isLoading } = useQuery({
     queryKey: ['notification-preferences'],
     queryFn: async () => {
-      const res = await api.get<Partial<Prefs>>('/v1/users/me/notification-preferences')
+      const res = await readNotificationPreferences()
       setPrefs({ ...DEFAULTS, ...res })
       return res
     },
@@ -33,7 +37,7 @@ export function NotificationSettings() {
     const next = { ...prefs, [key]: !prefs[key] }
     setPrefs(next)
     try {
-      await api.patch('/v1/users/me/notification-preferences', { [key]: next[key] })
+      await updateNotificationPreferences({ [key]: next[key] })
     } catch {
       setPrefs(previous)
       useErrorStore.getState().showError(t('notif.settings.saveFailed'))

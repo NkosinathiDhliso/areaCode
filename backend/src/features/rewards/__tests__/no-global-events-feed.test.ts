@@ -1,6 +1,10 @@
 import Fastify from 'fastify'
 import { describe, it, expect } from 'vitest'
 
+import { nodeRoutes } from '../../nodes/handler.js'
+import { nodeImageRoutes } from '../../nodes/image-routes.js'
+import { nodeShareRoutes } from '../../nodes/share-routes.js'
+import { nodeSocialRoutes } from '../../nodes/social-routes.js'
 import { rewardRoutes } from '../handler.js'
 
 /**
@@ -109,6 +113,104 @@ describe('rewards router — no new reach surface (R5.1, R5.2)', () => {
         expect(
           pattern.test(url),
           `rewards router must not expose a consumer events list/search route, but found GET ${url} matching ${pattern}`,
+        ).toBe(false)
+      }
+    }
+  })
+})
+
+// ─── Nodes surface ──────────────────────────────────────────────────────────
+//
+// proof-of-demand task 11.2 / R10.1: the Proof of Demand spec adds routes to the
+// nodes feature (Venue_Open, Going, the Share_Preview, Tonight reads), so the
+// "no new browse surface" guard has to cover the nodes routers too, not just the
+// rewards router. Same mechanism as above, one file: enumerate every route the
+// nodes feature registers and pin the set.
+//
+// The product rule (product.md): the consumer app is four tabs, there is no
+// gets/deals browse surface, and the only cross-venue consumer reads are the
+// city payload, the pre-existing trending and search reads, and the
+// proximity-gated `GET /v1/rewards/near-me` above. A new cross-venue list
+// fails this test, which is the point.
+
+/** Build a fresh Fastify instance with ONLY the nodes feature routers. */
+async function collectNodeRoutes(): Promise<CollectedRoute[]> {
+  const app = Fastify()
+  const routes: CollectedRoute[] = []
+
+  app.addHook('onRoute', (route) => {
+    const methods = Array.isArray(route.method) ? route.method : [route.method]
+    for (const method of methods) {
+      routes.push({ method: String(method).toUpperCase(), url: route.url })
+    }
+  })
+
+  await app.register(nodeRoutes)
+  await app.register(nodeSocialRoutes)
+  await app.register(nodeShareRoutes)
+  await app.register(nodeImageRoutes)
+  await app.ready()
+  await app.close()
+
+  return routes
+}
+
+describe('nodes routers, no new browse surface (R10.1)', () => {
+  it('registers exactly the known nodes routes and no others', async () => {
+    const routes = await collectNodeRoutes()
+    const signatures = new Set(routes.filter((r) => r.method !== 'HEAD').map((r) => `${r.method} ${r.url}`))
+
+    // The complete, intended surface of the nodes feature. Any addition or
+    // removal is a deliberate decision that must update this test.
+    const expected = new Set([
+      // Cross-venue consumer reads. All three are bounded: the city payload by
+      // city and paid-tier membership, trending by a limit, search by a query.
+      // No fourth may be added without a spec.
+      'GET /v1/nodes/trending',
+      'GET /v1/nodes/search',
+      'GET /v1/nodes/:citySlug',
+      // Single-venue reads.
+      'GET /v1/nodes/:nodeId/detail',
+      'GET /v1/nodes/:nodeSlug/public',
+      'GET /v1/nodes/:nodeId/who-is-here',
+      'GET /v1/nodes/:nodeId/rewards',
+      'GET /v1/nodes/:nodeId/presence',
+      // Going: intent on one venue for one night (R9.1).
+      'POST /v1/nodes/:nodeId/going',
+      'DELETE /v1/nodes/:nodeId/going',
+      // Share: the weekly tally beacon and the crawler preview (R1.2, R1.6).
+      'POST /v1/nodes/:nodeId/share',
+      'GET /v1/share/node/:slug',
+      // Owner and operator writes.
+      'POST /v1/nodes',
+      'POST /v1/nodes/business-create',
+      'PUT /v1/nodes/:nodeId',
+      'POST /v1/nodes/:nodeId/claim',
+      'POST /v1/nodes/:nodeId/report',
+      'POST /v1/upload/presigned',
+      'PUT /v1/business/nodes/:nodeId/social',
+      'POST /v1/business/nodes/:nodeId/image/upload-url',
+      'POST /v1/business/nodes/:nodeId/image/process',
+      'DELETE /v1/business/nodes/:nodeId/image',
+    ])
+
+    expect(signatures).toEqual(expected)
+  })
+
+  it('exposes no gets, deals or events browse route', async () => {
+    const routes = await collectNodeRoutes()
+    const getUrls = routes.filter((r) => r.method === 'GET').map((r) => r.url)
+
+    // The shapes a deals catalog or a "what's on" browse surface would take.
+    // `GET /v1/nodes/:nodeId/rewards` is the one rewards read here and it is
+    // scoped to a single venue, so it is not a cross-venue list.
+    const forbiddenPatterns = [/events/i, /deals/i, /offers/i, /whats-?on/i, /\/gets/i, /tonight/i, /nearby/i]
+
+    for (const url of getUrls) {
+      for (const pattern of forbiddenPatterns) {
+        expect(
+          pattern.test(url),
+          `the nodes router must not expose a gets/deals browse route, but found GET ${url} matching ${pattern}`,
         ).toBe(false)
       }
     }

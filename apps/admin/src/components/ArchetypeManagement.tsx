@@ -1,6 +1,7 @@
 import { getArchetypeDisplayName } from '@area-code/shared/constants/archetype-names'
 import { PERSONALITY_DIMENSIONS } from '@area-code/shared/constants/genre-weights'
 import { api } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
 import type { PersonalityArchetype, PersonalityDimension } from '@area-code/shared/types'
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -87,8 +88,7 @@ export function ArchetypeManagement() {
       setEditing(null)
       setShowAdd(false)
     } catch (err: unknown) {
-      const e = err as { message?: string }
-      setSaveError(e.message ?? 'Failed to save archetype.')
+      setSaveError(describeApiError(err, 'Failed to save archetype.'))
     }
   }
 

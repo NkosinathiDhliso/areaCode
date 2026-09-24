@@ -135,7 +135,7 @@ export function MapControls({
           aria-label={is3D ? t('map.controls.flatten') : t('map.controls.lift')}
           title={is3D ? t('map.controls.flatten') : t('map.controls.lift')}
           className={`
-            w-10 h-10 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all
+            w-11 h-11 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all
             ${
               is3D
                 ? 'bg-[var(--accent)] text-[var(--on-accent)] shadow-[var(--shadow-glow)]'
@@ -222,7 +222,7 @@ function ControlButton({ onClick, children, label, active, disabled, inactive, t
       title={label}
       data-testid={testId}
       className={`
-        w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-95
+        w-11 h-11 rounded-xl flex items-center justify-center transition-all active:scale-95
         ${
           active
             ? 'bg-[var(--accent)] text-[var(--on-accent)] shadow-[var(--shadow-glow)]'

@@ -1,4 +1,5 @@
 // DynamoDB Repository for Check-In Feature
+import { isFoundVia } from '@area-code/shared/constants/attribution'
 import { GetCommand, QueryCommand, PutCommand, UpdateCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb'
 
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
@@ -131,6 +132,51 @@ export async function getCheckInsByNode(
     : undefined
 
   return { checkIns, nextCursor }
+}
+
+/** Page size for the day-scoped node read below. Pages until the day is exhausted. */
+const NODE_SINCE_PAGE_SIZE = 200
+
+/**
+ * Every check-in at one node at or after `sinceIso`, paginated to completion.
+ *
+ * The one read behind an owner-facing day count. `getCheckInsByNode` stops at its
+ * `Limit` (50 by default) and hands back a cursor the caller may ignore, which on
+ * a busy night silently under-reports the number the owner is looking at. This
+ * one keeps paging until DynamoDB stops returning a key, so the count is the
+ * whole day or it throws.
+ *
+ * Bounded on the `NodeIndex` sort key (`timestamp`, epoch ms) rather than a
+ * filter on `checkedInAt`, so the query reads only the rows it returns.
+ */
+export async function getCheckInsByNodeSince(nodeId: string, sinceIso: string): Promise<CheckIn[]> {
+  const sinceMs = new Date(sinceIso).getTime()
+  if (Number.isNaN(sinceMs)) {
+    throw new Error(`getCheckInsByNodeSince: invalid sinceIso "${sinceIso}"`)
+  }
+
+  const checkIns: CheckIn[] = []
+  let lastKey: Record<string, unknown> | undefined
+
+  do {
+    const result: { Items?: Array<Record<string, unknown>>; LastEvaluatedKey?: Record<string, unknown> } =
+      await documentClient.send(
+        new QueryCommand({
+          TableName: TableNames.checkins,
+          IndexName: 'NodeIndex',
+          KeyConditionExpression: 'nodeId = :nodeId AND #ts >= :since',
+          ExpressionAttributeNames: { '#ts': 'timestamp' },
+          ExpressionAttributeValues: { ':nodeId': nodeId, ':since': sinceMs },
+          ScanIndexForward: false,
+          Limit: NODE_SINCE_PAGE_SIZE,
+          ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
+        }),
+      )
+    for (const item of result.Items || []) checkIns.push(mapCheckIn(item))
+    lastKey = result.LastEvaluatedKey
+  } while (lastKey)
+
+  return checkIns
 }
 
 /**
@@ -341,5 +387,9 @@ function mapCheckIn(item: Record<string, unknown>): CheckIn {
     neighbourhoodId: item['neighbourhoodId'] as string | undefined,
     type: item['type'] as string,
     checkedInAt: item['checkedInAt'] as string,
+    // Check-ins written before the Found_Via stamp shipped carry no attribute.
+    // They read as `walk_in`, which is what the Receipt counts them as, so a
+    // pre-spec history never inflates "found you" (proof-of-demand R4.1).
+    foundVia: isFoundVia(item['foundVia']) ? item['foundVia'] : 'walk_in',
   }
 }

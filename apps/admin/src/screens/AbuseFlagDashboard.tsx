@@ -1,4 +1,5 @@
 import { api } from '@area-code/shared/lib/api'
+import { formatSastDate } from '@area-code/shared/lib/sast'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -137,7 +138,7 @@ export function AbuseFlagDashboard() {
                   {flag.entityType}: {flag.entityId.slice(0, 8)}...
                 </span>
               </div>
-              <span className="text-[var(--text-muted)] text-xs">{new Date(flag.createdAt).toLocaleDateString()}</span>
+              <span className="text-[var(--text-muted)] text-xs shrink-0">{formatSastDate(flag.createdAt)}</span>
             </div>
 
             {expandedId === flag.id && (

@@ -1,4 +1,5 @@
 import { ScheduleValidationError, validateMusicSchedule } from '@area-code/shared/lib/schedule-validator'
+import { resolveScheduleClock } from '@area-code/shared/lib/scheduleResolver'
 import type { MusicSchedule } from '@area-code/shared/types'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
@@ -8,7 +9,8 @@ import { requireAuth, getAuth } from '../../shared/middleware/auth.js'
 import { requireBusinessPermission, getBusinessRole } from '../../shared/middleware/business-role.js'
 import { validate } from '../../shared/middleware/validation.js'
 
-import { deleteScheduleSlot, getSchedule, upsertSchedule } from './schedule-repository.js'
+import { DEFAULT_SCHEDULE_ID, getSchedule } from './schedule-repository.js'
+import { deleteScheduleSlotForBusiness, upsertScheduleForBusiness } from './schedule-service.js'
 import * as service from './service.js'
 import {
   updateGenresBodySchema,
@@ -25,8 +27,6 @@ import {
 // venue. The on-disk model still supports multiple schedules per business
 // (R3.2) — this is just the public API shape.
 // ─────────────────────────────────────────────────────────────────────────────
-
-const DEFAULT_SCHEDULE_ID = 'default'
 
 const businessPathParamsSchema = z.object({
   businessId: z.string().min(1).max(64),
@@ -100,6 +100,23 @@ function canonicaliseScheduleBody(rawBody: unknown, pathBusinessId: string): unk
     businessId: pathBusinessId,
     scheduleId: DEFAULT_SCHEDULE_ID,
   }
+}
+
+/**
+ * Today's calendar date in the schedule's own timezone, used only to enforce
+ * the Dated_Slot 14-day horizon (R8.1). The write path is the one place that
+ * knows "now", which is why the validator takes this rather than reading a
+ * clock itself.
+ *
+ * Returns `undefined` when the body carries no usable timezone: the validator
+ * rejects that body with `invalid_timezone` a moment later, so there is nothing
+ * to guess at here.
+ */
+function scheduleTodayLocalDate(candidate: unknown, nowIso: string): string | undefined {
+  if (candidate === null || typeof candidate !== 'object') return undefined
+  const timezone = (candidate as Record<string, unknown>)['timezone']
+  if (typeof timezone !== 'string' || timezone.length === 0) return undefined
+  return resolveScheduleClock(nowIso, timezone)?.date
 }
 
 export async function musicRoutes(app: FastifyInstance) {
@@ -228,12 +245,18 @@ export async function musicRoutes(app: FastifyInstance) {
       // misbehaving client cannot write under a different businessId.
       const candidate = canonicaliseScheduleBody(request.body, params.businessId)
 
-      const validation = validateMusicSchedule(candidate)
+      // `todayLocalDate` is supplied only here, on the write path, so the
+      // Dated_Slot horizon applies to what an owner is publishing now and never
+      // to a stored slot being re-validated later (R8.1).
+      const todayLocalDate = scheduleTodayLocalDate(candidate, new Date().toISOString())
+      const validation = validateMusicSchedule(candidate, todayLocalDate ? { todayLocalDate } : undefined)
       if (!validation.ok) {
         return sendValidationError(reply, validation.error)
       }
 
-      const persisted: MusicSchedule = await upsertSchedule(validation.value)
+      // The service checks each Dated_Slot's featured get against the rewards
+      // domain (R8.4) and throws a 400 naming the reason.
+      const persisted: MusicSchedule = await upsertScheduleForBusiness(validation.value, params.businessId)
       return reply.status(200).send(persisted)
     },
   )
@@ -249,7 +272,7 @@ export async function musicRoutes(app: FastifyInstance) {
       authoriseScheduleAccess(request, params.businessId)
 
       try {
-        const updated = await deleteScheduleSlot(params.businessId, DEFAULT_SCHEDULE_ID, params.slotId)
+        const updated = await deleteScheduleSlotForBusiness(params.businessId, DEFAULT_SCHEDULE_ID, params.slotId)
         return reply.status(200).send(updated)
       } catch (err) {
         // Translate the repository's tagged not-found errors to 404.

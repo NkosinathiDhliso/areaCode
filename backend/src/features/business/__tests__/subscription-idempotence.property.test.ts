@@ -163,6 +163,14 @@ vi.mock('../repository.js', async (importOriginal) => {
   }
 })
 
+// Tier decides map membership, so activation drops the cached city payload for
+// the business's venues (proof-of-demand R15.5). Mocked here to keep the
+// property's delivery schedules offline; the invalidation has its own suite.
+vi.mock('../../nodes/cache.js', () => ({
+  invalidateCityPayloadForBusiness: vi.fn(async () => {}),
+  invalidateCityPayloadForNode: vi.fn(async () => {}),
+}))
+
 let processYocoWebhook: (typeof import('../service.js'))['processYocoWebhook']
 
 beforeAll(async () => {

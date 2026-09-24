@@ -19,6 +19,8 @@ import { ReconsentGate } from './components/ReconsentGate'
 import { VerifyEmailBanner } from './components/VerifyEmailBanner'
 import { useCheckinOutbox } from './hooks/useCheckinOutbox'
 import { useFriendsPresence } from './hooks/useFriendsPresence'
+import { clearQrCheckIn, readQrCheckIn } from './lib/pendingQrCheckIn'
+import { captureVenueArrivalFromLocation, hasPendingVenueArrival } from './lib/venueArrival'
 import { AuthLanding } from './screens/AuthLanding'
 import { CheckInHistoryScreen } from './screens/CheckInHistoryScreen'
 import { ConsumerLogin } from './screens/ConsumerLogin'
@@ -71,7 +73,16 @@ const ROUTE_PATHS: Record<AppRoute, string> = {
   'legal-terms': '/legal/terms',
 }
 
-function pathToRoute(path: string): AppRoute {
+/**
+ * Map a URL path to the shell route.
+ *
+ * `/node/{slug}` (the shared venue link) and `/map?venue={slug}` (the
+ * Share_Preview redirect target and the push deep-link shape) both resolve to
+ * the map, where the arrival lands on the venue card in Browse_Mode
+ * (proof-of-demand R1.1, R12.3). The `{ slug, source }` pair itself is captured
+ * by `captureVenueArrivalFromLocation`.
+ */
+export function pathToRoute(path: string): AppRoute {
   if (path === '/login') return 'login'
   // The dedicated signup screen was consolidated into the single login entry
   // (sign-in creates the account when none exists). Keep old links working.
@@ -79,6 +90,10 @@ function pathToRoute(path: string): AppRoute {
   if (path === '/forgot-password') return 'forgot-password'
   if (path === '/first-get-prompt') return 'first-get-prompt'
   if (path === '/map') return 'map'
+  // Shared venue link. Crawlers and script-less clients get the Share_Preview
+  // HTML via the Amplify rewrite; anything that reaches the SPA lands on the map
+  // with the venue as the Active_Venue.
+  if (/^\/node\/[^/?#]+\/?$/.test(path)) return 'map'
   // The standalone gets/deals tab was removed; keep old links working by
   // redirecting them to the map, where gets now surface as a reward layer.
   if (path === '/gets') return 'map'
@@ -156,11 +171,19 @@ function AppContent() {
   // Handle browser back/forward buttons (Issue #9)
   useEffect(() => {
     function handlePopState() {
+      captureVenueArrivalFromLocation()
       const newRoute = pathToRoute(window.location.pathname)
       setRouteState(newRoute)
     }
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  // Capture a venue deep link before anything can rewrite the address bar
+  // (R1.7, R12.3). `/node/{slug}` and `/map?venue={slug}&src=…` both stash
+  // `{ slug, source }`; `useVenueArrival` on the map consumes it.
+  useEffect(() => {
+    captureVenueArrivalFromLocation()
   }, [])
 
   // Reset time-based nav default on fresh app open
@@ -215,18 +238,23 @@ function AppContent() {
   // the check-in completes.
   useEffect(() => {
     if (!isAuthenticated) return
-    let pending: { nodeId?: string; token?: string } | null = null
-    try {
-      const raw = sessionStorage.getItem('pendingQrCheckIn')
-      if (raw) pending = JSON.parse(raw) as { nodeId?: string; token?: string }
-    } catch {
-      pending = null
-    }
-    if (pending?.nodeId && pending.token) {
-      sessionStorage.removeItem('pendingQrCheckIn')
+    const pending = readQrCheckIn()
+    if (pending) {
+      clearQrCheckIn()
       window.location.replace(`/qr/${pending.nodeId}/${pending.token}`)
     }
   }, [isAuthenticated])
+
+  // Sibling of the QR resume: restore a pending venue arrival after sign-in.
+  // A visitor who opened a share or push link and then signed in is returned to
+  // the map, where `useVenueArrival` re-focuses the venue and records the
+  // Venue_Open with the stashed source (R1.5, R1.7). The stash is not read
+  // destructively here; the map owns clearing it.
+  useEffect(() => {
+    if (!isAuthenticated) return
+    if (!hasPendingVenueArrival()) return
+    setRoute('map')
+  }, [isAuthenticated, setRoute])
 
   // Must be called before any conditional returns to satisfy Rules of Hooks
   const activeDefaultTab = useNavigationStore((s) => s.activeDefaultTab)

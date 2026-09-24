@@ -4,6 +4,8 @@ import { useBusinessStore } from '@area-code/shared/stores/businessStore'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { BoostScoreboardCard } from './BoostScoreboardCard'
+
 // Operator-facing recent BoosterPurchase view (R6.6 - server already strips
 // `tierSnapshot`, `neighbourhoodIdSnapshot`, `floorAtPurchaseCents`). We do
 // not import the backend Zod schema here to avoid a backend → frontend
@@ -119,17 +121,22 @@ export function BoostPurchasesPanel() {
           {items.map((row) => (
             <div
               key={`${row.paidAt}#${row.yocoCheckoutId}`}
-              className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 flex flex-row items-center justify-between"
+              className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-3"
             >
-              <div className="flex flex-col gap-1">
-                <span className="text-[var(--text-primary)] font-medium text-sm">{nodeName(row.nodeId)}</span>
-                <div className="flex flex-row items-center gap-2 text-[var(--text-muted)] text-xs">
-                  <span>{formatPaidAt(row.paidAt)}</span>
-                  <span>·</span>
-                  <span>{row.duration}</span>
+              <div className="flex flex-row items-center justify-between">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[var(--text-primary)] font-medium text-sm">{nodeName(row.nodeId)}</span>
+                  <div className="flex flex-row items-center gap-2 text-[var(--text-muted)] text-xs">
+                    <span>{formatPaidAt(row.paidAt)}</span>
+                    <span>·</span>
+                    <span>{row.duration}</span>
+                  </div>
                 </div>
+                <span className="text-[var(--accent)] font-bold text-sm">{formatAmountCents(row.amountCents)}</span>
               </div>
-              <span className="text-[var(--accent)] font-bold text-sm">{formatAmountCents(row.amountCents)}</span>
+
+              {/* R7.4 - what this purchase's window recorded, per purchase. */}
+              <BoostScoreboardCard boostId={row.yocoCheckoutId} />
             </div>
           ))}
         </div>

@@ -1,21 +1,34 @@
 import { randomUUID } from 'node:crypto'
 
-import type { VenueMomentum } from '@area-code/shared/types'
+import { buildMediaUrl } from '@area-code/shared/lib/mediaUrl'
+import type { VenueMomentum, VenueTonight } from '@area-code/shared/types'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
-import { APP_ENV, AWS_REGION, DEV_MODE, requireEnv } from '../../shared/config/env.js'
+import { APP_ENV, AWS_REGION, DEV_MODE, mediaCdnBaseUrl, requireEnv, webBaseUrl } from '../../shared/config/env.js'
 import { AppError } from '../../shared/errors/AppError.js'
-import { kvBatchGet, kvDel, kvGet, kvSet } from '../../shared/kv/dynamodb-kv.js'
+import { kvBatchGet, kvGet, kvSet } from '../../shared/kv/dynamodb-kv.js'
 import { emitNodeCreated } from '../../shared/socket/events.js'
+import { nowEpochSeconds } from '../../shared/time/epoch.js'
 import { findBusinessById } from '../business/repository.js'
-import { getLivePresenceCount, getMomentum } from '../presence/repository.js'
+import {
+  getLivePresenceCount,
+  getMomentum,
+  parsePresenceCounterValue,
+  presenceCounterKvKey,
+} from '../presence/repository.js'
 import { getActiveRewardsByNodeId } from '../rewards/dynamodb-repository.js'
 
 import { isBoostActive } from './boost.js'
+import { cityPayloadCacheKey, invalidateCityPayload, invalidateCityPayloadForNode } from './cache.js'
 import { DEV_NODES } from './dev-nodes.js'
 import * as nodesDynamo from './dynamodb-repository.js'
+import { loadGoingCountByNode, readGoingForNode } from './going-service.js'
+import { parsePulseScore, pulseKvKey } from './pulse.js'
 import * as repo from './repository.js'
+import { DEFAULT_OG_IMAGE, type SharePreviewView } from './share-preview.js'
+import { buildShareSnapshot } from './share-snapshot.js'
+import { loadTonightByBusiness, loadTonightForBusiness } from './tonight-reader.js'
 
 // Tiers that count as 'paid' — nodes from these businesses appear on the public map.
 const PAID_TIERS = new Set(['starter', 'growth', 'pro', 'payg'])
@@ -57,34 +70,84 @@ function getNodeState(score: number): string {
 // path — honest-presence is unaffected (R2.4).
 const CITY_PAYLOAD_CACHE_TTL_SECONDS = 45
 
-function cityPayloadCacheKey(citySlug: string): string {
-  return `nodes:city:${citySlug}`
+/**
+ * Cached Live_Presence_Count for many venues in ONE batched KV read (R15.6).
+ *
+ * Used by the dev branch, which has no pulse KV read to batch with; the prod
+ * assembly reads the same counter keys inside its single pulse batch so the hot
+ * path stays at one round trip. A failing read is logged at error level and
+ * yields no counts rather than an invented number (R15.7).
+ */
+async function readPresenceCounters(nodeIds: string[]): Promise<Map<string, number>> {
+  if (nodeIds.length === 0) return new Map()
+  try {
+    const values = await kvBatchGet(nodeIds.map((id) => presenceCounterKvKey(id)))
+    return new Map(nodeIds.map((id) => [id, parsePresenceCounterValue(values.get(presenceCounterKvKey(id)))]))
+  } catch (err) {
+    console.error(`[nodes] presence counter seed failed for ${nodeIds.length} venues`, err)
+    return new Map()
+  }
 }
 
 async function assembleCityPayload(citySlug: string) {
-  const nodes = await repo.getNodesByCitySlug(citySlug)
-  if (nodes.length === 0) return nodes
+  const base = await repo.getNodesByCitySlug(citySlug)
+  if (base.length === 0) return base
 
-  // Best-effort pulse seed for Constellation beams on first paint. This must
-  // NEVER break the map: any KV failure falls back to a base node (pulseScore
-  // 0) and the beam lights up once the live socket pulse arrives. We only read
-  // the cheap pulse KV here - live presence counts come over the WebSocket, so
-  // we deliberately avoid a per-node GSI fan-out on this hot read path.
+  // Tonight (proof-of-demand R8.5): one schedule read per distinct business,
+  // not per node, because the scope is business-wide. An anticipation magnet
+  // that works on an empty map: it sits alongside pulse and taste on the card
+  // and never substitutes for them (`discovery-dna-vibe-over-convenience.md`).
+  const tonightByBusiness = await loadTonightByBusiness(
+    base.map((node) => node.businessId),
+    new Date().toISOString(),
+  )
+  const withTonight = base.map((node) => ({
+    ...node,
+    tonight: tonightByBusiness.get(node.businessId) ?? null,
+  }))
+
+  // Going counts (R9.2), read only for the venues whose count the card could
+  // ever show: the surfacing rule needs a Tonight, so a venue without one costs
+  // no count read at all. Intent sits beside Tonight as its own number and is
+  // never folded into pulse, the live count or the order (R9.4).
+  const goingByNode = await loadGoingCountByNode(
+    withTonight.filter((node) => node.tonight !== null).map((node) => node.id),
+  )
+  const nodes = withTonight.map((node) => ({
+    ...node,
+    // `null` means not measured on this payload, never a zero nobody counted.
+    goingCount: goingByNode.get(node.id) ?? null,
+  }))
+
+  // Aliveness seed for the map's first paint: pulse for the Constellation beams
+  // and the honest live presence count for the venue cards, both from ONE
+  // batched KV read (BatchGetItem, chunked at 100, UnprocessedKeys retried) —
+  // one round trip regardless of venue count (R2.2). No per-node GSI fan-out is
+  // added to this hot path (R15.6); the counters read here are the same cached
+  // values the realtime `node:presence_update` event carries, so the REST seed
+  // and the socket agree, and every per-venue read still resolves the
+  // authoritative record-derived count.
   //
-  // One batched KV read (BatchGetItem, chunked at 100, UnprocessedKeys retried)
-  // instead of a kvGet per node — one round trip regardless of venue count
-  // (R2.2). Key shape `pulse:{cityId}:{nodeId}` and the per-node pulseScore
-  // output are unchanged. A missing key means genuinely no pulse yet (score 0),
-  // not a swallowed error (honest-presence).
+  // A missing key means genuinely no pulse and nobody there, not a swallowed
+  // error (`honest-presence.md`). A failing read logs at error level with the
+  // city slug and returns the unseeded nodes (R15.7): the map still renders, the
+  // failure is visible in CloudWatch, and no number is invented.
   try {
     const city = await repo.getCityBySlug(citySlug)
-    if (!city) return nodes
-    const pulseByKey = await kvBatchGet(nodes.map((node) => `pulse:${city.id}:${node.id}`))
-    return nodes.map((node) => {
-      const scoreStr = pulseByKey.get(`pulse:${city.id}:${node.id}`)
-      return { ...node, pulseScore: scoreStr ? parseFloat(scoreStr) : 0 }
-    })
-  } catch {
+    if (!city) {
+      console.error(`[assembleCityPayload] no city row for slug ${citySlug}; serving nodes without an aliveness seed`)
+      return nodes
+    }
+    const values = await kvBatchGet(
+      nodes.flatMap((node) => [pulseKvKey(city.id, node.id), presenceCounterKvKey(node.id)]),
+    )
+    return nodes.map((node) => ({
+      ...node,
+      pulseScore: parsePulseScore(values.get(pulseKvKey(city.id, node.id))),
+      liveCheckInCount: parsePresenceCounterValue(values.get(presenceCounterKvKey(node.id))),
+    }))
+  } catch (err) {
+    console.error(`[assembleCityPayload] aliveness seed failed for city ${citySlug} (${nodes.length} nodes)`, err)
     return nodes
   }
 }
@@ -95,6 +158,10 @@ export async function getNodesByCitySlug(citySlug: string) {
     // the map can be exercised across all provinces and the global sample sites,
     // not only the user's default city. Prod stays city-scoped via the repo.
     void citySlug
+    // Live counts come from the same real presence counters prod reads, against
+    // dev data (R15.6). The old branch derived a count from the mock pulse
+    // score, which meant a dev venue claimed a crowd nobody had checked into.
+    const liveCounts = await readPresenceCounters(DEV_NODES.map((n) => n.id))
     return DEV_NODES.map((n) => ({
       id: n.id,
       name: n.name,
@@ -108,7 +175,7 @@ export async function getNodesByCitySlug(citySlug: string) {
       isVerified: true,
       businessTier: 'starter' as const,
       pulseScore: n.pulseScore,
-      liveCheckInCount: n.pulseScore >= 31 ? Math.max(1, Math.round(n.pulseScore / 10)) : 0,
+      liveCheckInCount: liveCounts.get(n.id) ?? 0,
     }))
   }
 
@@ -131,23 +198,32 @@ export async function getNodesByCitySlug(citySlug: string) {
   return payload
 }
 
-export async function getNodeDetail(nodeId: string) {
+/**
+ * Venue detail. `viewerUserId` is the consumer the request identified, or `null`
+ * for an anonymous read: it decides only whether the viewer's own Going state is
+ * reported (proof-of-demand R9.2), never what the venue looks like.
+ */
+export async function getNodeDetail(nodeId: string, viewerUserId: string | null = null) {
   if (DEV_MODE) {
     const node = DEV_NODES.find((n) => n.id === nodeId)
     if (!node) throw AppError.notFound('Node not found')
-    return { ...node, pulseScore: node.pulseScore }
+    return { ...node, pulseScore: node.pulseScore, tonight: null, goingCount: 0 }
   }
 
   const node = await repo.getNodeById(nodeId)
   if (!node) throw AppError.notFound('Node not found')
 
   // Get pulse score from DynamoDB KV
-  const cityId = node.city?.slug
-  let pulseScore = 0
-  if (cityId) {
-    const score = await kvGet(`pulse:${cityId}:${nodeId}`)
-    pulseScore = score ? parseFloat(score) : 0
-  }
+  const cityKey = node.city?.slug
+  const pulseScore = cityKey ? parsePulseScore(await kvGet(pulseKvKey(cityKey, nodeId))) : 0
+
+  // Tonight for the detail's Tonight block (R8.5, R8.7). Business-scoped, so it
+  // resolves from the owning business's schedule; null when nothing is on.
+  const tonight = await loadTonightForBusiness(node.businessId, new Date().toISOString())
+
+  // Going for the same block (R9.2): the true count, plus this viewer's own mark
+  // when a token identified them. Intent only, no bearing on pulse or presence.
+  const going = await readGoingForNode(nodeId, viewerUserId)
 
   // Registration evidence is admin-only. The public detail route must never
   // expose it, even though the repository read model carries it for review.
@@ -157,10 +233,40 @@ export async function getNodeDetail(nodeId: string) {
   // Expose the paid Boost_Window read model (billing R5.2, R5.5). `boostUntil`
   // flows through the spread; `boostActive` is computed at read time and
   // reverts to false once the window passes, with no expiry worker or residue.
-  return { ...publicNode, pulseScore, boostActive: isBoostActive(node.boostUntil) }
+  return { ...publicNode, pulseScore, tonight, ...going, boostActive: isBoostActive(node.boostUntil) }
 }
 
-export async function getNodePublic(nodeSlug: string) {
+/**
+ * Public (unauthenticated) venue read model. Backs
+ * `GET /v1/nodes/:nodeSlug/public` and the Share_Preview route, so the two can
+ * never drift apart on what a venue looks like to a stranger with a link.
+ */
+export interface PublicNodeView {
+  name: string
+  category: string
+  city: string | null
+  pulseScore: number
+  /** Honest Live_Presence_Count: who is there right now (`honest-presence.md`). */
+  liveCheckInCount: number
+  activeRewardCount: number
+  /** Venue header image URL on the Media_CDN, or null when none is set. */
+  ogImage: string | null
+  /**
+   * Tonight summary for the venue's current local night (R8.5), or null when
+   * nothing is published. Feeds the Share_Preview snapshot line: a stranger with
+   * the link sees the reason to come tonight (R1.2). `VenueTonight` is a
+   * superset of the snapshot's own `ShareSnapshotTonight`, so it assigns in.
+   */
+  tonight: VenueTonight | null
+  /**
+   * How many consumers marked going for tonight (R9.2). Intent, not presence:
+   * it sits beside `liveCheckInCount` and never adds to it, and the surfacing
+   * threshold is applied by the surface, not here.
+   */
+  goingCount: number
+}
+
+export async function getNodePublic(nodeSlug: string): Promise<PublicNodeView> {
   if (DEV_MODE) {
     const node = DEV_NODES.find((n) => n.slug === nodeSlug)
     if (!node) throw AppError.notFound('Node not found')
@@ -169,20 +275,72 @@ export async function getNodePublic(nodeSlug: string) {
       category: node.category,
       city: node.cityName,
       pulseScore: node.pulseScore,
+      liveCheckInCount: node.pulseScore >= 31 ? Math.max(1, Math.round(node.pulseScore / 10)) : 0,
       activeRewardCount: 2,
       ogImage: null,
+      tonight: null,
+      goingCount: 0,
     }
   }
   const node = await repo.getNodeBySlug(nodeSlug)
   if (!node) throw AppError.notFound('Node not found')
 
+  // Pulse comes from the same KV key `getNodeDetail` reads (R1.4), so the public
+  // model and the venue detail can never disagree about how alive a venue is.
+  const cityKey = node.city?.slug
+  const pulseScore = cityKey ? parsePulseScore(await kvGet(pulseKvKey(cityKey, node.id))) : 0
+
+  // Live count from the authoritative presence read: `present` records that have
+  // not expired. Epoch SECONDS, the unit presence records store `expiresAt` in
+  // and the unit the check-in write path passes (R15.4). A venue with nobody
+  // there reads as zero, honestly (`honest-presence.md`).
+  const liveCheckInCount = await getLivePresenceCount(node.id, nowEpochSeconds())
+
+  // Tonight for the share snapshot (R8.5, R1.2). Resolved from the owning
+  // business's schedule, the same read the map and the detail use.
+  const tonight = await loadTonightForBusiness(node.businessId, new Date().toISOString())
+
+  // Going count from the same read the detail uses, so a stranger with a link and
+  // a signed-in consumer never see two different numbers (R9.2). Anonymous, so no
+  // viewer state.
+  const { goingCount } = await readGoingForNode(node.id, null)
+
   return {
     name: node.name,
     category: node.category,
     city: node.city?.name ?? null,
-    pulseScore: 0,
+    pulseScore,
+    liveCheckInCount,
     activeRewardCount: node.rewards.length,
-    ogImage: null,
+    ogImage: buildMediaUrl(mediaCdnBaseUrl(), node.headerImageKey),
+    tonight,
+    goingCount,
+  }
+}
+
+/**
+ * Share_Preview view model for `GET /v1/share/node/:slug`
+ * (proof-of-demand R1.2, R12.2).
+ *
+ * Reads the one public venue model and turns it into the document's fields:
+ * the snapshot line for `og:description`, the venue header image (or the site
+ * default) for `og:image`, and the shared consumer-domain link for `og:url`.
+ * Throws `notFound` for an unknown slug, like every other venue read.
+ */
+export async function getNodeSharePreview(slug: string): Promise<SharePreviewView> {
+  const node = await getNodePublic(slug)
+  return {
+    slug,
+    name: node.name,
+    description: buildShareSnapshot({
+      name: node.name,
+      pulseScore: node.pulseScore,
+      liveCheckInCount: node.liveCheckInCount,
+      activeRewardCount: node.activeRewardCount,
+      tonight: node.tonight,
+    }),
+    imageUrl: node.ogImage ?? DEFAULT_OG_IMAGE,
+    canonicalUrl: `${webBaseUrl()}/node/${encodeURIComponent(slug)}`,
   }
 }
 
@@ -257,8 +415,7 @@ export async function getTrendingNodes(limit = 10): Promise<{ items: TrendingIte
       const cityId = node['cityId'] as string
       let pulseScore = 0
       try {
-        const score = await kvGet(`pulse:${cityId}:${nodeId}`)
-        pulseScore = score ? parseFloat(score) : 0
+        pulseScore = parsePulseScore(await kvGet(pulseKvKey(cityId, nodeId)))
       } catch {
         // KV lookup failed, default to 0
       }
@@ -357,6 +514,11 @@ export async function businessCreateNode(
   const business = await findBusinessById(businessId)
   const isPaid = business ? PAID_TIERS.has(business.tier ?? 'free') : false
 
+  // A new venue changes the city payload, so the cached assembly has to go
+  // (R15.5). Dropped regardless of tier: a free-tier node is excluded by the
+  // membership filter, and the next assembly is the one place that decides.
+  await invalidateCityPayload(city.slug)
+
   if (!isPaid) {
     return node
   }
@@ -439,7 +601,7 @@ export async function createNode(
   const city = await repo.getCityBySlug(data.citySlug)
   if (!city) throw AppError.badRequest('Invalid city')
 
-  return repo.createNode({
+  const created = await repo.createNode({
     name: data.name,
     slug: slugify(data.name),
     category: data.category,
@@ -448,6 +610,9 @@ export async function createNode(
     cityId: city.id,
     submittedBy: businessId,
   })
+  // New venue in this city: the cached assembly is out of date (R15.5).
+  await invalidateCityPayload(city.slug)
+  return created
 }
 
 export async function updateNode(
@@ -485,6 +650,11 @@ export async function updateNode(
 
   const result = await repo.updateNode(nodeId, businessId, patch as Parameters<typeof repo.updateNode>[2])
   if (result.count === 0) throw AppError.forbidden('You do not own this node')
+
+  // Name, category, marker colour, icon and position all render on the map, so
+  // the cached city assembly has to be dropped or the edit waits out the TTL
+  // (R15.5).
+  await invalidateCityPayloadForNode(nodeId)
 }
 
 export async function updateNodeSocialLinks(
@@ -496,7 +666,7 @@ export async function updateNodeSocialLinks(
   if (result.count === 0) throw AppError.forbidden('You do not own this node')
 
   if (result.citySlug) {
-    await kvDel(cityPayloadCacheKey(result.citySlug))
+    await invalidateCityPayload(result.citySlug)
   }
 }
 
@@ -534,6 +704,9 @@ export async function reportNode(reporterId: string, nodeId: string, type: strin
     const count = await repo.countRecentFraudReports(nodeId)
     if (count >= 5) {
       await repo.flagNode(nodeId)
+      // The flag sets `isActive` false, which takes the venue off the map: same
+      // membership change as an admin deactivation, same invalidation (R15.5).
+      await invalidateCityPayloadForNode(nodeId)
     }
   }
 
@@ -626,7 +799,7 @@ export async function getNodePresence(
     // substitute a value.
     return { nodeId, livePresenceCount: 0, momentum: 'steady' }
   }
-  const now = Math.floor(Date.now() / 1000)
+  const now = nowEpochSeconds()
   const livePresenceCount = await getLivePresenceCount(nodeId, now)
   // Seed the honest momentum label on first paint; kept live afterwards by
   // `node:presence_update`. `steady` when there is no recent trend to claim.

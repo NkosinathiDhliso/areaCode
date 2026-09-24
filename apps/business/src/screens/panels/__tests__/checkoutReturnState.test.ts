@@ -9,7 +9,9 @@ import { describe, it, expect } from 'vitest'
 
 import {
   computeReturnState,
+  hasBoostPurchaseLanded,
   hasPaidStateLanded,
+  parseReturnCheckoutId,
   parseReturnStatus,
   POLL_INTERVAL_MS,
   POLL_MAX_MS,
@@ -145,5 +147,43 @@ describe('parseReturnStatus', () => {
 
   it('reads status among other query params', () => {
     expect(parseReturnStatus('?plan=growth&status=success&x=1')).toBe('success')
+  })
+})
+
+// ─── Boost return identity (R15.11) ──────────────────────────────────────────
+
+describe('parseReturnCheckoutId', () => {
+  it('reads the awaited checkout id', () => {
+    expect(parseReturnCheckoutId('?status=success&checkoutId=ch_abc123')).toBe('ch_abc123')
+  })
+
+  it('is null when absent or empty', () => {
+    expect(parseReturnCheckoutId('?status=success')).toBeNull()
+    expect(parseReturnCheckoutId('?checkoutId=')).toBeNull()
+    expect(parseReturnCheckoutId('?checkoutId=%20%20')).toBeNull()
+  })
+
+  it('rejects anything that could not key an Idempotency_Marker', () => {
+    expect(parseReturnCheckoutId('?checkoutId=ch/abc')).toBeNull()
+    expect(parseReturnCheckoutId('?checkoutId=' + encodeURIComponent('<script>'))).toBeNull()
+    expect(parseReturnCheckoutId(`?checkoutId=${'a'.repeat(129)}`)).toBeNull()
+  })
+})
+
+describe('hasBoostPurchaseLanded', () => {
+  const rows = [{ yocoCheckoutId: 'ch_new' }, { yocoCheckoutId: 'ch_old' }]
+
+  it('lands on the awaited purchase wherever it sits in the list', () => {
+    expect(hasBoostPurchaseLanded(rows, 'ch_old')).toBe(true)
+    expect(hasBoostPurchaseLanded(rows, 'ch_new')).toBe(true)
+  })
+
+  it('does not land on a different purchase', () => {
+    expect(hasBoostPurchaseLanded(rows, 'ch_other')).toBe(false)
+  })
+
+  it('never lands without an awaited id, rather than guessing from a count', () => {
+    expect(hasBoostPurchaseLanded(rows, null)).toBe(false)
+    expect(hasBoostPurchaseLanded([], null)).toBe(false)
   })
 })

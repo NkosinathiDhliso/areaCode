@@ -3,6 +3,8 @@
  * Source of truth: packages/shared/types/index.ts
  */
 
+import type { FoundVia } from '@area-code/shared/constants/attribution'
+
 export type NodeState = 'dormant' | 'quiet' | 'active' | 'buzzing' | 'popping'
 export type ToastType = 'surge' | 'city_pulse' | 'reward_pressure' | 'checkin' | 'reward_new' | 'streak' | 'leaderboard'
 
@@ -34,6 +36,13 @@ export interface BusinessCheckinPayload {
   consumerDisplayName?: string
   checkInCount?: number
   timestamp: string
+  /**
+   * How the consumer found the venue (proof-of-demand R3.6). Required, so the
+   * live panel can split "found you here" from "already in the room" on every
+   * event rather than guessing from an absent field. An enum only: it carries no
+   * share token, referrer or campaign id (R11.2).
+   */
+  foundVia: FoundVia
 }
 
 export interface BusinessCheckinDetailPayload {
@@ -43,6 +52,25 @@ export interface BusinessCheckinDetailPayload {
   tier: string
   visitCount: number
   timestamp: string
+  /** How the consumer found the venue (proof-of-demand R3.6). */
+  foundVia: FoundVia
+}
+
+/**
+ * Going count for one venue and one night (proof-of-demand R9.5).
+ *
+ * Aggregate by construction: a node id, the night, the venue's own name, and a
+ * count. There is no consumer field to strip, so it carries no identity and
+ * enables no tracking. INTENT, not presence: the owner surface that renders it
+ * must keep it out of every aliveness readout (`honest-presence.md`, R9.4).
+ */
+export interface BusinessGoingPayload {
+  nodeId: string
+  nodeName: string
+  /** The Going night, `YYYY-MM-DD`, with the 04:00 SAST rollover. */
+  date: string
+  /** The true count after the toggle, including zero. */
+  goingCount: number
 }
 
 export interface TierChangedPayload {
@@ -122,6 +150,7 @@ export interface ServerToClientEvents {
   'business:checkin': (payload: BusinessCheckinPayload) => void
   'business:checkin_detail': (payload: BusinessCheckinDetailPayload) => void
   'business:reward_claimed': (payload: BusinessRewardClaimedPayload) => void
+  'business:going': (payload: BusinessGoingPayload) => void
   'toast:friend_checkin': (payload: {
     type: ToastType
     message: string

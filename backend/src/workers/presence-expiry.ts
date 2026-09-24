@@ -39,6 +39,7 @@ import { getMutualFollowIds, getFollowingIds } from '../features/social/reposito
 import { documentClient, TableNames } from '../shared/db/dynamodb.js'
 import { canEmitToFriends } from '../shared/privacy/privacy-guard.js'
 import { emitFriendCheckout, emitPresenceUpdate } from '../shared/socket/events.js'
+import { nowEpochSeconds } from '../shared/time/epoch.js'
 
 /** Cities are stored in `app-data` as `CITY#<id>` rows where `sk = pk`. */
 async function getCities() {
@@ -50,6 +51,62 @@ async function getCities() {
     }),
   )
   return (result.Items || []).map((c) => ({ id: (c['cityId'] ?? c['pk']) as string, slug: c['slug'] as string }))
+}
+
+/**
+ * Best-effort `friend:checkout` fan-out to the departing consumer's mutual
+ * follows, so their taste-match store stays honest (Requirements 3.4, 3.5).
+ * Only runs when the consumer's privacy allows identity sharing.
+ */
+async function emitFriendCheckoutFanout(userId: string, nodeId: string): Promise<void> {
+  const canEmit = await canEmitToFriends(userId)
+  if (!canEmit) return
+
+  const followingIds = await getFollowingIds(userId)
+  const friendIds = await getMutualFollowIds(userId, followingIds)
+  await Promise.allSettled([...friendIds].map((friendId) => emitFriendCheckout(friendId, { userId, nodeId })))
+}
+
+/**
+ * Expire one due presence row: conditional expire (only fires while still due),
+ * then the bounded dwell row and the friend fan-out. Returns false when the
+ * conditional expire was a no-op (already ended, or raced by a check-out), which
+ * is the caller's cue not to count it.
+ */
+async function expireOnePresenceRecord(userId: string, nodeId: string, now: number): Promise<boolean> {
+  const expired = await endPresenceByExpiry({ userId, nodeId, now })
+  if (!expired) return false
+
+  await writeDwellRow({
+    nodeId,
+    durationSeconds: expired.dwellSeconds!,
+    termination: 'expiry_terminated',
+    endedAt: expired.endedAt!,
+  })
+
+  try {
+    await emitFriendCheckoutFanout(userId, nodeId)
+  } catch (err) {
+    console.warn(`[presence-expiry] friend:checkout emit failed for user ${userId}: ${String(err)}`)
+  }
+
+  return true
+}
+
+/**
+ * Expire every presence row that is due at one node. Returns how many actually
+ * ended, which is what decides whether the node's cached counter needs
+ * reconciling and broadcasting at all.
+ */
+async function expireDueAtNode(nodeId: string, now: number): Promise<number> {
+  const due = await queryDuePresenceRecords(nodeId, now)
+  if (due.length === 0) return 0
+
+  let expired = 0
+  for (const record of due) {
+    if (await expireOnePresenceRecord(record.userId, nodeId, now)) expired++
+  }
+  return expired
 }
 
 /**
@@ -81,43 +138,9 @@ export async function handler() {
       const nodeId = n['nodeId'] as string
 
       // Compute `now` per node so a long sweep stays accurate as it progresses.
-      const now = Math.floor(Date.now() / 1000)
-      const due = await queryDuePresenceRecords(nodeId, now)
-      if (due.length === 0) continue
-
-      let expiredForNode = 0
-      for (const record of due) {
-        // Conditional expire: only fires while still due. Returns the expired
-        // record (with bounded dwell) on success, or null on a no-op (already
-        // ended / raced by a check-out).
-        const expired = await endPresenceByExpiry({ userId: record.userId, nodeId, now })
-        if (!expired) continue
-
-        await writeDwellRow({
-          nodeId,
-          durationSeconds: expired.dwellSeconds!,
-          termination: 'expiry_terminated',
-          endedAt: expired.endedAt!,
-        })
-
-        // Best-effort emit `friend:checkout` to the expired user's mutual friends
-        // so their taste-match store stays honest (Requirements 3.4, 3.5).
-        try {
-          const canEmit = await canEmitToFriends(record.userId)
-          if (canEmit) {
-            const followingIds = await getFollowingIds(record.userId)
-            const friendIds = await getMutualFollowIds(record.userId, followingIds)
-            await Promise.allSettled(
-              [...friendIds].map((friendId) => emitFriendCheckout(friendId, { userId: record.userId, nodeId })),
-            )
-          }
-        } catch (err) {
-          console.warn(`[presence-expiry] friend:checkout emit failed for user ${record.userId}: ${String(err)}`)
-        }
-
-        expiredForNode++
-        totalExpired++
-      }
+      const now = nowEpochSeconds()
+      const expiredForNode = await expireDueAtNode(nodeId, now)
+      totalExpired += expiredForNode
 
       if (expiredForNode === 0) continue
       nodesTouched++

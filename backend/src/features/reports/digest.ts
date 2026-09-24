@@ -8,12 +8,20 @@
 // timezone-library lookup, and keeps `digestWeekFor` framework-free and
 // property-testable (callers pass the reference instant).
 
+import { SAST_OFFSET_MS } from '../../shared/time/sast.js'
+
 import { analyzePeakHours } from './analyzers/peak-hours.js'
 import { anonymizeCheckIns, type RawCheckIn } from './anonymize.js'
+import { buildReceiptCopy } from './receipt-copy.js'
+import {
+  computeReceipt,
+  RECEIPT_METRIC_NAMES,
+  type Receipt,
+  type ReceiptBySource,
+  type ReceiptMetricName,
+} from './receipt.js'
+import { SUPPRESSION_FLOOR } from './suppression.js'
 import { FULL_ACCESS_TIERS } from './tier-gating.js'
-
-/** Fixed SAST offset (UTC+2, no DST). */
-const SAST_OFFSET_MS = 2 * 60 * 60 * 1000
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const WEEK_MS = 7 * DAY_MS
@@ -88,7 +96,10 @@ export function digestWeekFor(nowIso: string): DigestWeek {
 // the zod `digestRowSchema`; this file owns the TypeScript shape so the pure
 // logic and the schema never drift).
 
-/** Numeric Attribution_Metrics subject to the Suppression_Floor. */
+/**
+ * Numeric Attribution_Metrics that carry a week-over-week delta and are
+ * suppressed by their own count.
+ */
 export type DigestMetricName =
   | 'visits'
   | 'uniqueVisitors'
@@ -120,7 +131,60 @@ export interface DigestMetrics {
   shares: number
   busiestDay: string | null
   busiestHour: number | null
+
+  // ── Attribution_Metrics: the Receipt for the Digest_Week (R4.5) ────────────
+  //
+  // Every field below is optional because a Digest_Row written before the
+  // Receipt existed has none of them. Absent means the week was never measured,
+  // which is not the same fact as zero, so the copy builder stays silent on
+  // Found_You for those weeks instead of claiming nobody found the venue.
+
+  /** Distinct consumers who found the venue on Area Code and checked in. */
+  foundYouVisitors?: number
+  /** Distinct consumers in the week with Walk_In check-ins only. */
+  walkInVisitors?: number
+  /** Found_You consumers whose first-ever check-in here falls in the week. */
+  foundYouFirstTimers?: number
+  /** Found_You consumers counted once each, under their earliest source. */
+  bySource?: ReceiptBySource
+  /** Set when the week opens before `foundVia` was stamped (partial measurement). */
+  measuredFrom?: string | null
+
+  // ── Going: the pipeline before doors (R9.8) ────────────────────────────────
+  //
+  // Optional for the same reason as the Receipt block: a Digest_Row written
+  // before Going existed never measured it, and unmeasured is not zero. INTENT
+  // only. These two numbers are never an input to pulse, aliveness, momentum or
+  // any ranking (R9.4), and the copy that renders them says "marked going",
+  // never that anybody arrived.
+
+  /** Marks recorded at the business's venues across the week's nights. */
+  goingMarks?: number
+  /**
+   * How many of those marks belong to a consumer who also checked in at that
+   * venue on that night. A measured overlap, not a conversion claim: nothing
+   * here says the mark caused the visit.
+   */
+  goingCheckedIn?: number
 }
+
+/**
+ * Everything that can appear in the suppression list: the numeric metrics above
+ * plus the Receipt values the digest now carries. Receipt values are kept out of
+ * `DigestMetricName` on purpose — they get no week-over-week delta (the Receipt
+ * is a distinct-consumer split, not a running count), so `DigestDeltas` and the
+ * persisted `deltas` map stay exactly the eight metrics they always were.
+ */
+export type DigestSuppressibleName = DigestMetricName | ReceiptMetricName | DigestGoingMetricName
+
+/**
+ * The Going value the floor applies to. Only the mark count: the checked-in
+ * figure is read against it, so suppressing the denominator withholds the
+ * comparison, and there is nothing else to suppress. Kept out of
+ * `DigestMetricName` for the same reason as the Receipt values: Going carries no
+ * week-over-week delta, so `DigestDeltas` stays the eight metrics it always was.
+ */
+export type DigestGoingMetricName = 'goingMarks'
 
 /** Signed week-over-week deltas, keyed by metric. Absent when no prior week. */
 export type DigestDeltas = Partial<Record<DigestMetricName, number>>
@@ -134,7 +198,7 @@ export type DigestDeltas = Partial<Record<DigestMetricName, number>>
 export interface DigestData {
   metrics: DigestMetrics
   deltas?: DigestDeltas
-  suppressed: DigestMetricName[]
+  suppressed: DigestSuppressibleName[]
 }
 
 // ============================================================================
@@ -162,6 +226,27 @@ export const ZERO_VISITS_NEXT_STEP =
   'Ask your staff to mention Area Code at the till, or put the First-Get poster up where customers order.'
 
 const plural = (n: number, singular: string): string => (n === 1 ? singular : `${singular}s`)
+
+/**
+ * The Going sentence for a Digest_Week (R9.8), or null when the week carries no
+ * Going measurement at all.
+ *
+ * Null, not a zero line: a Digest_Row written before Going existed never counted
+ * it, and saying "0 marked going" for a week nobody measured would be a claim we
+ * cannot stand behind (`honest-presence.md`).
+ *
+ * Below the Suppression_Floor the absolute count still renders and the
+ * checked-in comparison does not, which is the same rule every other derived
+ * figure in this builder follows: too small a sample cannot carry a ratio.
+ */
+function buildGoingLine(metrics: DigestMetrics, suppressed: boolean): string | null {
+  const { goingMarks, goingCheckedIn } = metrics
+  if (goingMarks === undefined) return null
+
+  const marked = `${goingMarks} marked going before doors`
+  if (suppressed || goingCheckedIn === undefined) return `${marked}.`
+  return `${marked}, ${goingCheckedIn} of them checked in.`
+}
 
 /** A signed comparison clause, e.g. ", up 3 from the previous week". */
 function deltaClause(delta: number | undefined): string {
@@ -198,6 +283,42 @@ function tierClose(tier: string): string {
 }
 
 /**
+ * Rebuild the Receipt from the persisted Attribution_Metrics so the digest can
+ * render it through `buildReceiptCopy` — the one home for every owner-facing
+ * "found you" sentence (R4.6). The digest never writes a second wording of the
+ * same fact; the email, the Plans panel and the Monday card read identical words.
+ *
+ * Returns null for a Digest_Row written before the Receipt existed: those weeks
+ * carry no measurement, and unmeasured is not zero, so the digest says nothing
+ * about Found_You rather than reporting a zero it cannot stand behind (R4.7).
+ */
+function receiptFromMetrics(metrics: DigestMetrics, suppressed: DigestSuppressibleName[]): Receipt | null {
+  const { foundYouVisitors, walkInVisitors, foundYouFirstTimers, bySource } = metrics
+  if (
+    foundYouVisitors === undefined ||
+    walkInVisitors === undefined ||
+    foundYouFirstTimers === undefined ||
+    bySource === undefined
+  ) {
+    return null
+  }
+
+  return {
+    foundYouVisitors,
+    walkInVisitors,
+    uniqueVisitors: metrics.uniqueVisitors,
+    foundYouFirstTimers,
+    bySource,
+    // The digest list is the union of its own floor pass and the Receipt's;
+    // narrowing it back hands `buildReceiptCopy` exactly what `computeReceipt`
+    // produced, so a clause suppressed on one surface is suppressed on all.
+    suppressed: RECEIPT_METRIC_NAMES.filter((name) => suppressed.includes(name)),
+    // No annotation stored means the whole window was measured.
+    measuredFrom: metrics.measuredFrom ?? null,
+  }
+}
+
+/**
  * The ordered digest sentences shared by the email and the dashboard card.
  *
  * Honest_Framing (R2.1, R2.2): measurement verbs only (recorded, confirmed,
@@ -207,10 +328,15 @@ function tierClose(tier: string): string {
  * Zero-visits (R2.3): stated plainly with exactly one next step and no numbers.
  * Tier-aware close (R5.2, R5.3). Nothing the platform did not record is
  * rendered (R2.4): no revenue, no projected traffic.
+ *
+ * The Monday headline is the Found_You sentence (proof-of-demand R4.5): the
+ * owner's first line is how many people found the venue on Area Code and checked
+ * in, not the visit total. Those sentences come from `buildReceiptCopy`, shared
+ * with the trial and renewal emails and the Plans panel.
  */
 export function buildDigestCopy(digest: DigestData, tier: string): string[] {
   const { metrics, deltas = {}, suppressed } = digest
-  const isSuppressed = (m: DigestMetricName): boolean => suppressed.includes(m)
+  const isSuppressed = (m: DigestSuppressibleName): boolean => suppressed.includes(m)
   const deltaFor = (m: DigestMetricName): string => (isSuppressed(m) ? '' : deltaClause(deltas[m]))
 
   // Zero-visits branch: honest statement, exactly one next step, no numbers.
@@ -219,6 +345,15 @@ export function buildDigestCopy(digest: DigestData, tier: string): string[] {
   }
 
   const lines: string[] = []
+
+  // The Receipt leads: Found_You, then Walk_In, then the clauses that clear the
+  // floor. A week with visits but no Found_You takes the Receipt's quiet branch,
+  // which closes on one next step instead of a padded number (R4.7). No
+  // Onboarding_Checklist is read here, so that step is share and Tonight.
+  const receipt = receiptFromMetrics(metrics, suppressed)
+  if (receipt !== null) {
+    lines.push(...buildReceiptCopy(receipt, null, 'week').lines)
+  }
 
   lines.push(
     `${metrics.visits} ${plural(metrics.visits, 'visit')} recorded through Area Code this week` +
@@ -253,6 +388,13 @@ export function buildDigestCopy(digest: DigestData, tier: string): string[] {
       `${deltaFor('shares')}.`,
   )
 
+  // Going, framed as intent (R9.8). "Marked going" is the only verb allowed
+  // here: a mark is a person saying they mean to be out, not an arrival, and the
+  // second clause is a measured overlap with that night's check-ins, never a
+  // conversion the platform caused (`honest-presence.md`, R9.3, R10.3).
+  const goingLine = buildGoingLine(metrics, isSuppressed('goingMarks'))
+  if (goingLine !== null) lines.push(goingLine)
+
   if (metrics.busiestDay !== null && metrics.busiestHour !== null) {
     const hour = String(metrics.busiestHour).padStart(2, '0')
     lines.push(`Busiest recorded window was ${metrics.busiestDay} around ${hour}:00.`)
@@ -273,11 +415,6 @@ export function buildDigestCopy(digest: DigestData, tier: string): string[] {
 // (task 3.1) and the generator wiring (task 4.2) load the events and the prior
 // week's metrics, then hand them here. That keeps the metric math property
 // testable (Property 2: metric conservation) and free of DynamoDB and cycles.
-
-/** Suppression_Floor: percentages and week-over-week comparisons require the
- * underlying sample to reach this many events. Absolute counts always render.
- * Matches the reports anonymization posture (min sample of 5). */
-export const SUPPRESSION_FLOOR = 5
 
 /** Every numeric Attribution_Metric, in render order. Single source for the
  * delta and suppression passes so a new metric cannot be silently skipped. */
@@ -322,6 +459,16 @@ export interface DigestSources {
    * counters. A recorded reach fact, never a causal or ranking signal.
    */
   shares: number
+  /**
+   * Going marks recorded across the week's nights, and how many of them belong
+   * to a consumer who also checked in at that venue on that night (R9.8). The
+   * caller reads the week's Going rows and joins them to the window check-ins in
+   * memory; aggregate counts only, no identifiers reach here.
+   *
+   * Omitted when Going was not read for this week, which the copy builder renders
+   * as silence rather than as zero.
+   */
+  going?: { marks: number; checkedIn: number }
 }
 
 /**
@@ -347,7 +494,11 @@ function busiestHourFrom(hourlyDistribution: Record<number, number>, visits: num
  * Compute the Attribution_Metrics, week-over-week deltas, and suppression list
  * for one business over one Digest_Week.
  *
- * - visits / uniqueVisitors: from the window check-ins (R1.2).
+ * - visits: from the window check-ins (R1.2). uniqueVisitors comes from the
+ *   Receipt computed here over the same check-ins.
+ * - foundYouVisitors / walkInVisitors / foundYouFirstTimers / bySource /
+ *   measuredFrom: the Receipt for the Digest_Week (proof-of-demand R4.5), from
+ *   `computeReceipt` — one computation behind every owner-facing split.
  * - firstTimeVisitors: window visitors whose earliest recorded check-in at any
  *   of the business's nodes falls inside the window (R1.3). By construction this
  *   is counted only over the window's unique visitors, so
@@ -360,8 +511,9 @@ function busiestHourFrom(hourlyDistribution: Record<number, number>, visits: num
  *   only, never recomputed from raw data. Absent when there is no prior week
  *   (R1.2).
  * - suppressed: every metric whose absolute count is below the Suppression_Floor
- *   (R1.5); the copy builder shows their counts but withholds derived
- *   percentages and comparisons.
+ *   (R1.5), plus the Receipt values below it (R4.8); the copy builder shows
+ *   their counts but withholds derived percentages, comparisons and the clauses
+ *   that divide them.
  *
  * The `salt` is the reports anonymization salt, used only to bin check-ins for
  * the busiest day/hour via the shared anonymizer; no identifier reaches the
@@ -373,14 +525,22 @@ export function computeDigest(
   salt: string,
   priorMetrics?: DigestMetrics | null,
 ): DigestData {
-  const { windowCheckIns, earliestCheckInByUser, redemptions, firstGetIssued, firstGetConversions, shares } = sources
+  const { windowCheckIns, earliestCheckInByUser, redemptions, firstGetIssued, firstGetConversions, shares, going } =
+    sources
 
   const windowStartMs = new Date(week.windowStartUtc).getTime()
 
   const visits = windowCheckIns.length
 
+  // The Receipt is computed here, from the same check-ins and the same
+  // earliest-check-in map, so the split and the totals cannot disagree: the
+  // digest takes `uniqueVisitors` from it rather than counting a second time,
+  // which makes `foundYouVisitors + walkInVisitors === uniqueVisitors`
+  // structural on this surface too (R4.2).
+  const receipt = computeReceipt(windowCheckIns, week, earliestCheckInByUser)
+
   const uniqueUserIds = new Set(windowCheckIns.map((checkIn) => checkIn.userId))
-  const uniqueVisitors = uniqueUserIds.size
+  const uniqueVisitors = receipt.uniqueVisitors
 
   let firstTimeVisitors = 0
   for (const userId of uniqueUserIds) {
@@ -408,9 +568,24 @@ export function computeDigest(
     shares,
     busiestDay: peakHours.peakDay,
     busiestHour: busiestHourFrom(peakHours.hourlyDistribution, visits),
+    foundYouVisitors: receipt.foundYouVisitors,
+    walkInVisitors: receipt.walkInVisitors,
+    foundYouFirstTimers: receipt.foundYouFirstTimers,
+    bySource: receipt.bySource,
+    measuredFrom: receipt.measuredFrom,
+    // Going travels only when it was read. Absent means unmeasured, which the
+    // copy builder renders as silence (R9.8).
+    ...(going ? { goingMarks: going.marks, goingCheckedIn: going.checkedIn } : {}),
   }
 
-  const suppressed = DIGEST_METRIC_NAMES.filter((name) => metrics[name] < SUPPRESSION_FLOOR)
+  const suppressed: DigestSuppressibleName[] = [
+    ...DIGEST_METRIC_NAMES.filter((name) => metrics[name] < SUPPRESSION_FLOOR),
+    // The Receipt applied the same floor to its own values. `uniqueVisitors` is
+    // shared with the pass above and identical there, so it is taken once.
+    ...receipt.suppressed.filter((name) => name !== 'uniqueVisitors'),
+    // Too few marks to carry the checked-in comparison; the count still renders.
+    ...(going !== undefined && going.marks < SUPPRESSION_FLOOR ? (['goingMarks'] as const) : []),
+  ]
 
   const data: DigestData = { metrics, suppressed }
 

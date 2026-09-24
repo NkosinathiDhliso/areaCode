@@ -50,6 +50,32 @@ export function requireEnv(name: string, devDefault?: string): string {
 }
 
 /**
+ * Consumer web base URL (`AREA_CODE_WEB_URL`), without a trailing slash.
+ *
+ * One home for the public origin the API points consumers at: email
+ * verification links and the venue Share_Preview canonical / `og:url`. The
+ * literal is the dev/local default only; prod sets the var via Terraform.
+ */
+export function webBaseUrl(): string {
+  return requireEnv('AREA_CODE_WEB_URL', 'https://areacode.co.za').replace(/\/+$/, '')
+}
+
+/**
+ * Media_CDN base URL (`AREA_CODE_MEDIA_CDN_URL`) — the CloudFront distribution
+ * in front of the private media bucket, the same origin the frontends read as
+ * `VITE_CDN_URL`.
+ *
+ * Returns `null` when unset so callers render an explicit no-image state (the
+ * Share_Preview falls back to the site default OG image) instead of emitting a
+ * broken URL. Mirrors `packages/shared/lib/mediaUrl.ts`, which returns null on
+ * an unset base for the same reason.
+ */
+export function mediaCdnBaseUrl(): string | null {
+  const raw = process.env['AREA_CODE_MEDIA_CDN_URL']
+  return typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : null
+}
+
+/**
  * QR_Secret accessor (audit-gap-closure R1.1, R1.2).
  *
  * Single home for the `AREA_CODE_QR_HMAC_SECRET` HMAC key behind check-in QR

@@ -9,7 +9,7 @@ import { BoostPurchasesPanel } from '../../components/BoostPurchasesPanel'
 
 import { ActiveBoostList } from './ActiveBoostList'
 import { CheckoutReturnBanner } from './CheckoutReturnBanner'
-import { useBoostCheckoutReturn } from './useCheckoutReturn'
+import { rememberPendingBoostCheckout, useBoostCheckoutReturn } from './useCheckoutReturn'
 
 interface BoostPricing {
   '2hr': number
@@ -51,7 +51,7 @@ export function BoostPanel() {
     setLoading(duration)
     setError(null)
     try {
-      const res = await api.post<{ checkoutUrl: string }>('/v1/business/boost', {
+      const res = await api.post<{ checkoutUrl: string; checkoutId?: string }>('/v1/business/boost', {
         nodeId,
         duration,
       })
@@ -59,6 +59,9 @@ export function BoostPanel() {
       // when the payment provider is not configured): navigating to it is a
       // silent no-op, so surface a clear message instead.
       if (res.checkoutUrl && !res.checkoutUrl.startsWith('#')) {
+        // Carry the checkout id to the return leg so the banner confirms THIS
+        // purchase by id rather than by a count baseline (R15.11).
+        if (res.checkoutId) rememberPendingBoostCheckout(res.checkoutId)
         window.location.href = res.checkoutUrl
       } else {
         setError(t('biz.boost.unavailable', 'Boost checkout is not available right now. Please try again later.'))

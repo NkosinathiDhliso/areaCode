@@ -18,6 +18,10 @@ const NOTIFICATION_TYPE_TO_PREF: Record<string, NotificationPreferenceKey> = {
   streak_at_risk: 'streakAtRisk',
   leaderboard_reset: 'leaderboardPrewarning',
   friend_checkin: 'followedUserCheckin',
+  // Tonight_Reminder (proof-of-demand R9.6, R9.7): gated on the explicit opt-in
+  // the Going control writes, so the transition tick cannot reach a consumer who
+  // marked going but never asked to be told.
+  tonight_reminder: 'tonightReminder',
 }
 
 export async function registerPushToken(userId: string, token: string, platform: string, deviceId?: string) {
@@ -84,6 +88,27 @@ export interface SendNotificationResult {
 }
 
 /**
+ * Deactivate the tokens the push provider reported as invalid. `results` is
+ * index-aligned with `tokens` because `Promise.allSettled` preserves input
+ * order; a rejected or non-reporting result leaves the token alone.
+ */
+async function deactivateInvalidTokens(
+  userId: string,
+  tokens: readonly Record<string, unknown>[],
+  results: readonly PromiseSettledResult<unknown>[],
+): Promise<void> {
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i]!
+    if (result.status !== 'fulfilled') continue
+    const value = result.value
+    if (typeof value !== 'object' || value === null) continue
+    if (!('invalid' in value) || (value as { invalid?: boolean }).invalid !== true) continue
+    const token = tokens[i]?.['token']
+    if (typeof token === 'string') await repo.deactivatePushToken(userId, token)
+  }
+}
+
+/**
  * High-level notification sender that:
  * 1. Checks user preferences before sending
  * 2. Delivers via WebSocket (primary) or push (fallback)
@@ -141,13 +166,7 @@ export async function sendNotification(options: SendNotificationOptions): Promis
         }),
       )
 
-      // Deactivate invalid tokens
-      for (let i = 0; i < results.length; i++) {
-        const result = results[i]!
-        if (result.status === 'fulfilled' && result.value && 'invalid' in result.value && result.value.invalid) {
-          await repo.deactivatePushToken(userId, tokens[i]!.token)
-        }
-      }
+      await deactivateInvalidTokens(userId, tokens, results)
 
       deliveryChannel = 'push'
       pushCount = tokens.length
@@ -320,73 +339,4 @@ export async function canSendRewardPush(userId: string): Promise<boolean> {
 export async function incrementRewardPushCount(userId: string) {
   const key = `notif:reward_push:${userId}`
   await kvIncr(key, 86400)
-}
-
-// ─── New Reward Notification Targeting (Task 3.6) ───────────────────────────
-
-/**
- * Notify consumers who checked in at a node within the past 30 days
- * about a new reward. Respects rate limits and notification preferences.
- *
- * This runs asynchronously (fire-and-forget) so it doesn't slow down
- * the reward creation response.
- */
-export async function notifyNewRewardConsumers(
-  nodeId: string,
-  nodeName: string,
-  rewardId: string,
-  rewardTitle: string,
-): Promise<void> {
-  try {
-    const { getCheckInsByNode } = await import('../check-in/dynamodb-repository.js')
-
-    // Query consumers who checked in at this node within the past 30 days
-    const thirtyDaysHours = 30 * 24
-    let allCheckIns: Array<{ userId: string }> = []
-    let cursor: string | undefined
-
-    // Paginate through all check-ins at this node in the past 30 days
-    do {
-      const page = await getCheckInsByNode(nodeId, {
-        hours: thirtyDaysHours,
-        limit: 100,
-        cursor,
-      })
-      allCheckIns = allCheckIns.concat(page.checkIns)
-      cursor = page.nextCursor
-    } while (cursor)
-
-    // Deduplicate by userId
-    const uniqueUserIds = [...new Set(allCheckIns.map((c) => c.userId))]
-
-    // Send notification to each unique consumer
-    for (const userId of uniqueUserIds) {
-      try {
-        // Check rate limit (max 2 reward notifications per consumer per day)
-        const canSend = await canSendRewardPush(userId)
-        if (!canSend) {
-          continue
-        }
-
-        const result = await sendNotification({
-          userId,
-          type: 'reward_new',
-          title: 'New Reward Available!',
-          body: `${rewardTitle} at ${nodeName}`,
-          data: { rewardId, nodeId, rewardTitle, nodeName },
-        })
-
-        // Only increment rate limit counter if notification was actually delivered
-        if (result.delivered === 'socket' || result.delivered === 'push') {
-          await incrementRewardPushCount(userId)
-        }
-      } catch {
-        // Silently skip individual notification failures
-        // so one bad user doesn't block the rest
-      }
-    }
-  } catch (err) {
-    // Log but don't throw — this is fire-and-forget
-    console.error('Failed to send new reward notifications:', err)
-  }
 }

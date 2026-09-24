@@ -2,6 +2,7 @@ import { Spinner } from '@area-code/shared/components/Spinner'
 import { ARCHETYPE_CATALOG } from '@area-code/shared/constants/archetype-catalog'
 import { MUSIC_GENRES, GENRE_LABELS } from '@area-code/shared/constants/genre-weights'
 import { api, type ApiError } from '@area-code/shared/lib/api'
+import { describeApiError } from '@area-code/shared/lib/apiError'
 import { validateMusicSchedule, type ScheduleValidationCode } from '@area-code/shared/lib/schedule-validator'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import { useBusinessStore } from '@area-code/shared/stores/businessStore'
@@ -227,10 +228,6 @@ function hhmmToMinutes(hhmm: string): number {
   return Number(hh) * 60 + Number(mm)
 }
 
-interface MusicScheduleResponse {
-  schedule: MusicSchedule | null
-}
-
 export function MusicSchedulePanel() {
   const { t } = useTranslation()
   const jwtBusinessId = useBusinessAuthStore((s) => s.businessId)
@@ -274,11 +271,16 @@ export function MusicSchedulePanel() {
     setLoading(true)
     setLoadError(null)
 
+    // The handler sends the MusicSchedule itself, not a `{ schedule }` envelope
+    // (`backend/src/features/music/handler.ts`), which is also the shape
+    // `TonightForm` reads. Reading `res.schedule` here resolved to undefined on
+    // every response, so a venue with a published week always rendered "no
+    // schedule yet".
     api
-      .get<MusicScheduleResponse>(`/v1/business/${encodeURIComponent(venueBusinessId)}/music-schedule`)
+      .get<MusicSchedule>(`/v1/business/${encodeURIComponent(venueBusinessId)}/music-schedule`)
       .then((res) => {
         if (cancelled) return
-        setSchedule(res.schedule ?? null)
+        setSchedule(res)
       })
       .catch((err: ApiError) => {
         if (cancelled) return
@@ -287,7 +289,7 @@ export function MusicSchedulePanel() {
           setSchedule(null)
           return
         }
-        setLoadError(err.message ?? t('biz.musicSchedule.loadFailed'))
+        setLoadError(describeApiError(err, t('biz.musicSchedule.loadFailed')))
       })
       .finally(() => {
         if (cancelled) return
@@ -1148,14 +1150,14 @@ function SlotEditorSheet({ schedule, slot, onSaved, onClose }: SlotEditorSheetPr
           {
             code: apiErr.code,
             field: apiErr.field,
-            message: apiErr.message ?? 'Validation failed',
+            message: describeApiError(err, 'Validation failed'),
             ...(apiErr.slotId !== undefined ? { slotId: apiErr.slotId } : {}),
           },
           draft.slotId,
         )
         setServerError(mapped)
       } else {
-        setServerError({ _global: apiErr.message ?? 'Could not save the slot. Please try again.' })
+        setServerError({ _global: describeApiError(err, 'Could not save the slot. Please try again.') })
       }
     } finally {
       setSaving(false)
@@ -1185,11 +1187,10 @@ function SlotEditorSheet({ schedule, slot, onSaved, onClose }: SlotEditorSheetPr
       )
       onSaved(persisted)
     } catch (err) {
-      const apiErr = err as ApiError
       // R4.8: keep the slot in the UI on failure and surface a retry
       // affordance. We leave the editor open and show the error inline so
       // the operator can press Delete again.
-      setDeleteError(apiErr.message ?? 'Could not delete the slot. Please try again.')
+      setDeleteError(describeApiError(err, 'Could not delete the slot. Please try again.'))
       setConfirmDelete(true)
     } finally {
       setDeleting(false)

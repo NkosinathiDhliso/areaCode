@@ -10,6 +10,8 @@ import type { Node } from '@area-code/shared/types'
 import { useEffect, useRef, useState, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { OnboardingChecklistCard } from './panels/OnboardingChecklistCard'
+
 // Lazy-load panels so only the active one mounts (Issue #27)
 const LivePanel = lazy(() => import('./panels/LivePanel').then((m) => ({ default: m.LivePanel })))
 const RewardsPanel = lazy(() => import('./panels/RewardsPanel').then((m) => ({ default: m.RewardsPanel })))
@@ -34,6 +36,7 @@ const DigestCard = lazy(() => import('./panels/DigestCard').then((m) => ({ defau
 const DigestHistory = lazy(() => import('./panels/DigestHistory').then((m) => ({ default: m.DigestHistory })))
 const CampaignsPanel = lazy(() => import('./panels/CampaignsPanel').then((m) => ({ default: m.CampaignsPanel })))
 const MusicSchedulePanel = lazy(() => import('./MusicSchedulePanel').then((m) => ({ default: m.MusicSchedulePanel })))
+const TonightForm = lazy(() => import('./panels/TonightForm').then((m) => ({ default: m.TonightForm })))
 
 const PANELS: DashboardPanel[] = [
   'live',
@@ -42,6 +45,7 @@ const PANELS: DashboardPanel[] = [
   'reward-metrics',
   'audience',
   'boost',
+  'tonight',
   'music-schedule',
   'staff-leaderboard',
   'staff-redemptions',
@@ -58,6 +62,7 @@ const PANEL_LABELS: Record<DashboardPanel, string> = {
   'reward-metrics': 'biz.panel.rewardMetrics',
   audience: 'biz.panel.audience',
   boost: 'biz.panel.boost',
+  tonight: 'biz.panel.tonight',
   'music-schedule': 'biz.panel.musicSchedule',
   'staff-leaderboard': 'biz.panel.staffLeaderboard',
   'staff-redemptions': 'biz.panel.staffRedemptions',
@@ -76,6 +81,9 @@ const PANEL_PERMISSIONS: Record<DashboardPanel, string> = {
   'reward-metrics': 'view_metrics',
   audience: 'view_audience',
   boost: 'manage_boost',
+  // Tonight edits the same Music_Schedule the weekly grid does, so it rides the
+  // same permission.
+  tonight: 'view_settings',
   'music-schedule': 'view_settings',
   'staff-leaderboard': 'view_staff',
   'staff-redemptions': 'view_staff',
@@ -213,6 +221,8 @@ export function BusinessDashboard() {
         )
       case 'campaigns':
         return <CampaignsPanel />
+      case 'tonight':
+        return <TonightForm />
       case 'music-schedule':
         return <MusicSchedulePanel />
       case 'plans':
@@ -284,6 +294,15 @@ export function BusinessDashboard() {
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
+        {/* Onboarding_Checklist: the first card on the dashboard while any of
+            the four setup flags is false, above whichever panel is active
+            (proof-of-demand R5.1, R5.2). Gated on view_settings because three
+            of its four rows deep-link to the settings panel. */}
+        {hasPermission('view_settings') && (
+          <div className="px-5 pt-5">
+            <OnboardingChecklistCard />
+          </div>
+        )}
         <Suspense fallback={<PanelFallback />}>{renderPanel()}</Suspense>
       </div>
     </div>

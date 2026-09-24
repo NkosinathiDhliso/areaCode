@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import type { DigestData, DigestDeltas, DigestMetricName, DigestMetrics } from './digest.js'
+import type { DigestData, DigestDeltas, DigestMetrics, DigestSuppressibleName } from './digest.js'
 
 // ============================================================================
 // Internal Processing Types (never stored in reports)
@@ -407,6 +407,12 @@ export const teaserReportSchema = z.object({
  * retention is enforced by the cleanup worker (12 months), consistent with the
  * other audited rows.
  */
+/**
+ * Every name that may appear in a Digest_Row's suppression list: the eight
+ * numeric Attribution_Metrics plus the Receipt values the digest carries
+ * (proof-of-demand R4.5, R4.8). Stored rows written before the Receipt existed
+ * list only the eight, which this enum still accepts.
+ */
 export const digestMetricNameSchema = z.enum([
   'visits',
   'uniqueVisitors',
@@ -416,7 +422,24 @@ export const digestMetricNameSchema = z.enum([
   'firstGetIssued',
   'firstGetConversions',
   'shares',
+  'foundYouVisitors',
+  'walkInVisitors',
+  'foundYouFirstTimers',
+  'bySource',
+  // Going marks (proof-of-demand R9.8). Below the floor the count still renders
+  // and the checked-in comparison does not.
+  'goingMarks',
 ])
+
+// Distinct-consumer counts per Open_Source. The keys are spelled out rather
+// than taken from a record schema so the drift guard below compares them against
+// `ReceiptBySource` structurally: adding an Open_Source fails the build here.
+const receiptBySourceSchema = z.object({
+  map: z.number().int().min(0),
+  share: z.number().int().min(0),
+  search: z.number().int().min(0),
+  push: z.number().int().min(0),
+})
 
 const digestMetricsSchema = z.object({
   visits: z.number().int().min(0),
@@ -429,6 +452,18 @@ const digestMetricsSchema = z.object({
   shares: z.number().int().min(0),
   busiestDay: z.string().nullable(),
   busiestHour: z.number().int().min(0).max(23).nullable(),
+  // Attribution_Metrics (proof-of-demand R4.5). Optional so Digest_Rows written
+  // before the Receipt existed still parse; absent means the week was never
+  // measured, which the copy builder renders as silence, never as a zero.
+  foundYouVisitors: z.number().int().min(0).optional(),
+  walkInVisitors: z.number().int().min(0).optional(),
+  foundYouFirstTimers: z.number().int().min(0).optional(),
+  bySource: receiptBySourceSchema.optional(),
+  measuredFrom: z.string().nullable().optional(),
+  // Going (proof-of-demand R9.8). Optional for the same reason: a row written
+  // before Going existed never measured it, and absent is not zero.
+  goingMarks: z.number().int().min(0).optional(),
+  goingCheckedIn: z.number().int().min(0).optional(),
 })
 
 // Optional per-metric signed deltas. Modelled as an object of optional integers
@@ -465,7 +500,7 @@ export type DigestRow = z.infer<typeof digestRowSchema>
 type AssertEqual<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never
 type _MetricsInSync = AssertEqual<z.infer<typeof digestMetricsSchema>, DigestMetrics>
 type _DeltasInSync = AssertEqual<z.infer<typeof digestDeltasSchema>, DigestDeltas>
-type _SuppressedInSync = AssertEqual<DigestRow['suppressed'][number], DigestMetricName>
+type _SuppressedInSync = AssertEqual<DigestRow['suppressed'][number], DigestSuppressibleName>
 type _RowMetricsInSync = AssertEqual<DigestRow['metrics'], DigestData['metrics']>
 
 // Reference the guards so they are not reported as unused; a drift turns the

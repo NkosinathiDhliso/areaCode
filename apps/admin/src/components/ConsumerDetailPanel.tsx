@@ -1,5 +1,6 @@
 import { getTierLabel } from '@area-code/shared/constants/tier-levels'
 import { api } from '@area-code/shared/lib/api'
+import { formatSastDateTime } from '@area-code/shared/lib/sast'
 import type { Tier, User } from '@area-code/shared/types'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -25,10 +26,11 @@ interface CheckInHistoryItem {
   node: { name: string; slug: string } | null
 }
 
+// SAST through the shared formatter, the same clock the consumer checked in on
+// (R15.15). An unparseable value is shown as given rather than guessed at.
 function formatDate(value?: string): string {
   if (!value) return '-'
-  const d = new Date(value)
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleString()
+  return Number.isNaN(Date.parse(value)) ? value : formatSastDateTime(value)
 }
 
 export function ConsumerDetailPanel({ userId, onClose }: { userId: string; onClose: () => void }) {

@@ -2,6 +2,7 @@
  * Mock Socket.io replacement using a simple EventEmitter pattern.
  * Emits simulated real-time events on timers for consumer and business apps.
  */
+import { FOUND_VIA } from '../constants/attribution'
 import type { NodeState, ToastType } from '../types'
 
 import { getUserMusicData } from './data/crowdVibe'
@@ -142,6 +143,9 @@ export function startBusinessEmitter(socket: MockSocket, _businessId?: string): 
           avatarUrl: user.avatarUrl,
           username: user.username,
           timestamp: new Date().toISOString(),
+          // Cycles the whole Found_Via enum so the dev live panel exercises both
+          // the source badge and the walk-in row.
+          foundVia: FOUND_VIA[idx % FOUND_VIA.length]!,
         })
       } else {
         const reward = `Mock reward at ${node.name}`

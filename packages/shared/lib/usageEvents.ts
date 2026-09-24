@@ -17,6 +17,7 @@
  * Failures never degrade the app (R4.7): a failed flush is swallowed and the
  * batch is dropped. We do not retry or let the buffer grow without bound.
  */
+import type { OpenSource } from '../constants/attribution'
 import type { CitySlug } from '../constants/sa-cities'
 import { isUsageEventName, type UsageEventName } from '../constants/usage-events'
 
@@ -35,6 +36,12 @@ export interface UsageEventProps {
   city?: CitySlug
   /** Sign-in / sign-up method, for the signup funnel. */
   method?: 'email' | 'google'
+  /**
+   * Where a `venue_open` came from (proof-of-demand R2.6). A closed enum, and
+   * never accompanied by a venue id, so the aggregate cannot be joined back
+   * into a browsing trail.
+   */
+  source?: OpenSource
 }
 
 /** The wire shape of a single buffered event. */

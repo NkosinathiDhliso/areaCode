@@ -1,5 +1,7 @@
 import { sendCampaignEmail } from '../../shared/email/ses.js'
+import { pushVenueUrl } from '../../shared/links/venue-arrival.js'
 import { findBusinessById } from '../business/repository.js'
+import { getNodeById } from '../nodes/dynamodb-repository.js'
 import { sendNotification } from '../notifications/service.js'
 
 import { incrementFrequencyCap } from './eligibility.js'
@@ -135,6 +137,11 @@ async function deliverToRecipient(
           campaignId: campaign.campaignId,
           businessId: campaign.businessId,
           ...(campaign.rewardId ? { rewardId: campaign.rewardId } : {}),
+          // Click-through lands on the venue card with `src=push`, so the
+          // arrival records a `push` Venue_Open (proof-of-demand R2.1). Only a
+          // single-venue campaign has one honest destination; a multi-venue
+          // campaign carries no venue link and opens the app as before.
+          ...pushVenueUrl(await resolveCampaignVenueSlug(campaign)),
         },
         // Campaigns are gated by marketing consent + frequency cap upstream in
         // the dispatcher, not by transactional notification preferences
@@ -201,6 +208,34 @@ async function resolveBusinessName(businessId: string): Promise<string> {
 
 /** Per-invocation cache so we resolve the business name once per batch. */
 const businessNameCache = new Map<string, string>()
+
+/**
+ * Venue slug for the campaign's push deep link, or null when there is no single
+ * honest destination (no node, or more than one).
+ *
+ * Cached per batch keyed on the campaign, so a 100-recipient batch costs one
+ * node read, not one per recipient. `null` is cached too: a campaign that has
+ * no deep link must not re-read on every recipient.
+ */
+async function resolveCampaignVenueSlug(campaign: Campaign): Promise<string | null> {
+  const cached = campaignVenueSlugCache.get(campaign.campaignId)
+  if (cached !== undefined) return cached
+  let slug: string | null = null
+  const nodeId = campaign.nodeIds.length === 1 ? campaign.nodeIds[0] : undefined
+  if (nodeId) {
+    try {
+      const node = await getNodeById(nodeId)
+      slug = node?.slug ?? null
+    } catch (error) {
+      console.error(`[campaign-sender] failed to resolve venue slug campaignId=${campaign.campaignId}:`, error)
+    }
+  }
+  campaignVenueSlugCache.set(campaign.campaignId, slug)
+  return slug
+}
+
+/** Per-invocation cache so we resolve the campaign's venue slug once per batch. */
+const campaignVenueSlugCache = new Map<string, string | null>()
 
 // ----------------------------------------------------------------------------
 // Batch processing

@@ -1,4 +1,5 @@
 import { ARCHETYPE_CATALOG } from '@area-code/shared/constants/archetype-catalog'
+import { useSafeTimeout } from '@area-code/shared/hooks/useSafeTimeout'
 import { api } from '@area-code/shared/lib/api'
 import { useUserStore } from '@area-code/shared/stores/userStore'
 import type { MusicGenre, StreamingProvider, User } from '@area-code/shared/types'
@@ -48,6 +49,9 @@ export function StreamingSection() {
   // Manual genres are the fallback when Spotify isn't connected. Hidden behind
   // a toggle so the section leads with one choice at a time (Spotify first).
   const [showManual, setShowManual] = useState(false)
+  // The Spotify success banner self-closes after 5s. Profile can be left before
+  // then, so the timer is cleared on unmount (R15.25).
+  const setSafeTimeout = useSafeTimeout()
 
   const connected = user?.streamingProvider ?? null
   // Look up the catalog entry by id so the rename module (R9.6) is the only
@@ -101,7 +105,7 @@ export function StreamingSection() {
         .finally(() => setSyncingSpotify(false))
 
       // Clear success banner after 5s
-      setTimeout(() => setSpotifySuccess(false), 5000)
+      setSafeTimeout(() => setSpotifySuccess(false), 5000)
     } else if (streaming === 'error') {
       const messages: Record<string, string> = {
         invalid_state: 'Spotify authorization expired. Please try again.',
@@ -110,7 +114,7 @@ export function StreamingSection() {
       }
       setError(messages[reason ?? ''] ?? 'Spotify connection failed. Please try again.')
     }
-  }, [queryClient, setUser, user])
+  }, [queryClient, setUser, user, setSafeTimeout])
 
   async function handleConnect(provider: StreamingProvider) {
     setShowConsent(null)

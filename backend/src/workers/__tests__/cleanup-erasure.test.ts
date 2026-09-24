@@ -58,12 +58,9 @@ const mocks = vi.hoisted(() => {
       if (eav[':prefix'] === 'ERASURE#') {
         // Two-page scan: page 1 returns `erasureItemsPage1` + a cursor so the
         // loop must fetch page 2 (`erasureItems`, no cursor → loop ends).
-        if (state.erasureItemsPage1) {
-          const hasCursor = Boolean(input['ExclusiveStartKey'])
-          if (!hasCursor) {
-            return { Items: state.erasureItemsPage1, LastEvaluatedKey: { pk: 'ERASURE#page1' } }
-          }
-          return { Items: state.erasureItems }
+        const wantsPage1 = Boolean(state.erasureItemsPage1) && !input['ExclusiveStartKey']
+        if (wantsPage1) {
+          return { Items: state.erasureItemsPage1, LastEvaluatedKey: { pk: 'ERASURE#page1' } }
         }
         return { Items: state.erasureItems }
       }
@@ -155,6 +152,21 @@ import { handler } from '../cleanup'
 // 8 owned (base table) + 3 referencing (GSI1).
 const APP_DATA_PARTITION_COUNT = 11
 
+/**
+ * The anchored partition Queries, excluding the Going mirror lookup.
+ *
+ * The Going pair delete (proof-of-demand R9.9) runs its own anchored Query on
+ * `pk USER#{userId}` with `begins_with(sk, 'GOING#')` before the partition sweep,
+ * so it is a separate read with a separate purpose. It is covered by
+ * `going-erasure.test.ts`; these counts stay about the partition sweep.
+ */
+function partitionQueries(): Array<Record<string, unknown>> {
+  return mocks.state.queryCommands.filter((q) => {
+    const eav = (q['ExpressionAttributeValues'] ?? {}) as Record<string, unknown>
+    return eav[':skPrefix'] !== 'GOING#'
+  })
+}
+
 function makeErasureRequest(userId: string): Record<string, unknown> {
   return {
     pk: `ERASURE#${userId}`,
@@ -204,7 +216,7 @@ describe('POPIA erasure processor — completeness (R2.1, R2.2, R2.2a, R2.3)', (
     // users row deleted
     expect(mocks.deleteUser).toHaveBeenCalledWith('u1')
     // app-data: one anchored Query + one DeleteItem per partition
-    expect(mocks.state.queryCommands.length).toBe(APP_DATA_PARTITION_COUNT)
+    expect(partitionQueries().length).toBe(APP_DATA_PARTITION_COUNT)
     expect(mocks.state.deleteCommands.length).toBe(APP_DATA_PARTITION_COUNT)
 
     expect(result.erasedCount).toBe(1)
@@ -292,7 +304,7 @@ describe('POPIA erasure processor — app-data lookup paginates (R2.3)', () => {
     // paginated sweep deletes both pages → 22.
     expect(mocks.state.deleteCommands.length).toBe(APP_DATA_PARTITION_COUNT * 2)
     // The second Query for a partition must carry the page-1 cursor.
-    const cursoredQueries = mocks.state.queryCommands.filter((q) => Boolean(q['ExclusiveStartKey']))
+    const cursoredQueries = partitionQueries().filter((q) => Boolean(q['ExclusiveStartKey']))
     expect(cursoredQueries.length).toBe(APP_DATA_PARTITION_COUNT)
   })
 })

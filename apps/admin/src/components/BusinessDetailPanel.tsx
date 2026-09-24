@@ -1,4 +1,5 @@
 import { api } from '@area-code/shared/lib/api'
+import { formatSastDateTime } from '@area-code/shared/lib/sast'
 import type { BusinessAccount, ClaimCipcStatus, ClaimStatus } from '@area-code/shared/types'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -25,10 +26,12 @@ interface BusinessDetailData extends BusinessAccount {
   staffAccounts: BusinessStaff[]
 }
 
+// Admin surfaces read the venue's clock, so every instant renders in SAST
+// through the shared formatter (R15.15). An unparseable value is shown as given
+// rather than guessed at.
 function formatDate(value?: string | null): string {
   if (!value) return '-'
-  const d = new Date(value)
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleString()
+  return Number.isNaN(Date.parse(value)) ? value : formatSastDateTime(value)
 }
 
 export function BusinessDetailPanel({ businessId, onClose }: { businessId: string; onClose: () => void }) {
@@ -87,9 +90,11 @@ export function BusinessDetailPanel({ businessId, onClose }: { businessId: strin
 
 function Overview({ detail }: { detail: BusinessDetailData }) {
   return (
-    <section className="flex flex-col gap-1">
-      <span className="text-[var(--text-primary)] font-medium">{detail.businessName}</span>
-      <span className="text-[var(--text-muted)] text-xs">{detail.email}</span>
+    <section className="flex flex-col gap-1 min-w-0">
+      <span className="text-[var(--text-primary)] font-medium truncate">{detail.businessName}</span>
+      <span className="text-[var(--text-muted)] text-xs truncate" title={detail.email}>
+        {detail.email}
+      </span>
       <div className="text-[var(--text-secondary)] text-xs mt-1">
         Tier: <span className="capitalize">{detail.tier}</span> · Status: {detail.isActive ? 'active' : 'disabled'}
       </div>

@@ -87,14 +87,38 @@ const h = vi.hoisted(() => {
     return {}
   })
 
-  const sendRenewalUpcomingEmail = vi.fn(async (to: string, _name: string, _daysLeft: number) => {
-    // Address is the key we track failures on (matches `${businessId}@...`).
-    const id = to.split('@')[0] ?? ''
-    if (state.failEmailFor.has(id)) throw new Error(`email failed for ${id}`)
-  })
+  const sendRenewalUpcomingEmail = vi.fn(
+    async (to: string, _name: string, _daysLeft: number, _receiptLines: string[]) => {
+      // Address is the key we track failures on (matches `${businessId}@...`).
+      const id = to.split('@')[0] ?? ''
+      if (state.failEmailFor.has(id)) throw new Error(`email failed for ${id}`)
+    },
+  )
 
   // startLapseSweep also imports this; unused here but must exist on the mock.
   const sendRenewalReminderEmail = vi.fn(async (_to: string, _name: string) => {})
+
+  // The reminder now carries the paid-period Receipt (proof-of-demand R6.4), so
+  // the sweep reads the subscription window and the Receipt for it. Those reads
+  // are stubbed here: this file owns selection, dedup and failure isolation; the
+  // Receipt copy itself is covered by `receipt-emails.test.ts`.
+  const findBusinessById = vi.fn(async (id: string) => {
+    const b = state.businesses.get(id)
+    return b ? { businessId: id, trialEndsAt: null, paidUntil: b.paidUntil } : null
+  })
+  const querySubscriptionPaymentsForBusiness = vi.fn(async () => ({
+    items: [{ paidAt: '2026-02-15T10:00:00.000Z' }],
+    nextCursor: null,
+  }))
+  const getReceiptForWindow = vi.fn(async () => ({
+    foundYouVisitors: 7,
+    walkInVisitors: 3,
+    uniqueVisitors: 10,
+    foundYouFirstTimers: 0,
+    bySource: { map: 5, share: 1, search: 1, push: 0 },
+    suppressed: ['foundYouFirstTimers'],
+    measuredFrom: null,
+  }))
 
   return {
     state,
@@ -102,6 +126,9 @@ const h = vi.hoisted(() => {
     setRenewalReminderSent,
     sendRenewalUpcomingEmail,
     sendRenewalReminderEmail,
+    findBusinessById,
+    querySubscriptionPaymentsForBusiness,
+    getReceiptForWindow,
   }
 })
 
@@ -111,6 +138,9 @@ vi.mock('../repository.js', async (importOriginal) => {
     ...actual,
     listBusinessesForRenewalReminder: h.listBusinessesForRenewalReminder,
     setRenewalReminderSent: h.setRenewalReminderSent,
+    findBusinessById: h.findBusinessById,
+    querySubscriptionPaymentsForBusiness: h.querySubscriptionPaymentsForBusiness,
+    getReceiptForWindow: h.getReceiptForWindow,
   }
 })
 
@@ -166,7 +196,7 @@ describe('sendRenewalReminders — selection and send (R3.4)', () => {
     expect(result.reminded).toBe(1)
     expect(h.sendRenewalUpcomingEmail).toHaveBeenCalledTimes(1)
     // 3 days left, ISO exact so ceil is 3.
-    expect(h.sendRenewalUpcomingEmail).toHaveBeenCalledWith('biz-1@example.com', 'Biz biz-1', 3)
+    expect(h.sendRenewalUpcomingEmail).toHaveBeenCalledWith('biz-1@example.com', 'Biz biz-1', 3, expect.any(Array))
     expect(h.setRenewalReminderSent).toHaveBeenCalledWith('biz-1', paidUntil)
     expect(h.state.businesses.get('biz-1')!.renewalReminderSentFor).toBe(paidUntil)
   })
@@ -179,7 +209,12 @@ describe('sendRenewalReminders — selection and send (R3.4)', () => {
     const result = await sendRenewalReminders(nowMs)
 
     expect(result.reminded).toBe(1)
-    expect(h.sendRenewalUpcomingEmail).toHaveBeenCalledWith('biz-year@example.com', 'Biz biz-year', 6)
+    expect(h.sendRenewalUpcomingEmail).toHaveBeenCalledWith(
+      'biz-year@example.com',
+      'Biz biz-year',
+      6,
+      expect.any(Array),
+    )
   })
 
   it('never sends a pre-lapse reminder for daily or weekly payg windows (R3.4)', async () => {

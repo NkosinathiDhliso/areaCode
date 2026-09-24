@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto'
 
+import type { FoundVia } from '@area-code/shared/constants/attribution'
 import { getTierLabel } from '@area-code/shared/constants/tier-levels'
 import { PutCommand } from '@aws-sdk/lib-dynamodb'
 
@@ -7,6 +8,7 @@ import { AWS_REGION, DEV_MODE, qrHmacSecret } from '../../shared/config/env.js'
 import { documentClient, TableNames } from '../../shared/db/dynamodb.js'
 import { AppError } from '../../shared/errors/AppError.js'
 import { kvGet, kvSet, kvIncr, kvTtl } from '../../shared/kv/dynamodb-kv.js'
+import { pushVenueUrl } from '../../shared/links/venue-arrival.js'
 import { canEmitIdentity, canEmitToFriends, sanitizeForBusiness } from '../../shared/privacy/privacy-guard.js'
 import { digestsEqual } from '../../shared/security/hmac.js'
 import {
@@ -18,20 +20,24 @@ import {
   emitFriendToast,
   emitTierChanged,
 } from '../../shared/socket/events.js'
+import { epochSecondsFromMs } from '../../shared/time/epoch.js'
+import { sastDateString, secondsUntilNextSastMidnight } from '../../shared/time/sast.js'
 import { getUserById } from '../auth/repository.js'
+import { computePulse, dailyCheckInKvKey, pulseKvKey, pulseStateFor, PULSE_TTL_SECONDS } from '../nodes/pulse.js'
 import { createOrRefreshPresence, getLivePresenceCount, recordPresenceSample } from '../presence/repository.js'
 import { expiryWindowSeconds } from '../presence/window.js'
 import { getMutualFollowIds, getFollowingIds } from '../social/repository.js'
 
 import { runAbuseChecks } from './abuse.js'
+import { checkInCooldownKey, cooldownKindFor, cooldownSecondsFor } from './cooldown.js'
 import { getUserCheckInCountAtNode, incrementLeaderboard } from './dynamodb-repository.js'
+import { resolveFoundVia, type VenueOpenRow } from './found-via.js'
 import { decideProximity, haversineMetres, type ProximityConfig, type ProximityMode } from './proximity.js'
 import { isWithinReplayWindow, replayPresenceStartMs } from './replay.js'
 import * as repo from './repository.js'
 import type { CheckInInput, CheckInResponse } from './types.js'
+import { deleteVenueOpen, readVenueOpen } from './venue-open.js'
 
-const REWARD_COOLDOWN = 14400 // 4 hours
-const PRESENCE_COOLDOWN = 3600 // 1 hour
 const PROXIMITY_RADIUS = 500 // metres; legacy flat radius and the adaptive upper bound
 
 // ── Accuracy-aware proximity rollout (see ./proximity.ts) ───────────────────
@@ -69,21 +75,102 @@ function validateQrToken(nodeId: string, token: string): boolean {
   return false
 }
 
-// ─── Pulse Score ────────────────────────────────────────────────────────────
+// ─── Found_Via ──────────────────────────────────────────────────────────────
 
-const STATE_THRESHOLDS = [
-  { min: 61, state: 'popping' as const },
-  { min: 31, state: 'buzzing' as const },
-  { min: 11, state: 'active' as const },
-  { min: 1, state: 'quiet' as const },
-  { min: 0, state: 'dormant' as const },
-]
-
-function getNodeState(score: number) {
-  for (const t of STATE_THRESHOLDS) {
-    if (score >= t.min) return t.state
+/**
+ * Read the Venue_Open row for the stamp, treating a KV failure as no row.
+ *
+ * Attribution is a measurement laid over the check-in, never a precondition for
+ * it: a consumer standing at the door must not be refused because the
+ * attribution read is unavailable. The failure is logged at error level (it is a
+ * real fault, not an expected branch) and the stamp falls to `walk_in`, which
+ * under-claims rather than inventing demand.
+ */
+async function readOpenRowForStamp(userId: string, nodeId: string): Promise<VenueOpenRow | null> {
+  try {
+    return await readVenueOpen(userId, nodeId)
+  } catch (err) {
+    console.error(`[check-in] Venue_Open read failed for node ${nodeId}; stamping walk_in:`, err)
+    return null
   }
-  return 'dormant' as const
+}
+
+/**
+ * Personalised friend fan-out for one check-in: a live toast to every mutual
+ * follow, plus a "come join us" push for the ones who are not currently in the
+ * app. Runs only when the checked-in user's privacy allows identity sharing.
+ *
+ * Lives apart from `processCheckIn` because it is the one place that knows the
+ * friend fan-out shape, and because the caller treats it as best-effort: it
+ * wraps the call and swallows failures so fan-out never fails a check-in.
+ */
+async function emitFriendCheckInFanout(
+  userId: string,
+  nodeId: string,
+  nodeName: string,
+  nodeSlug: string | null | undefined,
+): Promise<void> {
+  const canEmit = await canEmitToFriends(userId)
+  if (!canEmit) return
+
+  const followingIds = await getFollowingIds(userId)
+  const friendIds = await getMutualFollowIds(userId, followingIds)
+  if (friendIds.size === 0) return
+
+  const user = await getUserById(userId)
+  const displayName = user?.displayName ?? 'Someone'
+  const friendPayload: {
+    type: 'checkin'
+    message: string
+    userId: string
+    nodeId: string
+    avatarUrl?: string
+  } = {
+    type: 'checkin',
+    message: `${displayName} just checked in at ${nodeName}`,
+    userId,
+    nodeId,
+  }
+  if (user?.avatarUrl) {
+    friendPayload.avatarUrl = user.avatarUrl
+  }
+
+  // Live in-app toast for friends with an open socket.
+  await Promise.allSettled([...friendIds].map((friendId) => emitFriendToast(friendId, friendPayload)))
+
+  // "Come join us" push for friends who are NOT currently in the app.
+  // `sendNotification` is socket-primary / push-fallback and persists to the
+  // notification center, so an offline friend still gets the nudge. In Lambda
+  // there is no in-process socket, so it reliably falls through to push tokens.
+  //
+  // The `followedUserCheckin` switch (off by default) gates this. We check it up
+  // front and skip the send entirely for opted-out friends, rather than letting
+  // `sendNotification` write a preference-blocked history row for every friend
+  // check-in — that would clutter the notification center on a high-frequency
+  // event.
+  const { sendNotification, getPreferences } = await import('../notifications/service.js')
+  // Fan out in parallel so a long friend list adds one round-trip of latency to
+  // the check-in path, not one per friend. allSettled keeps per-friend
+  // isolation: one failure never blocks the rest.
+  await Promise.allSettled(
+    [...friendIds].map(async (friendId) => {
+      const prefs = await getPreferences(friendId)
+      if ((prefs as { followedUserCheckin?: boolean }).followedUserCheckin !== true) return
+      await sendNotification({
+        userId: friendId,
+        type: 'friend_checkin',
+        title: `${displayName} just checked in`,
+        body: `${displayName} is at ${nodeName} right now.`,
+        // Click-through lands on the venue card with `src=push`, so the arrival
+        // records a `push` Venue_Open (R2.1). Without the `url` the service
+        // worker would drop them on `/`. A node with no slug cannot be
+        // deep-linked, so the key is omitted rather than pointed at a venue that
+        // will not resolve.
+        data: { nodeId, userId, ...pushVenueUrl(nodeSlug) },
+        skipPreferenceCheck: true,
+      })
+    }),
+  )
 }
 
 // ─── Main Check-In Pipeline ─────────────────────────────────────────────────
@@ -111,7 +198,7 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
   // delivery of the same queued attempt is made a no-op by an idempotency claim
   // on (userId, nodeId, capturedAt), returning the original success (R5.7). This
   // runs before the cooldown check so a duplicate returns success, not a 429.
-  const cooldownTtlForType = input.type === 'reward' ? REWARD_COOLDOWN : PRESENCE_COOLDOWN
+  const cooldownTtlForType = cooldownSecondsFor(cooldownKindFor(input.type))
   if (input.capturedAt) {
     if (!isWithinReplayWindow(input.capturedAt, Date.now())) {
       throw new AppError(422, 'checkin_replay_expired', 'This check-in is too old to submit')
@@ -177,11 +264,9 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
   )
 
   // 3. Cooldown check
-  const cooldownKey =
-    input.type === 'reward'
-      ? `checkin:cooldown:reward:${userId}:${input.nodeId}`
-      : `checkin:cooldown:presence:${userId}:${input.nodeId}`
-  const cooldownTtl = input.type === 'reward' ? REWARD_COOLDOWN : PRESENCE_COOLDOWN
+  const cooldownKind = cooldownKindFor(input.type)
+  const cooldownKey = checkInCooldownKey(cooldownKind, userId, input.nodeId)
+  const cooldownTtl = cooldownSecondsFor(cooldownKind)
 
   const existing = await kvGet(cooldownKey)
   if (existing) {
@@ -190,12 +275,38 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
     throw AppError.tooManyRequests('Check-in cooldown active', cooldownUntil)
   }
 
+  // 3b. Resolve Found_Via (proof-of-demand R3.1, R3.2). Read after proximity and
+  // cooldown have passed, so a row is only ever consumed by a check-in that is
+  // actually going to be written. The check-in instant is `capturedAt` for an
+  // offline replay and now for a live check-in, so a queued check-in is judged
+  // against the moment it happened, not the moment it was drained.
+  //
+  // Server-derived only (R3.5): the value comes from the KV row and the
+  // Away_Gate. `input` is never consulted for it — the body schema has no
+  // `foundVia` field, so Zod strips any a client sends.
+  const checkInInstantIso = input.capturedAt ?? new Date().toISOString()
+  const openRow = await readOpenRowForStamp(userId, input.nodeId)
+  const foundVia = resolveFoundVia(openRow, checkInInstantIso)
+
   // 4. Insert check-in (no lat/lng persisted) + increment totalCheckIns + recalculate tier
   const checkIn = await repo.insertCheckIn({
     userId,
     nodeId: input.nodeId,
     type: input.type,
+    foundVia,
   })
+
+  // 4a. Consume the row (R3.3). One open earns credit once, so the next
+  // check-in at this venue starts from nothing and is a Walk_In unless the
+  // consumer looked again. Best effort: the row's TTL removes it anyway, and a
+  // delete failure must not fail a check-in that is already written.
+  if (openRow) {
+    try {
+      await deleteVenueOpen(userId, input.nodeId)
+    } catch (err) {
+      console.warn(`[check-in] Venue_Open delete failed for node ${input.nodeId}: ${String(err)}`)
+    }
+  }
 
   // Capture tier before incrementing for change detection
   const userBeforeIncrement = await getUserById(userId)
@@ -204,6 +315,16 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
   const incrementResult = await repo.incrementTotalCheckIns(userId)
   const newTier = incrementResult.tier
   const streakValue = await repo.updateStreak(userId)
+
+  // The venue's lifetime total, maintained on the node row so the owner's live
+  // panel reads one number instead of scanning the venue's whole history
+  // (R15.1). Logged and continued on failure: the check-in row is already
+  // written and is the source of truth the backfill script can re-derive from.
+  try {
+    await repo.incrementNodeCheckInTotal(input.nodeId)
+  } catch (err) {
+    console.warn(`[check-in] node total increment failed: ${String(err)}`)
+  }
 
   // 4b. Advance threshold-lock progress on every active reward at this venue
   // (Churn-defences spec, Requirement 1). Only a Qualifying_Visit (type='reward')
@@ -223,7 +344,7 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
   // (Requirement 7.2). The same timestamp is used for the refresh and the one
   // authoritative count read that drives pulse and presence updates.
   let presenceOpened = false
-  const presenceNowSeconds = Math.floor(replayPresenceStartMs(Date.now(), input.capturedAt ?? null) / 1000)
+  const presenceNowSeconds = epochSecondsFromMs(replayPresenceStartMs(Date.now(), input.capturedAt ?? null))
 
   // 4c. Open or refresh the consumer's Presence_Record for this venue so the
   // honest live-presence count reflects that they are here now (Requirement 4).
@@ -335,13 +456,18 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
   const cityId = node.city?.id ?? ''
   const citySlug = node.city?.slug ?? ''
 
-  const dailyCount = await kvIncr(`checkin:today:${input.nodeId}`, 86400)
-  const pulseScore = livePresenceCount === undefined ? undefined : dailyCount * 5 + livePresenceCount * 2
+  // "Today" ends at midnight SAST, so the counter does too (R15.2). A fixed 24h
+  // TTL would have the 09:00 pulse and the morning toasts citing last night's
+  // number. `resetWhenExpired` covers a lagging TTL sweep.
+  const dailyCount = await kvIncr(dailyCheckInKvKey(input.nodeId), secondsUntilNextSastMidnight(), {
+    resetWhenExpired: true,
+  })
+  const pulseScore = livePresenceCount === undefined ? undefined : computePulse(dailyCount, livePresenceCount)
 
   if (cityId) {
     // Refresh pulse only when the authoritative live-presence read succeeded.
     if (pulseScore !== undefined) {
-      await kvSet(`pulse:${cityId}:${input.nodeId}`, String(pulseScore), 86400)
+      await kvSet(pulseKvKey(cityId, input.nodeId), String(pulseScore), PULSE_TTL_SECONDS)
     }
 
     // Increment the canonical current-period Leaderboard_Entry
@@ -365,7 +491,7 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
           nodeId: input.nodeId,
           pulseScore,
           checkInCount: dailyCount,
-          state: getNodeState(pulseScore),
+          state: pulseStateFor(pulseScore),
         })
       }
 
@@ -397,61 +523,7 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
       // Emit personalised friend toasts to each mutual follow's user room
       // Only emit if the user's privacy allows identity sharing
       try {
-        const canEmit = await canEmitToFriends(userId)
-        if (canEmit) {
-          const followingIds = await getFollowingIds(userId)
-          const friendIds = await getMutualFollowIds(userId, followingIds)
-          if (friendIds.size > 0) {
-            const user = await getUserById(userId)
-            const displayName = user?.displayName ?? 'Someone'
-            const friendPayload: {
-              type: 'checkin'
-              message: string
-              userId: string
-              nodeId: string
-              avatarUrl?: string
-            } = {
-              type: 'checkin',
-              message: `${displayName} just checked in at ${node.name}`,
-              userId,
-              nodeId: input.nodeId,
-            }
-            if (user?.avatarUrl) {
-              friendPayload.avatarUrl = user.avatarUrl
-            }
-            // Live in-app toast for friends with an open socket.
-            await Promise.allSettled([...friendIds].map((friendId) => emitFriendToast(friendId, friendPayload)))
-            // "Come join us" push for friends who are NOT currently in the app.
-            // `sendNotification` is socket-primary / push-fallback and persists
-            // to the notification center, so an offline friend still gets the
-            // nudge. In Lambda there is no in-process socket, so it reliably
-            // falls through to their push tokens.
-            //
-            // The `followedUserCheckin` switch (off by default) gates this. We
-            // check it up front and skip the send entirely for opted-out
-            // friends, rather than letting `sendNotification` write a
-            // preference-blocked history row for every friend check-in — that
-            // would clutter the notification center on a high-frequency event.
-            const { sendNotification, getPreferences } = await import('../notifications/service.js')
-            // Fan out in parallel so a long friend list adds one round-trip of
-            // latency to the check-in path, not one per friend. allSettled
-            // keeps per-friend isolation: one failure never blocks the rest.
-            await Promise.allSettled(
-              [...friendIds].map(async (friendId) => {
-                const prefs = await getPreferences(friendId)
-                if ((prefs as { followedUserCheckin?: boolean }).followedUserCheckin !== true) return
-                await sendNotification({
-                  userId: friendId,
-                  type: 'friend_checkin',
-                  title: `${displayName} just checked in`,
-                  body: `${displayName} is at ${node.name} right now.`,
-                  data: { nodeId: input.nodeId, userId },
-                  skipPreferenceCheck: true,
-                })
-              }),
-            )
-          }
-        }
+        await emitFriendCheckInFanout(userId, input.nodeId, node.name, node.slug)
       } catch {
         // Friend toast failures are non-critical , don't affect check-in response
       }
@@ -477,6 +549,10 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
         visitCount,
         timestamp: new Date().toISOString(),
         type: input.type,
+        // The live panel splits "found you here" from "already in the room" from
+        // this field (R3.6, R4.3). An enum, so it adds no identity to a payload
+        // the privacy guard has already narrowed (R11.2).
+        foundVia,
       }
       if (canShowIdentity && user?.displayName) {
         businessPayload['displayName'] = user.displayName
@@ -492,6 +568,7 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
           nodeName: string
           checkInCount: number
           timestamp: string
+          foundVia: FoundVia
           consumerDisplayName?: string
         },
       )
@@ -503,10 +580,15 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
         tier,
         visitCount,
         timestamp: new Date().toISOString(),
+        foundVia,
       })
 
-      // Write business check-in cache record to app-data table for later querying
-      const dateStr = new Date().toISOString().slice(0, 10)
+      // Write business check-in cache record to app-data table for later querying.
+      // Partitioned by the SAST calendar date (R15.8): an owner's "today" ends at
+      // midnight in Johannesburg, so a 23:30 check-in belongs to the night it
+      // happened on, not to tomorrow. Pre-deploy UTC-keyed rows are picked up by
+      // the reader's dual read; they are never rewritten.
+      const dateStr = sastDateString()
       const ts = Date.now()
       const ttl = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60 // 30-day TTL
       try {
@@ -522,6 +604,10 @@ export async function processCheckIn(userId: string, input: CheckInInput): Promi
               nodeId: input.nodeId,
               nodeName: node.name,
               timestamp: new Date().toISOString(),
+              // Stored so the check-ins panel shows the same source badge on a
+              // row loaded from history as it does on a live socket row
+              // (R4.4). An enum, so the cached row gains no identity (R11.2).
+              foundVia,
               ttl,
             },
           }),

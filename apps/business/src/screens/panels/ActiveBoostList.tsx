@@ -1,4 +1,4 @@
-import { formatLocalDate, formatLocalTime } from '@area-code/shared/lib/formatters'
+import { formatSastDate, formatSastTime, sastDateString } from '@area-code/shared/lib/sast'
 import type { Node } from '@area-code/shared/types'
 
 /**
@@ -15,24 +15,15 @@ function isBoostActive(boostUntil: string | null | undefined, nowMs: number): bo
   return Number.isFinite(end) && end > nowMs
 }
 
-/** SA calendar day (YYYY-MM-DD) for a given instant, for same-day comparison. */
-function saCalendarDay(value: string | number): string {
-  return new Intl.DateTimeFormat('en-ZA', {
-    timeZone: 'Africa/Johannesburg',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(value))
-}
-
 /**
  * "18:00" when the window ends today, "9 Aug 2026 18:00" when it ends on a
- * later day, so an overnight boost reads honestly.
+ * later day, so an overnight boost reads honestly. Today is the venue's day, so
+ * the comparison uses the shared SAST calendar date, not the device's.
  */
 function formatBoostUntil(boostUntil: string, nowMs: number): string {
-  const time = formatLocalTime(boostUntil)
-  if (saCalendarDay(boostUntil) === saCalendarDay(nowMs)) return time
-  return `${formatLocalDate(boostUntil)} ${time}`
+  const time = formatSastTime(boostUntil)
+  if (sastDateString(boostUntil) === sastDateString(nowMs)) return time
+  return `${formatSastDate(boostUntil)} ${time}`
 }
 
 interface ActiveBoostListProps {

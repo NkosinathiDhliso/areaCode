@@ -23,17 +23,50 @@ export type SeedReward = {
 }
 
 /**
+ * The Tonight summary a venue carries on the public city payload. Mirrors
+ * `VenueTonight` in `packages/shared/types` (this package is standalone, so it
+ * cannot import it). `null`/absent means nothing is published for the night.
+ */
+export type PublicTonight = {
+  headline: string
+  startsAt: string | null
+  archetypeId?: string
+  rewardTitle?: string
+  featuredRewardId?: string
+}
+
+/**
+ * A venue as the consumer map reads it. Superset of `SeedVenue`: the extra
+ * fields are the proof-of-demand anticipation and intent signals that the
+ * consumer card and detail render (`Node.tonight`, `Node.goingCount`).
+ * `goingCount` is null/absent when the payload did not measure it, which is
+ * never the same fact as zero.
+ */
+export type PublicNode = SeedVenue & {
+  tonight?: PublicTonight | null
+  goingCount?: number | null
+}
+
+/**
+ * Every venue on the public city listing, in payload order (which is
+ * `vibeRank`). One home for the city read, so a spec that needs to pick a venue
+ * by a property does not re-fetch it its own way.
+ */
+export async function publicNodes(api: APIRequestContext, city = 'johannesburg'): Promise<PublicNode[]> {
+  const res = await api.get(`/v1/nodes/${city}`)
+  if (!res.ok()) return []
+  const body = (await res.json()) as { nodes?: PublicNode[] }
+  return body.nodes ?? []
+}
+
+/**
  * Returns the first node from the public city listing — good enough for
  * tests that just need "any visible venue". Fall back to a freshly
  * seeded venue if you need full control.
  */
-export async function firstPublicNode(api: APIRequestContext, city = 'johannesburg'): Promise<SeedVenue | null> {
-  const res = await api.get(`/v1/nodes/${city}`)
-  if (!res.ok()) return null
-  const body = (await res.json()) as { nodes?: Array<{ id: string; slug: string; name: string }> }
-  const first = body.nodes?.[0]
-  if (!first) return null
-  return { id: first.id, slug: first.slug, name: first.name }
+export async function firstPublicNode(api: APIRequestContext, city = 'johannesburg'): Promise<PublicNode | null> {
+  const nodes = await publicNodes(api, city)
+  return nodes[0] ?? null
 }
 
 /**

@@ -22,8 +22,19 @@ vi.mock('react-i18next', () => ({
 // Mock @tanstack/react-query
 vi.mock('@tanstack/react-query', () => ({
   useQuery: () => ({
-    data: { checkInsToday: 5, pulseScore: 80, totalCheckIns: 100 },
+    data: {
+      checkInsToday: 5,
+      pulseScore: 80,
+      totalCheckIns: 100,
+      foundYouToday: 2,
+      walkInsToday: 3,
+      receiptToday: {
+        headline: '2 people found you on Area Code and checked in today.',
+        walkIn: '3 people who were already in the room also checked in.',
+      },
+    },
     isLoading: false,
+    refetch: vi.fn(),
   }),
 }))
 
@@ -244,10 +255,16 @@ describe('Bug Condition Exploration - Photo Preview Not Updating (Test 1d)', () 
     const fileInput = container!.querySelector('input[type="file"]') as HTMLInputElement
     expect(fileInput).not.toBeNull()
 
-    // Create a mock file
-    const mockFile = new File(['fake-image-data'], 'test-photo.jpg', {
-      type: 'image/jpeg',
-    })
+    // Real JPEG magic bytes: the panel gates on the file's leading bytes, not
+    // on `file.type` (R14.1), so a placeholder string would be rejected before
+    // the upload flow this test exercises.
+    const mockFile = new File(
+      [new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46])],
+      'test-photo.jpg',
+      {
+        type: 'image/jpeg',
+      },
+    )
 
     // Simulate file selection
     await act(async () => {

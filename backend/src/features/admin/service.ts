@@ -122,6 +122,10 @@ export async function setBusinessTier(
   const compWindow = isPaid ? paidUntil! : null
   const { setBusinessCompWindow } = await import('../business/repository.js')
   await setBusinessCompWindow(businessId, tier, compWindow)
+  // Tier decides map membership, so a comp or a downgrade must reach the map on
+  // the next read rather than waiting out the payload TTL (R15.5).
+  const { invalidateCityPayloadForBusiness } = await import('../nodes/cache.js')
+  await invalidateCityPayloadForBusiness(businessId)
   await repo.createAuditLog({
     adminId,
     adminRole,
@@ -524,10 +528,14 @@ export async function nodeAction(
 ) {
   checkPermission(adminRole, 'manage_business')
   const { getNodeById, updateNode } = await import('../nodes/dynamodb-repository.js')
+  // Activation, deactivation and an admin name/category edit all change what the
+  // consumer map shows, so each drops the cached city assembly (R15.5).
+  const { invalidateCityPayloadForNode } = await import('../nodes/cache.js')
 
   switch (action) {
     case 'deactivate':
       await updateNode(nodeId, { isActive: false })
+      await invalidateCityPayloadForNode(nodeId)
       await createAuditLog(adminId, adminRole, 'node_deactivate', nodeId, {
         before: { isActive: true },
         after: { isActive: false },
@@ -535,6 +543,7 @@ export async function nodeAction(
       return { success: true }
     case 'activate':
       await updateNode(nodeId, { isActive: true })
+      await invalidateCityPayloadForNode(nodeId)
       await createAuditLog(adminId, adminRole, 'node_activate', nodeId, {
         before: { isActive: false },
         after: { isActive: true },
@@ -547,6 +556,7 @@ export async function nodeAction(
       if (body['name']) allowedFields['name'] = body['name']
       if (body['category']) allowedFields['category'] = body['category']
       await updateNode(nodeId, allowedFields as any)
+      await invalidateCityPayloadForNode(nodeId)
       await createAuditLog(adminId, adminRole, 'node_update', nodeId, { before: node, after: allowedFields })
       return { success: true }
     }
@@ -986,6 +996,9 @@ export async function disableBusiness(adminId: string, adminRole: AdminRole, bus
   // Set isActive = false on all nodes owned by this business
   const { deactivateNodesForBusiness } = await import('../nodes/dynamodb-repository.js')
   const nodesDeactivated = await deactivateNodesForBusiness(businessId)
+  // Every one of those venues just left the map (R15.5).
+  const { invalidateCityPayloadForBusiness } = await import('../nodes/cache.js')
+  await invalidateCityPayloadForBusiness(businessId)
 
   // Create audit log
   await repo.createAuditLog({

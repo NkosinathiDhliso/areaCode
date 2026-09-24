@@ -1,3 +1,4 @@
+import { goingCountToShow } from '@area-code/shared/lib/going'
 import type { NodeCategory } from '@area-code/shared/types'
 import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -58,6 +59,32 @@ export const VenueCard = memo(function VenueCard({ vm, category, isActive = fals
         ? t('momentum.windingDown', 'Winding down')
         : null
 
+  // Tonight: the anticipation magnet (R8.6). One line BELOW the pulse row, so
+  // the card still leads with aliveness and taste; Tonight is additional pull,
+  // never a substitute (`discovery-dna-vibe-over-convenience.md`). A venue with
+  // nothing published renders nothing here, not a placeholder
+  // (`honest-presence.md`). No distance: the card never carries one.
+  const tonightLine = vm.tonight
+    ? [
+        t('venueCard.tonight', 'Tonight'),
+        vm.tonight.startsAt
+          ? `${vm.tonight.headline} ${t('venueCard.tonightFrom', 'from')} ${vm.tonight.startsAt}`
+          : vm.tonight.headline,
+        vm.tonight.rewardTitle,
+      ]
+        .filter((part): part is string => typeof part === 'string' && part !== '')
+        .join(' \u00b7 ')
+    : null
+
+  // Going: intent before doors, never presence. It sits BELOW the Tonight line,
+  // outside the pulse row, so it can never be read as part of the live count
+  // (`honest-presence.md`, R9.4). `goingCountToShow` is the one rule for whether
+  // a count may be named at all: at or above the threshold and only with a
+  // Tonight. Below that the card says nothing about Going and never gains a
+  // second "be the first" line (R9.2).
+  const goingCount = goingCountToShow(vm.goingCount, vm.tonight !== null)
+  const goingLine = goingCount === null ? null : `${goingCount} ${t('venueCard.going', 'marked going tonight')}`
+
   return (
     <button
       type="button"
@@ -65,7 +92,9 @@ export const VenueCard = memo(function VenueCard({ vm, category, isActive = fals
       data-venue-card={vm.id}
       data-pulse-state={vm.pulseState}
       aria-pressed={isActive}
-      aria-label={`${vm.name}, ${vm.isFirstIn ? beFirstLabel : countText}${momentumLabel ? `, ${momentumLabel}` : ''}`}
+      aria-label={`${vm.name}, ${vm.isFirstIn ? beFirstLabel : countText}${momentumLabel ? `, ${momentumLabel}` : ''}${
+        tonightLine ? `, ${tonightLine}` : ''
+      }${goingLine ? `, ${goingLine}` : ''}`}
       className={`glass-raised flex flex-col items-start gap-2 rounded-2xl px-4 py-3 w-full text-left transition-all duration-150 active:scale-95 focus:outline-none focus-visible:border-[var(--accent)] ${
         isActive ? 'border-[var(--accent)] ring-1 ring-[var(--accent)] bg-[var(--accent)]/10' : 'border-[var(--border)]'
       }`}
@@ -101,6 +130,21 @@ export const VenueCard = memo(function VenueCard({ vm, category, isActive = fals
             trigger. Renders only when the backend measured a real trend. */}
         <MomentumBadge momentum={vm.momentum} />
       </div>
+
+      {tonightLine && (
+        <span
+          data-venue-card-tonight={vm.id}
+          className="text-[var(--text-secondary)] text-xs font-medium truncate w-full"
+        >
+          {tonightLine}
+        </span>
+      )}
+
+      {goingLine && (
+        <span data-venue-card-going={vm.id} className="text-[var(--text-muted)] text-xs truncate w-full">
+          {goingLine}
+        </span>
+      )}
     </button>
   )
 })

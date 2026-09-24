@@ -1,5 +1,6 @@
 import { Spinner } from '@area-code/shared/components/Spinner'
 import { api } from '@area-code/shared/lib/api'
+import { describeOAuthError } from '@area-code/shared/lib/apiError'
 import { exchangeCodeForTokens } from '@area-code/shared/lib/cognitoHostedUiOAuth'
 import { useBusinessAuthStore } from '@area-code/shared/stores/businessAuthStore'
 import { useEffect, useState } from 'react'
@@ -56,9 +57,13 @@ export function BusinessOAuthCallback() {
       const params = new URLSearchParams(window.location.search)
       const code = params.get('code')
       const state = params.get('state')
-      const oauthErr = params.get('error_description') ?? params.get('error')
-      if (oauthErr) {
-        setError(oauthErr)
+      const oauthErrCode = params.get('error')
+      const oauthErrDetail = params.get('error_description')
+      if (oauthErrCode !== null || oauthErrDetail !== null) {
+        // Cognito's `error_description` is machinery ("Required String parameter
+        // ... is not present"). Logged, never rendered (R15.13).
+        console.warn('[business-oauth] manager callback error', { code: oauthErrCode, detail: oauthErrDetail })
+        setError(describeOAuthError(oauthErrCode))
         return true
       }
       if (!code || !state) {
@@ -124,10 +129,12 @@ export function BusinessOAuthCallback() {
       const params = new URLSearchParams(window.location.search)
       const code = params.get('code')
       const state = params.get('state')
-      const oauthErr = params.get('error_description') ?? params.get('error')
+      const oauthErrCode = params.get('error')
+      const oauthErrDetail = params.get('error_description')
 
-      if (oauthErr) {
-        setError(oauthErr)
+      if (oauthErrCode !== null || oauthErrDetail !== null) {
+        console.warn('[business-oauth] callback error', { code: oauthErrCode, detail: oauthErrDetail })
+        setError(describeOAuthError(oauthErrCode))
         return
       }
       if (!code || !state) {
