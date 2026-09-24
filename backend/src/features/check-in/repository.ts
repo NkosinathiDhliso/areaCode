@@ -109,7 +109,7 @@ export async function claimReplayCheckIn(userId: string, nodeId: string, capture
  * number is a maintained counter, so the live panel never pays a full-history
  * scan per venue and is never capped at a page size (proof-of-demand R15.1).
  * Nodes that predate the counter are seeded by
- * `scripts/backfill-node-checkin-totals.mjs`.
+ * `backend/src/scripts/backfill-node-checkin-totals.mjs`.
  */
 export async function incrementNodeCheckInTotal(nodeId: string): Promise<number> {
   const result = await documentClient.send(

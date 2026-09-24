@@ -13,11 +13,17 @@
 // after the check-in counter is deployed (so no increment is lost between the
 // count and the write).
 //
-// Usage (from the repo root, with AWS credentials for the target account):
-//   NODES_TABLE=area-code-prod-nodes CHECKINS_TABLE=area-code-prod-checkins \
-//     AWS_REGION=af-south-1 node scripts/backfill-node-checkin-totals.mjs
+// It lives in backend/src/scripts (with the other ops scripts) because that is
+// where bare `@aws-sdk/*` specifiers resolve: the SDK is a backend dependency,
+// so Node finds it in backend/node_modules and nowhere above it.
 //
-//   Add --dry-run to print what would change and write nothing.
+// Usage (from the repo root, with AWS credentials for the target account). The
+// region must match the account holding the tables (prod is us-east-1):
+//   NODES_TABLE=area-code-prod-nodes CHECKINS_TABLE=area-code-prod-checkins \
+//     AWS_REGION=us-east-1 pnpm --filter backend backfill:node-checkin-totals
+//
+//   Add --dry-run to print what would change and write nothing:
+//     ... pnpm --filter backend backfill:node-checkin-totals -- --dry-run
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, QueryCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'

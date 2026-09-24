@@ -208,9 +208,11 @@ export default tseslint.config(
       'import/no-default-export': 'off',
     },
   },
-  // Node-run helper scripts (build/codegen/ops) use Node globals.
+  // Node-run helper scripts (build/codegen/ops) use Node globals. Backend ops
+  // scripts live in backend/src/scripts so bare @aws-sdk specifiers resolve
+  // against backend/node_modules.
   {
-    files: ['scripts/**/*.js', 'scripts/**/*.mjs', 'scripts/**/*.cjs'],
+    files: ['scripts/**/*.js', 'scripts/**/*.mjs', 'scripts/**/*.cjs', 'backend/src/scripts/**/*.mjs'],
     languageOptions: {
       globals: {
         process: 'readonly',

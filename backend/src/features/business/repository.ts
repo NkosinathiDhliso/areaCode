@@ -482,9 +482,9 @@ export async function getLiveStats(businessId: string): Promise<LiveStatsRead> {
     nodeName: (n['name'] as string | undefined) ?? '',
     cityId: n['cityId'] as string | undefined,
     // Maintained lifetime counter, incremented at check-in. Absent means the
-    // venue has never been checked into (or predates the counter, which
-    // `scripts/backfill-node-checkin-totals.mjs` seeds), and zero is the honest
-    // reading of that. The BusinessIndex projects ALL, so this costs no read.
+    // venue has never been checked into (or predates the counter, seeded by
+    // `backend/src/scripts/backfill-node-checkin-totals.mjs`), and zero is the
+    // honest reading of that. The BusinessIndex projects ALL, so no extra read.
     nodeTotalCheckIns: (n['totalCheckIns'] as number | undefined) ?? 0,
   }))
 
