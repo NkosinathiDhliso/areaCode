@@ -1,3 +1,4 @@
+import type { FoundVia } from '../constants/attribution'
 import type { SocialLinks } from '../constants/social-platforms'
 
 // Social handles are re-exported here so callers can import venue-related
@@ -31,7 +32,7 @@ export type PrivacyLevel = 'public' | 'friends_only' | 'private'
 export type BusinessTier = 'free' | 'starter' | 'growth' | 'pro' | 'payg'
 
 // Paid subscription billing interval (billing-revenue-integrity). Null on a
-// business means no interval was bought — an admin Comp_Window, a legacy row, or
+// business means no interval was bought: an admin Comp_Window, a legacy row, or
 // a never-paid business.
 export type PaidInterval = 'daily' | 'weekly' | 'monthly' | 'yearly'
 
@@ -134,10 +135,53 @@ export interface ScheduleSlot {
   startTime: string // HH:mm
   endTime: string // HH:mm
   startTimeMin: number // 0..1439
-  endTimeMin: number // 0..1439
+  // 0..1439 for a weekly slot. A Dated_Slot that runs past midnight derives a
+  // value past 1439, up to `DATED_SLOT_MAX_END_MIN` (1680 = 04:00 the next
+  // morning): `endTime` stays a human `HH:mm` and the derived minute carries the
+  // day crossing. See `deriveEndTimeMin` in `lib/schedule-validator.ts`.
+  endTimeMin: number
   mode: ScheduleSlotMode
   genres?: MusicGenre[] // present iff mode === 'blanket'
   lineup?: LineupEntry[] // present iff mode === 'lineup'
+  // ── Dated_Slot (proof-of-demand R8.1) ──────────────────────────────────
+  // A slot carrying `date` is a Dated_Slot: it names one night, by its opening
+  // calendar date in the schedule's timezone (SAST for every venue today), and
+  // shadows the weekly slot covering the same instant. It may run past midnight
+  // into the following date, up to the night rollover. `dayOfWeek` must agree
+  // with `date` so the two can never contradict each other.
+  date?: string // YYYY-MM-DD, schedule-local calendar date
+  headline?: string // max 60 chars, the owner's one line for the night
+  featuredRewardId?: string // an active reward at one of the business's nodes
+}
+
+/**
+ * Tonight: the read model for a venue's dated programme on the current local
+ * night (proof-of-demand R8.5). Derived at read time from the Dated_Slot on the
+ * Music_Schedule, never stored: there is no second declaration store.
+ *
+ * An anticipation magnet, not a presence claim. It says what is on and when it
+ * starts, so it works on an empty map. It never implies a crowd, and on a
+ * consumer card it sits ALONGSIDE the aliveness and taste signals rather than
+ * replacing them (`discovery-dna-vibe-over-convenience.md`).
+ *
+ * A venue with nothing published has no Tonight at all (`null`), never a
+ * placeholder (`honest-presence.md`).
+ */
+export interface VenueTonight {
+  /** The owner's one line for the night. Always non-empty when present. */
+  headline: string
+  /** Local start as `HH:mm` in the schedule's timezone, or null while running. */
+  startsAt: string | null
+  /** Taste cue for the night, via the existing genre-to-archetype mapping. */
+  archetypeId: string
+  /** Featured get's title. Omitted when the get is gone or switched off. */
+  rewardTitle?: string
+  /**
+   * The featured get's id, present exactly when `rewardTitle` is. Lets the
+   * venue detail point at the get's own existing claim affordance instead of
+   * growing a second claim path.
+   */
+  featuredRewardId?: string
 }
 
 // Music schedule , a venue's weekly programming, denormalised into slots.
@@ -188,6 +232,18 @@ export interface CrowdVibeSnapshot {
 // `hasInsufficientData` flag. A hardcoded `0`/`{}`/`[]` is never a real value.
 // See .kiro/specs/business-intelligence-honesty/design.md and honest-presence.md.
 
+/**
+ * The two Receipt sentences for a window, worded on the server by
+ * `buildReceiptCopy`. The portal renders them verbatim: the Found_You fact has
+ * one wording, and a client must never re-derive it (proof-of-demand R4.6).
+ */
+export interface ReceiptSentences {
+  /** Lead line: the Found_You count, or the plain zero statement. */
+  headline: string
+  /** The "already in the room" line. */
+  walkIn: string
+}
+
 // Live panel payload: GET /v1/business/me/live-stats
 export interface LiveStats {
   checkInsToday: number
@@ -195,6 +251,138 @@ export interface LiveStats {
   rewardsClaimed: number
   // null => pulse unavailable; the Live panel omits the tile rather than showing 0.
   pulseScore: number | null
+  /**
+   * Distinct consumers in the live-panel window who found the venue on Area
+   * Code and checked in, and those who were already in the room. Exhaustive and
+   * disjoint, so the pair is the same split the Monday digest reports
+   * (proof-of-demand R4.3).
+   */
+  foundYouToday: number
+  walkInsToday: number
+  receiptToday: ReceiptSentences
+  /**
+   * Going marks for tonight, one entry per venue the server actually counted
+   * (proof-of-demand R9.5). Seeds the live panel so an owner who opens it at
+   * 20:00 sees the marks already recorded instead of waiting for the next
+   * toggle; `business:going` then overwrites an entry verbatim.
+   *
+   * A venue whose count could not be read is absent rather than reported as
+   * zero: unmeasured is not empty (`honest-presence.md`). A measured zero IS
+   * reported, because the owner watching the pipeline needs the drop as much as
+   * the rise.
+   */
+  goingTonight: LiveGoingLine[]
+}
+
+/** One venue's Going count for tonight. Intent before doors, never presence. */
+export interface LiveGoingLine {
+  nodeId: string
+  nodeName: string
+  goingCount: number
+}
+
+// Onboarding_Checklist payload: GET /v1/business/me/onboarding-status
+// (proof-of-demand R5.1). One home for the four flags: the backend service
+// returns this shape, the dashboard checklist card renders a row per flag, and
+// `buildReceiptCopy` reads it to point a zero Found_You window at the step that
+// is actually missing instead of implying failure.
+export interface OnboardingStatus {
+  hasNode: boolean
+  hasReward: boolean
+  hasStaff: boolean
+  hasQr: boolean
+}
+
+/** The step a false Onboarding_Checklist flag stands for, in render order. */
+export type OnboardingChecklistStep = 'venue' | 'reward' | 'staff' | 'qr'
+
+// ─── Receipt payload: GET /v1/business/receipt?window=... ────────────────────
+// (proof-of-demand R6.2). The owner-facing window the Receipt describes. The
+// backend ties this list to the copy builder's window labels, so a window here
+// always has a reviewed phrase to render.
+
+export type ReceiptWindowName = 'trial' | 'paid' | 'week'
+
+/**
+ * The one constructive step offered when Found_You is zero. `step` names the
+ * Onboarding_Checklist flag it completes, so the portal deep-links it through
+ * the checklist's own step-to-panel map; `null` means the venue is set up and
+ * the step is reach (share and Tonight), which no panel completes.
+ */
+export interface ReceiptNextStepView {
+  step: OnboardingChecklistStep | null
+  text: string
+}
+
+/**
+ * The Receipt for one window: the counts, the sentences that describe them, and
+ * the zero-state next step. Every string is worded on the server by
+ * `buildReceiptCopy` and rendered verbatim, so the trial email, the Plans panel
+ * and the Monday digest read the identical words (R4.6, R6.2, R6.3).
+ */
+export interface BusinessReceipt extends ReceiptSentences {
+  window: ReceiptWindowName
+  /** The half-open window `[windowStartUtc, windowEndUtc)` the counts cover. */
+  windowStartUtc: string
+  windowEndUtc: string
+  foundYouVisitors: number
+  walkInVisitors: number
+  /** "N of them had never been in before." Null when unmeasured or suppressed. */
+  firstTimers: string | null
+  /** Per-source breakdown. Null below the Suppression_Floor. */
+  bySource: string | null
+  /** Partial-window annotation. Null when the whole window was measured. */
+  measuredFrom: string | null
+  /** Exactly one step when Found_You is zero, null otherwise. */
+  nextStep: ReceiptNextStepView | null
+}
+
+// ─── Boost_Scoreboard payload: GET /v1/business/boosts/:boostId/scoreboard ───
+// (proof-of-demand R7.1 to R7.5). What one Boost_Window recorded, next to the
+// same clock window seven days earlier. Counts only: the words belong to the
+// panel, and nothing here describes the boost as having caused a visit.
+
+/** One window's readings. Visits (`checkIns`) and visitors are distinct facts. */
+export interface BoostScoreboardPeriodView {
+  /** The half-open window `[windowStartUtc, windowEndUtc)` these counts cover. */
+  windowStartUtc: string
+  windowEndUtc: string
+  checkIns: number
+  /** Distinct consumers. Always `foundYou + walkIns`. */
+  visitors: number
+  foundYou: number
+  walkIns: number
+}
+
+/** Window minus baseline, per reading. Signed: negative is a real answer. */
+export interface BoostScoreboardDeltaView {
+  checkIns: number
+  visitors: number
+  foundYou: number
+  walkIns: number
+}
+
+/**
+ * The scoreboard for one boost purchase.
+ *
+ * `comparable` is false when either window's sample is below the
+ * Suppression_Floor, and `delta` is then null, so a client cannot render a
+ * comparison the sample does not support (R7.3). Both sets of counts always
+ * render. A window that recorded nothing reports zeros, which is neither a
+ * failure nor a claim (R7.5).
+ *
+ * `windowClosed` says whether the numbers can still move: an open window is
+ * computed live on every read, a closed one is stable history (R7.2).
+ */
+export interface BoostScoreboardView {
+  /** The `yocoCheckoutId` of the purchase, the id the endpoint is keyed on. */
+  boostId: string
+  nodeId: string
+  windowClosed: boolean
+  window: BoostScoreboardPeriodView
+  baseline: BoostScoreboardPeriodView
+  comparable: boolean
+  delta: BoostScoreboardDeltaView | null
 }
 
 // Audience panel payload: GET /v1/business/me/audience
@@ -317,6 +505,28 @@ export interface Node {
    * taste-match or aliveness, per discovery-dna-vibe-over-convenience.
    */
   boostActive?: boolean
+  /**
+   * Tonight summary for the venue's current local night, derived at read time
+   * from the owning business's Music_Schedule (proof-of-demand R8.5). Absent or
+   * null means nothing is published: the surface renders no Tonight line rather
+   * than a placeholder.
+   *
+   * Scope is business-wide (`docs/decisions/proof-of-demand.md` decision 5), so
+   * every node of a multi-venue business carries the same summary.
+   */
+  tonight?: VenueTonight | null
+  /**
+   * How many consumers marked going for tonight (proof-of-demand R9.2).
+   *
+   * INTENT, not presence. It never contributes to `pulseScore`,
+   * `liveCheckInCount`, momentum, beam brightness or `vibeRank`
+   * (`honest-presence.md`, R9.4); it is a separate line beside them.
+   *
+   * `null` or absent means the count was not measured on this payload, which the
+   * city payload reports for a venue with no Tonight, because the card can only
+   * ever show the count when a Tonight exists. It is never a zero nobody counted.
+   */
+  goingCount?: number | null
 }
 
 export interface PulseScore {
@@ -522,6 +732,12 @@ export interface NotificationPreferences {
   rewardClaimedPush: boolean
   leaderboardPrewarning: boolean
   followedUserCheckin: boolean
+  /**
+   * Tonight_Reminder: the consumer asked to be told when a night they marked
+   * going for starts (proof-of-demand R9.6). Default false, and set only by an
+   * explicit tap at the moment of intent, never inferred from a Going mark.
+   */
+  tonightReminder: boolean
 }
 
 // MapInstance , generic interface abstracting Mapbox GL JS / @rnmapbox/maps
@@ -569,6 +785,12 @@ export interface BusinessCheckinPayload {
   avatarUrl?: string
   username?: string
   timestamp: string
+  /**
+   * How the consumer found the venue (proof-of-demand R3.6). Required: the live
+   * panel badges every arriving check-in from it rather than guessing from an
+   * absent field. An enum only, so the payload gains no identity (R11.2).
+   */
+  foundVia: FoundVia
 }
 
 export interface BusinessRewardClaimedPayload {
@@ -577,6 +799,22 @@ export interface BusinessRewardClaimedPayload {
   rewardId: string
   rewardTitle: string
   timestamp: string
+}
+
+/**
+ * Going count for one venue and one night (proof-of-demand R9.5).
+ *
+ * Aggregate by construction: node id, night, venue name and a count, with no
+ * consumer field at all. INTENT, not presence: the live panel renders it as its
+ * own line and never folds it into a check-in or pulse readout
+ * (`honest-presence.md`, R9.4). The count is the true one, including zero.
+ */
+export interface BusinessGoingPayload {
+  nodeId: string
+  nodeName: string
+  /** The Going night, `YYYY-MM-DD`, with the 04:00 SAST rollover. */
+  date: string
+  goingCount: number
 }
 
 // Socket event types
@@ -626,6 +864,7 @@ export interface ServerToClientEvents {
   'leaderboard:update': (payload: { userId: string; rank: number; delta: number }) => void
   'business:checkin': (payload: BusinessCheckinPayload) => void
   'business:reward_claimed': (payload: BusinessRewardClaimedPayload) => void
+  'business:going': (payload: BusinessGoingPayload) => void
   'toast:friend_checkin': (payload: {
     type: 'checkin'
     message: string

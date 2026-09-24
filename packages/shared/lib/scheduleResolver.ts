@@ -1,6 +1,9 @@
 import type { LineupEntry, MusicSchedule, ScheduleDayOfWeek, ScheduleSlot } from '../types'
 
-import { ScheduleValidationError, validateMusicSchedule } from './schedule-validator'
+import { parseCalendarDate, ScheduleValidationError, validateMusicSchedule } from './schedule-validator'
+
+const MINUTES_PER_DAY = 24 * 60
+const DAY_MS = MINUTES_PER_DAY * 60 * 1000
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public types
@@ -68,6 +71,9 @@ const WEEKDAY_MAP: Readonly<Record<string, ScheduleDayOfWeek>> = Object.freeze({
 interface LocalParts {
   dayOfWeek: ScheduleDayOfWeek
   minutesSinceMidnight: number
+  /** Schedule-local calendar date, `YYYY-MM-DD`. The key a Dated_Slot's
+   *  `date` is matched against (proof-of-demand R8.1). */
+  date: string
 }
 
 /**
@@ -85,6 +91,9 @@ function toLocalParts(date: Date, timezone: string): LocalParts {
     timeZone: timezone,
     hour12: false,
     weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
   })
@@ -93,14 +102,27 @@ function toLocalParts(date: Date, timezone: string): LocalParts {
   let weekdayRaw: string | undefined
   let hourRaw: string | undefined
   let minuteRaw: string | undefined
+  let yearRaw: string | undefined
+  let monthRaw: string | undefined
+  let dayRaw: string | undefined
   for (const part of parts) {
     if (part.type === 'weekday') weekdayRaw = part.value
     else if (part.type === 'hour') hourRaw = part.value
     else if (part.type === 'minute') minuteRaw = part.value
+    else if (part.type === 'year') yearRaw = part.value
+    else if (part.type === 'month') monthRaw = part.value
+    else if (part.type === 'day') dayRaw = part.value
   }
 
   const dayOfWeek = weekdayRaw ? WEEKDAY_MAP[weekdayRaw] : undefined
-  if (!dayOfWeek || hourRaw === undefined || minuteRaw === undefined) {
+  if (
+    !dayOfWeek ||
+    hourRaw === undefined ||
+    minuteRaw === undefined ||
+    yearRaw === undefined ||
+    monthRaw === undefined ||
+    dayRaw === undefined
+  ) {
     // Should be unreachable given the formatter options; throw an internal
     // error so an upstream regression in Intl is caught loudly.
     throw new ScheduleResolverInternalError({
@@ -114,9 +136,15 @@ function toLocalParts(date: Date, timezone: string): LocalParts {
 
   let hour = Number.parseInt(hourRaw, 10)
   const minute = Number.parseInt(minuteRaw, 10)
+  // `hour === '24'` means midnight on some runtimes. The date parts already
+  // name the day that midnight belongs to, so only the clock needs the fix.
   if (hour === 24) hour = 0
 
-  return { dayOfWeek, minutesSinceMidnight: hour * 60 + minute }
+  return {
+    dayOfWeek,
+    minutesSinceMidnight: hour * 60 + minute,
+    date: `${yearRaw.padStart(4, '0')}-${monthRaw}-${dayRaw}`,
+  }
 }
 
 /**
@@ -132,7 +160,7 @@ function toLocalParts(date: Date, timezone: string): LocalParts {
 export function resolveScheduleClock(
   timestampIso: string,
   timezone: string,
-): { dayOfWeek: ScheduleDayOfWeek; minutesSinceMidnight: number } | null {
+): { dayOfWeek: ScheduleDayOfWeek; minutesSinceMidnight: number; date: string } | null {
   if (typeof timestampIso !== 'string' || timestampIso.length === 0) return null
   const date = new Date(timestampIso)
   if (Number.isNaN(date.getTime())) return null
@@ -143,6 +171,33 @@ export function resolveScheduleClock(
   }
 }
 
+/**
+ * Minutes since the midnight of the night a Dated_Slot names, for an instant
+ * whose schedule-local clock is `clock`. `null` when that night is neither the
+ * instant's own local date nor the one before it, in which case the slot cannot
+ * reach the instant at all: a dated slot ends by the rollover on the morning
+ * after its night (`DATED_SLOT_MAX_END_MIN`).
+ *
+ * This is what makes Tonight and Going agree about a night. A dated slot's hours
+ * are measured from the midnight of the date it names, and may run past 1439:
+ * 21:00 to 02:00 is `[1260, 1560)`. At 01:00 on Saturday a Friday-dated slot is
+ * read at minute 1500 of Friday's night, so it is still running, instead of
+ * vanishing because the calendar date turned over one hour earlier while the
+ * consumer still held a Friday Going mark
+ * (`docs/decisions/proof-of-demand.md` decision 12).
+ */
+export function minutesIntoDatedNight(
+  slotDate: string,
+  clock: { date: string; minutesSinceMidnight: number },
+): number | null {
+  const slotMs = parseCalendarDate(slotDate)
+  const localMs = parseCalendarDate(clock.date)
+  if (slotMs === null || localMs === null) return null
+  const days = (localMs - slotMs) / DAY_MS
+  if (days !== 0 && days !== 1) return null
+  return clock.minutesSinceMidnight + days * MINUTES_PER_DAY
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // resolveActiveSlot
 // ─────────────────────────────────────────────────────────────────────────────
@@ -150,7 +205,13 @@ export function resolveScheduleClock(
  * Resolve the unique Active_Slot (and, in lineup mode, the covering
  * LineupEntry) for a given Music_Schedule and timestamp.
  *
- * Behaviour summary (R5):
+ * Behaviour summary (R5, plus proof-of-demand R8.1/R8.2):
+ *  - A Dated_Slot shadows the weekly slot covering the same instant; outside
+ *    the dated slot's hours the weekly slot still applies. Exactly one slot is
+ *    active at any instant.
+ *  - A Dated_Slot is resolved against the NIGHT it names, not the calendar
+ *    date, so one running 21:00 to 02:00 is still active at 01:00 the next
+ *    morning (see {@link minutesIntoDatedNight}).
  *  - Returns `null` when no slot covers the timestamp (R5.5).
  *  - Returns `{ slot }` for blanket mode and `{ slot, lineupEntry }` for
  *    lineup mode (R5.4, R5.7).
@@ -197,16 +258,44 @@ export function resolveActiveSlot(schedule: MusicSchedule, timestampIso: string)
   // ── Convert to schedule-local (dayOfWeek, minutesSinceMidnight) ──────────
   const local = toLocalParts(date, validated.timezone)
 
-  // ── R5.4: filter slots by dayOfWeek + half-open interval containment ────
-  // The validator (R3.9) already guarantees no two slots on the same
-  // dayOfWeek overlap, so at most one slot can match. We iterate the whole
-  // list (rather than break on first match) so an unexpected double-match
-  // surfaces as an internal error instead of silently returning the first.
-  const matches: ScheduleSlot[] = []
+  // ── R5.4 + R8.1/R8.2: filter by half-open interval containment, Dated_Slot
+  // first.
+  //
+  // Two passes, and the second only runs when the first found nothing. A
+  // Dated_Slot covering this instant wins outright: that is the whole point of
+  // Tonight. Outside the hours a dated slot covers, the weekly slot is still the
+  // venue's programme, so the weekly pass runs there. Exactly one slot is
+  // therefore active at any instant.
+  //
+  // The dated pass resolves by NIGHT, not by calendar date: each dated slot's
+  // hours are measured from the midnight of the date it names, so one that runs
+  // past midnight is still active in the small hours of the following date. The
+  // weekly pass stays on the local weekday and clock, which is what a recurring
+  // weekday pattern means.
+  //
+  // Within each pass the validator already guarantees no two candidates overlap
+  // (R3.9 for weekly, R8.1 for dated, compared in absolute time across adjacent
+  // dates), so at most one can match. We iterate the whole list rather than
+  // breaking on the first match so an unexpected double-match surfaces as an
+  // internal error instead of silently returning whichever came first.
+  const covers = (slot: ScheduleSlot, minutes: number): boolean =>
+    slot.startTimeMin <= minutes && minutes < slot.endTimeMin
+
+  // Each match carries the minutes it was matched at, because a dated slot's
+  // axis is its own night's midnight: the lineup lookup below must read the same
+  // axis the slot was matched on, or a crossing slot's covering entry is missed.
+  const matches: Array<{ slot: ScheduleSlot; minutes: number }> = []
   for (const slot of validated.slots) {
-    if (slot.dayOfWeek !== local.dayOfWeek) continue
-    if (slot.startTimeMin <= local.minutesSinceMidnight && local.minutesSinceMidnight < slot.endTimeMin) {
-      matches.push(slot)
+    if (slot.date === undefined) continue
+    const minutes = minutesIntoDatedNight(slot.date, local)
+    if (minutes === null) continue
+    if (covers(slot, minutes)) matches.push({ slot, minutes })
+  }
+  if (matches.length === 0) {
+    for (const slot of validated.slots) {
+      if (slot.date !== undefined) continue
+      if (slot.dayOfWeek !== local.dayOfWeek) continue
+      if (covers(slot, local.minutesSinceMidnight)) matches.push({ slot, minutes: local.minutesSinceMidnight })
     }
   }
 
@@ -219,15 +308,15 @@ export function resolveActiveSlot(schedule: MusicSchedule, timestampIso: string)
     // Reaching here means a programmer bypassed the validator or a future
     // regression let an overlap through; surface it loudly.
     throw new ScheduleResolverInternalError({
-      slotId: matches.map((s) => s.slotId).join(','),
+      slotId: matches.map((m) => m.slot.slotId).join(','),
       timestamp: timestampIso,
       message: `Schedule_Resolver internal error: ${matches.length} slots match (${matches
-        .map((s) => s.slotId)
+        .map((m) => m.slot.slotId)
         .join(', ')}) at ${timestampIso}; validator should have rejected overlap`,
     })
   }
 
-  const slot = matches[0]!
+  const { slot, minutes: activeMinutes } = matches[0]!
 
   // Blanket mode → return the slot alone (R5.4).
   if (slot.mode === 'blanket') {
@@ -251,7 +340,7 @@ export function resolveActiveSlot(schedule: MusicSchedule, timestampIso: string)
 
   let chosen: LineupEntry | undefined
   for (const entry of lineup) {
-    if (entry.startTimeMin <= local.minutesSinceMidnight) {
+    if (entry.startTimeMin <= activeMinutes) {
       if (!chosen || entry.startTimeMin > chosen.startTimeMin) {
         chosen = entry
       }
